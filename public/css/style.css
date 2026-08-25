@@ -1,0 +1,306 @@
+:root {
+    --primary: #0f172a;
+    --primary-light: #1e293b;
+    --accent: #4f46e5;
+    --accent-hover: #4338ca;
+    --brand-gold: #d97706;
+    --brand-rose: #e11d48;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --surface: #ffffff;
+    --background: #f8fafc;
+    --border: #e2e8f0;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background-color: #0f172a;
+    color: #1e293b;
+    margin: 0;
+    padding: 0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* ==========================================================================
+   TOP HEADER (DARK EXECUTIVE NAVY)
+   ========================================================================== */
+header {
+    background: #0f172a !important;
+    color: #ffffff !important;
+    border-bottom: 1px solid #1e293b !important;
+    box-shadow: 0 4px 20px -5px rgba(0, 0, 0, 0.3);
+}
+
+header .text-white {
+    color: #ffffff !important;
+}
+
+/* ==========================================================================
+   DARK SLEEK SIDEBAR NAVIGATION
+   ========================================================================== */
+aside,
+aside.w-64 {
+    background: #020617 !important;
+    border-right: 1px solid #1e293b !important;
+    color: #94a3b8 !important;
+}
+
+aside nav button.sidebar-btn,
+aside nav button.client-sidebar-btn {
+    color: #94a3b8 !important;
+    background-color: transparent !important;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 0.85rem;
+    border-radius: 0.75rem;
+    font-size: 0.82rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    border: 1px solid transparent !important;
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+}
+
+aside nav button.sidebar-btn:hover,
+aside nav button.client-sidebar-btn:hover {
+    color: #ffffff !important;
+    background-color: rgba(30, 41, 59, 0.7) !important;
+    border-color: rgba(255, 255, 255, 0.05) !important;
+    transform: translateX(2px);
+}
+
+aside nav button.sidebar-btn.active,
+aside nav button.client-sidebar-btn.active,
+aside nav button.sidebar-btn.bg-indigo-600,
+aside nav button.client-sidebar-btn.bg-indigo-600 {
+    color: #ffffff !important;
+    background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%) !important;
+    border-color: rgba(255, 255, 255, 0.15) !important;
+    font-weight: 600 !important;
+    box-shadow: 0 4px 14px -2px rgba(79, 70, 229, 0.4) !important;
+    transform: none;
+}
+
+aside div.uppercase {
+    color: #475569 !important;
+    font-size: 0.68rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.08em !important;
+}
+
+/* ==========================================================================
+   CRISP CLEAN WHITE MAIN WORKSPACE CANVAS
+   ========================================================================== */
+main {
+    background-color: #f8fafc !important;
+    color: #0f172a;
+}
+
+/* Specific Headings in Main (excluding banners) */
+main > section h2:not(.text-white),
+main div:not(.hero-banner):not(.bg-gradient-to-r) > h2:not(.text-white),
+main h3:not(.text-white),
+main h4:not(.text-white) {
+    color: #0f172a;
+    font-weight: 800;
+}
+
+/* Hero / Welcome Banner */
+.hero-banner,
+.bg-gradient-to-r {
+    background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #312e81 100%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    border-radius: 1.25rem !important;
+    box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.25) !important;
+}
+
+.hero-banner *,
+.bg-gradient-to-r h2,
+.bg-gradient-to-r p,
+.bg-gradient-to-r span {
+    color: #ffffff !important;
+}
+
+.hero-banner p,
+.bg-gradient-to-r p {
+    color: #c7d2fe !important;
+}
+
+/* Elevated White Cards */
+main div.bg-white,
+main section div.bg-white {
+    background-color: #ffffff !important;
+    border: 1px solid #e2e8f0;
+    border-radius: 1rem;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.03), 0 1px 2px 0 rgba(0, 0, 0, 0.02);
+}
+
+/* Metric / KPI Card Styling */
+.kpi-card {
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 1rem !important;
+    padding: 1.25rem !important;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.03) !important;
+    transition: all 0.2s ease !important;
+}
+
+.kpi-card:hover {
+    border-color: #cbd5e1 !important;
+    box-shadow: 0 8px 20px -4px rgba(0, 0, 0, 0.06) !important;
+    transform: translateY(-2px) !important;
+}
+
+/* Data Tables */
+main table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+main table thead {
+    background-color: #f8fafc !important;
+    color: #475569 !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+}
+
+main table thead th {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 0.75rem 1rem;
+    color: #475569 !important;
+}
+
+main table tbody tr {
+    transition: background-color 0.15s ease;
+}
+
+main table tbody tr:hover {
+    background-color: #f1f5f9 !important;
+}
+
+main table tbody td {
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+/* Buttons */
+.btn-primary {
+    background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%) !important;
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    border-radius: 0.75rem !important;
+    padding: 0.55rem 1rem !important;
+    border: none !important;
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3) !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+}
+
+.btn-primary:hover {
+    filter: brightness(1.08) !important;
+    transform: translateY(-1px) !important;
+}
+
+.btn-gold {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+    color: #0f172a !important;
+    font-weight: 800 !important;
+    border-radius: 0.75rem !important;
+    padding: 0.55rem 1rem !important;
+    border: none !important;
+    box-shadow: 0 4px 12px rgba(217, 119, 6, 0.35) !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+}
+
+.btn-gold:hover {
+    filter: brightness(1.08) !important;
+    transform: translateY(-1px) !important;
+}
+
+/* Forms & Inputs */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="date"],
+select,
+textarea {
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 0.65rem !important;
+    padding: 0.5rem 0.75rem !important;
+    transition: all 0.2s ease !important;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+    border-color: #4f46e5 !important;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12) !important;
+    outline: none !important;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* Toast Notifications */
+#toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 99999;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: 400px;
+}
+
+.toast {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: #0f172a;
+    color: #ffffff;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.toast-success {
+    border-left: 4px solid #10b981;
+}
+
+.toast-error {
+    border-left: 4px solid #ef4444;
+}
+
+.toast-info {
+    border-left: 4px solid #4f46e5;
+}

@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NKB Client Portal - B2B Cosmetics Ordering & Billing</title>
+    <!-- Standalone Production CSS -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="stylesheet" href="/css/tailwind.min.css">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased min-h-screen flex flex-col">
+
+    <!-- Top Header -->
+    <!-- Top Header -->
+    <header class="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-40">
+        <div class="px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <img src="/images/nkb-logo.png" alt="NKB Logo" class="h-8 w-auto object-contain">
+                <div class="flex items-center gap-2">
+                    <span class="font-bold tracking-tight text-white text-sm">NKB MANUFACTURING & TRADING</span>
+                    <span class="text-[11px] text-slate-400 font-medium hidden sm:inline-block pl-2 border-l border-slate-700">Client Portal</span>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-3">
+                <a href="/admin.html" class="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 border border-slate-700 transition">
+                    <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    <span>Operations View</span>
+                </a>
+                <div class="flex items-center gap-2 pl-2 border-l border-slate-800">
+                    <div class="text-right hidden sm:block">
+                        <div id="nav-company-name" class="text-xs font-semibold text-slate-200 leading-tight">ABC Cosmetics Trading</div>
+                        <div id="nav-user-name" class="text-[10px] text-slate-400 font-medium">Maria Santos</div>
+                    </div>
+                    <button onclick="NKB.logout()" class="px-2.5 py-1 bg-slate-800 hover:bg-rose-950/40 text-slate-300 hover:text-rose-300 border border-slate-700 hover:border-rose-700/50 rounded-lg text-xs font-medium transition">
+                        Logout
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Layout with Sidebar -->
+    <div class="flex-1 flex overflow-hidden">
+        
+        <!-- Dark Sidebar Navigation -->
+        <aside class="w-64 bg-slate-950 border-r border-slate-800 flex flex-col flex-shrink-0">
+            <nav class="p-3 space-y-1 overflow-y-auto flex-1 text-sm font-medium">
+                <button onclick="switchClientTab('dashboard')" id="tab-btn-dashboard" class="client-sidebar-btn w-full flex items-center gap-3 px-3 py-2 rounded-xl text-white bg-indigo-600 font-bold shadow-md shadow-indigo-600/30 transition">
+                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+                    <span>Dashboard</span>
+                </button>
+                <button onclick="switchClientTab('place-order')" id="tab-btn-place-order" class="client-sidebar-btn w-full flex items-center gap-3 px-3 py-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 transition">
+                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
+                    <span>Place New Order</span>
+                </button>
+                <button onclick="switchClientTab('my-orders')" id="tab-btn-my-orders" class="client-sidebar-btn w-full flex items-center gap-3 px-3 py-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 transition">
+                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+                    <span>My Purchase Orders</span>
+                </button>
+                <button onclick="switchClientTab('tracking')" id="tab-btn-tracking" class="client-sidebar-btn w-full flex items-center gap-3 px-3 py-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 transition">
+                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
+                    <span>Production Tracking</span>
+                </button>
+                <button onclick="switchClientTab('dr-acceptance')" id="tab-btn-dr-acceptance" class="client-sidebar-btn w-full flex items-center gap-3 px-3 py-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 transition">
+                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                    <span>DR & Acceptance</span>
+                </button>
+                <button onclick="switchClientTab('invoices')" id="tab-btn-invoices" class="client-sidebar-btn w-full flex items-center gap-3 px-3 py-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 transition">
+                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    <span>Invoices & SOA</span>
+                </button>
+                <button onclick="switchClientTab('buffer')" id="tab-btn-buffer" class="client-sidebar-btn w-full flex items-center gap-3 px-3 py-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 transition">
+                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                    <span>My Reserved Buffer</span>
+                </button>
+            </nav>
+            <div class="p-3 border-t border-slate-800/80 text-xs text-slate-400">
+                <div class="font-bold text-amber-400 text-[10px] uppercase tracking-wider">Manufacturing Policy</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">±10% Yield Variance billed based on accepted DR.</div>
+            </div>
+        </aside>
+
+        <!-- White Main Content Area -->
+        <main class="flex-1 overflow-y-auto p-6 lg:p-8 bg-[#f8fafc]">
+            
+            <!-- TAB: CLIENT DASHBOARD -->
+            <section id="client-view-dashboard" class="space-y-6">
+                <!-- Executive Hero Banner -->
+                <div class="hero-banner p-6 sm:p-8 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
+                    <div class="space-y-1.5">
+                        <div class="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-200 text-[11px] font-bold uppercase tracking-wider">
+                            <span>🏢</span><span>B2B Client Portal</span>
+                        </div>
+                        <h2 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight" id="client-welcome-title">Welcome to NKB Client Portal</h2>
+                        <p class="text-indigo-200/90 text-xs sm:text-sm max-w-xl leading-relaxed">Track live production batches, inspect cosmetic deliveries, digitally sign Delivery Receipts, and review transparent delivery-based invoices.</p>
+                    </div>
+                    <button onclick="switchClientTab('place-order')" class="btn-gold flex items-center gap-2 whitespace-nowrap shadow-xl">
+                        <span>➕ Place New Order</span>
+                        <span>→</span>
+                    </button>
+                </div>
+
+                <!-- Modern KPI Metric Cards Grid -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="kpi-card border-t-4 border-indigo-500">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Active Orders</span>
+                            <span class="p-1.5 rounded-lg bg-indigo-50 text-indigo-600 text-xs font-bold">PO</span>
+                        </div>
+                        <div id="client-kpi-open-pos" class="text-3xl font-black text-slate-900 mt-2">0</div>
+                        <div class="text-xs text-indigo-600 font-semibold mt-1">Orders in production</div>
+                    </div>
+                    <div class="kpi-card border-t-4 border-amber-500">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Pending DR Acceptance</span>
+                            <span class="p-1.5 rounded-lg bg-amber-50 text-amber-600 text-xs font-bold">DR</span>
+                        </div>
+                        <div id="client-kpi-pending-drs" class="text-3xl font-black text-amber-600 mt-2">0</div>
+                        <div class="text-xs text-amber-700 font-semibold mt-1">Waiting for your sign-off</div>
+                    </div>
+                    <div class="kpi-card border-t-4 border-rose-500">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Outstanding Invoices</span>
+                            <span class="p-1.5 rounded-lg bg-rose-50 text-rose-600 text-xs font-bold">AR</span>
+                        </div>
+                        <div id="client-kpi-unpaid-invoices" class="text-3xl font-black text-rose-600 mt-2">₱0.00</div>
+                        <div class="text-xs text-slate-500 mt-1">Total balance due</div>
+                    </div>
+                    <div class="kpi-card border-t-4 border-emerald-500">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Reserved Buffer Stock</span>
+                            <span class="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 text-xs font-bold">STK</span>
+                        </div>
+                        <div id="client-kpi-buffer-units" class="text-3xl font-black text-emerald-600 mt-2">0 pcs</div>
+                        <div class="text-xs text-emerald-700 font-semibold mt-1">Ready for drawdown</div>
+                    </div>
+                </div>
+
+                <!-- Live DR Acceptance Callout -->
+                <div id="client-pending-dr-banner" class="hidden p-5 rounded-2xl bg-amber-50 border border-amber-300 flex items-center justify-between gap-4">
+                    <div class="flex items-center gap-3">
+                        <div class="text-2xl">📦</div>
+                        <div>
+                            <div class="font-bold text-amber-900 text-sm">You have delivery receipts pending digital sign-off!</div>
+                            <div class="text-xs text-amber-700">Please inspect your delivered cosmetic goods and digitally sign the DR to finalize invoicing.</div>
+                        </div>
+                    </div>
+                    <button onclick="switchClientTab('dr-acceptance')" class="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition shadow-md whitespace-nowrap">
+                        Review & Sign DR →
+                    </button>
+                </div>
+
+                <!-- Recent Orders Preview -->
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h3 class="font-bold text-slate-900">Recent Purchase Orders</h3>
+                        <button onclick="switchClientTab('my-orders')" class="text-xs text-indigo-600 font-bold hover:underline">View All →</button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-50 border-y border-slate-200 text-slate-600 font-bold uppercase tracking-wider">
+                                <tr>
+                                    <th class="py-3 px-4">PO Number</th>
+                                    <th class="py-3 px-4">Date</th>
+                                    <th class="py-3 px-4">Tolerance</th>
+                                    <th class="py-3 px-4">Billing Policy</th>
+                                    <th class="py-3 px-4">Total Amount</th>
+                                    <th class="py-3 px-4">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="client-table-recent-pos" class="divide-y divide-slate-100 font-medium">
+                                <tr><td colspan="6" class="py-6 text-center text-slate-400">Loading orders...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB: PLACE NEW ORDER -->
+            <section id="client-view-place-order" class="space-y-6 hidden">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-2xl font-black text-slate-900">Place Manufacturing Purchase Order</h2>
+                        <p class="text-sm text-slate-500">Order multiple cosmetic products in a single Purchase Order with your agreed contract pricing.</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    <!-- Left: Available Products Catalog -->
+                    <div class="lg:col-span-6 space-y-4">
+                        <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                            <div class="flex items-center justify-between">
+                                <h3 class="font-bold text-slate-900 text-sm">1. Select Cosmetic Products</h3>
+                                <span class="text-xs text-indigo-600 font-semibold">Your Contract Pricing</span>
+                            </div>
+                            <div id="client-product-cards-grid" class="grid grid-cols-1 gap-3 max-h-[520px] overflow-y-auto pr-1">
+                                <!-- Dynamic Product Cards with Add to PO buttons -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: PO Cart / Line Items & Submission -->
+                    <div class="lg:col-span-6 space-y-4">
+                        <form id="form-client-po" onsubmit="submitClientPO(event)" class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4 text-xs font-semibold">
+                            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                                <h3 class="font-bold text-slate-900 text-sm">2. Purchase Order Items (<span id="cart-item-count">0</span>)</h3>
+                                <span class="text-xs text-slate-500 font-normal">Tolerance: ±10%</span>
+                            </div>
+
+                            <!-- Line Items Table -->
+                            <div class="overflow-x-auto border border-slate-200 rounded-xl">
+                                <table class="w-full text-left text-xs">
+                                    <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase">
+                                        <tr>
+                                            <th class="py-2.5 px-3">Product</th>
+                                            <th class="py-2.5 px-2 w-24">Qty (pcs)</th>
+                                            <th class="py-2.5 px-2">Unit Price</th>
+                                            <th class="py-2.5 px-2">Subtotal</th>
+                                            <th class="py-2.5 px-2 text-center w-8"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="client-po-items-table-body" class="divide-y divide-slate-100 font-medium">
+                                        <tr><td colspan="5" class="py-8 text-center text-slate-400">No products added yet. Click "+ Add to PO" on any product to the left.</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Billing Policy Selector -->
+                            <div class="pt-1">
+                                <label class="block text-slate-700 text-xs font-bold mb-2">3. Over-run Billing Policy</label>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <label class="p-3.5 border-2 border-indigo-600 bg-indigo-50/50 rounded-xl cursor-pointer flex flex-col justify-between space-y-1.5">
+                                        <div class="flex items-center justify-between">
+                                            <span class="font-extrabold text-indigo-950 text-xs">Option A: Bill Actual</span>
+                                            <input type="radio" name="client_billing_policy" value="ACTUAL_DELIVERY" checked class="text-indigo-600">
+                                        </div>
+                                        <p class="text-[10px] text-slate-600 font-normal">
+                                            Over-run within ±10% is delivered and billed directly on invoice.
+                                        </p>
+                                    </label>
+
+                                    <label class="p-3.5 border-2 border-slate-200 hover:border-slate-300 rounded-xl cursor-pointer flex flex-col justify-between space-y-1.5">
+                                        <div class="flex items-center justify-between">
+                                            <span class="font-extrabold text-slate-900 text-xs">Option B: Fixed + Buffer</span>
+                                            <input type="radio" name="client_billing_policy" value="FIXED_PO_BUFFER" class="text-indigo-600">
+                                        </div>
+                                        <p class="text-[10px] text-slate-600 font-normal">
+                                            Invoice fixed at PO target. Extra output stored as factory buffer.
+                                        </p>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-slate-700 mb-1">Packaging / Scent / Variant Notes</label>
+                                <textarea id="client-order-notes" rows="2" placeholder="e.g. Customized matte bottle, batch label instructions..." class="w-full px-3 py-2 border rounded-xl bg-slate-50 text-xs"></textarea>
+                            </div>
+
+                            <!-- Totals Box -->
+                            <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
+                                <div class="flex justify-between text-slate-600">
+                                    <span>Total Target Quantity:</span>
+                                    <strong id="client-summary-total-qty" class="text-slate-900">0 pcs</strong>
+                                </div>
+                                <div class="flex justify-between text-slate-600">
+                                    <span>Estimated Subtotal:</span>
+                                    <strong id="client-summary-subtotal" class="text-slate-900">₱0.00</strong>
+                                </div>
+                                <div class="border-t border-slate-200 pt-2 flex justify-between text-sm font-extrabold text-slate-900">
+                                    <span>Target Grand Total:</span>
+                                    <span id="client-summary-grand-total" class="text-indigo-600 font-black text-base">₱0.00</span>
+                                </div>
+                            </div>
+
+                            <button type="submit" id="btn-submit-client-po" class="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold rounded-xl shadow-lg shadow-indigo-600/30 transition text-sm flex items-center justify-center gap-2">
+                                <span>🚀 Submit Purchase Order →</span>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB: MY PURCHASE ORDERS -->
+            <section id="client-view-my-orders" class="space-y-6 hidden">
+                <div>
+                    <h2 class="text-2xl font-black text-slate-900">My Purchase Orders</h2>
+                    <p class="text-sm text-slate-500">Historical orders and production status.</p>
+                </div>
+
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-50 border-y border-slate-200 text-slate-600 font-bold uppercase tracking-wider">
+                                <tr>
+                                    <th class="py-3 px-4">PO Number</th>
+                                    <th class="py-3 px-4">Date</th>
+                                    <th class="py-3 px-4">Target Qty</th>
+                                    <th class="py-3 px-4">Tolerance</th>
+                                    <th class="py-3 px-4">Policy</th>
+                                    <th class="py-3 px-4">PO Value</th>
+                                    <th class="py-3 px-4">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="client-table-all-orders" class="divide-y divide-slate-100 font-medium">
+                                <tr><td colspan="7" class="py-6 text-center text-slate-400">Loading purchase orders...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB: PRODUCTION TRACKING TIMELINE -->
+            <section id="client-view-tracking" class="space-y-6 hidden">
+                <div>
+                    <h2 class="text-2xl font-black text-slate-900">Live Production Tracking</h2>
+                    <p class="text-sm text-slate-500">End-to-end manufacturing stage timeline for your cosmetic batches.</p>
+                </div>
+
+                <div id="client-production-timeline-container" class="space-y-6">
+                    <!-- Dynamic Live Batch Tracking Cards -->
+                </div>
+            </section>
+
+            <!-- TAB: DR & DIGITAL ACCEPTANCE -->
+            <section id="client-view-dr-acceptance" class="space-y-6 hidden">
+                <div>
+                    <h2 class="text-2xl font-black text-slate-900">Delivery Receipts & Digital Sign-off</h2>
+                    <p class="text-sm text-slate-500">Inspect finished cosmetics, accept received quantities, and digitally sign Delivery Receipts.</p>
+                </div>
+
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-50 border-y border-slate-200 text-slate-600 font-bold uppercase tracking-wider">
+                                <tr>
+                                    <th class="py-3 px-4">DR Number</th>
+                                    <th class="py-3 px-4">Delivery Date</th>
+                                    <th class="py-3 px-4">PO Ref</th>
+                                    <th class="py-3 px-4">Delivered Qty</th>
+                                    <th class="py-3 px-4">Accepted Qty</th>
+                                    <th class="py-3 px-4">Status</th>
+                                    <th class="py-3 px-4 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="client-table-drs" class="divide-y divide-slate-100 font-medium">
+                                <tr><td colspan="7" class="py-6 text-center text-slate-400">Loading delivery receipts...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB: INVOICES & SOA -->
+            <section id="client-view-invoices" class="space-y-6 hidden">
+                <div>
+                    <h2 class="text-2xl font-black text-slate-900">Sales Invoices & Statement of Account</h2>
+                    <p class="text-sm text-slate-500">Invoices billed from accepted Delivery Receipts.</p>
+                </div>
+
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-50 border-y border-slate-200 text-slate-600 font-bold uppercase tracking-wider">
+                                <tr>
+                                    <th class="py-3 px-4">Invoice No.</th>
+                                    <th class="py-3 px-4">Invoice Date</th>
+                                    <th class="py-3 px-4">Due Date</th>
+                                    <th class="py-3 px-4">DR Reference</th>
+                                    <th class="py-3 px-4">Total Billed</th>
+                                    <th class="py-3 px-4">Paid</th>
+                                    <th class="py-3 px-4">Balance Due</th>
+                                    <th class="py-3 px-4">Status</th>
+                                    <th class="py-3 px-4 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="client-table-invoices" class="divide-y divide-slate-100 font-medium">
+                                <tr><td colspan="9" class="py-6 text-center text-slate-400">Loading invoices...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB: MY RESERVED BUFFER -->
+            <section id="client-view-buffer" class="space-y-6 hidden">
+                <div>
+                    <h2 class="text-2xl font-black text-slate-900">My Reserved Buffer Stock</h2>
+                    <p class="text-sm text-slate-500">Your excess cosmetic inventory safely stored in NKB warehouse for future orders.</p>
+                </div>
+
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-50 border-y border-slate-200 text-slate-600 font-bold uppercase tracking-wider">
+                                <tr>
+                                    <th class="py-3 px-4">Product</th>
+                                    <th class="py-3 px-4">Source PO / Batch</th>
+                                    <th class="py-3 px-4">Date Reserved</th>
+                                    <th class="py-3 px-4">Initial Qty</th>
+                                    <th class="py-3 px-4">Drawn / Released</th>
+                                    <th class="py-3 px-4">Available Remaining</th>
+                                    <th class="py-3 px-4">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="client-table-buffer" class="divide-y divide-slate-100 font-medium">
+                                <tr><td colspan="7" class="py-6 text-center text-slate-400">Loading buffer stock...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- Modals Container -->
+    <div id="client-modals-root"></div>
+
+    <script src="/js/app.js"></script>
+    <script src="/js/client.js"></script>
+</body>
+</html>

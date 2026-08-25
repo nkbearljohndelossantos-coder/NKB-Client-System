@@ -1,0 +1,260 @@
+const express = require('express');
+const router = express.Router();
+const { v4: uuidv4 } = require('uuid');
+const db = require('../database/db');
+const { authenticateToken, requireRoles } = require('../middleware/auth');
+const { logAudit } = require('../services/auditService');
+
+/**
+ * GET /api/products
+ * Accessible by all authenticated users (Client & Admin)
+ * When requested by a client (or with ?clientId=...), automatically applies client custom pricing
+ */
+router.get('/', authenticateToken, (req, res) => {
+    const { search, activeOnly, clientId } = req.query;
+    
+    // Determine if client context applies
+    const targetClientId = req.user.role === 'CLIENT' ? (req.clientId || req.user.client_id) : (clientId || null);
+
+    let query = '';
+    const params = [];
+
+    if (targetClientId) {
+        if (req.user.role === 'CLIENT' || req.query.assignedOnly === 'true') {
+            query = `
+                SELECT p.id,
+                       COALESCE(cpp.custom_sku, p.sku) as sku,
+                       COALESCE(cpp.custom_sku, p.sku) as effective_sku,
+                       p.sku as master_sku,
+                       COALESCE(cpp.custom_name, p.name) as name,
+                       COALESCE(cpp.custom_name, p.name) as effective_name,
+                       p.name as master_name,
+                       p.category, p.description, p.unit,
+                       COALESCE(cpp.custom_price, p.default_price) as default_price,
+                       p.default_price as base_default_price,
+                       cpp.custom_price,
+                       cpp.custom_sku,
+                       cpp.custom_name,
+                       COALESCE(cpp.custom_formula_code, p.formula_code) as formula_code,
+                       CASE WHEN cpp.custom_price IS NOT NULL THEN 1 ELSE 0 END as has_custom_price,
+                       p.shelf_life_months, p.current_stock, p.is_active, p.created_at, p.updated_at
+                FROM products p
+                JOIN client_product_prices cpp ON cpp.product_id = p.id AND cpp.client_id = ?
+                WHERE p.is_active = 1 AND cpp.is_active = 1
+            `;
+            params.push(targetClientId);
+        } else {
+            query = `
+                SELECT p.id,
+                       COALESCE(cpp.custom_sku, p.sku) as sku,
+                       COALESCE(cpp.custom_sku, p.sku) as effective_sku,
+                       p.sku as master_sku,
+                       COALESCE(cpp.custom_name, p.name) as name,
+                       COALESCE(cpp.custom_name, p.name) as effective_name,
+                       p.name as master_name,
+                       p.category, p.description, p.unit,
+                       COALESCE(cpp.custom_price, p.default_price) as default_price,
+                       p.default_price as base_default_price,
+                       cpp.custom_price,
+                       cpp.custom_sku,
+                       cpp.custom_name,
+                       COALESCE(cpp.custom_formula_code, p.formula_code) as formula_code,
+                       CASE WHEN cpp.custom_price IS NOT NULL THEN 1 ELSE 0 END as has_custom_price,
+                       CASE WHEN cpp.id IS NOT NULL AND cpp.is_active = 1 THEN 1 ELSE 0 END as is_assigned,
+                       p.shelf_life_months, p.current_stock, p.is_active, p.created_at, p.updated_at
+                FROM products p
+                LEFT JOIN client_product_prices cpp ON cpp.product_id = p.id AND cpp.client_id = ?
+                WHERE 1=1
+            `;
+            params.push(targetClientId);
+        }
+    } else {
+        query = `
+            SELECT p.*,
+                   p.default_price as base_default_price,
+                   0 as has_custom_price
+            FROM products p
+            WHERE 1=1
+        `;
+    }
+
+    if (activeOnly === 'true' && req.user.role !== 'CLIENT') {
+        query += ' AND p.is_active = 1';
+    }
+
+    if (search) {
+        query += ' AND (p.name LIKE ? OR p.sku LIKE ? OR p.description LIKE ?)';
+        const term = `%${search}%`;
+        params.push(term, term, term);
+    }
+
+    query += ' ORDER BY p.name ASC';
+    const products = db.prepare(query).all(...params);
+
+    return res.json({
+        success: true,
+        data: products
+    });
+});
+
+/**
+ * GET /api/products/:id
+ */
+router.get('/:id', authenticateToken, (req, res) => {
+    const targetClientId = req.user.role === 'CLIENT' ? (req.clientId || req.user.client_id) : (req.query.clientId || null);
+
+    let product;
+    if (targetClientId) {
+        product = db.prepare(`
+            SELECT p.*,
+                   COALESCE(cpp.custom_price, p.default_price) as default_price,
+                   p.default_price as base_default_price,
+                   cpp.custom_price,
+                   COALESCE(cpp.custom_sku, p.sku) as effective_sku,
+                   CASE WHEN cpp.custom_price IS NOT NULL THEN 1 ELSE 0 END as has_custom_price
+            FROM products p
+            LEFT JOIN client_product_prices cpp ON cpp.product_id = p.id AND cpp.client_id = ?
+            WHERE p.id = ?
+        `).get(targetClientId, req.params.id);
+    } else {
+        product = db.prepare('SELECT p.*, p.default_price as base_default_price, 0 as has_custom_price FROM products p WHERE p.id = ?').get(req.params.id);
+    }
+
+    if (!product) {
+        return res.status(404).json({ success: false, error: 'Product not found.' });
+    }
+    return res.json({ success: true, data: product });
+});
+
+/**
+ * POST /api/products
+ * Admin/Production only
+ */
+router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), (req, res) => {
+    const { sku, name, category, description, unit, default_price, formula_code, shelf_life_months } = req.body;
+
+    if (!sku || !name || default_price === undefined) {
+        return res.status(400).json({ success: false, error: 'SKU, Name, and Default Price are required.' });
+    }
+
+    const id = uuidv4();
+    try {
+        db.prepare(`
+            INSERT INTO products (id, sku, name, category, description, unit, default_price, formula_code, shelf_life_months)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+            id,
+            sku.trim().toUpperCase(),
+            name.trim(),
+            category || 'Cosmetics',
+            description || '',
+            unit || 'pcs',
+            parseFloat(default_price),
+            formula_code || null,
+            parseInt(shelf_life_months || 24)
+        );
+
+        logAudit({
+            userId: req.user.id,
+            userName: req.user.name,
+            userRole: req.user.role,
+            action: 'CREATE_PRODUCT',
+            entityType: 'PRODUCT',
+            entityId: id,
+            details: { sku, name, default_price }
+        });
+
+        const newProduct = db.prepare('SELECT * FROM products WHERE id = ?').get(id);
+        return res.status(201).json({ success: true, data: newProduct });
+    } catch (err) {
+        if (err.message && err.message.includes('UNIQUE constraint failed: products.sku')) {
+            return res.status(400).json({ success: false, error: `Product SKU "${sku}" already exists.` });
+        }
+        throw err;
+    }
+});
+
+/**
+ * PUT /api/products/:id
+ */
+router.put('/:id', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), (req, res) => {
+    const { name, category, description, unit, default_price, formula_code, shelf_life_months, is_active } = req.body;
+    const { id } = req.params;
+
+    const existing = db.prepare('SELECT * FROM products WHERE id = ?').get(id);
+    if (!existing) {
+        return res.status(404).json({ success: false, error: 'Product not found.' });
+    }
+
+    db.prepare(`
+        UPDATE products 
+        SET name = COALESCE(?, name),
+            category = COALESCE(?, category),
+            description = COALESCE(?, description),
+            unit = COALESCE(?, unit),
+            default_price = COALESCE(?, default_price),
+            formula_code = COALESCE(?, formula_code),
+            shelf_life_months = COALESCE(?, shelf_life_months),
+            is_active = COALESCE(?, is_active),
+            updated_at = datetime('now')
+        WHERE id = ?
+    `).run(
+        name !== undefined ? name.trim() : null,
+        category !== undefined ? category : null,
+        description !== undefined ? description : null,
+        unit !== undefined ? unit : null,
+        default_price !== undefined ? parseFloat(default_price) : null,
+        formula_code !== undefined ? formula_code : null,
+        shelf_life_months !== undefined ? parseInt(shelf_life_months) : null,
+        is_active !== undefined ? parseInt(is_active) : null,
+        id
+    );
+
+    const updated = db.prepare('SELECT * FROM products WHERE id = ?').get(id);
+    return res.json({ success: true, data: updated });
+});
+
+/**
+ * DELETE /api/products/:id
+ * Delete Product from Catalog (Admin only)
+ */
+router.delete('/:id', authenticateToken, requireRoles('ADMIN', 'SUPER_ADMIN'), (req, res) => {
+    const { id } = req.params;
+
+    const product = db.prepare('SELECT id, name, sku FROM products WHERE id = ?').get(id);
+    if (!product) {
+        return res.status(404).json({ success: false, error: 'Product not found.' });
+    }
+
+    const deleteProductTx = db.transaction(() => {
+        db.prepare('DELETE FROM inventory_movements WHERE product_id = ?').run(id);
+        db.prepare('DELETE FROM client_buffer_stock WHERE product_id = ?').run(id);
+        db.prepare('DELETE FROM client_product_prices WHERE product_id = ?').run(id);
+        db.prepare('DELETE FROM delivery_items WHERE product_id = ?').run(id);
+        db.prepare('DELETE FROM invoice_items WHERE product_id = ?').run(id);
+        db.prepare('DELETE FROM returns WHERE product_id = ?').run(id);
+        db.prepare('DELETE FROM purchase_order_items WHERE product_id = ?').run(id);
+        db.prepare('DELETE FROM production_batches WHERE product_id = ?').run(id);
+        db.prepare('DELETE FROM job_orders WHERE product_id = ?').run(id);
+        db.prepare('DELETE FROM products WHERE id = ?').run(id);
+    });
+
+    deleteProductTx();
+
+    logAudit({
+        userId: req.user.id,
+        userName: req.user.name,
+        userRole: req.user.role,
+        action: 'DELETE_PRODUCT',
+        entityType: 'PRODUCT',
+        entityId: id,
+        details: { name: product.name, sku: product.sku }
+    });
+
+    return res.json({
+        success: true,
+        message: `Product "${product.name}" (${product.sku}) has been deleted.`
+    });
+});
+
+module.exports = router;

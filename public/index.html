@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NKB Manufacturing & Trading - Portal Login</title>
+    <!-- Standalone Production CSS -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="stylesheet" href="/css/tailwind.min.css">
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.78), rgba(30, 27, 75, 0.85)), url('/images/nkb-facility-bg.jpg');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+            padding: 1.5rem;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* Ambient Glow Backdrop */
+        .ambient-glow {
+            position: absolute;
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(217, 119, 6, 0.18) 0%, rgba(79, 70, 229, 0.15) 50%, transparent 70%);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            filter: blur(40px);
+            z-index: 1;
+        }
+
+        /* Glassmorphism Card */
+        .login-card {
+            position: relative;
+            z-index: 10;
+            width: 100%;
+            max-width: 440px;
+            background: rgba(15, 23, 42, 0.70);
+            border: 1.5px solid rgba(255, 255, 255, 0.22);
+            border-radius: 28px;
+            padding: 2.5rem 2rem;
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.65), 0 0 35px rgba(217, 119, 6, 0.15);
+            transition: all 0.3s ease;
+        }
+
+        /* Floating Input Boxes */
+        .input-box {
+            position: relative;
+            width: 100%;
+            margin: 24px 0;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.4);
+            transition: border-color 0.3s ease;
+        }
+
+        .input-box:focus-within {
+            border-bottom-color: #fbbf24;
+        }
+
+        .input-box label {
+            position: absolute;
+            top: 50%;
+            left: 5px;
+            transform: translateY(-50%);
+            font-size: 0.95rem;
+            color: rgba(255, 255, 255, 0.75);
+            pointer-events: none;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .input-box input:focus ~ label,
+        .input-box input:not(:placeholder-shown) ~ label {
+            top: -6px;
+            font-size: 0.75rem;
+            color: #fbbf24;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
+        .input-box input {
+            width: 100%;
+            height: 48px;
+            background: transparent;
+            border: none;
+            outline: none;
+            font-size: 0.95rem;
+            color: #ffffff;
+            padding: 0 38px 0 5px;
+            font-weight: 500;
+        }
+
+        .input-box .input-icon {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 1.15rem;
+            pointer-events: none;
+            transition: color 0.3s ease;
+        }
+
+        .input-box:focus-within .input-icon {
+            color: #fbbf24;
+        }
+
+        /* Golden / High-contrast Action Button */
+        .btn-submit {
+            width: 100%;
+            height: 46px;
+            background: linear-gradient(135deg, #fbbf24, #d97706, #b45309);
+            border: none;
+            outline: none;
+            border-radius: 40px;
+            cursor: pointer;
+            font-size: 1rem;
+            color: #0f172a;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            box-shadow: 0 10px 25px -5px rgba(217, 119, 6, 0.5);
+            transition: all 0.25s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-submit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 30px -5px rgba(217, 119, 6, 0.7);
+            filter: brightness(1.08);
+        }
+
+        .btn-submit:active {
+            transform: translateY(0);
+        }
+
+        /* Quick Login Pills */
+        .quick-pill {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 12px;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 0.72rem;
+            font-weight: 600;
+            padding: 6px 10px;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+        }
+
+        .quick-pill:hover {
+            background: rgba(251, 191, 36, 0.2);
+            border-color: #fbbf24;
+            color: #ffffff;
+            transform: scale(1.02);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Lighting Element -->
+    <div class="ambient-glow"></div>
+
+    <!-- Login Glass Container -->
+    <div class="login-card">
+        
+        <!-- Header with Official Gold Logo -->
+        <div class="text-center space-y-2 mb-6">
+            <img src="/images/nkb-logo.png" alt="NKB Manufacturing Corp." class="h-20 w-auto mx-auto drop-shadow-xl object-contain hover:scale-105 transition duration-300">
+            <h1 class="text-xl font-black text-white tracking-tight leading-tight">NKB MANUFACTURING & TRADING</h1>
+            <p class="text-xs text-amber-300/90 font-medium tracking-wide">Cosmetics Manufacturing & Yield Billing Portal</p>
+        </div>
+
+        <!-- Login Form -->
+        <form id="login-form" autocomplete="on">
+            
+            <!-- Email Input -->
+            <div class="input-box">
+                <span class="input-icon">✉️</span>
+                <input type="email" id="email" placeholder=" " required autocomplete="email">
+                <label for="email">Corporate / Login Email</label>
+            </div>
+
+            <!-- Password Input -->
+            <div class="input-box">
+                <span class="input-icon">🔒</span>
+                <input type="password" id="password" placeholder=" " required autocomplete="current-password">
+                <label for="password">Password</label>
+            </div>
+
+            <!-- Remember & Forgot Password -->
+            <div class="flex items-center justify-between text-xs text-slate-300 mb-6 font-medium">
+                <label class="flex items-center gap-2 cursor-pointer hover:text-white transition">
+                    <input type="checkbox" id="remember-me" checked class="rounded border-slate-700 text-amber-500 focus:ring-amber-500 bg-slate-900/80">
+                    <span>Remember Me</span>
+                </label>
+                <a href="javascript:void(0)" onclick="alert('For password resets or corporate account recovery, please contact IT Support at support@nkbmanufacturing.com or approach your System Administrator.')" class="text-amber-400 hover:text-amber-300 transition hover:underline">
+                    Forgot Password?
+                </a>
+            </div>
+
+            <!-- Error Banner -->
+            <div id="login-error" class="hidden mb-4 p-3 bg-rose-500/20 border border-rose-500/40 rounded-xl text-rose-300 text-xs font-semibold text-center backdrop-blur"></div>
+
+            <!-- Submit Button -->
+            <button type="submit" id="btn-login" class="btn-submit">
+                <span>Sign In to Portal</span>
+                <span>→</span>
+            </button>
+        </form>
+
+        <!-- Divider -->
+        <div class="relative my-6">
+            <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-white/20"></div></div>
+            <div class="relative flex justify-center text-[10px]"><span class="px-2.5 bg-slate-900/90 text-amber-300 font-bold rounded-full border border-white/10 uppercase tracking-wider">1-Click Demo Accounts</span></div>
+        </div>
+
+        <!-- 1-Click Role Access Buttons -->
+        <div class="grid grid-cols-2 gap-2 text-xs">
+            <button type="button" onclick="quickLogin('admin@nkbmanufacturing.com', 'Admin123!')" class="quick-pill">
+                <span>👑</span><span>Executive Admin</span>
+            </button>
+            <button type="button" onclick="quickLogin('client@example.com', 'Client123!')" class="quick-pill">
+                <span>🏢</span><span>ABC Client</span>
+            </button>
+            <button type="button" onclick="quickLogin('production@nkbmanufacturing.com', 'Staff123!')" class="quick-pill">
+                <span>🧪</span><span>Production Lead</span>
+            </button>
+            <button type="button" onclick="quickLogin('warehouse@nkbmanufacturing.com', 'Staff123!')" class="quick-pill">
+                <span>🚚</span><span>Logistics Lead</span>
+            </button>
+            <button type="button" onclick="quickLogin('accounting@nkbmanufacturing.com', 'Staff123!')" class="quick-pill col-span-2">
+                <span>💰</span><span>Senior Accountant</span>
+            </button>
+        </div>
+
+        <!-- Footer Notice -->
+        <div class="text-[10px] text-slate-400 text-center mt-6 leading-relaxed">
+            Lot 14, Sterling Industrial Park, Meycauayan, Bulacan<br>
+            &copy; 2026 NKB Manufacturing Corp. All rights reserved.
+        </div>
+    </div>
+
+    <script src="/js/app.js"></script>
+    <script>
+        // Check if already authenticated
+        document.addEventListener('DOMContentLoaded', async () => {
+            const token = localStorage.getItem('nkb_token');
+            if (token) {
+                const res = await NKB.api('/api/auth/me');
+                if (res.success && res.user) {
+                    redirectByRole(res.user.role);
+                }
+            }
+        });
+
+        function redirectByRole(role) {
+            if (role === 'CLIENT') {
+                window.location.href = '/client.html';
+            } else {
+                window.location.href = '/admin.html';
+            }
+        }
+
+        async function handleLogin(email, password) {
+            const errEl = document.getElementById('login-error');
+            const btn = document.getElementById('btn-login');
+            errEl.classList.add('hidden');
+            btn.disabled = true;
+            btn.innerHTML = '<span>Authenticating...</span>';
+
+            try {
+                const res = await NKB.api('/api/auth/login', {
+                    method: 'POST',
+                    body: JSON.stringify({ email, password })
+                });
+
+                if (res.success && res.token) {
+                    localStorage.setItem('nkb_token', res.token);
+                    localStorage.setItem('nkb_user', JSON.stringify(res.user));
+                    NKB.token = res.token;
+                    NKB.user = res.user;
+                    redirectByRole(res.user.role);
+                } else {
+                    errEl.textContent = res.message || res.error || 'Invalid login credentials.';
+                    errEl.classList.remove('hidden');
+                }
+            } catch (err) {
+                errEl.textContent = err.message || 'Login failed. Please check connection.';
+                errEl.classList.remove('hidden');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>Sign In to Portal</span><span>→</span>';
+            }
+        }
+
+        document.getElementById('login-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+            handleLogin(email, password);
+        });
+
+        function quickLogin(email, password) {
+            document.getElementById('email').value = email;
+            document.getElementById('password').value = password;
+            handleLogin(email, password);
+        }
+    </script>
+</body>
+</html>
