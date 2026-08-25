@@ -4,7 +4,10 @@ const fs = require('fs');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 
-const dbPath = process.env.DATABASE_PATH || path.join(__dirname, 'nkb.sqlite');
+const projectRoot = path.resolve(__dirname, '..');
+const dbPath = process.env.DATABASE_PATH
+    ? path.resolve(projectRoot, process.env.DATABASE_PATH)
+    : path.join(__dirname, 'nkb.sqlite');
 
 // Ensure directory exists
 const dir = path.dirname(dbPath);
@@ -65,7 +68,11 @@ db.transaction = function (fn) {
             db.exec('COMMIT;');
             return result;
         } catch (error) {
-            db.exec('ROLLBACK;');
+            try {
+                db.exec('ROLLBACK;');
+            } catch (rollbackError) {
+                console.error('Transaction rollback failed:', rollbackError.message);
+            }
             throw error;
         }
     };
