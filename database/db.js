@@ -5,8 +5,7 @@ const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 
 const dbDriver = (process.env.DB_DRIVER || '').toLowerCase();
-const useMysql = dbDriver === 'mysql'
-    || (dbDriver !== 'sqlite' && process.env.DB_HOST && process.env.DB_USER && process.env.DB_NAME && process.env.NODE_ENV === 'production');
+const useMysql = dbDriver === 'mysql';
 
 let db;
 

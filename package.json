@@ -34,6 +34,7 @@
     "express-rate-limit": "^8.6.2",
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.2",
+    "deasync": "^0.1.30",
     "mysql2": "^3.24.2",
     "uuid": "^11.1.0"
   },
