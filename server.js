@@ -9,8 +9,8 @@ const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const HOST = process.env.HOST || '0.0.0.0';
 const isProduction = process.env.NODE_ENV === 'production';
+const isTest = process.env.NODE_ENV === 'test';
 
 app.use(helmet({
     contentSecurityPolicy: {
@@ -41,7 +41,6 @@ if (isProduction && allowedOrigin) {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
-
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/favicon.ico', (req, res) => {
@@ -49,39 +48,16 @@ app.get('/favicon.ico', (req, res) => {
 });
 
 app.get('/api/health', (req, res) => {
-    const driver = (process.env.DB_DRIVER || '').toLowerCase() === 'mysql'
-        || (process.env.DB_DRIVER !== 'sqlite'
-            && process.env.DB_USER
-            && process.env.DB_PASSWORD
-            && process.env.DB_NAME
-            && process.env.NODE_ENV === 'production')
-        ? 'mysql'
-        : 'sqlite';
-
-    let dbStatus = 'unknown';
-    try {
-        const db = require('./database/db');
-        if (driver === 'mysql') {
-            const count = db.prepare('SELECT COUNT(*) AS total FROM clients').get();
-            dbStatus = `mysql_ok (${count?.total ?? 0} clients)`;
-        } else {
-            dbStatus = 'sqlite_ok';
-        }
-    } catch (error) {
-        dbStatus = `error: ${error.message}`;
-    }
-
     res.json({
         status: 'ok',
         environment: process.env.NODE_ENV || 'development',
-        database: driver,
-        dbStatus
+        database: process.env.DB_DRIVER || 'sqlite'
     });
 });
 
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: process.env.NODE_ENV === 'test' ? 1000 : parseInt(process.env.AUTH_RATE_LIMIT_MAX || '20'),
+    max: isTest ? 1000 : parseInt(process.env.AUTH_RATE_LIMIT_MAX || '20', 10),
     standardHeaders: true,
     legacyHeaders: false,
     message: {
@@ -92,65 +68,57 @@ const authLimiter = rateLimit({
 });
 
 function mountApiRoutes() {
-    const authRoutes = require('./routes/auth');
-    const productRoutes = require('./routes/products');
-    const clientRoutes = require('./routes/clients');
-    const orderRoutes = require('./routes/orders');
-    const jobOrderRoutes = require('./routes/jobOrders');
-    const productionRoutes = require('./routes/production');
-    const deliveryRoutes = require('./routes/deliveries');
-    const invoiceRoutes = require('./routes/invoices');
-    const paymentRoutes = require('./routes/payments');
-    const bufferStockRoutes = require('./routes/bufferStock');
-    const reportRoutes = require('./routes/reports');
-    const auditLogRoutes = require('./routes/auditLogs');
-    const userRoutes = require('./routes/users');
-
     app.use('/api/auth/login', authLimiter);
-    app.use('/api/auth', authRoutes);
-    app.use('/api/products', productRoutes);
-    app.use('/api/clients', clientRoutes);
-    app.use('/api/orders', orderRoutes);
-    app.use('/api/job-orders', jobOrderRoutes);
-    app.use('/api/production', productionRoutes);
-    app.use('/api/deliveries', deliveryRoutes);
-    app.use('/api/invoices', invoiceRoutes);
-    app.use('/api/payments', paymentRoutes);
-    app.use('/api/buffer-stock', bufferStockRoutes);
-    app.use('/api/reports', reportRoutes);
-    app.use('/api/audit-logs', auditLogRoutes);
-    app.use('/api/users', userRoutes);
+    app.use('/api/auth', require('./routes/auth'));
+    app.use('/api/products', require('./routes/products'));
+    app.use('/api/clients', require('./routes/clients'));
+    app.use('/api/orders', require('./routes/orders'));
+    app.use('/api/job-orders', require('./routes/jobOrders'));
+    app.use('/api/production', require('./routes/production'));
+    app.use('/api/deliveries', require('./routes/deliveries'));
+    app.use('/api/invoices', require('./routes/invoices'));
+    app.use('/api/payments', require('./routes/payments'));
+    app.use('/api/buffer-stock', require('./routes/bufferStock'));
+    app.use('/api/reports', require('./routes/reports'));
+    app.use('/api/audit-logs', require('./routes/auditLogs'));
+    app.use('/api/users', require('./routes/users'));
 }
 
-try {
-    require('./database/db');
-    mountApiRoutes();
-    console.log('✅ Database and API routes loaded');
-} catch (error) {
-    console.error('❌ Database/API startup failed:', error.message);
-    app.get('/api/*', (req, res) => {
-        res.status(503).json({
-            success: false,
-            error: 'SERVICE_UNAVAILABLE',
-            message: 'Database connection failed. Check Hostinger environment variables and run npm run migrate:mysql.'
+function loadDatabaseAndRoutes() {
+    try {
+        require('./database/db');
+        mountApiRoutes();
+        app.use(errorHandler);
+        console.log('✅ Database and API routes loaded');
+        return true;
+    } catch (error) {
+        console.error('❌ Database/API startup failed:', error.message);
+        app.use('/api', (req, res, next) => {
+            if (req.path === '/health' || req.originalUrl === '/api/health') {
+                return next();
+            }
+            return res.status(503).json({
+                success: false,
+                error: 'SERVICE_UNAVAILABLE',
+                message: 'Database connection failed. Check Hostinger environment variables and run npm run migrate:mysql.'
+            });
         });
-    });
+        app.use(errorHandler);
+        return false;
+    }
 }
 
-app.use(errorHandler);
-
-const shouldStartServer = require.main === module || process.env.PASSENGER_APP_ENV;
-
-if (shouldStartServer && process.env.NODE_ENV !== 'test') {
-    const server = app.listen(PORT, HOST, () => {
+if (isTest) {
+    loadDatabaseAndRoutes();
+} else {
+    const server = app.listen(PORT, () => {
         console.log(`=======================================================`);
         console.log(`🚀 NKB MANUFACTURING & TRADING SYSTEM IS RUNNING`);
         console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-        console.log(`🌐 Listening on: ${HOST}:${PORT}`);
+        console.log(`🌐 Port: ${PORT}`);
         console.log(`🗄️  Database: ${process.env.DB_DRIVER || 'sqlite'}`);
-        console.log(`🔐 Admin Portal: /admin.html`);
-        console.log(`📦 Client Portal: /client.html`);
         console.log(`=======================================================`);
+        loadDatabaseAndRoutes();
     });
 
     process.on('uncaughtException', (err) => {
@@ -159,7 +127,6 @@ if (shouldStartServer && process.env.NODE_ENV !== 'test') {
     process.on('unhandledRejection', (reason, promise) => {
         console.error('Unhandled Rejection at:', promise, 'reason:', reason);
     });
-
     process.on('SIGINT', () => {
         server.close(() => process.exit(0));
     });

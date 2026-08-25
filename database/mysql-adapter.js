@@ -73,26 +73,19 @@ function createWorkerBridge(config) {
         Atomics.notify(shared, 0);
     });
 
-    function callWorker(payload, timeoutMs = 20000) {
+    function callWorker(payload, timeoutMs = 8000) {
         const id = ++nextId;
         Atomics.store(shared, 0, 0);
 
-        const timeout = setTimeout(() => {
-            if (results.has(id)) {
-                return;
-            }
-            results.set(id, { error: `Database query timed out after ${timeoutMs}ms` });
-            Atomics.store(shared, 0, 1);
-            Atomics.notify(shared, 0);
-        }, timeoutMs);
-
         worker.postMessage({ ...payload, id });
-        Atomics.wait(shared, 0, 0);
-        clearTimeout(timeout);
+        const waitResult = Atomics.wait(shared, 0, 0, timeoutMs);
 
         const response = results.get(id);
         results.delete(id);
 
+        if (waitResult === 'timed-out' && !response) {
+            throw new Error(`Database query timed out after ${timeoutMs}ms`);
+        }
         if (!response) {
             throw new Error('Database worker returned no response');
         }
