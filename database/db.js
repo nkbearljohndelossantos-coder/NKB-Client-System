@@ -5,7 +5,17 @@ const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 
 const dbDriver = (process.env.DB_DRIVER || '').toLowerCase();
-const useMysql = dbDriver === 'mysql';
+const hasMysqlConfig = Boolean(
+    process.env.DB_USER && process.env.DB_PASSWORD && process.env.DB_NAME
+);
+const useMysql = dbDriver === 'mysql'
+    || (dbDriver !== 'sqlite' && hasMysqlConfig && process.env.NODE_ENV === 'production');
+
+if (process.env.NODE_ENV === 'production' && !useMysql) {
+    console.warn('⚠️  PRODUCTION is using SQLite file storage. Set DB_DRIVER=mysql and MySQL env vars to use phpMyAdmin.');
+} else if (useMysql) {
+    console.log(`🗄️  Database driver: MySQL (${process.env.DB_NAME})`);
+}
 
 let db;
 

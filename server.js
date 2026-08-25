@@ -49,10 +49,33 @@ app.get('/favicon.ico', (req, res) => {
 });
 
 app.get('/api/health', (req, res) => {
+    const driver = (process.env.DB_DRIVER || '').toLowerCase() === 'mysql'
+        || (process.env.DB_DRIVER !== 'sqlite'
+            && process.env.DB_USER
+            && process.env.DB_PASSWORD
+            && process.env.DB_NAME
+            && process.env.NODE_ENV === 'production')
+        ? 'mysql'
+        : 'sqlite';
+
+    let dbStatus = 'unknown';
+    try {
+        const db = require('./database/db');
+        if (driver === 'mysql') {
+            const count = db.prepare('SELECT COUNT(*) AS total FROM clients').get();
+            dbStatus = `mysql_ok (${count?.total ?? 0} clients)`;
+        } else {
+            dbStatus = 'sqlite_ok';
+        }
+    } catch (error) {
+        dbStatus = `error: ${error.message}`;
+    }
+
     res.json({
         status: 'ok',
         environment: process.env.NODE_ENV || 'development',
-        database: process.env.DB_DRIVER || 'sqlite'
+        database: driver,
+        dbStatus
     });
 });
 

@@ -163,7 +163,12 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'ACCOUNTING', 'SUPER_A
             } : null
         });
     } catch (err) {
-        if (err.message && err.message.includes('UNIQUE constraint failed: clients.email')) {
+        const duplicateEmail = err.code === 'ER_DUP_ENTRY'
+            || (err.message && (
+                err.message.includes('UNIQUE constraint failed: clients.email')
+                || err.message.includes('Duplicate entry')
+            ));
+        if (duplicateEmail) {
             return res.status(400).json({ success: false, error: `A client with email "${email}" already exists.` });
         }
         throw err;
