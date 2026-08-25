@@ -7,6 +7,7 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "migrate": "node database/migrate.js",
+    "migrate:mysql": "node database/migrate-mysql.js",
     "backup": "node database/backup.js",
     "init-admin": "node database/init-admin.js",
     "seed": "node database/seed.js",
@@ -27,11 +28,12 @@
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
-    "dotenv": "^16.4.7",
+    "dotenv": "^16.6.1",
     "express": "^4.21.2",
     "express-rate-limit": "^8.6.2",
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.2",
+    "mysql2": "^3.24.2",
     "uuid": "^11.1.0"
   },
   "devDependencies": {
