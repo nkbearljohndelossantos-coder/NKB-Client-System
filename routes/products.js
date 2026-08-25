@@ -149,7 +149,7 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'SUPER_A
 
     const id = uuidv4();
     try {
-        db.prepare(`
+        const insertResult = db.prepare(`
             INSERT INTO products (id, sku, name, category, description, unit, default_price, formula_code, shelf_life_months)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
@@ -163,6 +163,10 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'SUPER_A
             formula_code || null,
             parsedShelfLife
         );
+
+        if (!insertResult.changes) {
+            throw new Error('Product insert did not affect any rows.');
+        }
 
         logAudit({
             userId: req.user.id,

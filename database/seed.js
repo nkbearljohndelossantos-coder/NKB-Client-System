@@ -3,7 +3,12 @@ const { v4: uuidv4 } = require('uuid');
 const db = require('./db');
 
 function seedDatabase() {
-    console.log('🌱 Starting Database Seeding...');
+    if (process.env.NODE_ENV === 'production') {
+        console.error('❌ Refusing to seed demo data in production. Use npm run wipe:mysql for a clean database.');
+        process.exit(1);
+    }
+
+    console.log('🌱 Starting Database Seeding (development only)...');
 
     const salt = bcrypt.genSaltSync(10);
     const adminPasswordHash = bcrypt.hashSync('Admin123!', salt);

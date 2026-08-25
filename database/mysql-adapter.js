@@ -1,40 +1,5 @@
-require('dotenv').config();
-const mysql = require('mysql2/promise');
-
-let deasync;
-try {
-    deasync = require('deasync');
-} catch (error) {
-    console.warn('deasync not available; MySQL sync adapter requires it on the server.');
-}
-
-function wait(promise) {
-    if (!deasync) {
-        throw new Error('MySQL adapter requires deasync. Run: npm install');
-    }
-
-    let done = false;
-    let result;
-    let error;
-
-    promise
-        .then((value) => {
-            result = value;
-            done = true;
-        })
-        .catch((err) => {
-            error = err;
-            done = true;
-        });
-
-    deasync.loopWhile(() => !done);
-
-    if (error) {
-        throw error;
-    }
-
-    return result;
-}
+const { Worker } = require('worker_threads');
+const path = require('path');
 
 function translateSql(sql) {
     if (/^\s*PRAGMA/i.test(sql)) {
@@ -47,7 +12,6 @@ function translateSql(sql) {
         /CAST\s*\(\s*\(\s*julianday\s*\(\s*'now'\s*\)\s*-\s*julianday\s*\(\s*([a-zA-Z_][\w.]*)\s*\)\s*\)\s*AS\s*INTEGER\s*\)/gi,
         'DATEDIFF(CURDATE(), $1)'
     );
-
     translated = translated.replace(/datetime\s*\(\s*'now'\s*(?:,\s*'[^']*')?\s*\)/gi, 'NOW()');
     translated = translated.replace(/date\s*\(\s*'now'\s*(?:,\s*'[^']*')?\s*\)/gi, 'CURDATE()');
     translated = translated.replace(/date\s*\(\s*([a-zA-Z_][\w.]*)\s*\)/gi, 'DATE($1)');
@@ -85,53 +49,83 @@ function isDuplicateKeyError(err) {
         || (err?.message && err.message.includes('Duplicate entry'));
 }
 
+function createWorkerBridge(config) {
+    const shared = new Int32Array(new SharedArrayBuffer(4));
+    let nextId = 0;
+    const results = new Map();
+
+    const worker = new Worker(path.join(__dirname, 'mysql-worker.js'), {
+        workerData: config
+    });
+
+    worker.on('message', (message) => {
+        if (!message.id) {
+            return;
+        }
+        results.set(message.id, message);
+        Atomics.store(shared, 0, 1);
+        Atomics.notify(shared, 0);
+    });
+
+    worker.on('error', (error) => {
+        results.set(-1, { error: error.message });
+        Atomics.store(shared, 0, 1);
+        Atomics.notify(shared, 0);
+    });
+
+    function callWorker(payload, timeoutMs = 20000) {
+        const id = ++nextId;
+        Atomics.store(shared, 0, 0);
+
+        const timeout = setTimeout(() => {
+            if (results.has(id)) {
+                return;
+            }
+            results.set(id, { error: `Database query timed out after ${timeoutMs}ms` });
+            Atomics.store(shared, 0, 1);
+            Atomics.notify(shared, 0);
+        }, timeoutMs);
+
+        worker.postMessage({ ...payload, id });
+        Atomics.wait(shared, 0, 0);
+        clearTimeout(timeout);
+
+        const response = results.get(id);
+        results.delete(id);
+
+        if (!response) {
+            throw new Error('Database worker returned no response');
+        }
+        if (response.error) {
+            const error = new Error(response.error);
+            error.code = response.code || undefined;
+            throw error;
+        }
+        return response;
+    }
+
+    return { callWorker, worker };
+}
+
 function createMysqlAdapter() {
     if (!process.env.DB_USER || !process.env.DB_PASSWORD || !process.env.DB_NAME) {
         throw new Error('Missing DB_USER, DB_PASSWORD, or DB_NAME environment variables');
     }
 
-    const pool = mysql.createPool({
+    const config = {
         host: process.env.DB_HOST || 'localhost',
         port: parseInt(process.env.DB_PORT || '3306', 10),
         user: process.env.DB_USER,
         password: process.env.DB_PASSWORD,
-        database: process.env.DB_NAME,
-        waitForConnections: true,
-        connectionLimit: 10,
-        queueLimit: 0,
-        timezone: '+00:00',
-        connectTimeout: 10000
-    });
+        database: process.env.DB_NAME
+    };
 
-    let transactionConnection = null;
-    let connectionVerified = false;
+    const { callWorker } = createWorkerBridge(config);
+    let activeTransactionId = null;
 
-    function getExecutor() {
-        return transactionConnection || pool;
-    }
-
-    function runQuery(sql, params = []) {
-        return wait(getExecutor().query(sql, params));
-    }
-
-    function verifyConnection() {
-        if (connectionVerified) {
-            return;
-        }
-
-        try {
-            runQuery('SELECT 1');
-            connectionVerified = true;
-            console.log(`✅ Connected to MySQL: ${process.env.DB_NAME} @ ${process.env.DB_HOST || 'localhost'}`);
-        } catch (error) {
-            console.error(`❌ MySQL connection failed (${process.env.DB_HOST}/${process.env.DB_NAME}): ${error.message}`);
-            throw error;
-        }
-    }
+    console.log(`🗄️  MySQL adapter ready: ${config.database} @ ${config.host}`);
 
     function exec(sql) {
-        verifyConnection();
-
         const statements = sql
             .split(';')
             .map((statement) => statement.trim())
@@ -142,7 +136,11 @@ function createMysqlAdapter() {
             if (!translated) {
                 continue;
             }
-            runQuery(translated);
+            callWorker({
+                type: 'exec',
+                sql: translated,
+                transactionId: activeTransactionId
+            });
         }
     }
 
@@ -150,35 +148,45 @@ function createMysqlAdapter() {
         const translatedSql = translateSql(sql);
         if (!translatedSql) {
             return {
-                get() {
-                    return undefined;
-                },
-                all() {
-                    return [];
-                },
-                run() {
-                    return { changes: 0 };
-                }
+                get() { return undefined; },
+                all() { return []; },
+                run() { return { changes: 0 }; }
             };
         }
 
         return {
             get(...params) {
-                verifyConnection();
-                const [rows] = runQuery(translatedSql, params);
+                const response = callWorker({
+                    type: 'query',
+                    sql: translatedSql,
+                    params,
+                    mode: 'get',
+                    transactionId: activeTransactionId
+                });
+                const rows = response.rows;
                 return Array.isArray(rows) ? rows[0] : rows;
             },
             all(...params) {
-                verifyConnection();
-                const [rows] = runQuery(translatedSql, params);
-                return rows;
+                const response = callWorker({
+                    type: 'query',
+                    sql: translatedSql,
+                    params,
+                    mode: 'all',
+                    transactionId: activeTransactionId
+                });
+                return response.rows || [];
             },
             run(...params) {
-                verifyConnection();
-                const [result] = runQuery(translatedSql, params);
+                const response = callWorker({
+                    type: 'query',
+                    sql: translatedSql,
+                    params,
+                    mode: 'run',
+                    transactionId: activeTransactionId
+                });
                 return {
-                    changes: result.affectedRows || 0,
-                    lastInsertRowid: result.insertId || 0
+                    changes: response.affectedRows || 0,
+                    lastInsertRowid: response.insertId || 0
                 };
             }
         };
@@ -186,37 +194,31 @@ function createMysqlAdapter() {
 
     function transaction(fn) {
         return function transactionWrapper(...args) {
-            if (transactionConnection) {
+            if (activeTransactionId) {
                 return fn(...args);
             }
 
-            const connection = wait(pool.getConnection());
+            const beginResponse = callWorker({ type: 'begin' });
+            activeTransactionId = beginResponse.transactionId;
 
             try {
-                wait(connection.beginTransaction());
-                transactionConnection = connection;
                 const result = fn(...args);
-                wait(connection.commit());
+                callWorker({ type: 'commit', transactionId: activeTransactionId });
                 return result;
             } catch (error) {
                 try {
-                    wait(connection.rollback());
+                    callWorker({ type: 'rollback', transactionId: activeTransactionId });
                 } catch (rollbackError) {
                     console.error('Transaction rollback failed:', rollbackError.message);
                 }
                 throw error;
             } finally {
-                transactionConnection = null;
-                connection.release();
+                activeTransactionId = null;
             }
         };
     }
 
-    return {
-        exec,
-        prepare,
-        transaction
-    };
+    return { exec, prepare, transaction };
 }
 
 module.exports = createMysqlAdapter;

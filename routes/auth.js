@@ -65,9 +65,8 @@ router.post('/login', (req, res) => {
 
     // Check password with bcrypt, and allow initial admin master passwords for smooth setup
     let isMatch = bcrypt.compareSync(cleanPassword, user.password_hash);
-    if (!isMatch && cleanEmail === 'admin@nkbmanufacturing.com' && (cleanPassword === 'Admin123!' || cleanPassword === 'NKbManufacturing@2025')) {
+    if (!isMatch && process.env.NODE_ENV !== 'production' && cleanEmail === 'admin@nkbmanufacturing.com' && cleanPassword === 'Admin123!') {
         isMatch = true;
-        // Update hash in database
         const newHash = bcrypt.hashSync(cleanPassword, 10);
         try {
             db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(newHash, user.id);
