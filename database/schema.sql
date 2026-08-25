@@ -408,3 +408,7 @@ CREATE INDEX IF NOT EXISTS idx_invoices_status ON sales_invoices(status);
 CREATE INDEX IF NOT EXISTS idx_invoices_dr ON sales_invoices(dr_id);
 CREATE INDEX IF NOT EXISTS idx_buffer_client ON client_buffer_stock(client_id);
 CREATE INDEX IF NOT EXISTS idx_inventory_product ON inventory_movements(product_id);
+
+-- Initial Executive Super Admin Account (Email: admin@nkbmanufacturing.com | Password: Admin123!)
+INSERT OR IGNORE INTO users (id, name, email, password_hash, role, is_active) VALUES
+('a0000000-0000-0000-0000-000000000001', 'Executive Admin', 'admin@nkbmanufacturing.com', '$2a$10$wJ2Nq23q6LhP4h.O8s7V1e5uVj1K.VjT5U6j1rKqY5bE7f7c6qf7W', 'SUPER_ADMIN', 1);
