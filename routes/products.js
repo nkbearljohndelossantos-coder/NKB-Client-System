@@ -130,11 +130,21 @@ router.get('/:id', authenticateToken, (req, res) => {
  * POST /api/products
  * Admin/Production only
  */
-router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), (req, res) => {
+router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'SUPER_ADMIN'), (req, res) => {
     const { sku, name, category, description, unit, default_price, formula_code, shelf_life_months } = req.body;
 
-    if (!sku || !name || default_price === undefined) {
+    if (!sku || !name || default_price === undefined || default_price === null || default_price === '') {
         return res.status(400).json({ success: false, error: 'SKU, Name, and Default Price are required.' });
+    }
+
+    const parsedPrice = parseFloat(default_price);
+    if (Number.isNaN(parsedPrice) || parsedPrice < 0) {
+        return res.status(400).json({ success: false, error: 'Default price must be a valid positive number.' });
+    }
+
+    const parsedShelfLife = parseInt(shelf_life_months || 24, 10);
+    if (Number.isNaN(parsedShelfLife) || parsedShelfLife < 1) {
+        return res.status(400).json({ success: false, error: 'Shelf life must be at least 1 month.' });
     }
 
     const id = uuidv4();
@@ -149,9 +159,9 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), (req, r
             category || 'Cosmetics',
             description || '',
             unit || 'pcs',
-            parseFloat(default_price),
+            parsedPrice,
             formula_code || null,
-            parseInt(shelf_life_months || 24)
+            parsedShelfLife
         );
 
         logAudit({
@@ -167,10 +177,16 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), (req, r
         const newProduct = db.prepare('SELECT * FROM products WHERE id = ?').get(id);
         return res.status(201).json({ success: true, data: newProduct });
     } catch (err) {
-        if (err.message && err.message.includes('UNIQUE constraint failed: products.sku')) {
+        const duplicateSku = err.code === 'ER_DUP_ENTRY'
+            || (err.message && (
+                err.message.includes('UNIQUE constraint failed: products.sku')
+                || err.message.includes('Duplicate entry')
+            ));
+        if (duplicateSku) {
             return res.status(400).json({ success: false, error: `Product SKU "${sku}" already exists.` });
         }
-        throw err;
+        console.error('Create product failed:', err.message);
+        return res.status(500).json({ success: false, error: 'Failed to save product. Please try again.' });
     }
 });
 

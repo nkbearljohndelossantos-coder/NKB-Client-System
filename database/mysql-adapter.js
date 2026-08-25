@@ -43,8 +43,14 @@ function translateSql(sql) {
 
     let translated = sql;
 
+    translated = translated.replace(
+        /CAST\s*\(\s*\(\s*julianday\s*\(\s*'now'\s*\)\s*-\s*julianday\s*\(\s*([a-zA-Z_][\w.]*)\s*\)\s*\)\s*AS\s*INTEGER\s*\)/gi,
+        'DATEDIFF(CURDATE(), $1)'
+    );
+
     translated = translated.replace(/datetime\s*\(\s*'now'\s*(?:,\s*'[^']*')?\s*\)/gi, 'NOW()');
     translated = translated.replace(/date\s*\(\s*'now'\s*(?:,\s*'[^']*')?\s*\)/gi, 'CURDATE()');
+    translated = translated.replace(/date\s*\(\s*([a-zA-Z_][\w.]*)\s*\)/gi, 'DATE($1)');
     translated = translated.replace(
         /strftime\s*\(\s*'%Y-%m'\s*,\s*([a-zA-Z_][\w.]*)\s*\)/gi,
         "DATE_FORMAT($1, '%Y-%m')"
@@ -72,6 +78,11 @@ function translateSql(sql) {
     );
 
     return translated;
+}
+
+function isDuplicateKeyError(err) {
+    return err?.code === 'ER_DUP_ENTRY'
+        || (err?.message && err.message.includes('Duplicate entry'));
 }
 
 function createMysqlAdapter() {
@@ -209,3 +220,5 @@ function createMysqlAdapter() {
 }
 
 module.exports = createMysqlAdapter;
+module.exports.translateSql = translateSql;
+module.exports.isDuplicateKeyError = isDuplicateKeyError;

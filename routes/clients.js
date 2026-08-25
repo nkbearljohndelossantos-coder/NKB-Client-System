@@ -591,29 +591,39 @@ router.post('/:id/products', authenticateToken, requireRoles('ADMIN', 'SUPER_ADM
     const productId = uuidv4();
     const pricingId = uuidv4();
 
-    const createAndAssignTx = db.transaction(() => {
-        db.prepare(`
-            INSERT INTO products (id, sku, name, category, description, unit, default_price, formula_code, shelf_life_months, is_active)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-        `).run(
-            productId,
-            sku.trim().toUpperCase(),
-            name.trim(),
-            category || 'Cosmetics',
-            description || '',
-            unit || 'pcs',
-            parsedPrice,
-            formula_code || null,
-            shelf_life_months ? parseInt(shelf_life_months) : 24
-        );
+    try {
+        const createAndAssignTx = db.transaction(() => {
+            db.prepare(`
+                INSERT INTO products (id, sku, name, category, description, unit, default_price, formula_code, shelf_life_months, is_active)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+            `).run(
+                productId,
+                sku.trim().toUpperCase(),
+                name.trim(),
+                category || 'Cosmetics',
+                description || '',
+                unit || 'pcs',
+                parsedPrice,
+                formula_code || null,
+                shelf_life_months ? parseInt(shelf_life_months, 10) : 24
+            );
 
-        db.prepare(`
-            INSERT INTO client_product_prices (id, client_id, product_id, custom_name, custom_price, custom_sku, custom_formula_code, is_active)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 1)
-        `).run(pricingId, clientId, productId, name.trim(), parsedPrice, sku.trim().toUpperCase(), formula_code || null);
-    });
+            db.prepare(`
+                INSERT INTO client_product_prices (id, client_id, product_id, custom_name, custom_price, custom_sku, custom_formula_code, is_active)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+            `).run(pricingId, clientId, productId, name.trim(), parsedPrice, sku.trim().toUpperCase(), formula_code || null);
+        });
 
-    createAndAssignTx();
+        createAndAssignTx();
+    } catch (err) {
+        const duplicateSku = err.code === 'ER_DUP_ENTRY'
+            || (err.message && err.message.includes('Duplicate entry'));
+        if (duplicateSku) {
+            return res.status(400).json({ success: false, error: 'A product with this SKU already exists in catalog.' });
+        }
+        console.error('Create client product failed:', err.message);
+        return res.status(500).json({ success: false, error: 'Failed to save product. Please try again.' });
+    }
 
     logAudit({
         userId: req.user.id,
