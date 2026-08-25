@@ -1,11 +1,12 @@
 const db = require('./db');
 
-function wipeTransactions() {
-    console.log('🧹 Wiping all transaction records from database...');
+function wipeDatabase() {
+    console.log('🧹 Wiping all demo records (Transactions, Products, Clients, Pricing, and Demo Staff)...');
 
     db.exec('PRAGMA foreign_keys = OFF;');
 
     const wipeTx = db.transaction(() => {
+        // 1. Wipe all transaction tables
         db.exec(`
             DELETE FROM payments;
             DELETE FROM invoice_items;
@@ -23,9 +24,17 @@ function wipeTransactions() {
             DELETE FROM client_buffer_stock;
             DELETE FROM inventory_movements;
             DELETE FROM audit_logs;
+            DELETE FROM client_product_prices;
+            DELETE FROM products;
+            DELETE FROM clients;
         `);
 
-        // Reset document sequences
+        // 2. Remove all demo non-admin accounts, preserve only Super Admin
+        db.exec(`
+            DELETE FROM users WHERE role != 'SUPER_ADMIN';
+        `);
+
+        // 3. Reset document sequences
         const year = new Date().getFullYear();
         db.exec('DELETE FROM document_sequences;');
         const insertSeq = db.prepare('INSERT INTO document_sequences (doc_type, current_year, last_sequence) VALUES (?, ?, 0)');
@@ -37,15 +46,15 @@ function wipeTransactions() {
 
     try {
         wipeTx();
-        console.log('✅ All transaction records successfully wiped.');
-        console.log('✨ Master accounts (Clients, Products, Users, Client Pricing) are preserved.');
+        console.log('✅ Database is now 100% CLEAN: 0 Products, 0 Clients, 0 Transactions.');
+        console.log('👤 Only the Executive Super Admin account is retained for your initial setup.');
     } finally {
         db.exec('PRAGMA foreign_keys = ON;');
     }
 }
 
 if (require.main === module) {
-    wipeTransactions();
+    wipeDatabase();
 }
 
-module.exports = wipeTransactions;
+module.exports = wipeDatabase;
