@@ -8,6 +8,7 @@
     "dev": "node --watch server.js",
     "migrate": "node database/migrate.js",
     "migrate:mysql": "node database/migrate-mysql.js",
+    "test:db": "node database/test-connection.js",
     "backup": "node database/backup.js",
     "init-admin": "node database/init-admin.js",
     "seed": "node database/seed.js",

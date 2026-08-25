@@ -1,34 +1,41 @@
-const { DatabaseSync } = require('node:sqlite');
+require('dotenv').config();
 const path = require('path');
 const fs = require('fs');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 
-const projectRoot = path.resolve(__dirname, '..');
-const dbPath = process.env.DATABASE_PATH
-    ? path.resolve(projectRoot, process.env.DATABASE_PATH)
-    : path.join(__dirname, 'nkb.sqlite');
+const dbDriver = (process.env.DB_DRIVER || '').toLowerCase();
+const useMysql = dbDriver === 'mysql'
+    || (dbDriver !== 'sqlite' && process.env.DB_HOST && process.env.DB_USER && process.env.DB_NAME && process.env.NODE_ENV === 'production');
 
-// Ensure directory exists
-const dir = path.dirname(dbPath);
-if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+let db;
+
+if (useMysql) {
+    db = require('./mysql-adapter')();
+} else {
+    const { DatabaseSync } = require('node:sqlite');
+
+    const projectRoot = path.resolve(__dirname, '..');
+    const dbPath = process.env.DATABASE_PATH
+        ? path.resolve(projectRoot, process.env.DATABASE_PATH)
+        : path.join(__dirname, 'nkb.sqlite');
+
+    const dir = path.dirname(dbPath);
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+    }
+
+    db = new DatabaseSync(dbPath);
+    db.exec('PRAGMA foreign_keys = ON;');
+    db.exec('PRAGMA journal_mode = WAL;');
+
+    const schemaPath = path.join(__dirname, 'schema.sql');
+    if (fs.existsSync(schemaPath)) {
+        const schemaSql = fs.readFileSync(schemaPath, 'utf8');
+        db.exec(schemaSql);
+    }
 }
 
-const db = new DatabaseSync(dbPath);
-
-// Enable foreign keys and WAL mode for reliability
-db.exec('PRAGMA foreign_keys = ON;');
-db.exec('PRAGMA journal_mode = WAL;');
-
-// Initialize schema
-const schemaPath = path.join(__dirname, 'schema.sql');
-if (fs.existsSync(schemaPath)) {
-    const schemaSql = fs.readFileSync(schemaPath, 'utf8');
-    db.exec(schemaSql);
-}
-
-// Auto-provision Super Admin on startup if none exists
 try {
     const adminUser = db.prepare("SELECT id FROM users WHERE role = 'SUPER_ADMIN' LIMIT 1").get();
     if (!adminUser) {
@@ -43,10 +50,13 @@ try {
         console.log(`👤 Auto-provisioned Super Admin: ${adminEmail}`);
     }
 } catch (err) {
-    console.error('Admin provision error:', err.message);
+    if (useMysql) {
+        console.warn('Admin provision skipped (run npm run migrate:mysql first if tables are missing).');
+    } else {
+        console.error('Admin provision error:', err.message);
+    }
 }
 
-// Initialize Document Sequences if empty
 try {
     const year = new Date().getFullYear();
     const docTypes = ['PO', 'JO', 'BAT', 'DR', 'SI', 'PAY'];
@@ -59,23 +69,24 @@ try {
     }
 } catch (err) {}
 
-// Transaction wrapper helper
-db.transaction = function (fn) {
-    return function (...args) {
-        db.exec('BEGIN TRANSACTION;');
-        try {
-            const result = fn(...args);
-            db.exec('COMMIT;');
-            return result;
-        } catch (error) {
+if (!useMysql) {
+    db.transaction = function (fn) {
+        return function (...args) {
+            db.exec('BEGIN TRANSACTION;');
             try {
-                db.exec('ROLLBACK;');
-            } catch (rollbackError) {
-                console.error('Transaction rollback failed:', rollbackError.message);
+                const result = fn(...args);
+                db.exec('COMMIT;');
+                return result;
+            } catch (error) {
+                try {
+                    db.exec('ROLLBACK;');
+                } catch (rollbackError) {
+                    console.error('Transaction rollback failed:', rollbackError.message);
+                }
+                throw error;
             }
-            throw error;
-        }
+        };
     };
-};
+}
 
 module.exports = db;

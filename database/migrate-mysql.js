@@ -7,14 +7,19 @@ const bcrypt = require('bcryptjs');
 async function runMysqlMigration() {
     console.log('🔄 Connecting to MySQL Database...');
     console.log(`🌐 Host: ${process.env.DB_HOST || 'localhost'}`);
-    console.log(`📂 Database: ${process.env.DB_NAME || 'u335953510_client_db'}`);
-    console.log(`👤 User: ${process.env.DB_USER || 'u335953510_client'}`);
+    console.log(`📂 Database: ${process.env.DB_NAME}`);
+    console.log(`👤 User: ${process.env.DB_USER}`);
+
+    if (!process.env.DB_USER || !process.env.DB_PASSWORD || !process.env.DB_NAME) {
+        throw new Error('Missing DB_USER, DB_PASSWORD, or DB_NAME in .env');
+    }
 
     const connectionConfig = {
         host: process.env.DB_HOST || 'localhost',
-        user: process.env.DB_USER || 'u335953510_client',
-        password: process.env.DB_PASSWORD || 'NKbManufacturing@2025',
-        database: process.env.DB_NAME || 'u335953510_client_db',
+        port: parseInt(process.env.DB_PORT || '3306', 10),
+        user: process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+        database: process.env.DB_NAME,
         multipleStatements: true
     };
 
