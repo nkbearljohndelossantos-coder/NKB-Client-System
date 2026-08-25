@@ -5,6 +5,32 @@ let pool;
 const transactions = new Map();
 let transactionCounter = 0;
 
+function serializeValue(value) {
+    if (Buffer.isBuffer(value)) {
+        return value.toString('utf8');
+    }
+    if (typeof value === 'bigint') {
+        return Number(value);
+    }
+    if (value instanceof Date) {
+        return value.toISOString();
+    }
+    return value;
+}
+
+function serializeRows(result) {
+    if (!Array.isArray(result)) {
+        return result;
+    }
+    return result.map((row) => {
+        const out = {};
+        for (const [key, value] of Object.entries(row)) {
+            out[key] = serializeValue(value);
+        }
+        return out;
+    });
+}
+
 async function getPool() {
     if (!pool) {
         pool = mysql.createPool({
@@ -38,7 +64,7 @@ parentPort.on('message', async (message) => {
             const [result] = await executor.query(sql, params || []);
 
             if (mode === 'get' || mode === 'all') {
-                parentPort.postMessage({ id, rows: result });
+                parentPort.postMessage({ id, rows: serializeRows(result) });
                 return;
             }
 

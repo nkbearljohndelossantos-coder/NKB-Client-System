@@ -27,16 +27,23 @@ const NKB = {
     // API Helper
     api: async function(url, options = {}) {
         options.headers = options.headers || {};
+        options.credentials = options.credentials || 'same-origin';
         if (this.token) {
             options.headers['Authorization'] = `Bearer ${this.token}`;
         }
-        if (!(options.body instanceof FormData)) {
+        if (options.body && typeof options.body === 'object' && !(options.body instanceof FormData) && !(options.body instanceof URLSearchParams)) {
             options.headers['Content-Type'] = 'application/json';
+            options.body = JSON.stringify(options.body);
+        } else if (typeof options.body === 'string' && !(options.body instanceof FormData)) {
+            options.headers['Content-Type'] = options.headers['Content-Type'] || 'application/json';
         }
 
         try {
             const res = await fetch(url, options);
-            const data = await res.json();
+            const contentType = res.headers.get('content-type') || '';
+            const data = contentType.includes('application/json')
+                ? await res.json()
+                : { success: false, error: `Request failed (${res.status})` };
             if (res.status === 401 && !url.includes('/api/auth/login')) {
                 NKB.logout();
                 return { success: false, error: 'Session expired. Please log in again.' };
