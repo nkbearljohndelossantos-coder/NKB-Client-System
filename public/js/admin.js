@@ -477,11 +477,24 @@ async function loadClients() {
                 <td class="py-3 px-4"><span class="badge ${c.default_billing_policy === 'ACTUAL_DELIVERY' ? 'bg-indigo-50 text-indigo-700' : 'bg-purple-50 text-purple-700'}">${c.default_billing_policy}</span></td>
                 <td class="py-3 px-4 font-bold text-slate-700">±${c.default_tolerance_percent}%</td>
                 <td class="py-3 px-4 font-bold text-emerald-700">${NKB.formatCurrency(c.credit_limit)}</td>
-                <td class="py-3 px-4"><span class="badge bg-emerald-50 text-emerald-700">ACTIVE</span></td>
+                <td class="py-3 px-4">
+                    ${c.user_id ? `
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200" title="Login: ${c.user_email}">
+                            <span>●</span><span>Login Active</span>
+                        </span>
+                    ` : `
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-500">
+                            <span>○</span><span>No Login</span>
+                        </span>
+                    `}
+                </td>
                 <td class="py-3 px-4 text-right whitespace-nowrap">
                     <div class="flex items-center justify-end gap-1.5">
-                        <button onclick="openClientPricingModal('${c.id}', '${c.company_name.replace(/'/g, "\\'")}')" class="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1">
-                            <span>📦</span><span>Products & Pricing</span>
+                        <button onclick="openResetClientCredentialsModal('${c.id}', '${c.company_name.replace(/'/g, "\\'")}', '${c.email}')" class="px-2 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Manage Client Login & Reset Password">
+                            <span>🔑</span><span>${c.user_id ? 'Reset Password' : 'Create Login'}</span>
+                        </button>
+                        <button onclick="openClientPricingModal('${c.id}', '${c.company_name.replace(/'/g, "\\'")}')" class="px-2 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1">
+                            <span>📦</span><span>Catalog</span>
                         </button>
                         <button onclick="openEditClientModal('${c.id}')" class="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition" title="Edit Client">
                             <span>✏️</span>
@@ -2101,22 +2114,22 @@ function openCreateClientModal() {
                 </div>
                 <form onsubmit="submitCreateClient(event)" class="space-y-4 text-xs font-semibold">
                     <div>
-                        <label class="block text-slate-600 mb-1">Company / Brand Name</label>
+                        <label class="block text-slate-600 mb-1">Company / Brand Name *</label>
                         <input type="text" id="client-name" required placeholder="e.g. Luxe Skin Aesthetics Inc." class="w-full px-3 py-2 border rounded-xl bg-slate-50">
                     </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-slate-600 mb-1">Contact Person</label>
+                            <label class="block text-slate-600 mb-1">Contact Person *</label>
                             <input type="text" id="client-contact" required placeholder="Full Name" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
                         </div>
                         <div>
-                            <label class="block text-slate-600 mb-1">Email</label>
+                            <label class="block text-slate-600 mb-1">Email (Login Username) *</label>
                             <input type="email" id="client-email" required placeholder="client@company.com" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
                         </div>
                     </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-slate-600 mb-1">Phone</label>
+                            <label class="block text-slate-600 mb-1">Phone *</label>
                             <input type="text" id="client-phone" required placeholder="+63 917 000 0000" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
                         </div>
                         <div>
@@ -2125,7 +2138,7 @@ function openCreateClientModal() {
                         </div>
                     </div>
                     <div>
-                        <label class="block text-slate-600 mb-1">Business Address</label>
+                        <label class="block text-slate-600 mb-1">Business Address *</label>
                         <input type="text" id="client-address" required placeholder="Building, Street, City, Metro Manila" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
                     </div>
                     <div class="grid grid-cols-2 gap-3">
@@ -2141,6 +2154,23 @@ function openCreateClientModal() {
                             <input type="number" step="0.1" id="client-tolerance" value="10.0" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
                         </div>
                     </div>
+
+                    <!-- Client Portal Login Account Generator -->
+                    <div class="p-3 bg-amber-50/70 border border-amber-200 rounded-xl space-y-2">
+                        <div class="flex items-center justify-between">
+                            <label class="flex items-center gap-2 font-bold text-amber-900 cursor-pointer">
+                                <input type="checkbox" id="client-create-account" checked class="rounded border-amber-300 text-amber-600 focus:ring-amber-500">
+                                <span>Create Client Portal Login Credentials</span>
+                            </label>
+                            <span class="text-[10px] bg-amber-200 text-amber-900 font-bold px-2 py-0.5 rounded-full">Automated</span>
+                        </div>
+                        <div>
+                            <label class="block text-amber-800 text-[11px] mb-0.5">Initial Default Password</label>
+                            <input type="text" id="client-default-pass" value="Client123!" class="w-full px-3 py-1.5 border border-amber-300 rounded-lg bg-white text-slate-800 font-mono text-xs">
+                            <p class="text-[10px] text-amber-700 mt-0.5">The client will use their email and this password to log in, and can change it anytime in the Client Portal.</p>
+                        </div>
+                    </div>
+
                     <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
                         <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl">Cancel</button>
                         <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold">Save Client</button>
@@ -2161,6 +2191,8 @@ async function submitCreateClient(e) {
     const address = document.getElementById('client-address').value;
     const policy = document.getElementById('client-policy').value;
     const tolerance = parseFloat(document.getElementById('client-tolerance').value);
+    const createAccount = document.getElementById('client-create-account').checked;
+    const defaultPassword = document.getElementById('client-default-pass').value;
 
     const res = await NKB.api('/api/clients', {
         method: 'POST',
@@ -2172,17 +2204,121 @@ async function submitCreateClient(e) {
             tin,
             address,
             default_billing_policy: policy,
-            default_tolerance_percent: tolerance
+            default_tolerance_percent: tolerance,
+            create_portal_account: createAccount,
+            default_password: defaultPassword
         })
     });
 
     if (res.success) {
-        NKB.showToast(`Client "${companyName}" added successfully!`, 'success');
         closeModal();
         await loadInitialData();
         loadClients();
+
+        if (res.credentials) {
+            openClientCredentialsSummaryModal(companyName, res.credentials.email, res.credentials.password);
+        } else {
+            NKB.showToast(`Client "${companyName}" registered successfully!`, 'success');
+        }
     } else {
         NKB.showToast(res.error || 'Failed to add client.', 'error');
+    }
+}
+
+function openClientCredentialsSummaryModal(companyName, email, password) {
+    const root = document.getElementById('modals-root');
+    root.innerHTML = `
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
+            <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-emerald-200">
+                <div class="text-center space-y-1">
+                    <div class="text-4xl">🎉</div>
+                    <h3 class="text-lg font-extrabold text-slate-900">Client Login Credentials Created!</h3>
+                    <p class="text-xs text-slate-500">${companyName}</p>
+                </div>
+
+                <div class="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3 text-xs">
+                    <div class="flex justify-between items-center">
+                        <span class="text-slate-500 font-bold">Portal URL:</span>
+                        <a href="/index.html" target="_blank" class="font-mono text-indigo-600 font-bold hover:underline">/index.html</a>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-slate-500 font-bold">Username / Email:</span>
+                        <span class="font-mono font-bold text-slate-800 bg-white px-2 py-0.5 rounded border">${email}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-slate-500 font-bold">Default Password:</span>
+                        <span class="font-mono font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">${password}</span>
+                    </div>
+                </div>
+
+                <p class="text-[11px] text-slate-500 text-center">
+                    You may share these credentials with the client. The client can change their password anytime from their Client Portal.
+                </p>
+
+                <button onclick="closeModal()" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold rounded-xl shadow-lg transition text-xs">
+                    Got it, Close
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+function openResetClientCredentialsModal(clientId, companyName, email) {
+    const root = document.getElementById('modals-root');
+    root.innerHTML = `
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
+            <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-amber-200">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xl">🔑</span>
+                        <h3 class="text-base font-extrabold text-slate-900">Manage Client Credentials</h3>
+                    </div>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
+                </div>
+
+                <div class="text-xs text-slate-600">
+                    Client: <strong class="text-slate-900">${companyName}</strong><br>
+                    Login Email: <strong class="text-slate-900">${email}</strong>
+                </div>
+
+                <form onsubmit="submitResetClientCredentials(event, '${clientId}', '${companyName.replace(/'/g, "\\'")}', '${email}')" class="space-y-4 text-xs font-semibold">
+                    <div>
+                        <label class="block text-slate-700 mb-1">Set New Password (Default: Client123!)</label>
+                        <input type="text" id="reset-client-password" required value="Client123!" minlength="8" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-mono text-xs">
+                        <p class="text-[10px] text-slate-500 mt-1">This will update or create the client's login account with this new password.</p>
+                    </div>
+
+                    <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl">Cancel</button>
+                        <button type="submit" id="btn-submit-reset" class="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-bold shadow-md">Reset & Save Password</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+}
+
+async function submitResetClientCredentials(e, clientId, companyName, email) {
+    e.preventDefault();
+    const newPassword = document.getElementById('reset-client-password').value;
+    const btn = document.getElementById('btn-submit-reset');
+
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    const res = await NKB.api(`/api/clients/${clientId}/credentials/reset`, {
+        method: 'POST',
+        body: JSON.stringify({ new_password: newPassword })
+    });
+
+    if (res.success) {
+        closeModal();
+        loadClients();
+        openClientCredentialsSummaryModal(companyName, email, newPassword);
+    } else {
+        btn.disabled = false;
+        btn.textContent = 'Reset & Save Password';
+        NKB.showToast(res.error || res.message || 'Failed to reset password.', 'error');
     }
 }
 

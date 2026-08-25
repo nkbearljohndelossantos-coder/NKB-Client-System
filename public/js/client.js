@@ -691,3 +691,93 @@ async function loadClientBuffer() {
         tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-slate-400">No reserved buffer stock in warehouse.</td></tr>`;
     }
 }
+
+// -------------------------------------------------------------
+// 8. CHANGE PASSWORD MODAL
+// -------------------------------------------------------------
+function openClientChangePasswordModal() {
+    const root = document.getElementById('client-modals-root');
+    root.innerHTML = `
+        <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in duration-200">
+                <div class="flex items-center justify-between pb-4 border-b border-slate-100">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xl">🔒</span>
+                        <h3 class="font-extrabold text-slate-900 text-lg">Change Portal Password</h3>
+                    </div>
+                    <button onclick="document.getElementById('client-modals-root').innerHTML=''" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
+                </div>
+
+                <form id="form-change-password" onsubmit="submitClientChangePassword(event)" class="mt-5 space-y-4 text-xs">
+                    <div>
+                        <label class="font-bold text-slate-700 block mb-1">Current Password *</label>
+                        <input type="password" id="cp-current" required placeholder="Enter current password" class="w-full p-3 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500">
+                    </div>
+                    <div>
+                        <label class="font-bold text-slate-700 block mb-1">New Password (Min. 8 characters) *</label>
+                        <input type="password" id="cp-new" required minlength="8" placeholder="Enter new strong password" class="w-full p-3 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500">
+                    </div>
+                    <div>
+                        <label class="font-bold text-slate-700 block mb-1">Confirm New Password *</label>
+                        <input type="password" id="cp-confirm" required minlength="8" placeholder="Re-type new password" class="w-full p-3 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500">
+                    </div>
+
+                    <div id="cp-error" class="hidden p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 font-semibold"></div>
+
+                    <div class="pt-3 flex gap-3">
+                        <button type="button" onclick="document.getElementById('client-modals-root').innerHTML=''" class="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition">
+                            Cancel
+                        </button>
+                        <button type="submit" id="btn-cp-submit" class="flex-1 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-extrabold rounded-xl shadow-lg transition">
+                            Update Password
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+}
+
+async function submitClientChangePassword(e) {
+    e.preventDefault();
+    const currentPass = document.getElementById('cp-current').value;
+    const newPass = document.getElementById('cp-new').value;
+    const confirmPass = document.getElementById('cp-confirm').value;
+    const errEl = document.getElementById('cp-error');
+    const btn = document.getElementById('btn-cp-submit');
+
+    errEl.classList.add('hidden');
+
+    if (newPass !== confirmPass) {
+        errEl.textContent = 'New password and confirmation do not match.';
+        errEl.classList.remove('hidden');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Updating...';
+
+    try {
+        const res = await NKB.api('/api/auth/change-password', {
+            method: 'POST',
+            body: JSON.stringify({
+                current_password: currentPass,
+                new_password: newPass
+            })
+        });
+
+        if (res.success) {
+            NKB.showToast('✅ Password changed successfully!', 'success');
+            document.getElementById('client-modals-root').innerHTML = '';
+        } else {
+            errEl.textContent = res.error || res.message || 'Failed to change password.';
+            errEl.classList.remove('hidden');
+        }
+    } catch (err) {
+        errEl.textContent = err.message || 'Error occurred while updating password.';
+        errEl.classList.remove('hidden');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Update Password';
+    }
+}

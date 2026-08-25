@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 const db = require('../database/db');
 const { authenticateToken, requireRoles, enforceClientIsolation } = require('../middleware/auth');
@@ -11,21 +12,31 @@ const { logAudit } = require('../services/auditService');
  */
 router.get('/', authenticateToken, enforceClientIsolation, (req, res) => {
     if (req.user.role === 'CLIENT') {
-        const client = db.prepare('SELECT * FROM clients WHERE id = ?').get(req.clientId);
+        const client = db.prepare(`
+            SELECT c.*, u.id as user_id, u.email as user_email, u.is_active as user_active
+            FROM clients c
+            LEFT JOIN users u ON u.client_id = c.id
+            WHERE c.id = ?
+        `).get(req.clientId);
         return res.json({ success: true, data: client ? [client] : [] });
     }
 
     const { search } = req.query;
-    let query = 'SELECT * FROM clients WHERE 1=1';
+    let query = `
+        SELECT c.*, u.id as user_id, u.email as user_email, u.is_active as user_active
+        FROM clients c
+        LEFT JOIN users u ON u.client_id = c.id
+        WHERE 1=1
+    `;
     const params = [];
 
     if (search) {
-        query += ' AND (company_name LIKE ? OR contact_person LIKE ? OR email LIKE ?)';
+        query += ' AND (c.company_name LIKE ? OR c.contact_person LIKE ? OR c.email LIKE ?)';
         const term = `%${search}%`;
         params.push(term, term, term);
     }
 
-    query += ' ORDER BY company_name ASC';
+    query += ' ORDER BY c.company_name ASC';
     const clients = db.prepare(query).all(...params);
 
     return res.json({ success: true, data: clients });
@@ -41,7 +52,12 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
         return res.status(403).json({ success: false, error: 'Access denied to other client records.', code: 'FORBIDDEN' });
     }
 
-    const client = db.prepare('SELECT * FROM clients WHERE id = ?').get(id);
+    const client = db.prepare(`
+        SELECT c.*, u.id as user_id, u.email as user_email, u.is_active as user_active
+        FROM clients c
+        LEFT JOIN users u ON u.client_id = c.id
+        WHERE c.id = ?
+    `).get(id);
     if (!client) {
         return res.status(404).json({ success: false, error: 'Client not found.' });
     }
@@ -51,25 +67,39 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
 
 /**
  * POST /api/clients
- * Admin only
+ * Admin only (Creates client + Optional/Default Client Portal Login Account)
  */
-router.post('/', authenticateToken, requireRoles('ADMIN', 'ACCOUNTING'), (req, res) => {
-    const { company_name, contact_person, email, phone, address, tin, default_billing_policy, default_tolerance_percent, credit_limit } = req.body;
+router.post('/', authenticateToken, requireRoles('ADMIN', 'ACCOUNTING', 'SUPER_ADMIN'), (req, res) => {
+    const { 
+        company_name, 
+        contact_person, 
+        email, 
+        phone, 
+        address, 
+        tin, 
+        default_billing_policy, 
+        default_tolerance_percent, 
+        credit_limit,
+        create_portal_account = true,
+        default_password = 'Client123!'
+    } = req.body;
 
     if (!company_name || !contact_person || !email || !phone || !address) {
         return res.status(400).json({ success: false, error: 'Company name, contact person, email, phone, and address are required.' });
     }
 
-    const id = uuidv4();
+    const clientId = uuidv4();
+    const cleanEmail = email.trim().toLowerCase();
+
     try {
         db.prepare(`
             INSERT INTO clients (id, company_name, contact_person, email, phone, address, tin, default_billing_policy, default_tolerance_percent, credit_limit)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
-            id,
+            clientId,
             company_name.trim(),
             contact_person.trim(),
-            email.trim().toLowerCase(),
+            cleanEmail,
             phone.trim(),
             address.trim(),
             tin ? tin.trim() : null,
@@ -78,23 +108,136 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'ACCOUNTING'), (req, r
             credit_limit !== undefined ? parseFloat(credit_limit) : 500000.0
         );
 
+        let createdUser = null;
+        if (create_portal_account) {
+            const userId = uuidv4();
+            const passwordToHash = default_password || 'Client123!';
+            const passwordHash = bcrypt.hashSync(passwordToHash, 10);
+
+            const existingUser = db.prepare('SELECT id FROM users WHERE LOWER(email) = ?').get(cleanEmail);
+            if (!existingUser) {
+                db.prepare(`
+                    INSERT INTO users (id, name, email, password_hash, role, client_id, phone, is_active)
+                    VALUES (?, ?, ?, ?, 'CLIENT', ?, ?, 1)
+                `).run(
+                    userId,
+                    `${contact_person.trim()} (${company_name.trim()})`,
+                    cleanEmail,
+                    passwordHash,
+                    clientId,
+                    phone.trim()
+                );
+                createdUser = {
+                    id: userId,
+                    email: cleanEmail,
+                    role: 'CLIENT',
+                    default_password: passwordToHash
+                };
+            }
+        }
+
         logAudit({
             userId: req.user.id,
             userName: req.user.name,
             userRole: req.user.role,
             action: 'CREATE_CLIENT',
             entityType: 'CLIENT',
-            entityId: id,
-            details: { company_name, email }
+            entityId: clientId,
+            details: { company_name, email: cleanEmail, portalAccountCreated: !!createdUser }
         });
 
-        const newClient = db.prepare('SELECT * FROM clients WHERE id = ?').get(id);
-        return res.status(201).json({ success: true, data: newClient });
+        const newClient = db.prepare(`
+            SELECT c.*, u.id as user_id, u.email as user_email, u.is_active as user_active
+            FROM clients c
+            LEFT JOIN users u ON u.client_id = c.id
+            WHERE c.id = ?
+        `).get(clientId);
+
+        return res.status(201).json({ 
+            success: true, 
+            data: newClient,
+            credentials: createdUser ? {
+                email: cleanEmail,
+                password: default_password || 'Client123!',
+                note: 'Client can log in using these default credentials and change password upon login.'
+            } : null
+        });
     } catch (err) {
         if (err.message && err.message.includes('UNIQUE constraint failed: clients.email')) {
             return res.status(400).json({ success: false, error: `A client with email "${email}" already exists.` });
         }
         throw err;
+    }
+});
+
+/**
+ * POST /api/clients/:id/credentials/reset
+ * Admin: Reset or create client portal login credentials
+ */
+router.post('/:id/credentials/reset', authenticateToken, requireRoles('ADMIN', 'SUPER_ADMIN'), (req, res) => {
+    const { id } = req.params;
+    const { new_password = 'Client123!' } = req.body;
+
+    const client = db.prepare('SELECT * FROM clients WHERE id = ?').get(id);
+    if (!client) {
+        return res.status(404).json({ success: false, error: 'Client not found.' });
+    }
+
+    const passwordHash = bcrypt.hashSync(new_password, 10);
+    const existingUser = db.prepare('SELECT * FROM users WHERE client_id = ? OR LOWER(email) = LOWER(?)').get(id, client.email);
+
+    if (existingUser) {
+        db.prepare("UPDATE users SET password_hash = ?, is_active = 1, updated_at = datetime('now') WHERE id = ?").run(passwordHash, existingUser.id);
+        logAudit({
+            userId: req.user.id,
+            userName: req.user.name,
+            userRole: req.user.role,
+            action: 'RESET_CLIENT_PASSWORD',
+            entityType: 'CLIENT',
+            entityId: id,
+            details: { email: existingUser.email }
+        });
+
+        return res.json({
+            success: true,
+            message: `Password reset successfully for ${client.company_name}.`,
+            credentials: {
+                email: existingUser.email,
+                password: new_password
+            }
+        });
+    } else {
+        const newUserId = uuidv4();
+        db.prepare(`
+            INSERT INTO users (id, name, email, password_hash, role, client_id, phone, is_active)
+            VALUES (?, ?, ?, ?, 'CLIENT', ?, ?, 1)
+        `).run(
+            newUserId,
+            `${client.contact_person} (${client.company_name})`,
+            client.email.toLowerCase(),
+            passwordHash,
+            client.id,
+            client.phone
+        );
+
+        logAudit({
+            userId: req.user.id,
+            userName: req.user.name,
+            userRole: req.user.role,
+            action: 'CREATE_CLIENT_LOGIN',
+            entityType: 'CLIENT',
+            entityId: id,
+            details: { email: client.email }
+        });
+
+        return res.json({
+            success: true,
+            message: `Portal login account created for ${client.company_name}.`,
+            credentials: {
+                email: client.email,
+                password: new_password
+            }
+        });
     }
 });
 
