@@ -108,8 +108,10 @@ function loadDatabaseAndRoutes() {
     }
 }
 
+loadDatabaseAndRoutes();
+
 if (isTest) {
-    loadDatabaseAndRoutes();
+    // Tests import the app without binding a port.
 } else {
     const server = app.listen(PORT, () => {
         console.log(`=======================================================`);
@@ -118,7 +120,6 @@ if (isTest) {
         console.log(`🌐 Port: ${PORT}`);
         console.log(`🗄️  Database: ${process.env.DB_DRIVER || 'sqlite'}`);
         console.log(`=======================================================`);
-        loadDatabaseAndRoutes();
     });
 
     process.on('uncaughtException', (err) => {

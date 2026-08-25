@@ -14,7 +14,7 @@ function errorHandler(err, req, res, next) {
         err.code === 'UNAUTHORIZED' || err.code === 'INVALID_TOKEN' || err.code === 'USER_INACTIVE' ? 401 :
         err.code === 'FORBIDDEN' || err.code === 'CLIENT_PROFILE_MISSING' ? 403 :
         err.code === 'NOT_FOUND' || err.code === 'DR_NOT_FOUND' ? 404 :
-        400
+        500
     );
 
     // Production-safe response payload

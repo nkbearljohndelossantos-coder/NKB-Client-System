@@ -41,6 +41,9 @@ const NKB = {
                 NKB.logout();
                 return { success: false, error: 'Session expired. Please log in again.' };
             }
+            if (!data.success && !data.error && data.message) {
+                data.error = data.message;
+            }
             return data;
         } catch (err) {
             console.error('API Error:', err);

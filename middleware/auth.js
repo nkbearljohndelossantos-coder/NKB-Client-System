@@ -35,7 +35,8 @@ function authenticateToken(req, res, next) {
             WHERE u.id = ?
         `).get(decoded.id);
 
-        if (!user || user.is_active !== 1) {
+        const active = user && (user.is_active === 1 || user.is_active === true || user.is_active === '1');
+        if (!user || !active) {
             return res.status(401).json({
                 success: false,
                 error: 'User account not found or disabled.',
