@@ -35,12 +35,23 @@ if (useMysql) {
     }
 
     db = new DatabaseSync(dbPath);
-    db.exec('PRAGMA foreign_keys = ON;');
-    db.exec('PRAGMA journal_mode = WAL;');
+    try {
+        db.exec('PRAGMA foreign_keys = ON;');
+        db.exec('PRAGMA journal_mode = DELETE;');
+        db.exec('PRAGMA synchronous = NORMAL;');
+        db.exec('PRAGMA busy_timeout = 5000;');
+        db.exec('PRAGMA temp_store = MEMORY;');
+    } catch (pragmaErr) {
+        console.warn('SQLite PRAGMA warning:', pragmaErr.message);
+    }
 
     const schemaPath = path.join(__dirname, 'schema.sql');
     if (fs.existsSync(schemaPath)) {
-        db.exec(fs.readFileSync(schemaPath, 'utf8'));
+        try {
+            db.exec(fs.readFileSync(schemaPath, 'utf8'));
+        } catch (schemaErr) {
+            console.error('Schema initialization warning:', schemaErr.message);
+        }
     }
 
     db.transaction = function (fn) {

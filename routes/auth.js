@@ -146,15 +146,19 @@ router.post('/login', (req, res) => {
             maxAge: 7 * 24 * 60 * 60 * 1000
         });
 
-        logAudit({
-            userId: user.id,
-            userName: user.name,
-            userRole: user.role,
-            action: 'USER_LOGIN',
-            entityType: 'USER',
-            entityId: user.id,
-            ipAddress: req.ip
-        });
+        try {
+            logAudit({
+                userId: user.id,
+                userName: user.name,
+                userRole: user.role,
+                action: 'USER_LOGIN',
+                entityType: 'USER',
+                entityId: user.id,
+                ipAddress: req.ip
+            });
+        } catch (auditErr) {
+            console.warn('Login audit log skipped:', auditErr.message);
+        }
 
         return res.json({
             success: true,
