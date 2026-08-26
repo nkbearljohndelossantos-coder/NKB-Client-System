@@ -115,6 +115,32 @@ if (useMysql) {
         console.error('Client provision error:', err.message);
     }
 
+    // Auto-provision Product from phpMyAdmin screenshot: OXYGENATED SUNSCREEN (SKC-2026001)
+    try {
+        const prodId = '8b0747ec-ad8b-4b95-9c95-1c6c70844661';
+        const existingProd = db.prepare('SELECT id FROM products WHERE id = ? OR sku = ?').get(prodId, 'SKC-2026001');
+        if (!existingProd) {
+            db.prepare(`
+                INSERT INTO products (id, sku, name, category, description, unit, default_price, formula_code, shelf_life_months, current_stock, is_active)
+                VALUES (?, 'SKC-2026001', 'OXYGENATED SUNSCREEN', 'Sun Care', 'Broad spectrum oxygenated protection sunscreen', 'KG', 350.00, 'SKC-0001', 24, 0, 1)
+            `).run(prodId);
+            console.log('🧴 Auto-provisioned product: OXYGENATED SUNSCREEN (SKC-2026001)');
+        }
+
+        // Link product to SKEENCARE Enterprise client catalog
+        const clientId = '2fdb72bb-12fa-4909-8967-c19b130db4bb';
+        const existingLink = db.prepare('SELECT id FROM client_product_prices WHERE client_id = ? AND product_id = ?').get(clientId, prodId);
+        if (!existingLink) {
+            db.prepare(`
+                INSERT INTO client_product_prices (id, client_id, product_id, custom_sku, custom_name, custom_price, custom_formula_code, is_active)
+                VALUES (?, ?, ?, 'SKC-2026001', 'OXYGENATED SUNSCREEN', 350.00, 'SKC-0001', 1)
+            `).run(uuidv4(), clientId, prodId);
+            console.log('🔗 Linked OXYGENATED SUNSCREEN to SKEENCARE Enterprise catalog');
+        }
+    } catch (err) {
+        console.error('Product auto-provision error:', err.message);
+    }
+
     // Auto-initialize Document Sequences
     try {
         const year = new Date().getFullYear();

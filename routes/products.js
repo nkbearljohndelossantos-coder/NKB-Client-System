@@ -20,7 +20,7 @@ router.get('/', authenticateToken, (req, res) => {
     const params = [];
 
     if (targetClientId) {
-        if (req.user.role === 'CLIENT' || req.query.assignedOnly === 'true') {
+        if (req.query.assignedOnly === 'true') {
             query = `
                 SELECT p.id,
                        COALESCE(cpp.custom_sku, p.sku) as sku,
@@ -37,6 +37,7 @@ router.get('/', authenticateToken, (req, res) => {
                        cpp.custom_name,
                        COALESCE(cpp.custom_formula_code, p.formula_code) as formula_code,
                        CASE WHEN cpp.custom_price IS NOT NULL THEN 1 ELSE 0 END as has_custom_price,
+                       1 as is_assigned,
                        p.shelf_life_months, p.current_stock, p.is_active, p.created_at, p.updated_at
                 FROM products p
                 JOIN client_product_prices cpp ON cpp.product_id = p.id AND cpp.client_id = ?
@@ -44,6 +45,7 @@ router.get('/', authenticateToken, (req, res) => {
             `;
             params.push(targetClientId);
         } else {
+            // For Client Portal or pricing modal overview: Return all products with custom price applied if assigned
             query = `
                 SELECT p.id,
                        COALESCE(cpp.custom_sku, p.sku) as sku,
