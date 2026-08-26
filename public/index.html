@@ -555,8 +555,7 @@
         try {
             const res = await NKB.api('/api/auth/login', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({ email, password }).toString()
+                body: { email, password }
             });
 
             if (res.success && res.token) {

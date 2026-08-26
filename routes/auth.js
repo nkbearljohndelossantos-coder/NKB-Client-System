@@ -27,9 +27,23 @@ function passwordsMatch(plain, hash) {
 }
 
 function readLoginFields(req) {
-    const body = req.body && typeof req.body === 'object' ? req.body : {};
-    const email = body.email || body.Email || body.username;
-    const password = body.password || body.Password;
+    let body = req.body;
+    if (typeof body === 'string') {
+        try {
+            body = JSON.parse(body);
+        } catch (e) {
+            try {
+                const params = new URLSearchParams(body);
+                body = Object.fromEntries(params.entries());
+            } catch (e2) {
+                body = {};
+            }
+        }
+    } else if (!body || typeof body !== 'object') {
+        body = req.query || {};
+    }
+    const email = body.email || body.Email || body.username || body.user || (req.query && req.query.email) || '';
+    const password = body.password || body.Password || body.pass || (req.query && req.query.password) || '';
     return { email, password };
 }
 
