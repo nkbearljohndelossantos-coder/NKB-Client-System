@@ -40,10 +40,22 @@ function readLoginFields(req) {
             }
         }
     } else if (!body || typeof body !== 'object') {
-        body = req.query || {};
+        body = {};
     }
-    const email = body.email || body.Email || body.username || body.user || (req.query && req.query.email) || '';
-    const password = body.password || body.Password || body.pass || (req.query && req.query.password) || '';
+
+    let rawFallback = {};
+    if (req.rawBody && typeof req.rawBody === 'string') {
+        try {
+            rawFallback = JSON.parse(req.rawBody);
+        } catch (e) {
+            try {
+                rawFallback = Object.fromEntries(new URLSearchParams(req.rawBody).entries());
+            } catch (e2) {}
+        }
+    }
+
+    const email = body.email || body.Email || body.username || body.user || rawFallback.email || rawFallback.username || (req.query && req.query.email) || '';
+    const password = body.password || body.Password || body.pass || rawFallback.password || rawFallback.pass || (req.query && req.query.password) || '';
     return { email, password };
 }
 

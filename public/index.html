@@ -495,7 +495,7 @@
     </div>
 </div>
 
-<script src="/js/app.js"></script>
+<script src="/js/app.js?v=2.0.3"></script>
 <script>
     document.addEventListener('DOMContentLoaded', async () => {
         const token = localStorage.getItem('nkb_token');
@@ -553,10 +553,16 @@
         submitBtn.classList.add('processing');
 
         try {
-            const res = await NKB.api('/api/auth/login', {
+            const rawRes = await fetch('/api/auth/login', {
                 method: 'POST',
-                body: { email, password }
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({ email, password })
             });
+
+            const res = await rawRes.json();
 
             if (res.success && res.token) {
                 // Save session

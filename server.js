@@ -38,23 +38,49 @@ if (isProduction && allowedOrigin) {
     app.use(cors({ origin: true, credentials: true }));
 }
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// Gracefully recover from malformed JSON payloads (e.g. urlencoded sent with application/json header)
-app.use((err, req, res, next) => {
-    if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
-        try {
-            const raw = typeof err.body === 'string' ? err.body : '';
-            const params = new URLSearchParams(raw);
-            req.body = Object.fromEntries(params.entries());
-            return next();
-        } catch (e) {
-            req.body = {};
-            return next();
-        }
+// Universal robust body parsing (handles JSON, urlencoded, raw strings, and malformed headers seamlessly)
+app.use((req, res, next) => {
+    // Only parse if method is POST, PUT, PATCH, DELETE
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+        let rawData = '';
+        req.setEncoding('utf8');
+        req.on('data', chunk => { rawData += chunk; });
+        req.on('end', () => {
+            req.rawBody = rawData;
+            if (rawData && rawData.trim()) {
+                const trimmed = rawData.trim();
+                if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+                    try {
+                        req.body = JSON.parse(trimmed);
+                    } catch (e) {
+                        try {
+                            const params = new URLSearchParams(trimmed);
+                            req.body = Object.fromEntries(params.entries());
+                        } catch (e2) {
+                            req.body = {};
+                        }
+                    }
+                } else {
+                    try {
+                        const params = new URLSearchParams(trimmed);
+                        req.body = Object.fromEntries(params.entries());
+                    } catch (e) {
+                        try {
+                            req.body = JSON.parse(trimmed);
+                        } catch (e2) {
+                            req.body = {};
+                        }
+                    }
+                }
+            } else {
+                req.body = req.body || {};
+            }
+            next();
+        });
+    } else {
+        req.body = req.body || {};
+        next();
     }
-    next(err);
 });
 
 app.use(cookieParser());
