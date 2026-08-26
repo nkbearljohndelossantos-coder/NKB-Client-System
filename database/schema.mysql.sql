@@ -409,7 +409,7 @@ ON DUPLICATE KEY UPDATE current_year = VALUES(current_year);
 
 -- 23. Insert Initial Root Super Admin Account (Password: Admin123!)
 INSERT INTO users (id, name, email, password_hash, role, is_active) VALUES
-('a0000000-0000-0000-0000-000000000001', 'Executive Admin', 'admin@nkbmanufacturing.com', '$2a$10$wJ2Nq23q6LhP4h.O8s7V1e5uVj1K.VjT5U6j1rKqY5bE7f7c6qf7W', 'SUPER_ADMIN', 1)
-ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
+('a0000000-0000-0000-0000-000000000001', 'Executive Admin', 'admin@nkbmanufacturing.com', '$2b$10$jny3GQXy8GwL8vkYVtV4EeTH2QDo8tfg6hJO/vbpG3Xrwakfqgx2G', 'SUPER_ADMIN', 1)
+ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash), updated_at = CURRENT_TIMESTAMP;
 
 SET FOREIGN_KEY_CHECKS = 1;

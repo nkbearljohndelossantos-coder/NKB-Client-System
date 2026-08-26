@@ -8,13 +8,12 @@ const dbDriver = (process.env.DB_DRIVER || '').toLowerCase();
 const hasMysqlConfig = Boolean(
     process.env.DB_USER && process.env.DB_PASSWORD && process.env.DB_NAME
 );
-const useMysql = dbDriver === 'mysql'
-    || (dbDriver !== 'sqlite' && hasMysqlConfig && process.env.NODE_ENV === 'production');
+const useMysql = dbDriver === 'mysql' || (dbDriver !== 'sqlite' && hasMysqlConfig);
 
-if (process.env.NODE_ENV === 'production' && !useMysql) {
-    console.warn('⚠️  PRODUCTION is using SQLite. Set DB_DRIVER=mysql to write to phpMyAdmin.');
-} else if (useMysql) {
-    console.log(`🗄️  Database driver: MySQL (${process.env.DB_NAME})`);
+if (useMysql) {
+    console.log(`🗄️  Connected to MySQL Database: ${process.env.DB_NAME || 'u335953510_client_db'}`);
+} else {
+    console.log('📦 Database driver: SQLite (local fallback)');
 }
 
 let db;
