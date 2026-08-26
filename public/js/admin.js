@@ -2327,55 +2327,63 @@ function openCreateProductModal() {
     const root = document.getElementById('modals-root');
     root.innerHTML = `
         <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
-            <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+            <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 border border-slate-200">
                 <div class="flex justify-between items-center border-b border-slate-100 pb-3">
-                    <h3 class="text-lg font-bold text-slate-900">Add Cosmetic Product</h3>
-                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold">&times;</button>
+                    <div class="flex items-center gap-2">
+                        <span class="text-2xl">✨</span>
+                        <div>
+                            <h3 class="text-lg font-black text-slate-900">Add Cosmetic Product</h3>
+                            <p class="text-xs text-slate-500">Register new item in master formulation & pricing catalog</p>
+                        </div>
+                    </div>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-xl">&times;</button>
                 </div>
-                <form onsubmit="submitCreateProduct(event)" class="space-y-4 text-xs font-semibold">
+                <form onsubmit="submitCreateProduct(event)" class="space-y-3.5 text-xs font-semibold">
                     <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-slate-600 mb-1">SKU</label>
-                            <input type="text" id="prod-sku" required placeholder="e.g. VLC-300" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-mono uppercase">
+                            <label class="block text-slate-700 font-bold mb-1">SKU / Item Code *</label>
+                            <input type="text" id="prod-sku" required placeholder="e.g. VLC-300" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 font-mono uppercase focus:ring-2 focus:ring-indigo-500">
                         </div>
                         <div>
-                            <label class="block text-slate-600 mb-1">Category</label>
-                            <select id="prod-category" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
+                            <label class="block text-slate-700 font-bold mb-1">Category *</label>
+                            <select id="prod-category" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 font-bold focus:ring-2 focus:ring-indigo-500">
                                 <option value="Body Care">Body Care</option>
-                                <option value="Sun Care">Sun Care</option>
                                 <option value="Face Care">Face Care</option>
+                                <option value="Sun Care">Sun Care</option>
                                 <option value="Bath & Body">Bath & Body</option>
                                 <option value="Hair Care">Hair Care</option>
+                                <option value="Cosmetics">Cosmetics</option>
+                                <option value="Skincare Treatment">Skincare Treatment</option>
                             </select>
                         </div>
                     </div>
                     <div>
-                        <label class="block text-slate-600 mb-1">Product Name</label>
-                        <input type="text" id="prod-name" required placeholder="e.g. Vitamin C Brightening Body Lotion 300ml" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
+                        <label class="block text-slate-700 font-bold mb-1">Product Commercial Name *</label>
+                        <input type="text" id="prod-name" required placeholder="e.g. Vitamin C Brightening Body Lotion 300ml" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500">
                     </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-slate-600 mb-1">Default Unit Price (₱)</label>
-                            <input type="number" step="0.01" id="prod-price" required placeholder="120.00" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
+                            <label class="block text-slate-700 font-bold mb-1">Default Unit Price (₱) *</label>
+                            <input type="number" step="0.01" min="0" id="prod-price" required placeholder="120.00" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white font-extrabold text-indigo-900 text-sm focus:ring-2 focus:ring-indigo-500">
                         </div>
                         <div>
-                            <label class="block text-slate-600 mb-1">Formula Code</label>
-                            <input type="text" id="prod-formula" placeholder="FORM-VLC-V1" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-mono">
+                            <label class="block text-slate-700 font-bold mb-1">Formula Code</label>
+                            <input type="text" id="prod-formula" placeholder="FORM-VLC-V1" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 font-mono focus:ring-2 focus:ring-indigo-500">
                         </div>
                     </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-slate-600 mb-1">Unit</label>
-                            <input type="text" id="prod-unit" value="pcs" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
+                            <label class="block text-slate-700 font-bold mb-1">Unit of Measure</label>
+                            <input type="text" id="prod-unit" value="pcs" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500">
                         </div>
                         <div>
-                            <label class="block text-slate-600 mb-1">Shelf Life (Months)</label>
-                            <input type="number" id="prod-shelf-life" value="24" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
+                            <label class="block text-slate-700 font-bold mb-1">Shelf Life (Months)</label>
+                            <input type="number" id="prod-shelf-life" value="24" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500">
                         </div>
                     </div>
-                    <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl">Cancel</button>
-                        <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold">Save Product</button>
+                    <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition">Cancel</button>
+                        <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-black shadow-lg shadow-indigo-600/30 transition">Save Product</button>
                     </div>
                 </form>
             </div>
