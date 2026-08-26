@@ -35,7 +35,12 @@ const NKB = {
             options.headers['Content-Type'] = 'application/json';
             options.body = JSON.stringify(options.body);
         } else if (typeof options.body === 'string' && !(options.body instanceof FormData)) {
-            options.headers['Content-Type'] = options.headers['Content-Type'] || 'application/json';
+            const trimmed = options.body.trim();
+            if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+                options.headers['Content-Type'] = options.headers['Content-Type'] || 'application/json';
+            } else {
+                options.headers['Content-Type'] = options.headers['Content-Type'] || 'application/x-www-form-urlencoded';
+            }
         }
 
         try {
