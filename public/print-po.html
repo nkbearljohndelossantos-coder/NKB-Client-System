@@ -3,137 +3,159 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Purchase Order - NKB Manufacturing & Trading</title>
+    <title>Purchase Order - NKB Manufacturing Corp</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <link rel="stylesheet" href="/css/tailwind.min.css">
     <link rel="stylesheet" href="/css/style.css">
     <style>
+        @page {
+            size: 8.5in 5.5in;
+            margin: 4mm 6mm;
+        }
         @media print {
-            body { font-size: 11pt; background: #ffffff !important; padding: 0 !important; }
+            html, body {
+                width: 100% !important;
+                height: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: #ffffff !important;
+                font-size: 7.5pt !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
             .no-print { display: none !important; }
-            .print-shadow-none { box-shadow: none !important; border: 1px solid #cbd5e1 !important; }
+            .half-sheet {
+                box-shadow: none !important;
+                border: 1px solid #cbd5e1 !important;
+                padding: 8px 12px !important;
+                margin: 0 !important;
+                max-width: 100% !important;
+                border-radius: 6px !important;
+                page-break-inside: avoid !important;
+            }
+            .compact-gap { gap: 4px !important; }
+            .compact-py { padding-top: 2px !important; padding-bottom: 2px !important; }
+            .compact-my { margin-top: 4px !important; margin-bottom: 4px !important; }
+            .signature-box { min-height: 28px !important; }
+            .header-logo { height: 32px !important; }
+        }
+        @media screen {
+            .half-sheet {
+                max-width: 8.5in;
+                min-height: 5.5in;
+            }
         }
     </style>
 </head>
-<body class="bg-slate-100 min-h-screen p-4 sm:p-8 text-slate-900 antialiased">
+<body class="bg-slate-100 min-h-screen p-2 sm:p-6 text-slate-900 antialiased text-xs">
 
     <!-- Action Bar (Hidden on Print) -->
-    <div class="max-w-4xl mx-auto mb-6 flex justify-between items-center no-print">
-        <a href="javascript:window.history.back()" class="px-4 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 transition">
+    <div class="max-w-4xl mx-auto mb-4 flex justify-between items-center no-print">
+        <a href="javascript:window.history.back()" class="px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 transition">
             ← Back to Portal
         </a>
-        <button onclick="window.print()" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/30 transition flex items-center gap-2">
-            <span>🖨️ Print Purchase Order</span>
-        </button>
+        <div class="flex items-center gap-2">
+            <span class="text-[11px] text-slate-500 font-medium">Layout: <strong>Half Bond Paper (8.5" × 5.5")</strong></span>
+            <button onclick="window.print()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold shadow-md shadow-indigo-600/30 transition flex items-center gap-1.5">
+                <span>🖨️ Print PO (Half Sheet)</span>
+            </button>
+        </div>
     </div>
 
-    <!-- A4 Printable Sheet -->
-    <div class="max-w-4xl mx-auto bg-white p-8 sm:p-12 rounded-3xl shadow-xl border border-slate-200 space-y-8 print-shadow-none" id="po-printable-sheet">
+    <!-- Half Bond Paper Sheet -->
+    <div class="half-sheet mx-auto bg-white p-5 rounded-2xl shadow-lg border border-slate-200 space-y-3" id="po-printable-sheet">
         
         <!-- Header -->
-        <div class="flex justify-between items-start border-b border-slate-200 pb-6">
-            <div class="flex items-start gap-4">
-                <img src="/images/nkb-logo.png" alt="NKB Logo" class="h-14 w-auto object-contain">
+        <div class="flex justify-between items-center border-b border-slate-200 pb-2">
+            <div class="flex items-center gap-3">
+                <img src="/images/nkb-logo.png" alt="NKB Logo" class="header-logo h-10 w-auto object-contain">
                 <div>
-                    <h1 class="text-2xl font-black text-slate-900 tracking-tight">NKB MANUFACTURING CORP.</h1>
-                    <p class="text-xs text-slate-500 font-medium mt-0.5">Cosmetics & Personal Care Formulation Laboratory</p>
-                    <p class="text-xs text-slate-500">Sampaguita Village 2, B4 L5, Twig St, Bacoor, 4102 Cavite</p>
-                    <p class="text-xs text-slate-500">Contact: +63 (2) 8888-0000 | Email: customerservice@nkbmanufacturing.com</p>
+                    <h1 class="text-base font-black text-slate-900 tracking-tight leading-tight">NKB MANUFACTURING CORP.</h1>
+                    <p class="text-[9px] text-slate-500 font-medium leading-tight">Sampaguita Village 2, B4 L5, Twig St, Bacoor, 4102 Cavite</p>
+                    <p class="text-[9px] text-slate-500 leading-tight">Tel: +63 (2) 8888-0000 | Email: customerservice@nkbmanufacturing.com</p>
                 </div>
             </div>
-            <div class="text-right space-y-1">
-                <span class="inline-block px-3 py-1 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-extrabold tracking-wider border border-indigo-200">
+            <div class="text-right">
+                <span class="inline-block px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded text-[10px] font-extrabold tracking-wider border border-indigo-200">
                     PURCHASE ORDER
                 </span>
-                <div id="po-number-display" class="text-xl font-black text-slate-900 font-mono">PO-XXXX-XXXXXX</div>
-                <div class="text-xs text-slate-500">Date: <strong id="po-date-display" class="text-slate-800">-</strong></div>
-                <div id="po-status-badge" class="mt-1"></div>
+                <div id="po-number-display" class="text-sm font-black text-slate-900 font-mono mt-0.5">PO-XXXX-XXXXXX</div>
+                <div class="text-[10px] text-slate-500">Date: <strong id="po-date-display" class="text-slate-800">-</strong></div>
             </div>
         </div>
 
         <!-- Client & Order Terms Grid -->
-        <div class="grid grid-cols-2 gap-8 text-xs">
-            <div class="space-y-1">
-                <span class="text-slate-400 font-bold uppercase tracking-wider">Client (Buyer):</span>
-                <div id="client-company-display" class="font-extrabold text-sm text-slate-900">-</div>
-                <div id="client-contact-display" class="text-slate-600 font-medium">-</div>
-                <div id="client-address-display" class="text-slate-600 leading-relaxed">-</div>
-                <div id="client-phone-display" class="text-slate-500 font-mono">-</div>
-                <div id="client-email-display" class="text-slate-500">-</div>
+        <div class="grid grid-cols-2 gap-4 text-[10.5px]">
+            <div class="p-2 bg-slate-50/70 rounded-lg border border-slate-200/80 space-y-0.5">
+                <span class="text-slate-400 font-bold uppercase text-[8.5px] block tracking-wider">Client (Buyer):</span>
+                <div id="client-company-display" class="font-extrabold text-slate-900 text-[11px] leading-tight">-</div>
+                <div id="client-contact-display" class="text-slate-600 leading-tight">-</div>
+                <div id="client-address-display" class="text-slate-500 text-[9.5px] leading-tight truncate">-</div>
+                <div class="text-slate-500 text-[9.5px]"><span id="client-phone-display" class="font-mono mr-2">-</span><span id="client-email-display">-</span></div>
             </div>
-            <div class="space-y-1 bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                <span class="text-slate-400 font-bold uppercase tracking-wider">Manufacturing & Order Terms:</span>
+            <div class="p-2 bg-slate-50/70 rounded-lg border border-slate-200/80 space-y-0.5 text-[10px]">
+                <span class="text-slate-400 font-bold uppercase text-[8.5px] block tracking-wider">Terms & Policy:</span>
                 <div>Billing Policy: <strong id="po-policy-display" class="text-indigo-700">-</strong></div>
-                <div>Over-run Tolerance: <strong id="po-tolerance-display" class="text-slate-900 font-mono">±10%</strong></div>
-                <div>Target Delivery: <strong id="po-delivery-date-display" class="text-slate-800 font-medium">Within standard production lead time</strong></div>
-                <div>Payment Terms: <strong class="text-slate-800">Per agreed client credit contract</strong></div>
+                <div>Tolerance: <strong id="po-tolerance-display" class="text-slate-900 font-mono">±10%</strong> | Status: <span id="po-status-badge"></span></div>
+                <div>Delivery Terms: <strong class="text-slate-800">Standard Production Lead Time</strong></div>
             </div>
         </div>
 
         <!-- Line Items Table -->
-        <div class="border border-slate-200 rounded-2xl overflow-hidden text-xs">
+        <div class="border border-slate-200 rounded-lg overflow-hidden text-[10px]">
             <table class="w-full text-left">
-                <thead class="bg-slate-900 text-white font-bold uppercase text-[11px]">
+                <thead class="bg-slate-900 text-white font-bold uppercase text-[9px]">
                     <tr>
-                        <th class="py-3 px-4 w-12 text-center">#</th>
-                        <th class="py-3 px-4">Item & Commercial Description</th>
-                        <th class="py-3 px-4 font-mono">SKU / Code</th>
-                        <th class="py-3 px-4 text-right">Target Quantity</th>
-                        <th class="py-3 px-4 text-right">Contract Unit Price</th>
-                        <th class="py-3 px-4 text-right">Subtotal</th>
+                        <th class="py-1.5 px-2.5 w-8 text-center">#</th>
+                        <th class="py-1.5 px-2.5">Item & Commercial Description</th>
+                        <th class="py-1.5 px-2.5 font-mono">SKU Code</th>
+                        <th class="py-1.5 px-2.5 text-right">Target Qty</th>
+                        <th class="py-1.5 px-2.5 text-right">Unit Price</th>
+                        <th class="py-1.5 px-2.5 text-right">Subtotal</th>
                     </tr>
                 </thead>
                 <tbody id="po-items-tbody" class="divide-y divide-slate-100 font-medium">
-                    <tr><td colspan="6" class="py-6 text-center text-slate-400">Loading purchase order details...</td></tr>
+                    <tr><td colspan="6" class="py-3 text-center text-slate-400">Loading purchase order details...</td></tr>
                 </tbody>
             </table>
         </div>
 
         <!-- Totals & Notes Grid -->
-        <div class="grid grid-cols-1 sm:grid-cols-12 gap-6 text-xs items-start">
-            <div class="sm:col-span-7 space-y-2 p-4 bg-slate-50 rounded-2xl border border-slate-200">
-                <span class="text-slate-500 font-bold uppercase tracking-wider text-[10px]">Formulation & Packaging Notes:</span>
-                <p id="po-notes-display" class="text-slate-700 italic">No special notes provided.</p>
-                <div class="pt-2 text-[10px] text-slate-400 border-t border-slate-200 leading-tight">
-                    * Final billed invoice amount will be calculated upon client DR digital sign-off based on agreed tolerance policy.
-                </div>
+        <div class="grid grid-cols-12 gap-3 text-[10px] items-center">
+            <div class="col-span-7 p-2 bg-slate-50 rounded-lg border border-slate-200 space-y-0.5">
+                <span class="text-slate-400 font-bold uppercase text-[8.5px]">Notes / Instructions:</span>
+                <p id="po-notes-display" class="text-slate-700 italic text-[9.5px] leading-tight">Standard manufacturing formulation.</p>
             </div>
-            <div class="sm:col-span-5 space-y-2 p-4 bg-slate-50 rounded-2xl border border-slate-200">
-                <div class="flex justify-between text-slate-600">
-                    <span>Total Target Quantity:</span>
+            <div class="col-span-5 p-2 bg-indigo-50/40 rounded-lg border border-indigo-100 space-y-0.5 text-right">
+                <div class="flex justify-between text-slate-600 text-[9.5px]">
+                    <span>Total Target Qty:</span>
                     <strong id="po-total-qty" class="text-slate-900 font-mono">0 pcs</strong>
                 </div>
-                <div class="flex justify-between text-slate-600">
-                    <span>Subtotal:</span>
-                    <strong id="po-subtotal-display" class="text-slate-900 font-mono">₱0.00</strong>
-                </div>
-                <div class="border-t border-slate-300 pt-2 flex justify-between text-slate-900 font-extrabold text-sm">
-                    <span>Estimated Grand Total:</span>
-                    <span id="po-grand-total" class="text-indigo-600 font-black text-base font-mono">₱0.00</span>
+                <div class="flex justify-between text-slate-900 font-extrabold text-[11px] border-t border-indigo-200/60 pt-0.5">
+                    <span>Est. Grand Total:</span>
+                    <span id="po-grand-total" class="text-indigo-700 font-black font-mono">₱0.00</span>
                 </div>
             </div>
         </div>
 
         <!-- Signatures Block -->
-        <div class="grid grid-cols-2 gap-12 pt-8 border-t border-slate-200 text-xs">
-            <div class="space-y-8">
-                <span class="text-slate-400 font-bold uppercase">Requested & Authorized By:</span>
-                <div class="border-b-2 border-slate-300 pb-2">
+        <div class="grid grid-cols-2 gap-6 pt-2 border-t border-slate-200 text-[9.5px]">
+            <div>
+                <span class="text-slate-400 font-bold uppercase text-[8px] block mb-3">Prepared / Authorized By:</span>
+                <div class="border-b border-slate-300 pb-0.5">
                     <div id="client-signature-name" class="font-bold text-slate-800">Authorized Client Representative</div>
-                    <div class="text-[10px] text-slate-400">Date: ____________________</div>
                 </div>
             </div>
-            <div class="space-y-8">
-                <span class="text-slate-400 font-bold uppercase">Accepted & Conformed By:</span>
-                <div class="border-b-2 border-slate-300 pb-2">
+            <div>
+                <span class="text-slate-400 font-bold uppercase text-[8px] block mb-3">Accepted / Conformed By:</span>
+                <div class="border-b border-slate-300 pb-0.5">
                     <div class="font-bold text-slate-800">NKB Operations & Production Head</div>
-                    <div class="text-[10px] text-slate-400">Date: ____________________</div>
                 </div>
             </div>
         </div>
 
-        <div class="text-center text-[10px] text-slate-400 pt-4 border-t border-slate-100">
-            NKB Manufacturing Corp. System • ISO/GMP Compliant Cosmetic Formulation Facility
+        <div class="text-center text-[8px] text-slate-400 pt-1 border-t border-slate-100">
+            NKB Manufacturing Corp. • Half Sheet Format (8.5" × 5.5") • ISO/GMP Cosmetic Laboratory
         </div>
     </div>
 
@@ -171,8 +193,8 @@
                 document.getElementById('client-email-display').textContent = po.client_email || po.email || '';
 
                 document.getElementById('po-policy-display').textContent = po.billing_policy === 'ACTUAL_DELIVERY' 
-                    ? 'Option A: Bill Actual Delivered Quantity' 
-                    : 'Option B: Fixed Target PO + Buffer Stock';
+                    ? 'Option A: Bill Actual Delivered Qty' 
+                    : 'Option B: Fixed PO + Buffer';
                 document.getElementById('po-tolerance-display').textContent = `±${po.tolerance_percent || 10}%`;
                 document.getElementById('po-notes-display').textContent = po.notes || 'Standard manufacturing packaging and formulation.';
 
@@ -191,24 +213,23 @@
 
                         return `
                             <tr class="hover:bg-slate-50">
-                                <td class="py-3 px-4 text-center text-slate-400 font-bold">${idx + 1}</td>
-                                <td class="py-3 px-4">
-                                    <div class="font-bold text-slate-900">${item.product_name || item.name || 'Cosmetic Product'}</div>
-                                    <div class="text-[10px] text-slate-400">${item.category || 'Cosmetics'} ${item.formula_code ? '• ' + item.formula_code : ''}</div>
+                                <td class="py-1 px-2.5 text-center text-slate-400 font-bold">${idx + 1}</td>
+                                <td class="py-1 px-2.5">
+                                    <span class="font-bold text-slate-900">${item.product_name || item.name || 'Cosmetic Product'}</span>
+                                    <span class="text-[9px] text-slate-400 font-normal ml-1">(${item.category || 'Cosmetics'})</span>
                                 </td>
-                                <td class="py-3 px-4 font-mono font-bold text-indigo-700">${item.product_sku || item.sku || '-'}</td>
-                                <td class="py-3 px-4 text-right font-bold text-slate-900 font-mono">${NKB.formatNumber(itemQty)} ${item.unit || 'pcs'}</td>
-                                <td class="py-3 px-4 text-right font-mono text-slate-700">${NKB.formatCurrency(itemPrice)}</td>
-                                <td class="py-3 px-4 text-right font-black font-mono text-indigo-900">${NKB.formatCurrency(itemSubtotal)}</td>
+                                <td class="py-1 px-2.5 font-mono font-bold text-indigo-700">${item.product_sku || item.sku || '-'}</td>
+                                <td class="py-1 px-2.5 text-right font-bold text-slate-900 font-mono">${NKB.formatNumber(itemQty)} ${item.unit || 'pcs'}</td>
+                                <td class="py-1 px-2.5 text-right font-mono text-slate-700">${NKB.formatCurrency(itemPrice)}</td>
+                                <td class="py-1 px-2.5 text-right font-black font-mono text-indigo-900">${NKB.formatCurrency(itemSubtotal)}</td>
                             </tr>
                         `;
                     }).join('');
                 } else {
-                    tbody.innerHTML = `<tr><td colspan="6" class="py-6 text-center text-slate-400">No items found in this order.</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="6" class="py-3 text-center text-slate-400">No items found in this order.</td></tr>`;
                 }
 
                 document.getElementById('po-total-qty').textContent = `${NKB.formatNumber(totalQty)} pcs`;
-                document.getElementById('po-subtotal-display').textContent = NKB.formatCurrency(subtotal);
                 document.getElementById('po-grand-total').textContent = NKB.formatCurrency(po.grand_total || subtotal);
 
             } catch (err) {

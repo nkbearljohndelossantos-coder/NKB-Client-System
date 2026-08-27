@@ -3,154 +3,161 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sales Invoice - NKB Manufacturing & Trading</title>
+    <title>Sales Invoice - NKB Manufacturing Corp</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <link rel="stylesheet" href="/css/tailwind.min.css">
     <link rel="stylesheet" href="/css/style.css">
     <style>
+        @page {
+            size: 8.5in 5.5in;
+            margin: 4mm 6mm;
+        }
         @media print {
-            body { font-size: 10pt; }
+            html, body {
+                width: 100% !important;
+                height: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: #ffffff !important;
+                font-size: 7.5pt !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
             .no-print { display: none !important; }
+            .half-sheet {
+                box-shadow: none !important;
+                border: 1px solid #cbd5e1 !important;
+                padding: 8px 12px !important;
+                margin: 0 !important;
+                max-width: 100% !important;
+                border-radius: 6px !important;
+                page-break-inside: avoid !important;
+            }
+            .header-logo { height: 32px !important; }
+        }
+        @media screen {
+            .half-sheet {
+                max-width: 8.5in;
+                min-height: 5.5in;
+            }
         }
     </style>
 </head>
-<body class="bg-slate-100 min-h-screen p-4 sm:p-8 text-slate-900 antialiased">
+<body class="bg-slate-100 min-h-screen p-2 sm:p-6 text-slate-900 antialiased text-xs">
 
     <!-- Action Bar (Hidden on Print) -->
-    <div class="max-w-4xl mx-auto mb-6 flex justify-between items-center no-print">
-        <a href="javascript:window.history.back()" class="px-4 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 transition">
-            ← Back to Invoices
+    <div class="max-w-4xl mx-auto mb-4 flex justify-between items-center no-print">
+        <a href="javascript:window.history.back()" class="px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 transition">
+            ← Back to Portal
         </a>
-        <button onclick="window.print()" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/30 transition flex items-center gap-2">
-            <span>🖨️ Print Official Invoice</span>
-        </button>
+        <div class="flex items-center gap-2">
+            <span class="text-[11px] text-slate-500 font-medium">Layout: <strong>Half Bond Paper (8.5" × 5.5")</strong></span>
+            <button onclick="window.print()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold shadow-md shadow-indigo-600/30 transition flex items-center gap-1.5">
+                <span>🖨️ Print Invoice (Half Sheet)</span>
+            </button>
+        </div>
     </div>
 
-    <!-- A4 Printable Sheet -->
-    <div class="max-w-4xl mx-auto bg-white p-8 sm:p-12 rounded-3xl shadow-xl border border-slate-200 space-y-8" id="invoice-printable-sheet">
+    <!-- Half Bond Paper Sheet -->
+    <div class="half-sheet mx-auto bg-white p-5 rounded-2xl shadow-lg border border-slate-200 space-y-2.5" id="invoice-printable-sheet">
         
         <!-- Header -->
-        <div class="flex justify-between items-start border-b border-slate-200 pb-6">
-            <div class="flex items-start gap-4">
-                <img src="/images/nkb-logo.png" alt="NKB Logo" class="h-14 w-auto object-contain">
+        <div class="flex justify-between items-center border-b border-slate-200 pb-2">
+            <div class="flex items-center gap-3">
+                <img src="/images/nkb-logo.png" alt="NKB Logo" class="header-logo h-10 w-auto object-contain">
                 <div>
-                    <h1 class="text-2xl font-black text-slate-900 tracking-tight">NKB MANUFACTURING CORP.</h1>
-                    <p class="text-xs text-slate-500 font-medium mt-0.5">Cosmetics & Personal Care Formulation Laboratory</p>
-                    <p class="text-xs text-slate-500">TIN: 000-123-456-789-00000 | VAT Registered</p>
-                    <p class="text-xs text-slate-500">Sampaguita Village 2, B4 L5, Twig St, Bacoor, 4102 Cavite</p>
-                    <p class="text-xs text-slate-500">Contact: +63 (2) 8888-0000 | Email: customerservice@nkbmanufacturing.com</p>
+                    <h1 class="text-base font-black text-slate-900 tracking-tight leading-tight">NKB MANUFACTURING CORP.</h1>
+                    <p class="text-[9px] text-slate-500 font-medium leading-tight">TIN: 000-123-456-789-00000 | VAT Registered</p>
+                    <p class="text-[9px] text-slate-500 leading-tight">Sampaguita Village 2, B4 L5, Twig St, Bacoor, 4102 Cavite</p>
+                    <p class="text-[9px] text-slate-500 leading-tight">Billing Dept: customerservice@nkbmanufacturing.com | +63 (2) 8888-0000</p>
                 </div>
             </div>
-            <div class="text-right space-y-1">
-                <span class="inline-block px-3 py-1 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-extrabold tracking-wider border border-indigo-200">
+            <div class="text-right">
+                <span class="inline-block px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded text-[10px] font-extrabold tracking-wider border border-indigo-200">
                     SALES INVOICE
                 </span>
-                <div id="si-number-display" class="text-xl font-black text-slate-900 font-mono">SI-XXXX-XXXXXX</div>
-                <div class="text-xs text-slate-500">Invoice Date: <strong id="si-date-display" class="text-slate-800">-</strong></div>
-                <div class="text-xs text-rose-600 font-bold">Payment Due: <strong id="si-due-display" class="text-rose-700 font-mono">-</strong></div>
+                <div id="si-number-display" class="text-sm font-black text-slate-900 font-mono mt-0.5">SI-XXXX-XXXXXX</div>
+                <div class="text-[10px] text-slate-500">Date: <strong id="si-date-display" class="text-slate-800">-</strong> | Due: <strong id="si-due-display" class="text-rose-600 font-mono">-</strong></div>
             </div>
         </div>
 
-        <!-- Billed To & References Grid -->
-        <div class="grid grid-cols-2 gap-8 text-xs">
-            <div class="space-y-1">
-                <span class="text-slate-400 font-bold uppercase tracking-wider">Billed To (Client):</span>
-                <div id="si-client-name" class="font-extrabold text-sm text-slate-900">-</div>
-                <div id="si-client-contact" class="text-slate-600 font-medium">-</div>
-                <div id="si-client-address" class="text-slate-600 leading-relaxed">-</div>
-                <div id="si-client-tin" class="text-slate-500 font-mono">TIN: -</div>
+        <!-- Billed Client & Reference Grid -->
+        <div class="grid grid-cols-2 gap-3 text-[10px]">
+            <div class="p-2 bg-slate-50/70 rounded-lg border border-slate-200/80 space-y-0.5">
+                <span class="text-slate-400 font-bold uppercase text-[8px] block">Invoice To (Client):</span>
+                <div id="client-company-display" class="font-extrabold text-slate-900 text-[11px] leading-tight">-</div>
+                <div id="client-contact-display" class="text-slate-600 leading-tight">-</div>
+                <div id="client-address-display" class="text-slate-500 text-[9.5px] leading-tight truncate">-</div>
+                <div id="client-phone-display" class="text-slate-500 font-mono text-[9px]">-</div>
             </div>
-            <div class="space-y-1 bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                <span class="text-slate-400 font-bold uppercase tracking-wider">Billing Matching References:</span>
-                <div>Delivery Receipt (DR): <strong id="si-dr-ref" class="text-indigo-700 font-mono font-bold">-</strong></div>
-                <div>Delivery Date: <strong id="si-dr-date" class="text-slate-800">-</strong></div>
-                <div>Purchase Order (PO): <strong id="si-po-ref" class="text-slate-800 font-mono">-</strong></div>
-                <div>Billing Policy: <strong id="si-policy-ref" class="text-purple-700 font-bold">-</strong></div>
+            <div class="p-2 bg-slate-50/70 rounded-lg border border-slate-200/80 space-y-0.5 text-[9.5px]">
+                <span class="text-slate-400 font-bold uppercase text-[8px] block">Order & Policy Details:</span>
+                <div>PO Ref: <strong id="po-ref-display" class="text-indigo-700 font-mono font-bold">-</strong> | DR Ref: <strong id="dr-ref-display" class="text-slate-800 font-mono font-bold">-</strong></div>
+                <div>Billing Policy: <strong id="policy-display" class="text-slate-800">-</strong></div>
+                <div>Payment Status: <span id="payment-status-badge"></span></div>
             </div>
         </div>
 
-        <!-- Invoiced Items Table -->
-        <div class="border border-slate-200 rounded-2xl overflow-hidden text-xs">
+        <!-- Line Items Table -->
+        <div class="border border-slate-200 rounded-lg overflow-hidden text-[9.5px]">
             <table class="w-full text-left">
-                <thead class="bg-slate-900 text-white font-bold uppercase text-[11px]">
+                <thead class="bg-slate-900 text-white font-bold uppercase text-[8.5px]">
                     <tr>
-                        <th class="py-3 px-4">Item & Description</th>
-                        <th class="py-3 px-4 text-center">PO Target</th>
-                        <th class="py-3 px-4 text-center">Accepted DR</th>
-                        <th class="py-3 px-4 text-center">Billable Qty</th>
-                        <th class="py-3 px-4 text-right">Unit Rate</th>
-                        <th class="py-3 px-4 text-right">Total Amount</th>
+                        <th class="py-1 px-2.5">Item & Description</th>
+                        <th class="py-1 px-2.5 text-center font-mono">Billed Qty</th>
+                        <th class="py-1 px-2.5 text-right">Unit Price</th>
+                        <th class="py-1 px-2.5 text-right">Subtotal</th>
                     </tr>
                 </thead>
-                <tbody id="si-items-tbody" class="divide-y divide-slate-100 font-medium">
-                    <tr><td colspan="6" class="py-6 text-center text-slate-400">Loading invoice line items...</td></tr>
+                <tbody id="invoice-items-tbody" class="divide-y divide-slate-100 font-medium">
+                    <tr><td colspan="4" class="py-3 text-center text-slate-400">Loading invoice items...</td></tr>
                 </tbody>
             </table>
         </div>
 
-        <!-- Calculation Breakdown & Settlement Grid -->
-        <div class="grid grid-cols-2 gap-8 text-xs">
-            <!-- Bank & Remittance Details -->
-            <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                <span class="text-slate-500 font-bold uppercase">Payment Instructions & Remittance:</span>
-                <div class="space-y-1 font-mono text-[11px] text-slate-700">
-                    <div>Bank: <strong>BDO Unibank (Ortigas Branch)</strong></div>
-                    <div>Account Name: <strong>NKB Manufacturing & Trading Corp</strong></div>
-                    <div>Account Number: <strong>0012-3456-7890</strong></div>
-                    <div class="pt-1 text-[10px] font-sans text-slate-500">Please send proof of payment to: accounting@nkbmanufacturing.com</div>
-                </div>
+        <!-- Payment Terms & Amount Summary Grid -->
+        <div class="grid grid-cols-12 gap-3 text-[10px] items-center">
+            <div class="col-span-7 p-2 bg-slate-50 rounded-lg border border-slate-200 space-y-0.5 text-[9px]">
+                <span class="text-slate-400 font-bold uppercase text-[8px] block">Payment Instructions:</span>
+                <div>Bank: <strong>BDO Unibank</strong> • Account: <strong>NKB Manufacturing Corp.</strong></div>
+                <div class="font-mono text-slate-800">Account #: 0012-3456-7890 • Gcash: 0917-123-4567</div>
             </div>
-
-            <!-- Financial Totals -->
-            <div class="space-y-2 text-xs font-semibold">
-                <div class="flex justify-between text-slate-600">
-                    <span>Subtotal:</span>
-                    <span id="si-subtotal" class="font-bold text-slate-900 font-mono">₱0.00</span>
+            <div class="col-span-5 p-2 bg-indigo-50/40 rounded-lg border border-indigo-100 space-y-0.5 text-right">
+                <div class="flex justify-between text-slate-600 text-[9.5px]">
+                    <span>Net Total:</span>
+                    <strong id="invoice-subtotal" class="text-slate-900 font-mono">₱0.00</strong>
                 </div>
-                <div class="flex justify-between text-slate-600">
-                    <span>Value Added Tax (0%):</span>
-                    <span class="font-bold text-slate-900 font-mono">₱0.00</span>
-                </div>
-                <div class="border-t-2 border-slate-300 pt-2 flex justify-between text-sm font-extrabold text-slate-900">
-                    <span>Total Amount Billed:</span>
-                    <span id="si-grand-total" class="text-indigo-700 font-black font-mono">₱0.00</span>
-                </div>
-                <div class="flex justify-between text-emerald-700">
-                    <span>Paid / Applied:</span>
-                    <span id="si-paid-amount" class="font-bold font-mono">₱0.00</span>
-                </div>
-                <div class="flex justify-between text-base font-black text-rose-700 border-t border-slate-200 pt-1">
-                    <span>Balance Due:</span>
-                    <span id="si-balance-due" class="font-mono">₱0.00</span>
+                <div class="flex justify-between text-slate-900 font-extrabold text-[11px] border-t border-indigo-200/60 pt-0.5">
+                    <span>Grand Total:</span>
+                    <span id="invoice-grand-total" class="text-indigo-700 font-black font-mono">₱0.00</span>
                 </div>
             </div>
         </div>
 
-        <!-- Signature Block -->
-        <div class="grid grid-cols-2 gap-8 pt-8 border-t border-slate-200 text-xs">
-            <div class="space-y-4">
-                <span class="text-slate-400 font-bold uppercase">Prepared & Certified By:</span>
-                <div class="border-b-2 border-slate-300 pb-2">
-                    <div class="font-bold text-slate-800">Accounting & Billing Department</div>
-                    <div class="text-[10px] text-slate-400">NKB Manufacturing Corp.</div>
+        <!-- Signatures & Acceptance Block -->
+        <div class="grid grid-cols-2 gap-6 pt-1 border-t border-slate-200 text-[9.5px]">
+            <div>
+                <span class="text-slate-400 font-bold uppercase text-[8px] block mb-3">Prepared By:</span>
+                <div class="border-b border-slate-300 pb-0.5">
+                    <div class="font-bold text-slate-800">Accounting & Billing Dept</div>
+                    <div class="text-[8px] text-slate-400">NKB Manufacturing Corp.</div>
                 </div>
             </div>
-
-            <div class="space-y-4">
-                <span class="text-slate-400 font-bold uppercase">Authorized Managerial Sign-off:</span>
-                <div class="border-b-2 border-slate-300 pb-2 flex items-end justify-between">
-                    <div>
-                        <div class="font-bold text-slate-900">Finance Controller</div>
-                        <div class="text-[10px] text-slate-400">Official Electronic Invoice Validation</div>
-                    </div>
-                    <div class="text-emerald-700 font-bold font-mono text-[10px]">VERIFIED [DR-MATCHED]</div>
+            <div>
+                <span class="text-slate-400 font-bold uppercase text-[8px] block mb-3">Authorized Sign-off:</span>
+                <div class="border-b border-slate-300 pb-0.5 flex justify-between items-end">
+                    <div class="font-bold text-slate-900">Finance Controller</div>
+                    <div class="text-emerald-700 font-bold font-mono text-[8px]">VERIFIED [DR-MATCHED]</div>
                 </div>
             </div>
         </div>
 
+        <div class="text-center text-[8px] text-slate-400 pt-0.5 border-t border-slate-100">
+            NKB Manufacturing Corp. • Half Sheet Format (8.5" × 5.5") • Official Commercial Invoice
+        </div>
     </div>
 
-    <script src="/js/app.js"></script>
+    <script src="/js/app.js?v=2.0.4"></script>
     <script>
         document.addEventListener('DOMContentLoaded', async () => {
             await NKB.init();
@@ -159,45 +166,67 @@
 
             if (!invoiceId) {
                 alert('No Invoice ID provided.');
+                window.history.back();
                 return;
             }
 
-            const res = await NKB.api(`/api/invoices/${invoiceId}`);
-            if (res.success && res.data) {
-                const si = res.data;
-                document.getElementById('si-number-display').textContent = si.invoice_number;
-                document.getElementById('si-date-display').textContent = NKB.formatDate(si.invoice_date);
-                document.getElementById('si-due-display').textContent = NKB.formatDate(si.due_date);
+            try {
+                const res = await NKB.api(`/api/invoices/${invoiceId}`);
+                if (!res.success || !res.data) {
+                    alert(res.error || 'Failed to load Sales Invoice.');
+                    return;
+                }
 
-                document.getElementById('si-client-name').textContent = si.company_name;
-                document.getElementById('si-client-contact').textContent = `Attn: ${si.contact_person}`;
-                document.getElementById('si-client-address').textContent = si.client_address;
-                document.getElementById('si-client-tin').textContent = `TIN: ${si.client_tin || 'Non-VAT'}`;
+                const inv = res.data;
+                const items = inv.items || [];
 
-                document.getElementById('si-dr-ref').textContent = si.dr_number;
-                document.getElementById('si-dr-date').textContent = NKB.formatDate(si.delivery_date);
-                document.getElementById('si-po-ref').textContent = si.po_number;
-                document.getElementById('si-policy-ref').textContent = si.billing_policy;
+                document.getElementById('si-number-display').textContent = inv.invoice_number || '-';
+                document.getElementById('si-date-display').textContent = NKB.formatDate(inv.invoice_date || inv.created_at);
+                document.getElementById('si-due-display').textContent = inv.due_date ? NKB.formatDate(inv.due_date) : 'Due on Receipt';
+                document.getElementById('payment-status-badge').innerHTML = NKB.renderStatusBadge(inv.status);
 
-                document.getElementById('si-items-tbody').innerHTML = si.items.map(item => `
-                    <tr>
-                        <td class="py-3 px-4">
-                            <div class="font-bold text-slate-900">${item.product_name}</div>
-                            <div class="text-[10px] text-slate-400 font-mono">SKU: ${item.sku} ${item.batch_number ? '| Batch: ' + item.batch_number : ''}</div>
-                            ${item.is_overrun ? `<span class="badge badge-overrun mt-1">Over-run Yield: +${NKB.formatNumber(item.overrun_quantity)} pcs billed</span>` : ''}
-                        </td>
-                        <td class="py-3 px-4 text-center text-slate-600 font-mono">${NKB.formatNumber(item.po_quantity)}</td>
-                        <td class="py-3 px-4 text-center text-slate-900 font-mono font-bold">${NKB.formatNumber(item.accepted_quantity)}</td>
-                        <td class="py-3 px-4 text-center font-extrabold text-indigo-700 font-mono text-sm">${NKB.formatNumber(item.billable_quantity)}</td>
-                        <td class="py-3 px-4 text-right font-mono text-slate-700">${NKB.formatCurrency(item.unit_price)}</td>
-                        <td class="py-3 px-4 text-right font-extrabold text-slate-900 font-mono">${NKB.formatCurrency(item.line_total)}</td>
-                    </tr>
-                `).join('');
+                document.getElementById('client-company-display').textContent = inv.company_name || 'Valued Client';
+                document.getElementById('client-contact-display').textContent = `Attn: ${inv.contact_person || 'Accounting Department'}`;
+                document.getElementById('client-address-display').textContent = inv.address || 'Metro Manila, Philippines';
+                document.getElementById('client-phone-display').textContent = inv.phone || '';
 
-                document.getElementById('si-subtotal').textContent = NKB.formatCurrency(si.subtotal);
-                document.getElementById('si-grand-total').textContent = NKB.formatCurrency(si.total_amount);
-                document.getElementById('si-paid-amount').textContent = NKB.formatCurrency(si.paid_amount);
-                document.getElementById('si-balance-due').textContent = NKB.formatCurrency(si.balance_due);
+                document.getElementById('po-ref-display').textContent = inv.po_number || '-';
+                document.getElementById('dr-ref-display').textContent = inv.dr_number || '-';
+                document.getElementById('policy-display').textContent = inv.billing_policy === 'ACTUAL_DELIVERY' 
+                    ? 'Option A (Bill Actual)' 
+                    : 'Option B (Fixed+Buffer)';
+
+                const tbody = document.getElementById('invoice-items-tbody');
+                let totalAmount = 0;
+
+                if (items.length > 0) {
+                    tbody.innerHTML = items.map(item => {
+                        const qty = item.quantity || 0;
+                        const price = item.unit_price || 0;
+                        const subtotal = item.subtotal || (qty * price);
+                        totalAmount += subtotal;
+
+                        return `
+                            <tr class="hover:bg-slate-50">
+                                <td class="py-1 px-2.5">
+                                    <span class="font-bold text-slate-900">${item.product_name || 'Cosmetic Product'}</span>
+                                    <span class="text-[9px] text-slate-400 ml-1 font-mono">(${item.sku || '-'})</span>
+                                </td>
+                                <td class="py-1 px-2.5 text-center font-bold text-slate-900 font-mono">${NKB.formatNumber(qty)} pcs</td>
+                                <td class="py-1 px-2.5 text-right font-mono text-slate-700">${NKB.formatCurrency(price)}</td>
+                                <td class="py-1 px-2.5 text-right font-black font-mono text-indigo-900">${NKB.formatCurrency(subtotal)}</td>
+                            </tr>
+                        `;
+                    }).join('');
+                } else {
+                    tbody.innerHTML = `<tr><td colspan="4" class="py-3 text-center text-slate-400">No items found.</td></tr>`;
+                }
+
+                document.getElementById('invoice-subtotal').textContent = NKB.formatCurrency(totalAmount);
+                document.getElementById('invoice-grand-total').textContent = NKB.formatCurrency(inv.grand_total || totalAmount);
+
+            } catch (err) {
+                alert('Error loading Invoice details: ' + err.message);
             }
         });
     </script>

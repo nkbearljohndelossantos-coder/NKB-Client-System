@@ -3,120 +3,151 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Delivery Receipt - NKB Manufacturing & Trading</title>
+    <title>Delivery Receipt - NKB Manufacturing Corp</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <link rel="stylesheet" href="/css/tailwind.min.css">
     <link rel="stylesheet" href="/css/style.css">
     <style>
+        @page {
+            size: 8.5in 5.5in;
+            margin: 4mm 6mm;
+        }
         @media print {
-            body { font-size: 11pt; }
+            html, body {
+                width: 100% !important;
+                height: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: #ffffff !important;
+                font-size: 7.5pt !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
             .no-print { display: none !important; }
+            .half-sheet {
+                box-shadow: none !important;
+                border: 1px solid #cbd5e1 !important;
+                padding: 8px 12px !important;
+                margin: 0 !important;
+                max-width: 100% !important;
+                border-radius: 6px !important;
+                page-break-inside: avoid !important;
+            }
+            .header-logo { height: 32px !important; }
+        }
+        @media screen {
+            .half-sheet {
+                max-width: 8.5in;
+                min-height: 5.5in;
+            }
         }
     </style>
 </head>
-<body class="bg-slate-100 min-h-screen p-4 sm:p-8 text-slate-900 antialiased">
+<body class="bg-slate-100 min-h-screen p-2 sm:p-6 text-slate-900 antialiased text-xs">
 
     <!-- Action Bar (Hidden on Print) -->
-    <div class="max-w-4xl mx-auto mb-6 flex justify-between items-center no-print">
-        <a href="javascript:window.history.back()" class="px-4 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 transition">
+    <div class="max-w-4xl mx-auto mb-4 flex justify-between items-center no-print">
+        <a href="javascript:window.history.back()" class="px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 transition">
             ← Back to Portal
         </a>
-        <button onclick="window.print()" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/30 transition flex items-center gap-2">
-            <span>🖨️ Print Delivery Receipt</span>
-        </button>
+        <div class="flex items-center gap-2">
+            <span class="text-[11px] text-slate-500 font-medium">Layout: <strong>Half Bond Paper (8.5" × 5.5")</strong></span>
+            <button onclick="window.print()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold shadow-md shadow-indigo-600/30 transition flex items-center gap-1.5">
+                <span>🖨️ Print DR (Half Sheet)</span>
+            </button>
+        </div>
     </div>
 
-    <!-- A4 Printable Sheet -->
-    <div class="max-w-4xl mx-auto bg-white p-8 sm:p-12 rounded-3xl shadow-xl border border-slate-200 space-y-8" id="dr-printable-sheet">
+    <!-- Half Bond Paper Sheet -->
+    <div class="half-sheet mx-auto bg-white p-5 rounded-2xl shadow-lg border border-slate-200 space-y-2.5" id="dr-printable-sheet">
         
         <!-- Header -->
-        <div class="flex justify-between items-start border-b border-slate-200 pb-6">
-            <div class="flex items-start gap-4">
-                <img src="/images/nkb-logo.png" alt="NKB Logo" class="h-14 w-auto object-contain">
+        <div class="flex justify-between items-center border-b border-slate-200 pb-2">
+            <div class="flex items-center gap-3">
+                <img src="/images/nkb-logo.png" alt="NKB Logo" class="header-logo h-10 w-auto object-contain">
                 <div>
-                    <h1 class="text-2xl font-black text-slate-900 tracking-tight">NKB MANUFACTURING CORP.</h1>
-                    <p class="text-xs text-slate-500 font-medium mt-0.5">Cosmetics & Personal Care Formulation Laboratory</p>
-                    <p class="text-xs text-slate-500">Sampaguita Village 2, B4 L5, Twig St, Bacoor, 4102 Cavite</p>
-                    <p class="text-xs text-slate-500">Contact: +63 (2) 8888-0000 | Email: customerservice@nkbmanufacturing.com</p>
+                    <h1 class="text-base font-black text-slate-900 tracking-tight leading-tight">NKB MANUFACTURING CORP.</h1>
+                    <p class="text-[9px] text-slate-500 font-medium leading-tight">Sampaguita Village 2, B4 L5, Twig St, Bacoor, 4102 Cavite</p>
+                    <p class="text-[9px] text-slate-500 leading-tight">Tel: +63 (2) 8888-0000 | Email: customerservice@nkbmanufacturing.com</p>
                 </div>
             </div>
-            <div class="text-right space-y-1">
-                <span class="inline-block px-3 py-1 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-extrabold tracking-wider border border-indigo-200">
+            <div class="text-right">
+                <span class="inline-block px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded text-[10px] font-extrabold tracking-wider border border-indigo-200">
                     DELIVERY RECEIPT
                 </span>
-                <div id="dr-number-display" class="text-xl font-black text-slate-900 font-mono">DR-XXXX-XXXXXX</div>
-                <div class="text-xs text-slate-500">Date: <strong id="dr-date-display" class="text-slate-800">-</strong></div>
+                <div id="dr-number-display" class="text-sm font-black text-slate-900 font-mono mt-0.5">DR-XXXX-XXXXXX</div>
+                <div class="text-[10px] text-slate-500">Date: <strong id="dr-date-display" class="text-slate-800">-</strong></div>
             </div>
         </div>
 
-        <!-- Client & PO Reference Info Grid -->
-        <div class="grid grid-cols-2 gap-8 text-xs">
-            <div class="space-y-1">
-                <span class="text-slate-400 font-bold uppercase tracking-wider">Deliver To (Client):</span>
-                <div id="client-company-display" class="font-extrabold text-sm text-slate-900">-</div>
-                <div id="client-contact-display" class="text-slate-600 font-medium">-</div>
-                <div id="client-address-display" class="text-slate-600 leading-relaxed">-</div>
-                <div id="client-phone-display" class="text-slate-500 font-mono">-</div>
+        <!-- Client & Dispatch Info Grid -->
+        <div class="grid grid-cols-2 gap-3 text-[10px]">
+            <div class="p-2 bg-slate-50/70 rounded-lg border border-slate-200/80 space-y-0.5">
+                <span class="text-slate-400 font-bold uppercase text-[8px] block">Deliver To (Client):</span>
+                <div id="client-company-display" class="font-extrabold text-slate-900 text-[11px] leading-tight">-</div>
+                <div id="client-contact-display" class="text-slate-600 leading-tight">-</div>
+                <div id="client-address-display" class="text-slate-500 text-[9.5px] leading-tight truncate">-</div>
+                <div id="client-phone-display" class="text-slate-500 font-mono text-[9px]">-</div>
             </div>
-            <div class="space-y-1 bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                <span class="text-slate-400 font-bold uppercase tracking-wider">Dispatch Details:</span>
-                <div>PO Reference: <strong id="po-ref-display" class="text-slate-900 font-mono">-</strong></div>
-                <div>Billing Policy: <strong id="policy-display" class="text-indigo-700">-</strong></div>
-                <div>Driver: <strong id="driver-display" class="text-slate-800">-</strong></div>
-                <div>Vehicle Plate: <strong id="plate-display" class="text-slate-800 font-mono">-</strong></div>
+            <div class="p-2 bg-slate-50/70 rounded-lg border border-slate-200/80 space-y-0.5 text-[9.5px]">
+                <span class="text-slate-400 font-bold uppercase text-[8px] block">Dispatch Logistics:</span>
+                <div>PO Ref: <strong id="po-ref-display" class="text-slate-900 font-mono font-bold">-</strong> | Policy: <strong id="policy-display" class="text-indigo-700">-</strong></div>
+                <div>Driver: <strong id="driver-display" class="text-slate-800">-</strong> | Vehicle Plate: <strong id="plate-display" class="text-slate-800 font-mono">-</strong></div>
+                <div>Tracking Status: <span id="dr-status-badge"></span></div>
             </div>
         </div>
 
         <!-- Items Table -->
-        <div class="border border-slate-200 rounded-2xl overflow-hidden text-xs">
+        <div class="border border-slate-200 rounded-lg overflow-hidden text-[9.5px]">
             <table class="w-full text-left">
-                <thead class="bg-slate-900 text-white font-bold uppercase text-[11px]">
+                <thead class="bg-slate-900 text-white font-bold uppercase text-[8.5px]">
                     <tr>
-                        <th class="py-3 px-4">Item & Description</th>
-                        <th class="py-3 px-4">Batch Number</th>
-                        <th class="py-3 px-4">Mfg / Exp Date</th>
-                        <th class="py-3 px-4 text-right">Delivered Quantity</th>
-                        <th class="py-3 px-4 text-right">Accepted Qty</th>
+                        <th class="py-1 px-2.5">Item & Description</th>
+                        <th class="py-1 px-2.5 font-mono">Batch Number</th>
+                        <th class="py-1 px-2.5">Mfg / Exp Date</th>
+                        <th class="py-1 px-2.5 text-right">Dispatched Qty</th>
+                        <th class="py-1 px-2.5 text-right">Accepted Qty</th>
                     </tr>
                 </thead>
                 <tbody id="dr-items-tbody" class="divide-y divide-slate-100 font-medium">
-                    <tr><td colspan="5" class="py-6 text-center text-slate-400">Loading delivery details...</td></tr>
+                    <tr><td colspan="5" class="py-3 text-center text-slate-400">Loading delivery details...</td></tr>
                 </tbody>
             </table>
         </div>
 
-        <!-- Total Count -->
-        <div class="flex justify-end text-xs font-bold space-x-6 pr-4">
-            <span class="text-slate-500">Total Units Dispatched:</span>
-            <span id="dr-total-units" class="text-base font-black text-slate-900 font-mono">0 pcs</span>
+        <!-- Total Count Summary -->
+        <div class="flex justify-between items-center text-[10px] bg-slate-50 p-2 rounded-lg border border-slate-200">
+            <span class="text-slate-500 font-medium italic text-[9px]">* Accepted count serves as binding billing quantity under agreed tolerance policy.</span>
+            <div class="space-x-3">
+                <span class="text-slate-500 font-bold">Total Dispatched:</span>
+                <span id="dr-total-units" class="text-xs font-black text-slate-900 font-mono">0 pcs</span>
+            </div>
         </div>
 
         <!-- Signatures & Acceptance Block -->
-        <div class="grid grid-cols-2 gap-8 pt-8 border-t border-slate-200 text-xs">
-            <div class="space-y-6">
-                <span class="text-slate-400 font-bold uppercase">Dispatched By (Warehouse Lead):</span>
-                <div class="border-b-2 border-slate-300 pb-2">
+        <div class="grid grid-cols-2 gap-6 pt-1 border-t border-slate-200 text-[9.5px]">
+            <div>
+                <span class="text-slate-400 font-bold uppercase text-[8px] block mb-3">Dispatched By:</span>
+                <div class="border-b border-slate-300 pb-0.5">
                     <div class="font-bold text-slate-800">Warehouse & Logistics Team</div>
-                    <div class="text-[10px] text-slate-400">NKB Manufacturing Corp.</div>
+                    <div class="text-[8px] text-slate-400">NKB Manufacturing Corp.</div>
                 </div>
             </div>
-
-            <div class="space-y-4">
-                <span class="text-slate-400 font-bold uppercase">Received & Accepted By (Client Signatory):</span>
-                <div id="signature-display-box" class="min-h-[70px] border-b-2 border-slate-300 pb-2 flex flex-col justify-end">
-                    <div id="signer-name-display" class="font-bold text-slate-900 text-sm">_________________________</div>
-                    <div id="signer-title-display" class="text-[10px] text-slate-500">Authorized Representative / Date</div>
+            <div>
+                <span class="text-slate-400 font-bold uppercase text-[8px] block mb-3">Received & Accepted By:</span>
+                <div id="signature-display-box" class="border-b border-slate-300 pb-0.5">
+                    <div id="signer-name-display" class="font-bold text-slate-900">Authorized Client Signatory</div>
+                    <div id="signer-title-display" class="text-[8px] text-slate-400">Digital Acceptance Sign-off</div>
                 </div>
             </div>
         </div>
 
-        <!-- Footer / Legal Terms -->
-        <div class="text-[10px] text-slate-400 border-t border-slate-100 pt-4 leading-relaxed">
-            * Note: This Delivery Receipt serves as the official proof of delivery. In accordance with the agreed Manufacturing Over-run Policy (±10%), the accepted count above constitutes the binding billing quantity for the final Sales Invoice.
+        <div class="text-center text-[8px] text-slate-400 pt-0.5 border-t border-slate-100">
+            NKB Manufacturing Corp. • Half Sheet Format (8.5" × 5.5") • Official Proof of Delivery
         </div>
     </div>
 
-    <script src="/js/app.js"></script>
+    <script src="/js/app.js?v=2.0.4"></script>
     <script>
         document.addEventListener('DOMContentLoaded', async () => {
             await NKB.init();
@@ -125,59 +156,84 @@
 
             if (!drId) {
                 alert('No DR ID provided.');
+                window.history.back();
                 return;
             }
 
-            const res = await NKB.api(`/api/deliveries/${drId}`);
-            if (res.success && res.data) {
-                const dr = res.data;
-                document.getElementById('dr-number-display').textContent = dr.dr_number;
-                document.getElementById('dr-date-display').textContent = NKB.formatDate(dr.delivery_date);
-                document.getElementById('client-company-display').textContent = dr.company_name;
-                document.getElementById('client-contact-display').textContent = `Attn: ${dr.contact_person}`;
-                document.getElementById('client-address-display').textContent = dr.client_address;
-                document.getElementById('client-phone-display').textContent = dr.client_phone;
-
-                document.getElementById('po-ref-display').textContent = dr.po_number;
-                document.getElementById('policy-display').textContent = dr.billing_policy;
-                document.getElementById('driver-display').textContent = dr.driver_name || 'In-house Logistics';
-                document.getElementById('plate-display').textContent = dr.vehicle_plate || 'NKB-8899';
-
-                let totalQty = 0;
-                document.getElementById('dr-items-tbody').innerHTML = dr.items.map(item => {
-                    totalQty += item.delivered_quantity;
-                    return `
-                        <tr>
-                            <td class="py-3 px-4">
-                                <div class="font-bold text-slate-900">${item.product_name}</div>
-                                <div class="text-[10px] text-slate-400 font-mono">SKU: ${item.sku}</div>
-                            </td>
-                            <td class="py-3 px-4 font-mono font-bold text-indigo-700">${item.batch_number}</td>
-                            <td class="py-3 px-4 text-slate-600">${NKB.formatDate(item.production_date)} / ${NKB.formatDate(item.expiry_date)}</td>
-                            <td class="py-3 px-4 text-right font-extrabold text-slate-900">${NKB.formatNumber(item.delivered_quantity)} ${item.unit}</td>
-                            <td class="py-3 px-4 text-right font-extrabold text-emerald-700">${item.accepted_quantity > 0 ? NKB.formatNumber(item.accepted_quantity) + ' ' + item.unit : '-'}</td>
-                        </tr>
-                    `;
-                }).join('');
-
-                document.getElementById('dr-total-units').textContent = `${NKB.formatNumber(totalQty)} pcs`;
-
-                if (dr.acceptance) {
-                    const box = document.getElementById('signature-display-box');
-                    if (dr.acceptance.signature_data && dr.acceptance.signature_data.startsWith('data:image')) {
-                        box.innerHTML = `
-                            <img src="${dr.acceptance.signature_data}" alt="Digital Signature" class="max-h-16 mb-1">
-                            <div class="font-bold text-slate-900">${dr.acceptance.signer_name}</div>
-                            <div class="text-[10px] text-slate-500">${dr.acceptance.signer_title} • Signed on ${NKB.formatDateTime(dr.acceptance.accepted_at)}</div>
-                        `;
-                    } else {
-                        box.innerHTML = `
-                            <div class="font-mono text-sm text-indigo-800 font-bold mb-1">[DIGITALLY SIGNED]</div>
-                            <div class="font-bold text-slate-900">${dr.acceptance.signer_name}</div>
-                            <div class="text-[10px] text-slate-500">${dr.acceptance.signer_title} • Signed on ${NKB.formatDateTime(dr.acceptance.accepted_at)}</div>
-                        `;
-                    }
+            try {
+                const res = await NKB.api(`/api/deliveries/${drId}`);
+                if (!res.success || !res.data) {
+                    alert(res.error || 'Failed to load Delivery Receipt.');
+                    return;
                 }
+
+                const dr = res.data;
+                const items = dr.items || [];
+
+                document.getElementById('dr-number-display').textContent = dr.dr_number || '-';
+                document.getElementById('dr-date-display').textContent = NKB.formatDate(dr.dr_date || dr.created_at);
+                document.getElementById('dr-status-badge').innerHTML = NKB.renderStatusBadge(dr.status);
+
+                document.getElementById('client-company-display').textContent = dr.company_name || 'Valued Client';
+                document.getElementById('client-contact-display').textContent = `Attn: ${dr.contact_person || 'Receiving Team'}`;
+                document.getElementById('client-address-display').textContent = dr.delivery_address || dr.address || 'Metro Manila, Philippines';
+                document.getElementById('client-phone-display').textContent = dr.phone || '';
+
+                document.getElementById('po-ref-display').textContent = dr.po_number || '-';
+                document.getElementById('policy-display').textContent = dr.billing_policy === 'ACTUAL_DELIVERY' 
+                    ? 'Option A (Bill Actual)' 
+                    : 'Option B (Fixed+Buffer)';
+                document.getElementById('driver-display').textContent = dr.driver_name || 'Designated Courier';
+                document.getElementById('plate-display').textContent = dr.vehicle_plate || 'N/A';
+
+                const tbody = document.getElementById('dr-items-tbody');
+                let totalUnits = 0;
+
+                if (items.length > 0) {
+                    tbody.innerHTML = items.map(item => {
+                        const delivered = item.delivered_quantity || 0;
+                        const accepted = item.accepted_quantity !== null && item.accepted_quantity !== undefined 
+                            ? item.accepted_quantity 
+                            : (dr.status === 'ACCEPTED' ? delivered : '-');
+                        
+                        totalUnits += delivered;
+
+                        return `
+                            <tr class="hover:bg-slate-50">
+                                <td class="py-1 px-2.5">
+                                    <span class="font-bold text-slate-900">${item.product_name || 'Cosmetic Product'}</span>
+                                    <span class="text-[9px] text-slate-400 ml-1">(${item.sku || '-'})</span>
+                                </td>
+                                <td class="py-1 px-2.5 font-mono text-indigo-600 font-bold">${item.batch_number || '-'}</td>
+                                <td class="py-1 px-2.5 text-slate-500">${item.expiry_date ? NKB.formatDate(item.expiry_date) : 'Per Batch Spec'}</td>
+                                <td class="py-1 px-2.5 text-right font-bold text-slate-900 font-mono">${NKB.formatNumber(delivered)} pcs</td>
+                                <td class="py-1 px-2.5 text-right font-black ${accepted !== '-' ? 'text-emerald-700' : 'text-slate-400'} font-mono">
+                                    ${accepted !== '-' ? NKB.formatNumber(accepted) + ' pcs' : 'Pending'}
+                                </td>
+                            </tr>
+                        `;
+                    }).join('');
+                } else {
+                    tbody.innerHTML = `<tr><td colspan="5" class="py-3 text-center text-slate-400">No items found.</td></tr>`;
+                }
+
+                document.getElementById('dr-total-units').textContent = `${NKB.formatNumber(totalUnits)} pcs`;
+
+                if (dr.status === 'ACCEPTED' && dr.acceptance) {
+                    const acc = dr.acceptance;
+                    const sigHtml = acc.signature_data 
+                        ? `<img src="${acc.signature_data}" alt="Signature" class="max-h-8 object-contain mb-0.5">` 
+                        : '';
+                    
+                    document.getElementById('signature-display-box').innerHTML = `
+                        ${sigHtml}
+                        <div class="font-bold text-emerald-800 text-[10px]">${acc.signer_name} (${acc.signer_title || 'Authorized Rep'})</div>
+                        <div class="text-[8px] text-slate-400">Accepted: ${NKB.formatDate(acc.created_at)}</div>
+                    `;
+                }
+
+            } catch (err) {
+                alert('Error loading DR details: ' + err.message);
             }
         });
     </script>
