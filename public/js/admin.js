@@ -232,7 +232,10 @@ async function loadOrders() {
                 <td class="py-3 px-4 font-bold text-slate-700">${NKB.formatNumber(po.total_target_quantity)} pcs</td>
                 <td class="py-3 px-4 font-extrabold text-slate-900">${NKB.formatCurrency(po.grand_total)}</td>
                 <td class="py-3 px-4">${NKB.renderStatusBadge(po.status)}</td>
-                <td class="py-3 px-4 text-right space-x-1.5">
+                <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                    <a href="/print-po.html?id=${po.id}" target="_blank" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold transition inline-flex items-center gap-1">
+                        <span>🖨️</span><span>Print PO</span>
+                    </a>
                     ${po.status === 'PENDING_APPROVAL' ? `
                         <button onclick="approvePO('${po.id}', '${po.po_number}')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition">
                             Approve
@@ -279,7 +282,10 @@ async function loadJobOrders() {
                 <td class="py-3 px-4 font-bold text-slate-700">${NKB.formatNumber(jo.target_quantity)} pcs</td>
                 <td class="py-3 px-4 text-slate-600">${jo.assigned_team}</td>
                 <td class="py-3 px-4">${NKB.renderStatusBadge(jo.status)}</td>
-                <td class="py-3 px-4 text-right">
+                <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                    <a href="/print-jo.html?id=${jo.id}" target="_blank" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold transition inline-flex items-center gap-1">
+                        <span>🖨️</span><span>Print JO</span>
+                    </a>
                     <button onclick="openCreateBatchModal('${jo.id}', '${jo.jo_number}', ${jo.target_quantity}, '${jo.product_name}')" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition">
                         + Start Batch
                     </button>
