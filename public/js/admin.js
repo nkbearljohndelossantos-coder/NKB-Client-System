@@ -1515,8 +1515,8 @@ function addAdminPOLineItem() {
     const defaultProd = adminPOCatalog[0];
     adminPOLineItems.push({
         product_id: defaultProd.id,
-        target_quantity: 1000,
-        unit_price: defaultProd.default_price
+        target_quantity: 0,
+        unit_price: defaultProd.default_price || 0
     });
     renderAdminPOLineItems();
 }
@@ -1571,7 +1571,8 @@ function renderAdminPOLineItems() {
                 </td>
                 <td class="py-2.5 px-3">
                     <input type="number" min="1" step="1" 
-                           value="${item.target_quantity}" 
+                           value="${item.target_quantity > 0 ? item.target_quantity : ''}" 
+                           placeholder="0"
                            oninput="updateAdminPOLineItem(${idx}, 'target_quantity', this.value)" 
                            class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-900">
                 </td>
