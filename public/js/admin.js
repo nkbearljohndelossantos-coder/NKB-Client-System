@@ -1532,18 +1532,42 @@ function removeAdminPOLineItem(index) {
 
 function updateAdminPOLineItem(index, field, value) {
     if (!adminPOLineItems[index]) return;
+
     if (field === 'product_id') {
         const prod = adminPOCatalog.find(p => p.id === value);
         adminPOLineItems[index].product_id = value;
         if (prod) {
-            adminPOLineItems[index].unit_price = prod.default_price;
+            adminPOLineItems[index].unit_price = prod.default_price || 0;
+            const priceInput = document.getElementById(`admin-po-line-price-${index}`);
+            if (priceInput) priceInput.value = prod.default_price || 0;
         }
     } else if (field === 'target_quantity') {
         adminPOLineItems[index].target_quantity = parseInt(value) || 0;
     } else if (field === 'unit_price') {
         adminPOLineItems[index].unit_price = parseFloat(value) || 0;
     }
-    renderAdminPOLineItems();
+
+    // In-place calculation without re-rendering the whole DOM (preserves input focus & continuous typing)
+    const lineSubtotal = (adminPOLineItems[index].target_quantity || 0) * (adminPOLineItems[index].unit_price || 0);
+    const subtotalEl = document.getElementById(`admin-po-line-subtotal-${index}`);
+    if (subtotalEl) {
+        subtotalEl.textContent = NKB.formatCurrency(lineSubtotal);
+    }
+
+    // Update PO Summary Totals
+    let totalQty = 0;
+    let grandTotal = 0;
+    for (const item of adminPOLineItems) {
+        totalQty += item.target_quantity || 0;
+        grandTotal += (item.target_quantity || 0) * (item.unit_price || 0);
+    }
+
+    const elTotalItems = document.getElementById('admin-po-total-items');
+    if (elTotalItems) elTotalItems.textContent = adminPOLineItems.length;
+    const elTotalQty = document.getElementById('admin-po-total-qty');
+    if (elTotalQty) elTotalQty.textContent = `${NKB.formatNumber(totalQty)} pcs`;
+    const elGrandTotal = document.getElementById('admin-po-grand-total');
+    if (elGrandTotal) elGrandTotal.textContent = NKB.formatCurrency(grandTotal);
 }
 
 function renderAdminPOLineItems() {
@@ -1559,12 +1583,12 @@ function renderAdminPOLineItems() {
         grandTotal += lineSubtotal;
 
         return `
-            <tr class="hover:bg-slate-50 transition">
+            <tr class="hover:bg-slate-50 transition" id="admin-po-row-${idx}">
                 <td class="py-2.5 px-3">
                     <select onchange="updateAdminPOLineItem(${idx}, 'product_id', this.value)" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white font-medium">
                         ${adminPOCatalog.map(p => `
                             <option value="${p.id}" ${p.id === item.product_id ? 'selected' : ''}>
-                                ${p.name} (${p.effective_sku || p.sku}) - ₱${p.default_price.toFixed(2)}${p.has_custom_price ? ' [Custom]' : ''}
+                                ${p.name} (${p.effective_sku || p.sku}) - ₱${(p.default_price || 0).toFixed(2)}${p.has_custom_price ? ' [Custom]' : ''}
                             </option>
                         `).join('')}
                     </select>
@@ -1574,15 +1598,17 @@ function renderAdminPOLineItems() {
                            value="${item.target_quantity > 0 ? item.target_quantity : ''}" 
                            placeholder="0"
                            oninput="updateAdminPOLineItem(${idx}, 'target_quantity', this.value)" 
-                           class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-900">
+                           class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500">
                 </td>
                 <td class="py-2.5 px-3">
                     <input type="number" min="0" step="0.01" 
-                           value="${item.unit_price}" 
+                           id="admin-po-line-price-${idx}"
+                           value="${item.unit_price || ''}" 
+                           placeholder="0.00"
                            oninput="updateAdminPOLineItem(${idx}, 'unit_price', this.value)" 
-                           class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-indigo-900">
+                           class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-indigo-900 focus:ring-2 focus:ring-indigo-500">
                 </td>
-                <td class="py-2.5 px-3 font-extrabold text-slate-900">
+                <td class="py-2.5 px-3 font-extrabold text-slate-900" id="admin-po-line-subtotal-${idx}">
                     ${NKB.formatCurrency(lineSubtotal)}
                 </td>
                 <td class="py-2.5 px-2 text-center">
