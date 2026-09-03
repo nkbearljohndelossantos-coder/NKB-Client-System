@@ -256,6 +256,11 @@ async function loadOrders() {
                     <a href="/print-po.html?id=${po.id}" target="_blank" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold transition inline-flex items-center gap-1">
                         <span>🖨️</span><span>Print PO</span>
                     </a>
+                    ${(po.status === 'PENDING_APPROVAL' || po.status === 'APPROVED' || po.status === 'DRAFT') ? `
+                        <button onclick="openEditPOModal('${po.id}')" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Edit Purchase Order">
+                            <span>✏️</span><span>Edit</span>
+                        </button>
+                    ` : ''}
                     ${po.status === 'PENDING_APPROVAL' ? `
                         <button onclick="approvePO('${po.id}', '${po.po_number}')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition">
                             Approve
@@ -1478,7 +1483,9 @@ async function openCreatePOModal() {
 
                     <div class="flex justify-end gap-2 pt-2 border-t border-slate-100 flex-shrink-0">
                         <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold">Cancel</button>
-                        <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-md shadow-indigo-600/30">Submit Purchase Order</button>
+                        <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-md shadow-indigo-600/30 flex items-center gap-1.5">
+                            <span>🔍</span><span>Double Check & Review PO</span>
+                        </button>
                     </div>
                 </form>
             </div>
@@ -1488,8 +1495,117 @@ async function openCreatePOModal() {
     await onAdminPOClientChanged();
 }
 
+// Open Edit PO Modal
+async function openEditPOModal(poId) {
+    const root = document.getElementById('modals-root');
+    const orderRes = await NKB.api(`/api/orders/${poId}`);
+    if (!orderRes.success || !orderRes.data) {
+        NKB.showToast('Purchase Order not found.', 'error');
+        return;
+    }
+    const po = orderRes.data;
+
+    // Load client catalog for this PO's client
+    const catalogRes = await NKB.api(`/api/products?clientId=${po.client_id}&forPO=true`);
+    adminPOCatalog = (catalogRes.success && catalogRes.data) ? catalogRes.data : [];
+
+    // Pre-populate line items from existing PO
+    adminPOLineItems = (po.items || []).map(it => ({
+        product_id: it.product_id,
+        target_quantity: it.target_quantity || 0,
+        unit_price: it.unit_price || 0
+    }));
+
+    if (adminPOLineItems.length === 0 && adminPOCatalog.length > 0) {
+        addAdminPOLineItem();
+    }
+
+    root.innerHTML = `
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
+            <div class="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col border border-amber-300">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-3 flex-shrink-0">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="px-2 py-0.5 bg-amber-100 text-amber-800 rounded font-mono text-xs font-extrabold">✏️ Edit Mode</span>
+                            <h3 class="text-lg font-bold text-slate-900">Edit Purchase Order: <span class="text-indigo-600 font-mono">${po.po_number}</span></h3>
+                        </div>
+                        <p class="text-xs text-slate-500">Modify line items, quantities, or unit prices for ${po.company_name}</p>
+                    </div>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
+                </div>
+                <form id="form-edit-po" onsubmit="submitEditPO(event, '${po.id}', '${po.po_number}')" class="space-y-4 text-xs font-semibold flex-1 overflow-y-auto pr-1">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-slate-600 mb-1">Client Company</label>
+                            <select id="edit-po-client-id" onchange="onAdminPOClientChanged()" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-900">
+                                ${cachedClients.map(c => `<option value="${c.id}" ${c.id === po.client_id ? 'selected' : ''}>${c.company_name}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 mb-1">Billing Policy</label>
+                            <select id="edit-po-billing-policy" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold">
+                                <option value="ACTUAL_DELIVERY" ${po.billing_policy === 'ACTUAL_DELIVERY' ? 'selected' : ''}>Option A: Bill Actual Delivered</option>
+                                <option value="FIXED_PO_BUFFER" ${po.billing_policy === 'FIXED_PO_BUFFER' ? 'selected' : ''}>Option B: Fixed PO + Buffer Stock</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Line Items Section -->
+                    <div class="space-y-2 pt-2 border-t border-slate-100">
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs font-bold uppercase tracking-wider text-slate-700">Order Products (Line Items)</span>
+                            <button type="button" onclick="addAdminPOLineItem()" class="px-3 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition flex items-center gap-1">
+                                <span>➕</span><span>Add Product Line</span>
+                            </button>
+                        </div>
+
+                        <div class="overflow-x-auto border border-slate-200 rounded-xl">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase">
+                                    <tr>
+                                        <th class="py-2.5 px-3">Product</th>
+                                        <th class="py-2.5 px-3 w-28">Target Qty (pcs)</th>
+                                        <th class="py-2.5 px-3 w-28">Unit Price (₱)</th>
+                                        <th class="py-2.5 px-3 w-28">Subtotal (₱)</th>
+                                        <th class="py-2.5 px-2 w-12 text-center">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="admin-po-lines-body" class="divide-y divide-slate-100 font-medium">
+                                    <!-- Dynamic Rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Summary & Totals -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                        <div>
+                            <label class="block text-slate-600 mb-1">Packaging / Batch Notes</label>
+                            <textarea id="edit-po-notes" rows="2" placeholder="Formulation variants, packaging specifics..." class="w-full px-3 py-2 border rounded-xl bg-white">${po.notes || ''}</textarea>
+                        </div>
+                        <div class="space-y-1.5 text-right flex flex-col justify-center">
+                            <div class="text-slate-500">Total Items: <strong id="admin-po-total-items" class="text-slate-900">0</strong></div>
+                            <div class="text-slate-500">Total Target Quantity: <strong id="admin-po-total-qty" class="text-slate-900">0 pcs</strong></div>
+                            <div class="text-base font-extrabold text-indigo-900 pt-1 border-t border-slate-200">Grand Total: <span id="admin-po-grand-total">₱0.00</span></div>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end gap-2 pt-2 border-t border-slate-100 flex-shrink-0">
+                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold">Cancel</button>
+                        <button type="submit" class="px-5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-bold shadow-md shadow-amber-600/30 flex items-center gap-1.5">
+                            <span>🔍</span><span>Double Check & Save Changes</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+
+    renderAdminPOLineItems();
+}
+
 async function onAdminPOClientChanged() {
-    const clientSelect = document.getElementById('po-client-id');
+    const clientSelect = document.getElementById('po-client-id') || document.getElementById('edit-po-client-id');
     if (!clientSelect) return;
     const clientId = clientSelect.value;
 
@@ -1603,7 +1719,7 @@ function renderAdminPOLineItems() {
                 <td class="py-2.5 px-3">
                     <input type="number" min="0" step="0.01" 
                            id="admin-po-line-price-${idx}"
-                           value="${item.unit_price || ''}" 
+                           value="${item.unit_price !== undefined ? item.unit_price : ''}" 
                            placeholder="0.00"
                            oninput="updateAdminPOLineItem(${idx}, 'unit_price', this.value)" 
                            class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-indigo-900 focus:ring-2 focus:ring-indigo-500">
@@ -1628,9 +1744,15 @@ function renderAdminPOLineItems() {
     if (elGrandTotal) elGrandTotal.textContent = NKB.formatCurrency(grandTotal);
 }
 
-async function submitCreatePO(e) {
+// -------------------------------------------------------------
+// DOUBLE CHECK & REVIEW PURCHASE ORDER MODAL
+// -------------------------------------------------------------
+let pendingPOPayload = null;
+
+function submitCreatePO(e) {
     e.preventDefault();
     const clientId = document.getElementById('po-client-id').value;
+    const clientObj = cachedClients.find(c => c.id === clientId);
     const policy = document.getElementById('po-billing-policy').value;
     const notes = document.getElementById('po-notes').value;
 
@@ -1646,26 +1768,232 @@ async function submitCreatePO(e) {
         }
     }
 
-    const res = await NKB.api('/api/orders', {
-        method: 'POST',
-        body: JSON.stringify({
-            client_id: clientId,
-            billing_policy: policy,
-            notes,
-            items: adminPOLineItems.map(item => ({
+    const payload = {
+        client_id: clientId,
+        client_name: clientObj ? clientObj.company_name : 'Selected Client',
+        billing_policy: policy,
+        notes,
+        is_edit: false,
+        items: adminPOLineItems.map(item => {
+            const prod = adminPOCatalog.find(p => p.id === item.product_id) || cachedProducts.find(p => p.id === item.product_id);
+            return {
                 product_id: item.product_id,
+                product_name: prod ? prod.name : 'Cosmetic Item',
+                sku: prod ? (prod.effective_sku || prod.sku) : '',
                 target_quantity: item.target_quantity,
-                unit_price: item.unit_price
+                unit_price: item.unit_price,
+                subtotal: (item.target_quantity || 0) * (item.unit_price || 0)
+            };
+        })
+    };
+
+    openPODoubleCheckModal(payload);
+}
+
+function submitEditPO(e, poId, poNumber) {
+    e.preventDefault();
+    const clientId = document.getElementById('edit-po-client-id').value;
+    const clientObj = cachedClients.find(c => c.id === clientId);
+    const policy = document.getElementById('edit-po-billing-policy').value;
+    const notes = document.getElementById('edit-po-notes').value;
+
+    if (!adminPOLineItems || adminPOLineItems.length === 0) {
+        NKB.showToast('Please add at least one product line item to the order.', 'error');
+        return;
+    }
+
+    for (const item of adminPOLineItems) {
+        if (!item.product_id || item.target_quantity <= 0) {
+            NKB.showToast('All product lines must have valid quantity > 0.', 'error');
+            return;
+        }
+    }
+
+    const payload = {
+        edit_po_id: poId,
+        po_number: poNumber,
+        client_id: clientId,
+        client_name: clientObj ? clientObj.company_name : 'Selected Client',
+        billing_policy: policy,
+        notes,
+        is_edit: true,
+        items: adminPOLineItems.map(item => {
+            const prod = adminPOCatalog.find(p => p.id === item.product_id) || cachedProducts.find(p => p.id === item.product_id);
+            return {
+                product_id: item.product_id,
+                product_name: prod ? prod.name : 'Cosmetic Item',
+                sku: prod ? (prod.effective_sku || prod.sku) : '',
+                target_quantity: item.target_quantity,
+                unit_price: item.unit_price,
+                subtotal: (item.target_quantity || 0) * (item.unit_price || 0)
+            };
+        })
+    };
+
+    openPODoubleCheckModal(payload);
+}
+
+function openPODoubleCheckModal(payload) {
+    pendingPOPayload = payload;
+    const root = document.getElementById('modals-root');
+
+    const totalQty = payload.items.reduce((acc, it) => acc + (it.target_quantity || 0), 0);
+    const grandTotal = payload.items.reduce((acc, it) => acc + (it.subtotal || 0), 0);
+
+    root.innerHTML = `
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+            <div class="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border-2 border-indigo-200 space-y-4 max-h-[92vh] flex flex-col">
+                <div class="flex justify-between items-center pb-3 border-b border-slate-100 flex-shrink-0">
+                    <div class="flex items-center gap-2">
+                        <span class="p-2 bg-amber-100 text-amber-800 rounded-2xl text-xl">🔍</span>
+                        <div>
+                            <h3 class="text-lg font-black text-slate-900">Double Check & Verification (P.O)</h3>
+                            <p class="text-xs text-indigo-600 font-bold">Paki-review kung tama ang lahat bago opisyal na i-submit</p>
+                        </div>
+                    </div>
+                    <button onclick="reopenPOEditForm()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
+                </div>
+
+                <div class="flex-1 overflow-y-auto space-y-4 pr-1 text-xs">
+                    <!-- Client & Policy Summary Card -->
+                    <div class="p-4 bg-slate-50 border border-slate-200 rounded-2xl grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <span class="text-slate-400 text-[10px] uppercase font-bold block">Kliyente (Client Company)</span>
+                            <span class="text-sm font-black text-slate-900">🏢 ${payload.client_name}</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-400 text-[10px] uppercase font-bold block">Billing Policy</span>
+                            <span class="inline-block px-2 py-0.5 mt-0.5 rounded text-[11px] font-bold ${payload.billing_policy === 'ACTUAL_DELIVERY' ? 'bg-indigo-100 text-indigo-800' : 'bg-purple-100 text-purple-800'}">
+                                ${payload.billing_policy === 'ACTUAL_DELIVERY' ? 'Option A: Bill Actual Delivered' : 'Option B: Fixed PO + Buffer Stock'}
+                            </span>
+                        </div>
+                        ${payload.notes ? `
+                            <div class="sm:col-span-2 pt-2 border-t border-slate-200">
+                                <span class="text-slate-400 text-[10px] uppercase font-bold block">Batch / Packaging Notes</span>
+                                <span class="text-slate-700 italic">${payload.notes}</span>
+                            </div>
+                        ` : ''}
+                    </div>
+
+                    <!-- Products Review Table -->
+                    <div class="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                        <div class="p-2.5 bg-indigo-50/70 border-b border-indigo-100 flex justify-between items-center">
+                            <span class="font-extrabold text-indigo-950 uppercase tracking-wider text-[11px]">Listahan ng Produkto sa P.O (${payload.items.length} items)</span>
+                            <span class="text-[11px] text-slate-500 font-semibold">Tiyakin ang Tamang Dami at Presyo</span>
+                        </div>
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-100/70 border-b border-slate-200 text-slate-700 font-bold uppercase text-[10px]">
+                                <tr>
+                                    <th class="py-2 px-3">Produkto</th>
+                                    <th class="py-2 px-3 text-right">Target Qty</th>
+                                    <th class="py-2 px-3 text-right">Unit Price</th>
+                                    <th class="py-2 px-3 text-right">Subtotal</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 font-medium">
+                                ${payload.items.map(it => `
+                                    <tr class="hover:bg-slate-50">
+                                        <td class="py-2.5 px-3">
+                                            <div class="font-bold text-slate-900">${it.product_name}</div>
+                                            <div class="text-[10px] text-slate-400 font-mono">${it.sku}</div>
+                                        </td>
+                                        <td class="py-2.5 px-3 text-right font-black text-slate-800">
+                                            ${NKB.formatNumber(it.target_quantity)} pcs
+                                        </td>
+                                        <td class="py-2.5 px-3 text-right font-semibold text-slate-700">
+                                            ${NKB.formatCurrency(it.unit_price)}
+                                        </td>
+                                        <td class="py-2.5 px-3 text-right font-black text-indigo-900">
+                                            ${NKB.formatCurrency(it.subtotal)}
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Grand Summary Box -->
+                    <div class="p-4 bg-indigo-950 text-white rounded-2xl shadow flex justify-between items-center">
+                        <div>
+                            <div class="text-[10px] uppercase tracking-wider text-indigo-300 font-bold">Kabuuan (Total Output)</div>
+                            <div class="text-base font-black text-white">${NKB.formatNumber(totalQty)} pcs (${payload.items.length} Lines)</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-[10px] uppercase tracking-wider text-indigo-300 font-bold">Grand Total Amount</div>
+                            <div class="text-xl font-black text-emerald-400">${NKB.formatCurrency(grandTotal)}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Double Check Action Buttons -->
+                <div class="flex flex-col sm:flex-row justify-between items-center gap-3 pt-3 border-t border-slate-100 flex-shrink-0">
+                    <button type="button" onclick="reopenPOEditForm()" class="w-full sm:w-auto px-4 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border-2 border-amber-300 rounded-xl font-extrabold text-xs transition flex items-center justify-center gap-1.5 shadow-sm">
+                        <span>✏️ May Mali / Baguhin (Edit)</span>
+                    </button>
+                    <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
+                        <button type="button" onclick="closeModal()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition">
+                            Cancel
+                        </button>
+                        <button type="button" id="btn-confirm-po" onclick="confirmAndExecutePOSubmit()" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-black text-xs shadow-lg shadow-emerald-600/30 transition flex items-center justify-center gap-1.5">
+                            <span>✅ Tama Lahat — Confirm & Submit P.O</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function reopenPOEditForm() {
+    if (!pendingPOPayload) {
+        closeModal();
+        return;
+    }
+    if (pendingPOPayload.is_edit) {
+        openEditPOModal(pendingPOPayload.edit_po_id);
+    } else {
+        openCreatePOModal();
+    }
+}
+
+async function confirmAndExecutePOSubmit() {
+    if (!pendingPOPayload) return;
+    const btn = document.getElementById('btn-confirm-po');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Processing...';
+    }
+
+    const isEdit = pendingPOPayload.is_edit;
+    const url = isEdit ? `/api/orders/${pendingPOPayload.edit_po_id}` : '/api/orders';
+    const method = isEdit ? 'PUT' : 'POST';
+
+    const res = await NKB.api(url, {
+        method,
+        body: JSON.stringify({
+            client_id: pendingPOPayload.client_id,
+            billing_policy: pendingPOPayload.billing_policy,
+            notes: pendingPOPayload.notes,
+            items: pendingPOPayload.items.map(it => ({
+                product_id: it.product_id,
+                target_quantity: it.target_quantity,
+                unit_price: it.unit_price
             }))
         })
     });
 
     if (res.success) {
-        NKB.showToast(`Purchase Order ${res.data.po_number} created successfully!`, 'success');
+        const poNum = res.data?.po_number || pendingPOPayload.po_number || '';
+        NKB.showToast(`🎉 Purchase Order ${poNum} ${isEdit ? 'updated' : 'created'} successfully!`, 'success');
         closeModal();
+        pendingPOPayload = null;
         loadOrders();
     } else {
-        NKB.showToast(res.error || 'Failed to create PO.', 'error');
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = '✅ Tama Lahat — Confirm & Submit P.O';
+        }
+        NKB.showToast(res.error || 'Failed to submit Purchase Order.', 'error');
     }
 }
 

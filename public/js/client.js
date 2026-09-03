@@ -242,23 +242,162 @@ function renderClientCart() {
     if (grandTotalEl) grandTotalEl.textContent = NKB.formatCurrency(grandTotal);
 }
 
-async function submitClientPO(e) {
+let pendingClientPOPayload = null;
+
+function submitClientPO(e) {
     e.preventDefault();
     if (clientCartItems.length === 0) {
         NKB.showToast('Please add at least one product to your order before submitting.', 'error');
         return;
     }
 
+    for (const item of clientCartItems) {
+        if (!item.product_id || item.target_quantity <= 0) {
+            NKB.showToast('All items must have valid quantity > 0.', 'error');
+            return;
+        }
+    }
+
     const policy = document.querySelector('input[name="client_billing_policy"]:checked')?.value || 'ACTUAL_DELIVERY';
     const notes = document.getElementById('client-order-notes')?.value || '';
+
+    pendingClientPOPayload = {
+        billing_policy: policy,
+        notes,
+        items: clientCartItems.map(it => ({ ...it, subtotal: (it.target_quantity || 0) * (it.unit_price || 0) }))
+    };
+
+    openClientPODoubleCheckModal();
+}
+
+function openClientPODoubleCheckModal() {
+    if (!pendingClientPOPayload) return;
+    const modalRoot = document.getElementById('client-modals-root');
+    if (!modalRoot) return;
+
+    const totalQty = pendingClientPOPayload.items.reduce((acc, it) => acc + (it.target_quantity || 0), 0);
+    const grandTotal = pendingClientPOPayload.items.reduce((acc, it) => acc + (it.subtotal || 0), 0);
+
+    modalRoot.innerHTML = `
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+            <div class="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border-2 border-indigo-200 space-y-4 max-h-[92vh] flex flex-col">
+                <div class="flex justify-between items-center pb-3 border-b border-slate-100 flex-shrink-0">
+                    <div class="flex items-center gap-2">
+                        <span class="p-2 bg-amber-100 text-amber-800 rounded-2xl text-xl">🔍</span>
+                        <div>
+                            <h3 class="text-lg font-black text-slate-900">Double Check & Verification (Purchase Order)</h3>
+                            <p class="text-xs text-indigo-600 font-bold">Paki-review kung tama ang lahat ng detalye bago mag-submit</p>
+                        </div>
+                    </div>
+                    <button onclick="closeClientModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
+                </div>
+
+                <div class="flex-1 overflow-y-auto space-y-4 pr-1 text-xs">
+                    <!-- Policy & Notes -->
+                    <div class="p-4 bg-slate-50 border border-slate-200 rounded-2xl grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <span class="text-slate-400 text-[10px] uppercase font-bold block">Billing Policy</span>
+                            <span class="inline-block px-2 py-0.5 mt-0.5 rounded text-[11px] font-bold ${pendingClientPOPayload.billing_policy === 'ACTUAL_DELIVERY' ? 'bg-indigo-100 text-indigo-800' : 'bg-purple-100 text-purple-800'}">
+                                ${pendingClientPOPayload.billing_policy === 'ACTUAL_DELIVERY' ? 'Option A: Bill Actual Delivered' : 'Option B: Fixed PO + Buffer Stock'}
+                            </span>
+                        </div>
+                        ${pendingClientPOPayload.notes ? `
+                            <div class="sm:col-span-2 pt-2 border-t border-slate-200">
+                                <span class="text-slate-400 text-[10px] uppercase font-bold block">Order / Packaging Notes</span>
+                                <span class="text-slate-700 italic">${pendingClientPOPayload.notes}</span>
+                            </div>
+                        ` : ''}
+                    </div>
+
+                    <!-- Products Review Table -->
+                    <div class="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                        <div class="p-2.5 bg-indigo-50/70 border-b border-indigo-100 flex justify-between items-center">
+                            <span class="font-extrabold text-indigo-950 uppercase tracking-wider text-[11px]">Listahan ng Produkto (${pendingClientPOPayload.items.length} items)</span>
+                            <span class="text-[11px] text-slate-500 font-semibold">Tiyakin ang Tamang Dami at Presyo</span>
+                        </div>
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-100/70 border-b border-slate-200 text-slate-700 font-bold uppercase text-[10px]">
+                                <tr>
+                                    <th class="py-2 px-3">Produkto</th>
+                                    <th class="py-2 px-3 text-right">Target Qty</th>
+                                    <th class="py-2 px-3 text-right">Unit Rate</th>
+                                    <th class="py-2 px-3 text-right">Subtotal</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 font-medium">
+                                ${pendingClientPOPayload.items.map(it => `
+                                    <tr class="hover:bg-slate-50">
+                                        <td class="py-2.5 px-3">
+                                            <div class="font-bold text-slate-900">${it.name}</div>
+                                            <div class="text-[10px] text-slate-400 font-mono">${it.sku}</div>
+                                        </td>
+                                        <td class="py-2.5 px-3 text-right font-black text-slate-800">
+                                            ${NKB.formatNumber(it.target_quantity)} pcs
+                                        </td>
+                                        <td class="py-2.5 px-3 text-right font-semibold text-slate-700">
+                                            ${NKB.formatCurrency(it.unit_price)}
+                                        </td>
+                                        <td class="py-2.5 px-3 text-right font-black text-indigo-900">
+                                            ${NKB.formatCurrency(it.subtotal)}
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Grand Summary Box -->
+                    <div class="p-4 bg-indigo-950 text-white rounded-2xl shadow flex justify-between items-center">
+                        <div>
+                            <div class="text-[10px] uppercase tracking-wider text-indigo-300 font-bold">Kabuuan (Total Output)</div>
+                            <div class="text-base font-black text-white">${NKB.formatNumber(totalQty)} pcs (${pendingClientPOPayload.items.length} Lines)</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-[10px] uppercase tracking-wider text-indigo-300 font-bold">Estimated Grand Total</div>
+                            <div class="text-xl font-black text-emerald-400">${NKB.formatCurrency(grandTotal)}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex flex-col sm:flex-row justify-between items-center gap-3 pt-3 border-t border-slate-100 flex-shrink-0">
+                    <button type="button" onclick="closeClientModal()" class="w-full sm:w-auto px-4 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border-2 border-amber-300 rounded-xl font-extrabold text-xs transition flex items-center justify-center gap-1.5 shadow-sm">
+                        <span>✏️ May Mali / Baguhin (Edit Cart)</span>
+                    </button>
+                    <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
+                        <button type="button" onclick="closeClientModal()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition">
+                            Cancel
+                        </button>
+                        <button type="button" id="btn-client-confirm-po" onclick="confirmAndExecuteClientPOSubmit()" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-black text-xs shadow-lg shadow-emerald-600/30 transition flex items-center justify-center gap-1.5">
+                            <span>✅ Tama Lahat — Confirm & Submit P.O</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function closeClientModal() {
+    const modalRoot = document.getElementById('client-modals-root');
+    if (modalRoot) modalRoot.innerHTML = '';
+}
+
+async function confirmAndExecuteClientPOSubmit() {
+    if (!pendingClientPOPayload) return;
+    const btn = document.getElementById('btn-client-confirm-po');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Submitting...';
+    }
 
     const res = await NKB.api('/api/orders', {
         method: 'POST',
         body: JSON.stringify({
             tolerance_percent: 10.0,
-            billing_policy: policy,
-            notes,
-            items: clientCartItems.map(item => ({
+            billing_policy: pendingClientPOPayload.billing_policy,
+            notes: pendingClientPOPayload.notes,
+            items: pendingClientPOPayload.items.map(item => ({
                 product_id: item.product_id,
                 target_quantity: item.target_quantity,
                 unit_price: item.unit_price
@@ -268,10 +407,16 @@ async function submitClientPO(e) {
 
     if (res.success) {
         NKB.showToast(`🎉 Purchase Order ${res.data.po_number} submitted successfully!`, 'success');
+        closeClientModal();
+        pendingClientPOPayload = null;
         clientCartItems = [];
         renderClientCart();
         switchClientTab('my-orders');
     } else {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = '✅ Tama Lahat — Confirm & Submit P.O';
+        }
         NKB.showToast(res.error || 'Failed to submit order.', 'error');
     }
 }

@@ -506,4 +506,168 @@ router.post('/:id/approve', authenticateToken, requireRoles('ADMIN'), (req, res)
     return res.json({ success: true, message: 'Purchase Order approved successfully.', data: updated });
 });
 
+/**
+ * PUT /api/orders/:id
+ * Edit/Update an existing Purchase Order
+ */
+router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
+    const { id } = req.params;
+    let { client_id, expected_delivery_date, tolerance_percent, billing_policy, notes, items, tax_percent } = req.body;
+
+    const existingPO = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
+    if (!existingPO) {
+        return res.status(404).json({ success: false, error: 'Purchase Order not found.' });
+    }
+
+    if (req.user.role === 'CLIENT' && existingPO.client_id !== req.clientId) {
+        return res.status(403).json({ success: false, error: 'Access denied.', code: 'FORBIDDEN' });
+    }
+
+    if (existingPO.status === 'DELIVERED' || existingPO.status === 'CLOSED' || existingPO.status === 'CANCELLED') {
+        return res.status(400).json({ success: false, error: `Cannot edit Purchase Order with status "${existingPO.status}".` });
+    }
+
+    if (req.user.role === 'CLIENT') {
+        client_id = req.clientId;
+    } else if (!client_id) {
+        client_id = existingPO.client_id;
+    }
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ success: false, error: 'At least one order item is required.' });
+    }
+
+    const client = db.prepare('SELECT * FROM clients WHERE id = ?').get(client_id);
+    if (!client) {
+        return res.status(404).json({ success: false, error: 'Client not found.' });
+    }
+
+    const tolerance = tolerance_percent !== undefined ? parseFloat(tolerance_percent) : existingPO.tolerance_percent;
+    const policy = billing_policy || existingPO.billing_policy;
+    const taxRate = tax_percent !== undefined ? parseFloat(tax_percent) : existingPO.tax_percent;
+
+    const updateOrderTx = db.transaction(() => {
+        let subtotal = 0.0;
+        const processedItems = [];
+
+        for (const item of items) {
+            const product = db.prepare('SELECT * FROM products WHERE id = ?').get(item.product_id);
+            if (!product) {
+                throw new Error(`Invalid product ID: ${item.product_id}`);
+            }
+
+            const targetQty = parseInt(item.target_quantity);
+            if (isNaN(targetQty) || targetQty <= 0) {
+                throw new Error(`Target quantity for "${product.name}" must be greater than 0.`);
+            }
+
+            const assignment = db.prepare('SELECT custom_price, custom_name, is_active FROM client_product_prices WHERE client_id = ? AND product_id = ?').get(client_id, item.product_id);
+            const expectedClientPrice = (assignment && assignment.custom_price !== null && assignment.custom_price !== undefined) ? assignment.custom_price : product.default_price;
+
+            let unitPrice;
+            if (req.user.role === 'CLIENT') {
+                unitPrice = expectedClientPrice;
+            } else {
+                unitPrice = item.unit_price !== undefined && item.unit_price !== null ? parseFloat(item.unit_price) : expectedClientPrice;
+            }
+
+            const lineSubtotal = targetQty * unitPrice;
+            subtotal += lineSubtotal;
+
+            const minQty = Math.floor(targetQty * (1 - tolerance / 100));
+            const maxQty = Math.ceil(targetQty * (1 + tolerance / 100));
+
+            processedItems.push({
+                id: item.id || uuidv4(),
+                poId: id,
+                productId: product.id,
+                targetQuantity: targetQty,
+                minAllowedQuantity: minQty,
+                maxAllowedQuantity: maxQty,
+                unitPrice,
+                subtotal: lineSubtotal
+            });
+        }
+
+        const taxAmount = (subtotal * taxRate) / 100;
+        const grandTotal = subtotal + taxAmount;
+
+        // Update purchase_orders record
+        db.prepare(`
+            UPDATE purchase_orders
+            SET client_id = ?,
+                expected_delivery_date = ?,
+                tolerance_percent = ?,
+                billing_policy = ?,
+                notes = ?,
+                subtotal = ?,
+                tax_percent = ?,
+                tax_amount = ?,
+                grand_total = ?,
+                updated_at = datetime('now')
+            WHERE id = ?
+        `).run(
+            client_id,
+            expected_delivery_date || existingPO.expected_delivery_date,
+            tolerance,
+            policy,
+            notes !== undefined ? notes : existingPO.notes,
+            subtotal,
+            taxRate,
+            taxAmount,
+            grandTotal,
+            id
+        );
+
+        // Delete old items and insert updated items
+        db.prepare('DELETE FROM purchase_order_items WHERE po_id = ?').run(id);
+
+        const insertItemStmt = db.prepare(`
+            INSERT INTO purchase_order_items
+            (id, po_id, product_id, target_quantity, min_allowed_quantity, max_allowed_quantity, unit_price, subtotal)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+
+        for (const it of processedItems) {
+            insertItemStmt.run(
+                it.id,
+                it.poId,
+                it.productId,
+                it.targetQuantity,
+                it.minAllowedQuantity,
+                it.maxAllowedQuantity,
+                it.unitPrice,
+                it.subtotal
+            );
+        }
+
+        logAudit({
+            userId: req.user.id,
+            userName: req.user.name,
+            userRole: req.user.role,
+            action: 'UPDATE_PO',
+            entityType: 'PURCHASE_ORDER',
+            entityId: existingPO.po_number,
+            details: {
+                poId: id,
+                poNumber: existingPO.po_number,
+                clientId: client_id,
+                grandTotal,
+                itemCount: processedItems.length
+            }
+        });
+
+        return { id, poNumber: existingPO.po_number, grandTotal };
+    });
+
+    try {
+        const result = updateOrderTx();
+        const updatedPO = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(result.id);
+        const orderItems = db.prepare('SELECT * FROM purchase_order_items WHERE po_id = ?').all(result.id);
+        return res.json({ success: true, message: `Purchase Order ${result.poNumber} updated successfully!`, data: { ...updatedPO, items: orderItems } });
+    } catch (err) {
+        return res.status(400).json({ success: false, error: err.message });
+    }
+});
+
 module.exports = router;
