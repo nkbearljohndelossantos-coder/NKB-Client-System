@@ -161,42 +161,42 @@
         </div>
 
         <!-- BOTTOM BLOCK: OTHER COMMENTS & BANK INFO (Left) | TOTALS BREAKDOWN (Right) -->
-        <div class="grid grid-cols-12 gap-3 text-[10px] items-start pt-1">
+        <div class="grid grid-cols-12 gap-4 text-[10.5px] items-start pt-1">
             
             <!-- Left Comments Box -->
-            <div class="col-span-7 space-y-1">
+            <div class="col-span-6 space-y-1.5">
                 <div class="border border-slate-300 overflow-hidden rounded">
-                    <div class="doc-grey-header font-bold uppercase text-[9px] py-0.5 px-2">PAYMENT INSTRUCTIONS & TERMS</div>
-                    <div class="p-2 space-y-0.5 text-slate-600 text-[9.5px] leading-tight">
+                    <div class="doc-grey-header font-bold uppercase text-[9px] py-1 px-2.5">PAYMENT INSTRUCTIONS & TERMS</div>
+                    <div class="p-2.5 space-y-1 text-slate-600 text-[10px] leading-relaxed">
                         <p>1. Bank Transfer: <strong>BDO Unibank</strong> • Acct Name: <strong>NKB Manufacturing Corp</strong></p>
                         <p>2. Account #: <strong>0012-3456-7890</strong> | GCash Official: <strong>0917-123-4567</strong></p>
                         <p>3. Billing inquiries: <strong>customerservice@nkbmanufacturing.com</strong></p>
                     </div>
                 </div>
-                <div class="text-[9.5px] text-slate-700 pt-0.5">
+                <div class="text-[10px] text-slate-700 pt-0.5">
                     Make checks payable to: <strong class="text-slate-900">NKB Manufacturing Corp</strong>
                 </div>
             </div>
 
             <!-- Right Totals Table -->
-            <div class="col-span-5 border border-slate-300 overflow-hidden rounded text-[10px]">
-                <table class="w-full text-right">
+            <div class="col-span-6 border border-slate-300 overflow-hidden rounded text-[10.5px]">
+                <table class="w-full">
                     <tbody class="divide-y divide-slate-200">
                         <tr>
-                            <td class="py-0.5 px-2 text-slate-600 font-semibold bg-slate-50">SUBTOTAL</td>
-                            <td class="py-0.5 px-2 font-bold font-mono text-slate-900" id="invoice-subtotal">₱0.00</td>
+                            <td class="py-1.5 px-3 text-slate-700 font-bold bg-slate-50 text-left whitespace-nowrap">SUBTOTAL</td>
+                            <td class="py-1.5 px-3 font-bold font-mono text-slate-900 text-right whitespace-nowrap" id="invoice-subtotal">₱0.00</td>
                         </tr>
                         <tr>
-                            <td class="py-0.5 px-2 text-slate-600 font-semibold bg-slate-50">TAXABLE</td>
-                            <td class="py-0.5 px-2 font-mono text-slate-800" id="invoice-taxable">₱0.00</td>
+                            <td class="py-1.5 px-3 text-slate-700 font-bold bg-slate-50 text-left whitespace-nowrap">TAXABLE AMOUNT</td>
+                            <td class="py-1.5 px-3 font-mono text-slate-800 text-right whitespace-nowrap" id="invoice-taxable">₱0.00</td>
                         </tr>
                         <tr>
-                            <td class="py-0.5 px-2 text-slate-600 font-semibold bg-slate-50">TAX RATE</td>
-                            <td class="py-0.5 px-2 font-mono text-slate-800">12.00% VAT</td>
+                            <td class="py-1.5 px-3 text-slate-700 font-bold bg-slate-50 text-left whitespace-nowrap">TAX RATE</td>
+                            <td class="py-1.5 px-3 font-mono text-slate-800 text-right whitespace-nowrap">12.00% VAT</td>
                         </tr>
-                        <tr class="doc-total-bar font-bold text-[11.5px]">
-                            <td class="py-1 px-2 uppercase tracking-wider text-left text-white">TOTAL</td>
-                            <td class="py-1 px-2 font-mono text-white text-right font-black" id="invoice-grand-total">₱0.00</td>
+                        <tr class="doc-total-bar font-bold text-[11px]">
+                            <td class="py-2 px-3 uppercase tracking-wider text-left text-white whitespace-nowrap">TOTAL AMOUNT DUE</td>
+                            <td class="py-2 px-3 font-mono text-white text-right font-black whitespace-nowrap" id="invoice-grand-total">₱0.00</td>
                         </tr>
                     </tbody>
                 </table>

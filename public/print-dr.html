@@ -168,38 +168,38 @@
         </div>
 
         <!-- BOTTOM BLOCK: OTHER COMMENTS (Left) | TOTALS SUMMARY (Right) -->
-        <div class="grid grid-cols-12 gap-3 text-[10px] items-start pt-1">
+        <div class="grid grid-cols-12 gap-4 text-[10.5px] items-start pt-1">
             
             <!-- Left Comments Box -->
-            <div class="col-span-7 space-y-1">
+            <div class="col-span-6 space-y-1.5">
                 <div class="border border-slate-300 overflow-hidden rounded">
-                    <div class="doc-grey-header font-bold uppercase text-[9px] py-0.5 px-2">RECEIVING & ACCEPTANCE TERMS</div>
-                    <div class="p-2 space-y-0.5 text-slate-600 text-[9.5px] leading-tight">
+                    <div class="doc-grey-header font-bold uppercase text-[9px] py-1 px-2.5">RECEIVING & ACCEPTANCE TERMS</div>
+                    <div class="p-2.5 space-y-1 text-slate-600 text-[10px] leading-relaxed">
                         <p>1. This Delivery Receipt serves as official proof of transfer of goods.</p>
                         <p>2. Accepted quantity constitutes the final basis for Sales Invoicing.</p>
                         <p>3. Dispatch inquiries: <strong>customerservice@nkbmanufacturing.com</strong></p>
                     </div>
                 </div>
-                <div class="text-[9.5px] text-slate-700 pt-0.5">
+                <div class="text-[10px] text-slate-700 pt-0.5">
                     Authorized Logistics: <strong class="text-slate-900">NKB Manufacturing Warehouse Division</strong>
                 </div>
             </div>
 
             <!-- Right Totals Table -->
-            <div class="col-span-5 border border-slate-300 overflow-hidden rounded text-[10px]">
-                <table class="w-full text-right">
+            <div class="col-span-6 border border-slate-300 overflow-hidden rounded text-[10.5px]">
+                <table class="w-full">
                     <tbody class="divide-y divide-slate-200">
                         <tr>
-                            <td class="py-0.5 px-2 text-slate-600 font-semibold bg-slate-50">DISPATCHED UNITS</td>
-                            <td class="py-0.5 px-2 font-bold font-mono text-slate-900" id="dr-total-units">0 pcs</td>
+                            <td class="py-1.5 px-3 text-slate-700 font-bold bg-slate-50 text-left whitespace-nowrap">DISPATCHED UNITS</td>
+                            <td class="py-1.5 px-3 font-bold font-mono text-slate-900 text-right whitespace-nowrap" id="dr-total-units">0 pcs</td>
                         </tr>
                         <tr>
-                            <td class="py-0.5 px-2 text-slate-600 font-semibold bg-slate-50">QC & TAMPER INSPECTION</td>
-                            <td class="py-0.5 px-2 font-mono text-emerald-700 font-bold">VERIFIED</td>
+                            <td class="py-1.5 px-3 text-slate-700 font-bold bg-slate-50 text-left whitespace-nowrap">QC & TAMPER CHECK</td>
+                            <td class="py-1.5 px-3 font-mono text-emerald-700 font-bold text-right whitespace-nowrap">VERIFIED</td>
                         </tr>
-                        <tr class="doc-total-bar font-bold text-[11.5px]">
-                            <td class="py-1 px-2 uppercase tracking-wider text-left text-white">DELIVERY</td>
-                            <td class="py-1 px-2 font-mono text-white text-right font-black" id="dr-summary-status">DISPATCHED</td>
+                        <tr class="doc-total-bar font-bold text-[11px]">
+                            <td class="py-2 px-3 uppercase tracking-wider text-left text-white whitespace-nowrap">DELIVERY STATUS</td>
+                            <td class="py-2 px-3 font-mono text-white text-right font-black whitespace-nowrap uppercase" id="dr-summary-status">DISPATCHED</td>
                         </tr>
                     </tbody>
                 </table>
@@ -319,7 +319,7 @@
                 }
 
                 document.getElementById('dr-total-units').textContent = `${NKB.formatNumber(totalUnits)} pcs`;
-                document.getElementById('dr-summary-status').textContent = dr.status || 'DISPATCHED';
+                document.getElementById('dr-summary-status').textContent = dr.status === 'PENDING_CLIENT_ACCEPTANCE' ? 'PENDING ACCEPTANCE' : (dr.status ? dr.status.replace(/_/g, ' ') : 'DISPATCHED');
                 document.getElementById('dr-sign-date').textContent = NKB.formatDate(dr.dr_date || dr.created_at);
 
                 if (dr.status === 'ACCEPTED' && dr.acceptance) {
