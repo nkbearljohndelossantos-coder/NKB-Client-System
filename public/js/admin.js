@@ -49,31 +49,45 @@ function applyRoleBasedUI() {
     };
 
     if (role === 'PRODUCTION') {
-        hideTab('deliveries');
+        hideTab('dashboard');
+        hideTab('orders');
         hideTab('invoices');
         hideTab('payments');
         hideTab('buffer');
         hideTab('clients');
+        hideTab('products');
         hideTab('users');
+        hideTab('reports');
         hideTab('audit');
+        const mgmtHdr = document.getElementById('sidebar-mgmt-header');
+        if (mgmtHdr) mgmtHdr.style.display = 'none';
+
+        // Default to Job Orders view
+        switchTab('job-orders');
     } else if (role === 'WAREHOUSE') {
+        hideTab('dashboard');
         hideTab('orders');
         hideTab('job-orders');
         hideTab('production');
         hideTab('invoices');
         hideTab('payments');
         hideTab('clients');
+        hideTab('products');
         hideTab('users');
+        hideTab('reports');
         hideTab('audit');
+        const mgmtHdr = document.getElementById('sidebar-mgmt-header');
+        if (mgmtHdr) mgmtHdr.style.display = 'none';
+
+        switchTab('deliveries');
     } else if (role === 'ACCOUNTING') {
         hideTab('job-orders');
         hideTab('production');
-        hideTab('deliveries');
-        hideTab('clients');
+        hideTab('buffer');
         hideTab('users');
         hideTab('audit');
     } else if (role === 'ADMIN') {
-        // Admin sees everything except super-admin exclusive config
+        // Admin sees operational tools
     }
 }
 
