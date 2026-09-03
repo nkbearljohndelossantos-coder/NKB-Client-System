@@ -212,7 +212,7 @@ router.get('/backtrack/:term', authenticateToken, enforceClientIsolation, (req, 
         WHERE entity_id IN (?, ?, ?) 
            OR details LIKE ? 
            OR details LIKE ?
-        ORDER BY created_at DESC LIMIT 50
+        ORDER BY timestamp DESC LIMIT 50
     `).all(poId, po.po_number, rawTerm, `%${po.po_number}%`, `%${rawTerm}%`);
 
     return res.json({

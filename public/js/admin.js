@@ -3063,7 +3063,7 @@ async function openBacktrackModal(term) {
                                     <span class="px-1.5 py-0.5 bg-indigo-100 text-indigo-800 rounded font-bold text-[9px]">${log.action}</span>
                                     <span class="text-slate-800 font-semibold">${log.user_name || 'System'} (${log.user_role || 'STAFF'})</span>
                                 </div>
-                                <span class="font-mono text-[10px] text-slate-400">${NKB.formatDate(log.created_at)}</span>
+                                <span class="font-mono text-[10px] text-slate-400">${NKB.formatDate(log.timestamp || log.created_at)}</span>
                             </div>
                         `).join('')}
                     </div>
