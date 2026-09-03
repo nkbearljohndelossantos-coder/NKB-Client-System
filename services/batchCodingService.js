@@ -67,14 +67,14 @@ const BATCH_CODE_CATALOG = [
     { name: "GELIS PHARMA GIDERM FACIAL MOSTURIZER", template: "GDFMXX-XXX" },
     
     // SKEENCARE
-    { name: "SKEENCARE TINTED SUNSCREEN CREAM", template: "SCTSCXX-XXX-001" },
-    { name: "SKEENCARE REJUVENATING TONER", template: "SCRTXX-XXX-001" },
-    { name: "SKEENCARE NIACINAMIDE BAR SOAP", template: "SCNBSXX-XXX-001" },
-    { name: "SKEENCARE MOISTURIZING CREAM", template: "SCMCXX-XXX-001" },
-    { name: "SKEENCARE KOJIC PAPAYA SOAP REMOLD", template: "SCKPSRemXX-XXX-00X" },
-    { name: "SKEENCARE OXYGENATED SUNSCREEN", template: "SCOSSXX-XXX-00X" },
-    { name: "SKEENCARE BAKUCHIOL NIACINAMIDE SERUM", template: "SCBNSXX-XXX-00X" },
-    { name: "SKEENCARE 4 IN 1 ALCOHOL FREE TONER", template: "SCAFTXX-XXX-00X" },
+    { name: "SKEENCARE TINTED SUNSCREEN CREAM", template: "SCTSCXX-XXX" },
+    { name: "SKEENCARE REJUVENATING TONER", template: "SCRTXX-XXX" },
+    { name: "SKEENCARE NIACINAMIDE BAR SOAP", template: "SCNBSXX-XXX" },
+    { name: "SKEENCARE MOISTURIZING CREAM", template: "SCMCXX-XXX" },
+    { name: "SKEENCARE KOJIC PAPAYA SOAP REMOLD", template: "SCKPSRemXX-XXX" },
+    { name: "SKEENCARE OXYGENATED SUNSCREEN", template: "SCOSSXX-XXX" },
+    { name: "SKEENCARE BAKUCHIOL NIACINAMIDE SERUM", template: "SCBNSXX-XXX" },
+    { name: "SKEENCARE 4 IN 1 ALCOHOL FREE TONER", template: "SCAFTXX-XXX" },
     { name: "SKEENCARE SPRAY N' SLAY FEMININE SPRAY BANANA SPLIT", template: "SCFSBXX-XXX" },
     { name: "SKEENCARE SPRAY N' SLAY FEMININE SPRAY STRAWBERRY FLAVOR", template: "SCFSSXX-XXX" },
     { name: "CUTIS ANO NE MILK POWER LIGHTENING LOTION", template: "CAMPLXX-XXX" },
@@ -82,7 +82,7 @@ const BATCH_CODE_CATALOG = [
     { name: "SKEENCARE PEKAS CREAM", template: "SCPCXX-XXX" },
     
     // ADORN
-    { name: "ADORN SUNBLOCK CREAM", template: "ASBCXX-XXX-001" },
+    { name: "ADORN SUNBLOCK CREAM", template: "ASBCXX-XXX" },
     
     // HER CHOICE PH
     { name: "HER CHOICE PH INTENSIVE BLEACHING CREAM", template: "HCIBCXX-XXX" },
@@ -111,8 +111,8 @@ const BATCH_CODE_CATALOG = [
     { name: "BRIGHTEST SET SUNBLOCK (PAID SAMPLE)", template: "PSBSSXX-XXX" },
     { name: "BRIGHTEST SET NIGHT CREAM (PAID SAMPLE)", template: "PSBSNCXX-XXX" },
     { name: "BRIGHTEST SET TONER (PAID SAMPLE)", template: "PSBSTXX-XXX" },
-    { name: "BRIGHTEST UNDERARM CREAM (PAID SAMPLE) GREEN TEA", template: "PSUACXX-XXX-01" },
-    { name: "BRIGHTEST UNDERARM CREAM (PAID SAMPLE) BABY POWDER", template: "PSUACXX-XXX-02" },
+    { name: "BRIGHTEST UNDERARM CREAM (PAID SAMPLE) GREEN TEA", template: "PSUACXX-XXX" },
+    { name: "BRIGHTEST UNDERARM CREAM (PAID SAMPLE) BABY POWDER", template: "PSUACXX-XXX" },
     
     // MAGNIFIQUE / INTIMATE WHITE
     { name: "MAGNIFIQUE WHITE KOJIC ACID WITH VITAMIN E HAND & BODY LOTION", template: "MWKAEXX-XXX" },
@@ -270,12 +270,12 @@ function findBatchTemplate(productName = '', sku = '', customTemplate = '') {
     }
 
     if (normName.includes('SKEENCARE')) {
-        if (normName.includes('TONER')) return 'SCRTXX-XXX-001';
-        if (normName.includes('SUNSCREEN')) return 'SCTSCXX-XXX-001';
-        if (normName.includes('NIACINAMIDE')) return 'SCNBSXX-XXX-001';
-        if (normName.includes('MOISTURIZING')) return 'SCMCXX-XXX-001';
+        if (normName.includes('TONER')) return 'SCRTXX-XXX';
+        if (normName.includes('SUNSCREEN')) return 'SCTSCXX-XXX';
+        if (normName.includes('NIACINAMIDE')) return 'SCNBSXX-XXX';
+        if (normName.includes('MOISTURIZING')) return 'SCMCXX-XXX';
         if (normName.includes('PEKAS')) return 'SCPCXX-XXX';
-        return 'SCXX-XXX-001';
+        return 'SCXX-XXX';
     }
 
     if (normName.includes('HERCHOICE')) {
@@ -293,11 +293,14 @@ function findBatchTemplate(productName = '', sku = '', customTemplate = '') {
 
 /**
  * Generate Batch Code from product & production date
- * @param {Object} options - { productName, sku, customTemplate, productionDate, subSequence }
+ * @param {Object} options - { productName, sku, customTemplate, productionDate }
  * @returns {string} Formatted batch code like "BSPTS26-247"
  */
-function generateBatchCode({ productName = '', sku = '', customTemplate = '', productionDate = new Date(), subSequence = 1 } = {}) {
-    const template = findBatchTemplate(productName, sku, customTemplate);
+function generateBatchCode({ productName = '', sku = '', customTemplate = '', productionDate = new Date() } = {}) {
+    let template = findBatchTemplate(productName, sku, customTemplate);
+    // Strip any legacy trailing -001, -00X, etc.
+    template = template.replace(/-00[0-9X]/g, '').replace(/-0[0-9]/g, '');
+
     const yy = get2DigitYear(productionDate);
     const julian = getJulianDay(productionDate);
 
@@ -305,10 +308,6 @@ function generateBatchCode({ productName = '', sku = '', customTemplate = '', pr
     let batchCode = template
         .replace(/XXX/g, julian)
         .replace(/XX/g, yy);
-
-    if (batchCode.includes('-00X')) {
-        batchCode = batchCode.replace(/-00X/g, `-${String(subSequence).padStart(3, '0')}`);
-    }
 
     return batchCode;
 }

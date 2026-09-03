@@ -8,10 +8,10 @@ const { logAudit } = require('../services/auditService');
 /**
  * GET /api/products
  * Accessible by all authenticated users (Client & Admin)
- * When requested by a client (or with ?clientId=...), automatically applies client custom pricing
+ * When requested with ?clientId=... or forPO=true, automatically applies client custom pricing and filters by designated client
  */
 router.get('/', authenticateToken, (req, res) => {
-    const { search, activeOnly, clientId } = req.query;
+    const { search, activeOnly, clientId, assignedOnly, forPO } = req.query;
     
     // Determine if client context applies
     const targetClientId = req.user.role === 'CLIENT' ? (req.clientId || req.user.client_id) : (clientId || null);
@@ -20,9 +20,13 @@ router.get('/', authenticateToken, (req, res) => {
     const params = [];
 
     if (targetClientId) {
-        if (req.query.assignedOnly === 'true') {
+        if (assignedOnly === 'true' || forPO === 'true' || req.user.role === 'CLIENT') {
+            // Strict filtering: Return products assigned to this client (or custom priced for this client)
             query = `
                 SELECT p.id,
+                       p.client_id,
+                       c.company_name as client_name,
+                       c.company_name as client_company_name,
                        COALESCE(cpp.custom_sku, p.sku) as sku,
                        COALESCE(cpp.custom_sku, p.sku) as effective_sku,
                        p.sku as master_sku,
@@ -36,18 +40,23 @@ router.get('/', authenticateToken, (req, res) => {
                        cpp.custom_sku,
                        cpp.custom_name,
                        COALESCE(cpp.custom_formula_code, p.formula_code) as formula_code,
+                       COALESCE(cpp.batch_code_template, p.batch_code_template) as batch_code_template,
                        CASE WHEN cpp.custom_price IS NOT NULL THEN 1 ELSE 0 END as has_custom_price,
                        1 as is_assigned,
                        p.shelf_life_months, p.current_stock, p.is_active, p.created_at, p.updated_at
                 FROM products p
-                JOIN client_product_prices cpp ON cpp.product_id = p.id AND cpp.client_id = ?
-                WHERE p.is_active = 1 AND cpp.is_active = 1
+                LEFT JOIN clients c ON p.client_id = c.id
+                LEFT JOIN client_product_prices cpp ON cpp.product_id = p.id AND cpp.client_id = ?
+                WHERE p.is_active = 1 AND (p.client_id = ? OR cpp.client_id = ?)
             `;
-            params.push(targetClientId);
+            params.push(targetClientId, targetClientId, targetClientId);
         } else {
-            // For Client Portal or pricing modal overview: Return all products with custom price applied if assigned
+            // For general catalog view with client context
             query = `
                 SELECT p.id,
+                       p.client_id,
+                       c.company_name as client_name,
+                       c.company_name as client_company_name,
                        COALESCE(cpp.custom_sku, p.sku) as sku,
                        COALESCE(cpp.custom_sku, p.sku) as effective_sku,
                        p.sku as master_sku,
@@ -61,21 +70,26 @@ router.get('/', authenticateToken, (req, res) => {
                        cpp.custom_sku,
                        cpp.custom_name,
                        COALESCE(cpp.custom_formula_code, p.formula_code) as formula_code,
+                       COALESCE(cpp.batch_code_template, p.batch_code_template) as batch_code_template,
                        CASE WHEN cpp.custom_price IS NOT NULL THEN 1 ELSE 0 END as has_custom_price,
-                       CASE WHEN cpp.id IS NOT NULL AND cpp.is_active = 1 THEN 1 ELSE 0 END as is_assigned,
+                       CASE WHEN (p.client_id = ? OR cpp.id IS NOT NULL) THEN 1 ELSE 0 END as is_assigned,
                        p.shelf_life_months, p.current_stock, p.is_active, p.created_at, p.updated_at
                 FROM products p
+                LEFT JOIN clients c ON p.client_id = c.id
                 LEFT JOIN client_product_prices cpp ON cpp.product_id = p.id AND cpp.client_id = ?
                 WHERE 1=1
             `;
-            params.push(targetClientId);
+            params.push(targetClientId, targetClientId);
         }
     } else {
         query = `
             SELECT p.*,
+                   c.company_name as client_name,
+                   c.company_name as client_company_name,
                    p.default_price as base_default_price,
                    0 as has_custom_price
             FROM products p
+            LEFT JOIN clients c ON p.client_id = c.id
             WHERE 1=1
         `;
     }
@@ -91,7 +105,21 @@ router.get('/', authenticateToken, (req, res) => {
     }
 
     query += ' ORDER BY p.name ASC';
-    const products = db.prepare(query).all(...params);
+    let products = db.prepare(query).all(...params);
+
+    // Fallback: If client has 0 assigned products and it's for PO, show all active products so the user is not completely blocked
+    if (forPO === 'true' && targetClientId && products.length === 0) {
+        products = db.prepare(`
+            SELECT p.*,
+                   c.company_name as client_name,
+                   p.default_price as base_default_price,
+                   0 as has_custom_price
+            FROM products p
+            LEFT JOIN clients c ON p.client_id = c.id
+            WHERE p.is_active = 1
+            ORDER BY p.name ASC
+        `).all();
+    }
 
     return res.json({
         success: true,
@@ -109,17 +137,24 @@ router.get('/:id', authenticateToken, (req, res) => {
     if (targetClientId) {
         product = db.prepare(`
             SELECT p.*,
+                   c.company_name as client_name,
                    COALESCE(cpp.custom_price, p.default_price) as default_price,
                    p.default_price as base_default_price,
                    cpp.custom_price,
                    COALESCE(cpp.custom_sku, p.sku) as effective_sku,
                    CASE WHEN cpp.custom_price IS NOT NULL THEN 1 ELSE 0 END as has_custom_price
             FROM products p
+            LEFT JOIN clients c ON p.client_id = c.id
             LEFT JOIN client_product_prices cpp ON cpp.product_id = p.id AND cpp.client_id = ?
             WHERE p.id = ?
         `).get(targetClientId, req.params.id);
     } else {
-        product = db.prepare('SELECT p.*, p.default_price as base_default_price, 0 as has_custom_price FROM products p WHERE p.id = ?').get(req.params.id);
+        product = db.prepare(`
+            SELECT p.*, c.company_name as client_name, p.default_price as base_default_price, 0 as has_custom_price 
+            FROM products p 
+            LEFT JOIN clients c ON p.client_id = c.id 
+            WHERE p.id = ?
+        `).get(req.params.id);
     }
 
     if (!product) {
@@ -133,7 +168,7 @@ router.get('/:id', authenticateToken, (req, res) => {
  * Admin/Production only
  */
 router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'SUPER_ADMIN'), (req, res) => {
-    const { sku, name, category, description, unit, default_price, formula_code, shelf_life_months } = req.body;
+    const { sku, name, category, description, unit, default_price, formula_code, batch_code_template, client_id, shelf_life_months } = req.body;
 
     if (!sku || !name || default_price === undefined || default_price === null || default_price === '') {
         return res.status(400).json({ success: false, error: 'SKU, Name, and Default Price are required.' });
@@ -152,8 +187,8 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'SUPER_A
     const id = uuidv4();
     try {
         const insertResult = db.prepare(`
-            INSERT INTO products (id, sku, name, category, description, unit, default_price, formula_code, shelf_life_months)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO products (id, sku, name, category, description, unit, default_price, formula_code, batch_code_template, client_id, shelf_life_months)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
             id,
             sku.trim().toUpperCase(),
@@ -163,6 +198,8 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'SUPER_A
             unit || 'pcs',
             parsedPrice,
             formula_code || null,
+            batch_code_template || null,
+            client_id || null,
             parsedShelfLife
         );
 
@@ -177,10 +214,15 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'SUPER_A
             action: 'CREATE_PRODUCT',
             entityType: 'PRODUCT',
             entityId: id,
-            details: { sku, name, default_price }
+            details: { sku, name, default_price, client_id }
         });
 
-        const newProduct = db.prepare('SELECT * FROM products WHERE id = ?').get(id);
+        const newProduct = db.prepare(`
+            SELECT p.*, c.company_name as client_name 
+            FROM products p 
+            LEFT JOIN clients c ON p.client_id = c.id 
+            WHERE p.id = ?
+        `).get(id);
         return res.status(201).json({ success: true, data: newProduct });
     } catch (err) {
         const duplicateSku = err.code === 'ER_DUP_ENTRY'
@@ -199,8 +241,8 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'SUPER_A
 /**
  * PUT /api/products/:id
  */
-router.put('/:id', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), (req, res) => {
-    const { name, category, description, unit, default_price, formula_code, shelf_life_months, is_active } = req.body;
+router.put('/:id', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'SUPER_ADMIN'), (req, res) => {
+    const { sku, name, category, description, unit, default_price, formula_code, batch_code_template, client_id, shelf_life_months, is_active } = req.body;
     const { id } = req.params;
 
     const existing = db.prepare('SELECT * FROM products WHERE id = ?').get(id);
@@ -210,29 +252,40 @@ router.put('/:id', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), (req,
 
     db.prepare(`
         UPDATE products 
-        SET name = COALESCE(?, name),
+        SET sku = COALESCE(?, sku),
+            name = COALESCE(?, name),
             category = COALESCE(?, category),
             description = COALESCE(?, description),
             unit = COALESCE(?, unit),
             default_price = COALESCE(?, default_price),
             formula_code = COALESCE(?, formula_code),
+            batch_code_template = COALESCE(?, batch_code_template),
+            client_id = ?,
             shelf_life_months = COALESCE(?, shelf_life_months),
             is_active = COALESCE(?, is_active),
             updated_at = datetime('now')
         WHERE id = ?
     `).run(
+        sku !== undefined ? sku.trim().toUpperCase() : null,
         name !== undefined ? name.trim() : null,
         category !== undefined ? category : null,
         description !== undefined ? description : null,
         unit !== undefined ? unit : null,
         default_price !== undefined ? parseFloat(default_price) : null,
         formula_code !== undefined ? formula_code : null,
+        batch_code_template !== undefined ? batch_code_template : null,
+        client_id !== undefined ? (client_id || null) : existing.client_id,
         shelf_life_months !== undefined ? parseInt(shelf_life_months) : null,
         is_active !== undefined ? parseInt(is_active) : null,
         id
     );
 
-    const updated = db.prepare('SELECT * FROM products WHERE id = ?').get(id);
+    const updated = db.prepare(`
+        SELECT p.*, c.company_name as client_name 
+        FROM products p 
+        LEFT JOIN clients c ON p.client_id = c.id 
+        WHERE p.id = ?
+    `).get(id);
     return res.json({ success: true, data: updated });
 });
 

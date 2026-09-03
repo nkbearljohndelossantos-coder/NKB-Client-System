@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS products (
     default_price REAL NOT NULL,
     formula_code TEXT,
     batch_code_template TEXT,
+    client_id TEXT REFERENCES clients(id) ON DELETE SET NULL,
     shelf_life_months INTEGER NOT NULL DEFAULT 24,
     current_stock INTEGER NOT NULL DEFAULT 0,
     is_active INTEGER NOT NULL DEFAULT 1,

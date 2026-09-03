@@ -53,19 +53,75 @@ if (useMysql) {
     try {
         db.exec('ALTER TABLE client_product_prices ADD COLUMN batch_code_template TEXT;');
     } catch (e) {}
+    try {
+        db.exec('ALTER TABLE products ADD COLUMN client_id TEXT REFERENCES clients(id) ON DELETE SET NULL;');
+    } catch (e) {}
 
-    // Auto-update batch_code_template for existing products from catalog
+    // Auto-update and clean batch_code_template for all products
     try {
         const { findBatchTemplate } = require('../services/batchCodingService');
         const prods = db.prepare('SELECT id, name, sku, batch_code_template FROM products').all();
         for (const p of prods) {
-            if (!p.batch_code_template) {
-                const tmpl = findBatchTemplate(p.name, p.sku);
-                db.prepare('UPDATE products SET batch_code_template = ? WHERE id = ?').run(tmpl, p.id);
-            }
+            const tmpl = findBatchTemplate(p.name, p.sku);
+            db.prepare('UPDATE products SET batch_code_template = ? WHERE id = ?').run(tmpl, p.id);
         }
     } catch (err) {
         console.warn('Batch template update warning:', err.message);
+    }
+
+    // Auto-provision standard brand clients if missing
+    try {
+        const brandClients = [
+            { id: '2fdb72bb-12fa-4909-8967-c19b130db4bb', name: 'SKEENCARE Enterprise', email: 'nkb.earljohndelossantos@gmail.com', contact: 'Earl John Delos Santos' },
+            { id: 'c0000000-0000-0000-0000-000000000002', name: 'Bella Skin Essentials', email: 'orders@bellaskin.ph', contact: 'Bella Skin Purchasing' },
+            { id: 'c0000000-0000-0000-0000-000000000003', name: 'Her Choice PH', email: 'orders@herchoiceph.com', contact: 'Her Choice PH Admin' },
+            { id: 'c0000000-0000-0000-0000-000000000004', name: 'Natasha Philippines', email: 'procurement@natasha.ph', contact: 'Natasha Purchasing' },
+            { id: 'c0000000-0000-0000-0000-000000000005', name: 'Hanapam Cosmetics', email: 'orders@hanapam.com', contact: 'Hanapam Operations' },
+            { id: 'c0000000-0000-0000-0000-000000000006', name: 'Gelis Pharma Inc.', email: 'orders@gelispharma.com', contact: 'Gelis Pharma Admin' },
+            { id: 'c0000000-0000-0000-0000-000000000007', name: 'Jgloww Aesthetics', email: 'orders@jgloww.com', contact: 'Jgloww Procurement' },
+            { id: 'c0000000-0000-0000-0000-000000000008', name: 'Brightest Skin Essentials', email: 'orders@brightestskin.ph', contact: 'Brightest Skin Admin' },
+            { id: 'c0000000-0000-0000-0000-000000000009', name: 'Royce B Skincare', email: 'orders@royceb.ph', contact: 'Royce B Operations' },
+            { id: 'c0000000-0000-0000-0000-000000000010', name: 'Elixia Wellness', email: 'orders@elixia.ph', contact: 'Elixia Admin' }
+        ];
+
+        for (const bc of brandClients) {
+            const exists = db.prepare('SELECT id FROM clients WHERE id = ? OR UPPER(company_name) = UPPER(?)').get(bc.id, bc.name);
+            if (!exists) {
+                db.prepare(`
+                    INSERT INTO clients (id, company_name, contact_person, email, phone, address, default_billing_policy, default_tolerance_percent, credit_limit, is_active)
+                    VALUES (?, ?, ?, ?, '+63 917 000 0000', 'Metro Manila, Philippines', 'ACTUAL_DELIVERY', 10.0, 500000, 1)
+                `).run(bc.id, bc.name, bc.contact, bc.email);
+            }
+        }
+
+        // Auto-assign products to their respective brand clients if currently null
+        const allClients = db.prepare('SELECT id, company_name FROM clients').all();
+        for (const cl of allClients) {
+            const cName = cl.company_name.toUpperCase();
+            if (cName.includes('SKEENCARE')) {
+                db.prepare("UPDATE products SET client_id = ? WHERE (UPPER(name) LIKE '%SKEENCARE%' OR UPPER(name) LIKE '%CUTIS%') AND client_id IS NULL").run(cl.id);
+            } else if (cName.includes('BELLA SKIN')) {
+                db.prepare("UPDATE products SET client_id = ? WHERE UPPER(name) LIKE '%BELLA SKIN%' AND client_id IS NULL").run(cl.id);
+            } else if (cName.includes('HER CHOICE')) {
+                db.prepare("UPDATE products SET client_id = ? WHERE UPPER(name) LIKE '%HER CHOICE%' AND client_id IS NULL").run(cl.id);
+            } else if (cName.includes('NATASHA')) {
+                db.prepare("UPDATE products SET client_id = ? WHERE UPPER(name) LIKE '%NATASHA%' AND client_id IS NULL").run(cl.id);
+            } else if (cName.includes('HANAPAM')) {
+                db.prepare("UPDATE products SET client_id = ? WHERE UPPER(name) LIKE '%HANAPAM%' AND client_id IS NULL").run(cl.id);
+            } else if (cName.includes('GELIS')) {
+                db.prepare("UPDATE products SET client_id = ? WHERE UPPER(name) LIKE '%GELIS%' AND client_id IS NULL").run(cl.id);
+            } else if (cName.includes('JGLOWW')) {
+                db.prepare("UPDATE products SET client_id = ? WHERE UPPER(name) LIKE '%JGLOWW%' AND client_id IS NULL").run(cl.id);
+            } else if (cName.includes('BRIGHTEST')) {
+                db.prepare("UPDATE products SET client_id = ? WHERE UPPER(name) LIKE '%BRIGHTEST%' AND client_id IS NULL").run(cl.id);
+            } else if (cName.includes('ROYCE')) {
+                db.prepare("UPDATE products SET client_id = ? WHERE UPPER(name) LIKE '%ROYCE%' AND client_id IS NULL").run(cl.id);
+            } else if (cName.includes('ELIXIA')) {
+                db.prepare("UPDATE products SET client_id = ? WHERE UPPER(name) LIKE '%ELIXIA%' AND client_id IS NULL").run(cl.id);
+            }
+        }
+    } catch (err) {
+        console.warn('Brand clients auto-linking warning:', err.message);
     }
 
     db.transaction = function (fn) {
