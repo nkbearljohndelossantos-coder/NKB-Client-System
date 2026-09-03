@@ -120,27 +120,6 @@ if (useMysql) {
                 db.prepare("UPDATE products SET client_id = ? WHERE UPPER(name) LIKE '%ELIXIA%' AND client_id IS NULL").run(cl.id);
             }
         }
-
-        // Auto-provision Job Orders for all active Purchase Orders that do not have J.O.s yet
-        const unlinkedPOs = db.prepare("SELECT * FROM purchase_orders WHERE status IN ('APPROVED', 'IN_PRODUCTION')").all();
-        const { getNextDocumentNumber } = require('../services/documentNumberService');
-        for (const po of unlinkedPOs) {
-            const items = db.prepare('SELECT * FROM purchase_order_items WHERE po_id = ?').all(po.id);
-            const existingJOs = db.prepare('SELECT product_id FROM job_orders WHERE po_id = ?').all(po.id);
-            const existingSet = new Set(existingJOs.map(j => j.product_id));
-
-            for (const it of items) {
-                if (!existingSet.has(it.product_id)) {
-                    const joId = uuidv4();
-                    const joNumber = getNextDocumentNumber('JO');
-                    db.prepare(`
-                        INSERT INTO job_orders
-                        (id, jo_number, po_id, product_id, target_quantity, scheduled_start_date, assigned_team, status, notes, created_by)
-                        VALUES (?, ?, ?, ?, ?, date('now'), 'Formulation & Bottling Team Alpha', 'IN_PRODUCTION', ?, ?)
-                    `).run(joId, joNumber, po.id, it.product_id, it.target_quantity, po.notes || null, po.created_by);
-                }
-            }
-        }
     } catch (err) {
         console.warn('Brand clients auto-linking warning:', err.message);
     }

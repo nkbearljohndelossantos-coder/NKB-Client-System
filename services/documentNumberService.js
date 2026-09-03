@@ -1,4 +1,6 @@
-const db = require('../database/db');
+function getDb() {
+    return require('../database/db');
+}
 
 /**
  * Generate a sequential, human-readable document number
@@ -8,6 +10,7 @@ const db = require('../database/db');
  * @returns {string} The next formatted document number
  */
 function getNextDocumentNumber(docType) {
+    const db = getDb();
     const year = new Date().getFullYear();
     
     const getSeq = db.prepare('SELECT current_year, last_sequence FROM document_sequences WHERE doc_type = ?');
