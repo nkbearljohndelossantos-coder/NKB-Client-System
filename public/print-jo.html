@@ -9,36 +9,38 @@
     <link rel="stylesheet" href="/css/style.css">
     <style>
         @page {
-            size: 8.5in 5.5in;
-            margin: 4mm 6mm;
+            size: letter portrait;
+            margin: 8mm 10mm;
         }
         @media print {
             html, body {
                 width: 100% !important;
-                height: 100% !important;
+                height: auto !important;
                 margin: 0 !important;
                 padding: 0 !important;
                 background: #ffffff !important;
-                font-size: 7.5pt !important;
+                font-size: 8.5pt !important;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
             }
             .no-print { display: none !important; }
             .sheet-container {
                 box-shadow: none !important;
-                border: 1px solid #000000 !important;
-                padding: 10px 14px !important;
-                margin: 0 !important;
+                border: 1.5px solid #000000 !important;
+                padding: 20px 24px !important;
+                margin: 0 auto !important;
+                width: 100% !important;
                 max-width: 100% !important;
+                min-height: auto !important;
                 border-radius: 0 !important;
                 page-break-inside: avoid !important;
             }
-            .header-logo { height: 38px !important; }
+            .header-logo { height: 46px !important; }
         }
         @media screen {
             .sheet-container {
                 max-width: 8.5in;
-                min-height: 5.5in;
+                min-height: 11in;
                 box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1);
             }
         }
@@ -51,7 +53,7 @@
         }
     </style>
 </head>
-<body class="bg-slate-100 min-h-screen p-2 sm:p-6 text-slate-900 antialiased text-[11px] font-sans">
+<body class="bg-slate-100 min-h-screen p-2 sm:p-6 text-slate-900 antialiased text-[11.5px] font-sans">
 
     <!-- Action Bar (Hidden on Print) -->
     <div class="max-w-4xl mx-auto mb-4 flex justify-between items-center no-print">
@@ -59,7 +61,7 @@
             ← Back to Portal
         </a>
         <div class="flex items-center gap-2">
-            <span class="text-[11px] text-slate-500 font-medium">Layout: <strong>Job Order / Corporate Style (8.5" × 5.5")</strong></span>
+            <span class="text-[11px] text-slate-500 font-medium">Layout: <strong>Official Letter Size (8.5" × 11")</strong></span>
             <button onclick="window.print()" class="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold shadow-md shadow-blue-600/30 transition flex items-center gap-1.5">
                 <span>🖨️ Print Job Order</span>
             </button>
@@ -67,7 +69,7 @@
     </div>
 
     <!-- Main Sheet matching Reference Image Structure -->
-    <div class="sheet-container mx-auto bg-white p-6 sm:p-8 border border-slate-900 text-slate-900 space-y-3" id="jo-printable-sheet">
+    <div class="sheet-container mx-auto bg-white p-6 sm:p-10 border border-slate-900 text-slate-900 space-y-4" id="jo-printable-sheet">
         
         <!-- HEADER: Left Company Info | Right Document Title & Blue Bar Boxes -->
         <div class="flex justify-between items-start">
