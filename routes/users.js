@@ -266,4 +266,88 @@ router.post('/:id/reset-password', authenticateToken, requireRoles(ROLES.SUPER_A
     });
 });
 
+/**
+ * POST /api/users/reset-system-data
+ * Super Admin Reset: Wipes all transaction records (POs, JOs, Batches, DRs, Invoices, Payments, Buffer Stocks)
+ * STRICTLY PRESERVING Users, Staff, RBAC Roles, Clients, and Products.
+ */
+router.post('/reset-system-data', authenticateToken, requireRoles(ROLES.SUPER_ADMIN), (req, res) => {
+    const { confirmation_keyword, admin_password } = req.body;
+
+    if (confirmation_keyword !== 'CONFIRM-RESET') {
+        return res.status(400).json({
+            success: false,
+            error: 'INVALID_CONFIRMATION',
+            message: 'Please type CONFIRM-RESET to authorize database wipe.'
+        });
+    }
+
+    // Verify Super Admin Password
+    const adminUser = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    if (!adminUser || !bcrypt.compareSync(admin_password || '', adminUser.password_hash)) {
+        return res.status(401).json({
+            success: false,
+            error: 'INVALID_PASSWORD',
+            message: 'Incorrect Super Admin password.'
+        });
+    }
+
+    try {
+        const resetTx = db.transaction(() => {
+            // Delete child and transactional tables in safe order
+            db.prepare('DELETE FROM payments').run();
+            db.prepare('DELETE FROM invoice_items').run();
+            db.prepare('DELETE FROM sales_invoices').run();
+            db.prepare('DELETE FROM dr_acceptances').run();
+            db.prepare('DELETE FROM returns').run();
+            db.prepare('DELETE FROM delivery_items').run();
+            db.prepare('DELETE FROM delivery_receipts').run();
+            db.prepare('DELETE FROM overrun_approvals').run();
+            db.prepare('DELETE FROM batch_yields').run();
+            db.prepare('DELETE FROM production_batches').run();
+            db.prepare('DELETE FROM job_orders').run();
+            db.prepare('DELETE FROM purchase_order_items').run();
+            db.prepare('DELETE FROM purchase_orders').run();
+            db.prepare('DELETE FROM client_buffer_stock').run();
+
+            // Reset stock count to 0 in products
+            db.prepare('UPDATE products SET current_stock = 0').run();
+
+            // Reset sequence counters back to 0
+            db.prepare('UPDATE document_sequences SET last_sequence = 0').run();
+
+            // Log the system reset in audit logs
+            logAudit({
+                userId: req.user.id,
+                userName: req.user.name,
+                userRole: req.user.role,
+                action: 'SYSTEM_DATABASE_RESET',
+                entityType: 'SYSTEM',
+                entityId: 'SYSTEM_RESET',
+                details: {
+                    status: 'SUCCESS',
+                    preserved: 'users, roles, staff, clients, products',
+                    cleared: 'orders, job_orders, batches, deliveries, invoices, payments, buffer'
+                },
+                ipAddress: req.ip
+            });
+        });
+
+        resetTx();
+
+        return res.json({
+            success: true,
+            message: 'Database successfully reset! All transactions cleared. Users, Staff, and Roles remain intact.'
+        });
+    } catch (err) {
+        console.error('System reset error:', err);
+        return res.status(500).json({
+            success: false,
+            error: 'RESET_FAILED',
+            message: 'Failed to reset database: ' + err.message
+        });
+    }
+});
+
 module.exports = router;
+

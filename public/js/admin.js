@@ -2585,3 +2585,108 @@ async function promptResetUserPassword(userId, email) {
         NKB.showToast(res.message || res.error || 'Failed to reset password.', 'error');
     }
 }
+
+// -------------------------------------------------------------
+// 12. SUPER ADMIN FACTORY RESET (PRESERVE USERS & ROLES)
+// -------------------------------------------------------------
+function openResetSystemDataModal() {
+    if (NKB.user?.role !== 'SUPER_ADMIN') {
+        NKB.showToast('Access Denied: Only Super Admin can perform database resets.', 'error');
+        return;
+    }
+
+    const root = document.getElementById('modals-root');
+    root.innerHTML = `
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+            <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border-2 border-rose-300 space-y-4">
+                <div class="flex justify-between items-center pb-2 border-b border-rose-100">
+                    <div class="flex items-center gap-2">
+                        <span class="p-2 bg-rose-100 text-rose-700 rounded-xl text-lg">⚠️</span>
+                        <div>
+                            <h3 class="text-base font-black text-rose-900">Database Factory Reset</h3>
+                            <p class="text-[11px] text-rose-600 font-semibold">Clear transactions while preserving all accounts & roles</p>
+                        </div>
+                    </div>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
+                </div>
+
+                <div class="p-4 bg-rose-50 border border-rose-200 rounded-2xl text-xs space-y-2 text-rose-800">
+                    <p class="font-bold text-rose-900">This action will permanently delete:</p>
+                    <ul class="list-disc pl-5 space-y-0.5 text-[11px]">
+                        <li>All Purchase Orders (POs) and Line Items</li>
+                        <li>All Job Orders (JOs) & Production Batches</li>
+                        <li>All Delivery Receipts (DRs) & Client Signatures</li>
+                        <li>All Sales Invoices & Payment Collections</li>
+                        <li>All Warehouse Stock counts (reset to 0)</li>
+                    </ul>
+                    <div class="pt-2 border-t border-rose-200 text-emerald-800 font-bold text-[11px] flex items-center gap-1.5">
+                        <span>🛡️</span>
+                        <span>PRESERVED: All Users, Staff, RBAC Roles, Clients, and Products will NOT be deleted.</span>
+                    </div>
+                </div>
+
+                <form onsubmit="submitResetSystemData(event)" class="space-y-3 text-xs font-semibold">
+                    <div>
+                        <label class="block text-slate-700 mb-1">
+                            Type <strong class="text-rose-600 font-mono select-all">CONFIRM-RESET</strong> to verify:
+                        </label>
+                        <input type="text" id="reset-confirm-keyword" required placeholder="CONFIRM-RESET" class="w-full px-3 py-2 border-2 border-rose-200 rounded-xl bg-slate-50 font-mono text-sm uppercase text-slate-900 focus:border-rose-600 focus:outline-none">
+                    </div>
+
+                    <div>
+                        <label class="block text-slate-700 mb-1">Enter Super Admin Password:</label>
+                        <input type="password" id="reset-admin-password" required placeholder="••••••••" class="w-full px-3 py-2 border rounded-xl bg-slate-50 text-slate-900 focus:ring-2 focus:ring-rose-500 focus:outline-none">
+                    </div>
+
+                    <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition">
+                            Cancel
+                        </button>
+                        <button type="submit" id="btn-submit-reset" class="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-black shadow-lg shadow-rose-600/30 transition flex items-center gap-1.5">
+                            <span>🔴 Permanently Reset Database</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+}
+
+async function submitResetSystemData(e) {
+    e.preventDefault();
+    const keyword = document.getElementById('reset-confirm-keyword').value.trim();
+    const password = document.getElementById('reset-admin-password').value;
+    const btn = document.getElementById('btn-submit-reset');
+
+    if (keyword !== 'CONFIRM-RESET') {
+        NKB.showToast('Please type CONFIRM-RESET exactly as shown.', 'error');
+        return;
+    }
+
+    if (!password) {
+        NKB.showToast('Please enter your Super Admin password.', 'error');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span>⏳ Resetting Database...</span>';
+
+    const res = await NKB.api('/api/users/reset-system-data', {
+        method: 'POST',
+        body: JSON.stringify({
+            confirmation_keyword: keyword,
+            admin_password: password
+        })
+    });
+
+    if (res.success) {
+        closeModal();
+        alert('🎉 ' + res.message);
+        window.location.reload();
+    } else {
+        btn.disabled = false;
+        btn.innerHTML = '<span>🔴 Permanently Reset Database</span>';
+        NKB.showToast(res.message || res.error || 'Failed to reset database.', 'error');
+    }
+}
+

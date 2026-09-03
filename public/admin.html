@@ -582,9 +582,14 @@
                         <h2 class="text-2xl font-black text-slate-900">Staff & Role-Based Access Control (RBAC)</h2>
                         <p class="text-sm text-slate-500">Manage internal operations staff, assign enterprise roles, and control account status.</p>
                     </div>
-                    <button onclick="openCreateUserModal()" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/30 transition flex items-center gap-2">
-                        <span>➕ Add Staff / User</span>
-                    </button>
+                    <div class="flex items-center gap-2">
+                        <button onclick="openResetSystemDataModal()" class="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm">
+                            <span>🗑️</span><span>Reset Database (Keep Users)</span>
+                        </button>
+                        <button onclick="openCreateUserModal()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/30 transition flex items-center gap-2">
+                            <span>➕ Add Staff / User</span>
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Roles Overview Grid -->
@@ -642,6 +647,25 @@
                                 <tr><td colspan="6" class="py-6 text-center text-slate-400">Loading users directory...</td></tr>
                             </tbody>
                         </table>
+                    </div>
+                </div>
+
+                <!-- Super Admin System Data Reset Card -->
+                <div class="bg-rose-50/50 border border-rose-200 rounded-2xl p-6 space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-rose-600 text-base">⚠️</span>
+                                <h3 class="font-bold text-rose-900 text-sm">Super Admin Database Reset & Maintenance</h3>
+                            </div>
+                            <p class="text-xs text-rose-700 mt-1">
+                                Clear all transaction records (POs, Job Orders, Batches, Deliveries, Invoices, Payments, and Stock counts) to start fresh.
+                                <strong>Users, Staff accounts, and RBAC Roles are permanently preserved.</strong>
+                            </p>
+                        </div>
+                        <button onclick="openResetSystemDataModal()" class="px-4 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold shadow-md shadow-rose-600/30 transition flex items-center gap-2 whitespace-nowrap">
+                            <span>🔴 Factory Reset Database</span>
+                        </button>
                     </div>
                 </div>
             </section>
