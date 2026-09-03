@@ -227,7 +227,6 @@ async function loadOrders() {
                 <td class="py-3 px-4 font-bold text-indigo-600">${po.po_number}</td>
                 <td class="py-3 px-4 text-slate-600">${NKB.formatDate(po.po_date)}</td>
                 <td class="py-3 px-4 font-bold text-slate-800">${po.company_name}</td>
-                <td class="py-3 px-4"><span class="badge bg-slate-100 text-slate-700">±${po.tolerance_percent}%</span></td>
                 <td class="py-3 px-4"><span class="badge ${po.billing_policy === 'ACTUAL_DELIVERY' ? 'bg-indigo-50 text-indigo-700' : 'bg-purple-50 text-purple-700'}">${po.billing_policy}</span></td>
                 <td class="py-3 px-4 font-bold text-slate-700">${NKB.formatNumber(po.total_target_quantity)} pcs</td>
                 <td class="py-3 px-4 font-extrabold text-slate-900">${NKB.formatCurrency(po.grand_total)}</td>
@@ -250,7 +249,7 @@ async function loadOrders() {
             </tr>
         `).join('');
     } else {
-        tbody.innerHTML = `<tr><td colspan="9" class="py-6 text-center text-slate-400">No purchase orders found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="py-6 text-center text-slate-400">No purchase orders found.</td></tr>`;
     }
 }
 
@@ -481,7 +480,6 @@ async function loadClients() {
                 <td class="py-3 px-4 font-semibold text-slate-800">${c.contact_person}</td>
                 <td class="py-3 px-4 text-slate-600">${c.email} <br><span class="text-xs text-slate-400">${c.phone}</span></td>
                 <td class="py-3 px-4"><span class="badge ${c.default_billing_policy === 'ACTUAL_DELIVERY' ? 'bg-indigo-50 text-indigo-700' : 'bg-purple-50 text-purple-700'}">${c.default_billing_policy}</span></td>
-                <td class="py-3 px-4 font-bold text-slate-700">±${c.default_tolerance_percent}%</td>
                 <td class="py-3 px-4 font-bold text-emerald-700">${NKB.formatCurrency(c.credit_limit)}</td>
                 <td class="py-3 px-4">
                     ${c.user_id ? `

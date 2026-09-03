@@ -112,7 +112,7 @@
                 <div id="meta-jo-po-ref" class="py-1 font-semibold text-slate-800 font-mono">-</div>
             </div>
             <div>
-                <div class="doc-grey-header font-bold uppercase py-0.5 text-[9px]">BILLING POLICY & TOLERANCE</div>
+                <div class="doc-grey-header font-bold uppercase py-0.5 text-[9px]">BILLING POLICY</div>
                 <div id="meta-jo-policy" class="py-1 font-semibold text-slate-800">-</div>
             </div>
         </div>
@@ -133,13 +133,13 @@
                 <div class="col-span-7 pl-1 space-y-0.5 text-slate-700">
                     <div>Product Name: <strong id="jo-product-name" class="text-blue-900 font-bold">-</strong></div>
                     <div>Product SKU & Formula: <strong id="jo-product-sku" class="text-slate-900 font-mono">-</strong> <span id="jo-formula-code" class="text-slate-500 font-mono text-[9px]"></span></div>
-                    <div>Batch Tolerance Range: <strong id="jo-tolerance-text" class="text-slate-900 font-mono">±10%</strong></div>
                     <div>Job Order Status: <span id="jo-status-badge"></span></div>
+                    <div class="text-[9.5px] italic text-slate-500 pt-0.5">Cleanroom batch compounding and manufacturing run.</div>
                 </div>
             </div>
         </div>
 
-        <!-- LINE ITEMS TABLE (QTY | DESCRIPTION | SKU / CODE | TOLERANCE | TOTAL) -->
+        <!-- LINE ITEMS TABLE (QTY | DESCRIPTION | SKU / CODE | UNIT | TOTAL) -->
         <div class="border border-slate-300 overflow-hidden">
             <table class="w-full text-left doc-table text-[10px] border-collapse">
                 <thead class="doc-table-header font-bold uppercase text-[9px]">
@@ -147,7 +147,7 @@
                         <th class="py-1 px-2 w-16 text-center border border-slate-300">QTY</th>
                         <th class="py-1 px-2 border border-slate-300">PRODUCT & FORMULATION DESCRIPTION</th>
                         <th class="py-1 px-2 w-28 text-center border border-slate-300">SKU / CODE</th>
-                        <th class="py-1 px-2 w-28 text-center border border-slate-300">TOLERANCE RANGE</th>
+                        <th class="py-1 px-2 w-28 text-center border border-slate-300">UNIT SPEC</th>
                         <th class="py-1 px-2 w-32 text-right border border-slate-300">TARGET UNITS</th>
                     </tr>
                 </thead>
@@ -163,10 +163,10 @@
             <!-- Left Comments Box -->
             <div class="col-span-7 space-y-1">
                 <div class="border border-slate-300 overflow-hidden rounded">
-                    <div class="doc-grey-header font-bold uppercase text-[9px] py-0.5 px-2">PRODUCTION NOTES & TOLERANCE TERMS</div>
+                    <div class="doc-grey-header font-bold uppercase text-[9px] py-0.5 px-2">PRODUCTION NOTES & COMPLIANCE</div>
                     <div class="p-2 space-y-0.5 text-slate-600 text-[9.5px] leading-tight">
                         <p>1. Job Order is executed strictly in compliance with the linked Purchase Order.</p>
-                        <p>2. Actual output within the ±10% tolerance is validated upon laboratory QC sign-off.</p>
+                        <p>2. Production output is validated upon laboratory QC clearance and release.</p>
                         <p>3. Production questions: <strong>customerservice@nkbmanufacturing.com</strong></p>
                     </div>
                 </div>
@@ -180,16 +180,12 @@
                 <table class="w-full text-right">
                     <tbody class="divide-y divide-slate-200">
                         <tr>
-                            <td class="py-0.5 px-2 text-slate-600 font-semibold bg-slate-50">BASE TARGET QTY</td>
+                            <td class="py-0.5 px-2 text-slate-600 font-semibold bg-slate-50">TARGET BATCH QTY</td>
                             <td class="py-0.5 px-2 font-bold font-mono text-slate-900" id="jo-base-target-qty">0 pcs</td>
                         </tr>
                         <tr>
-                            <td class="py-0.5 px-2 text-slate-600 font-semibold bg-slate-50">MIN YIELD (-10%)</td>
-                            <td class="py-0.5 px-2 font-mono text-slate-800" id="jo-min-yield">0 pcs</td>
-                        </tr>
-                        <tr>
-                            <td class="py-0.5 px-2 text-slate-600 font-semibold bg-slate-50">MAX OVERRUN (+10%)</td>
-                            <td class="py-0.5 px-2 font-mono text-slate-800" id="jo-max-yield">0 pcs</td>
+                            <td class="py-0.5 px-2 text-slate-600 font-semibold bg-slate-50">QC INSPECTION</td>
+                            <td class="py-0.5 px-2 font-mono text-emerald-700 font-bold">PASSED / READY</td>
                         </tr>
                         <tr class="doc-total-bar font-bold text-[11.5px]">
                             <td class="py-1 px-2 uppercase tracking-wider text-left text-white">TOTAL TARGET</td>
@@ -251,7 +247,7 @@
                 document.getElementById('jo-number-display').textContent = jo.jo_number || '-';
                 document.getElementById('jo-date-display').textContent = NKB.formatDate(jo.created_at);
                 document.getElementById('meta-jo-po-ref').textContent = jo.po_number || '-';
-                document.getElementById('meta-jo-policy').textContent = (jo.billing_policy === 'ACTUAL_DELIVERY' ? 'Option A (Bill Actual)' : 'Option B (Fixed+Buffer)') + ` ±${jo.tolerance_percent || 10}%`;
+                document.getElementById('meta-jo-policy').textContent = jo.billing_policy === 'ACTUAL_DELIVERY' ? 'Option A (Bill Actual)' : 'Option B (Fixed+Buffer)';
                 document.getElementById('jo-status-badge').innerHTML = NKB.renderStatusBadge(jo.status);
 
                 document.getElementById('jo-client-name').textContent = jo.company_name || 'Valued Client';
@@ -263,14 +259,7 @@
                 document.getElementById('jo-assigned-team').textContent = jo.assigned_team || 'Cleanroom Team A';
 
                 const targetQty = jo.target_quantity || 0;
-                const tolerancePct = jo.tolerance_percent || 10;
-                const minYield = Math.round(targetQty * (1 - tolerancePct / 100));
-                const maxYield = Math.round(targetQty * (1 + tolerancePct / 100));
-
                 document.getElementById('jo-base-target-qty').textContent = `${NKB.formatNumber(targetQty)} pcs`;
-                document.getElementById('jo-tolerance-text').textContent = `±${tolerancePct}%`;
-                document.getElementById('jo-min-yield').textContent = `${NKB.formatNumber(minYield)} pcs`;
-                document.getElementById('jo-max-yield').textContent = `${NKB.formatNumber(maxYield)} pcs`;
                 document.getElementById('jo-grand-total-qty').textContent = `${NKB.formatNumber(targetQty)} pcs`;
 
                 const tbody = document.getElementById('jo-items-tbody');
@@ -281,10 +270,9 @@
                         <td class="py-1.5 px-2 text-center font-bold text-slate-800">${NKB.formatNumber(targetQty)}</td>
                         <td class="py-1.5 px-2 font-semibold text-slate-900">
                             ${jo.product_name || 'Cosmetic Formulation'} 
-                            <span class="text-[9px] text-slate-500 font-normal ml-1">(${jo.unit || 'pcs'})</span>
                         </td>
                         <td class="py-1.5 px-2 text-center font-mono text-slate-700 font-bold">${jo.sku || '-'}${jo.formula_code ? ' / ' + jo.formula_code : ''}</td>
-                        <td class="py-1.5 px-2 text-center font-mono text-blue-700 font-bold">±${tolerancePct}% (${NKB.formatNumber(minYield)} - ${NKB.formatNumber(maxYield)})</td>
+                        <td class="py-1.5 px-2 text-center font-mono text-slate-600">${jo.unit || 'KG / PCS'}</td>
                         <td class="py-1.5 px-2 text-right font-bold font-mono text-slate-900">${NKB.formatNumber(targetQty)} pcs</td>
                     </tr>
                 `;
