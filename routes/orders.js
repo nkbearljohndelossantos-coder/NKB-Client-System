@@ -130,6 +130,187 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
 });
 
 /**
+ * GET /api/orders/backtrack/:term
+ * Universal 360-Degree Backtracking & Lineage Trace
+ * Finds complete workflow lineage from ANY document number or ID: PO, JO, Batch, DR, Invoice, Payment!
+ */
+router.get('/backtrack/:term', authenticateToken, enforceClientIsolation, (req, res) => {
+    const rawTerm = req.params.term.trim();
+    
+    // Resolve PO ID from any given document number or ID
+    let poId = null;
+
+    // 1. Direct PO check (id or po_number)
+    const poMatch = db.prepare('SELECT id FROM purchase_orders WHERE id = ? OR po_number LIKE ?').get(rawTerm, rawTerm);
+    if (poMatch) poId = poMatch.id;
+
+    // 2. JO check (id or jo_number)
+    if (!poId) {
+        const joMatch = db.prepare('SELECT po_id FROM job_orders WHERE id = ? OR jo_number LIKE ?').get(rawTerm, rawTerm);
+        if (joMatch) poId = joMatch.po_id;
+    }
+
+    // 3. Batch check (id or batch_number)
+    if (!poId) {
+        const batchMatch = db.prepare(`
+            SELECT jo.po_id 
+            FROM production_batches pb 
+            JOIN job_orders jo ON pb.jo_id = jo.id 
+            WHERE pb.id = ? OR pb.batch_number LIKE ?
+        `).get(rawTerm, rawTerm);
+        if (batchMatch) poId = batchMatch.po_id;
+    }
+
+    // 4. DR check (id or dr_number)
+    if (!poId) {
+        const drMatch = db.prepare('SELECT po_id FROM delivery_receipts WHERE id = ? OR dr_number LIKE ?').get(rawTerm, rawTerm);
+        if (drMatch) poId = drMatch.po_id;
+    }
+
+    // 5. Invoice check (id or invoice_number)
+    if (!poId) {
+        const invMatch = db.prepare('SELECT po_id FROM sales_invoices WHERE id = ? OR invoice_number LIKE ?').get(rawTerm, rawTerm);
+        if (invMatch) poId = invMatch.po_id;
+    }
+
+    // 6. Payment check (id, payment_number, reference_number)
+    if (!poId) {
+        const payMatch = db.prepare(`
+            SELECT si.po_id 
+            FROM payments p 
+            JOIN sales_invoices si ON p.invoice_id = si.id 
+            WHERE p.id = ? OR p.payment_number LIKE ? OR p.reference_number LIKE ?
+        `).get(rawTerm, rawTerm, rawTerm);
+        if (payMatch) poId = payMatch.po_id;
+    }
+
+    if (!poId) {
+        return res.status(404).json({
+            success: false,
+            error: 'NOT_FOUND',
+            message: `No record found matching "${rawTerm}". Please check PO, JO, Batch, DR, or Invoice number.`
+        });
+    }
+
+    // Fetch Full PO Details
+    const po = db.prepare(`
+        SELECT po.*, c.company_name, c.contact_person, c.email as client_email, c.phone as client_phone, c.address as client_address,
+               u.name as creator_name
+        FROM purchase_orders po
+        JOIN clients c ON po.client_id = c.id
+        LEFT JOIN users u ON po.created_by = u.id
+        WHERE po.id = ?
+    `).get(poId);
+
+    if (req.user.role === 'CLIENT' && po.client_id !== req.clientId) {
+        return res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Access denied.' });
+    }
+
+    // Items
+    const items = db.prepare(`
+        SELECT poi.*, p.name as product_name, p.sku, p.unit, p.formula_code,
+               (SELECT COALESCE(SUM(di.delivered_quantity), 0) FROM delivery_items di JOIN delivery_receipts dr ON di.dr_id = dr.id WHERE dr.po_id = poi.po_id AND di.product_id = poi.product_id) as total_delivered_qty
+        FROM purchase_order_items poi
+        JOIN products p ON poi.product_id = p.id
+        WHERE poi.po_id = ?
+    `).all(poId);
+
+    // Job Orders
+    const jobOrders = db.prepare(`
+        SELECT jo.*, p.name as product_name, p.sku,
+               (SELECT COUNT(*) FROM production_batches WHERE jo_id = jo.id) as batch_count,
+               (SELECT COALESCE(SUM(actual_yield), 0) FROM production_batches WHERE jo_id = jo.id) as total_yield
+        FROM job_orders jo
+        JOIN products p ON jo.product_id = p.id
+        WHERE jo.po_id = ?
+        ORDER BY jo.created_at ASC
+    `).all(poId);
+
+    // Production Batches
+    const batches = db.prepare(`
+        SELECT pb.*, jo.jo_number, p.name as product_name, p.sku, u.name as logged_by_name
+        FROM production_batches pb
+        JOIN job_orders jo ON pb.jo_id = jo.id
+        JOIN products p ON pb.product_id = p.id
+        LEFT JOIN users u ON pb.created_by = u.id
+        WHERE jo.po_id = ?
+        ORDER BY pb.created_at ASC
+    `).all(poId);
+
+    // Delivery Receipts + Signatures
+    const deliveries = db.prepare(`
+        SELECT dr.*,
+               (SELECT COUNT(*) FROM delivery_items WHERE dr_id = dr.id) as items_count,
+               (SELECT COALESCE(SUM(delivered_quantity), 0) FROM delivery_items WHERE dr_id = dr.id) as total_delivered_qty,
+               (SELECT COALESCE(SUM(accepted_quantity), 0) FROM delivery_items WHERE dr_id = dr.id) as total_accepted_qty,
+               da.signer_name, da.signer_title, da.signature_data, da.accepted_at as client_signed_at,
+               u.name as dispatched_by_name
+        FROM delivery_receipts dr
+        LEFT JOIN dr_acceptances da ON da.dr_id = dr.id
+        LEFT JOIN users u ON dr.dispatched_by = u.id
+        WHERE dr.po_id = ?
+        ORDER BY dr.created_at ASC
+    `).all(poId);
+
+    // Delivery Items detailed list
+    const deliveryItems = db.prepare(`
+        SELECT di.*, dr.dr_number, p.name as product_name, p.sku, pb.batch_number, pb.expiry_date
+        FROM delivery_items di
+        JOIN delivery_receipts dr ON di.dr_id = dr.id
+        JOIN products p ON di.product_id = p.id
+        LEFT JOIN production_batches pb ON di.batch_id = pb.id
+        WHERE dr.po_id = ?
+        ORDER BY dr.created_at ASC
+    `).all(poId);
+
+    // Sales Invoices
+    const invoices = db.prepare(`
+        SELECT si.*, dr.dr_number, u.name as creator_name
+        FROM sales_invoices si
+        LEFT JOIN delivery_receipts dr ON si.dr_id = dr.id
+        LEFT JOIN users u ON si.created_by = u.id
+        WHERE si.po_id = ?
+        ORDER BY si.created_at ASC
+    `).all(poId);
+
+    // Payments
+    const payments = db.prepare(`
+        SELECT pay.*, si.invoice_number, u.name as recorded_by_name
+        FROM payments pay
+        JOIN sales_invoices si ON pay.invoice_id = si.id
+        LEFT JOIN users u ON pay.recorded_by = u.id
+        WHERE si.po_id = ?
+        ORDER BY pay.payment_date ASC
+    `).all(poId);
+
+    // Audit Logs
+    const auditLogs = db.prepare(`
+        SELECT * FROM audit_logs 
+        WHERE entity_id IN (?, ?, ?) 
+           OR details LIKE ? 
+           OR details LIKE ?
+        ORDER BY created_at DESC LIMIT 50
+    `).all(poId, po.po_number, rawTerm, `%${po.po_number}%`, `%${rawTerm}%`);
+
+    return res.json({
+        success: true,
+        data: {
+            searchedTerm: rawTerm,
+            po,
+            items,
+            jobOrders,
+            batches,
+            deliveries,
+            deliveryItems,
+            invoices,
+            payments,
+            auditLogs
+        }
+    });
+});
+
+
+/**
  * POST /api/orders
  * Create a new Purchase Order
  */

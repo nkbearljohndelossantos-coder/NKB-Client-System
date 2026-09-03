@@ -238,7 +238,11 @@ async function loadOrders() {
     if (res.success && res.data && res.data.length > 0) {
         tbody.innerHTML = res.data.map(po => `
             <tr class="hover:bg-slate-50 transition">
-                <td class="py-3 px-4 font-bold text-indigo-600">${po.po_number}</td>
+                <td class="py-3 px-4">
+                    <button onclick="openBacktrackModal('${po.po_number}')" class="font-bold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1 font-mono text-xs">
+                        <span>🔍</span><span>${po.po_number}</span>
+                    </button>
+                </td>
                 <td class="py-3 px-4 text-slate-600">${NKB.formatDate(po.po_date)}</td>
                 <td class="py-3 px-4 font-bold text-slate-800">${po.company_name}</td>
                 <td class="py-3 px-4"><span class="badge ${po.billing_policy === 'ACTUAL_DELIVERY' ? 'bg-indigo-50 text-indigo-700' : 'bg-purple-50 text-purple-700'}">${po.billing_policy}</span></td>
@@ -246,6 +250,9 @@ async function loadOrders() {
                 <td class="py-3 px-4 font-extrabold text-slate-900">${NKB.formatCurrency(po.grand_total)}</td>
                 <td class="py-3 px-4">${NKB.renderStatusBadge(po.status)}</td>
                 <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                    <button onclick="openBacktrackModal('${po.po_number}')" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1">
+                        <span>🔍</span><span>Trace</span>
+                    </button>
                     <a href="/print-po.html?id=${po.id}" target="_blank" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold transition inline-flex items-center gap-1">
                         <span>🖨️</span><span>Print PO</span>
                     </a>
@@ -290,8 +297,16 @@ async function loadJobOrders() {
             const isDelivered = jo.status === 'COMPLETED' || (jo.delivered_quantity && jo.delivered_quantity >= jo.target_quantity) || jo.latest_dr_number;
             return `
                 <tr class="hover:bg-slate-50 transition">
-                    <td class="py-3 px-4 font-bold text-indigo-600">${jo.jo_number}</td>
-                    <td class="py-3 px-4 text-slate-600 font-semibold">${jo.po_number}</td>
+                    <td class="py-3 px-4 font-bold text-indigo-600">
+                        <button onclick="openBacktrackModal('${jo.jo_number}')" class="font-bold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1 font-mono text-xs">
+                            <span>🔍</span><span>${jo.jo_number}</span>
+                        </button>
+                    </td>
+                    <td class="py-3 px-4 text-slate-600 font-semibold">
+                        <button onclick="openBacktrackModal('${jo.po_number}')" class="hover:underline hover:text-indigo-600 font-mono">
+                            ${jo.po_number}
+                        </button>
+                    </td>
                     <td class="py-3 px-4 font-bold text-slate-800">${jo.company_name}</td>
                     <td class="py-3 px-4 font-semibold text-slate-800">${jo.product_name} <span class="text-xs text-slate-400">(${jo.sku})</span></td>
                     <td class="py-3 px-4 font-black text-slate-800">${NKB.formatNumber(jo.target_quantity)} pcs</td>
@@ -301,9 +316,9 @@ async function loadJobOrders() {
                     </td>
                     <td class="py-3 px-4">
                         ${jo.latest_dr_number ? `
-                            <span class="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md font-mono text-[11px] font-bold inline-flex items-center gap-1">
+                            <button onclick="openBacktrackModal('${jo.latest_dr_number}')" class="px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-md font-mono text-[11px] font-bold inline-flex items-center gap-1 transition">
                                 <span>🚚</span><span>${jo.latest_dr_number}</span>
-                            </span>
+                            </button>
                         ` : `<span class="text-slate-400 italic text-[11px]">Pending Dispatch</span>`}
                     </td>
                     <td class="py-3 px-4">
@@ -322,6 +337,9 @@ async function loadJobOrders() {
                         `)}
                     </td>
                     <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                        <button onclick="openBacktrackModal('${jo.jo_number}')" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1">
+                            <span>🔍</span><span>Trace</span>
+                        </button>
                         <a href="/print-jo.html?id=${jo.id}" target="_blank" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold transition inline-flex items-center gap-1">
                             <span>🖨️</span><span>Print JO</span>
                         </a>
@@ -353,15 +371,25 @@ async function loadBatches() {
     if (res.success && res.data && res.data.length > 0) {
         tbody.innerHTML = res.data.map(b => `
             <tr class="hover:bg-slate-50 transition">
-                <td class="py-3 px-4 font-bold text-indigo-600">${b.batch_number}</td>
-                <td class="py-3 px-4 text-slate-600">${b.jo_number} / ${b.po_number}</td>
+                <td class="py-3 px-4 font-bold text-indigo-600">
+                    <button onclick="openBacktrackModal('${b.batch_number}')" class="font-bold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1 font-mono text-xs">
+                        <span>🔍</span><span>${b.batch_number}</span>
+                    </button>
+                </td>
+                <td class="py-3 px-4 text-slate-600">
+                    <button onclick="openBacktrackModal('${b.jo_number}')" class="hover:underline hover:text-indigo-600 font-mono">${b.jo_number}</button> / 
+                    <button onclick="openBacktrackModal('${b.po_number}')" class="hover:underline hover:text-indigo-600 font-mono">${b.po_number}</button>
+                </td>
                 <td class="py-3 px-4 font-semibold text-slate-800">${b.product_name}</td>
                 <td class="py-3 px-4 font-bold text-slate-700">${NKB.formatNumber(b.target_quantity)} pcs</td>
                 <td class="py-3 px-4 font-extrabold text-indigo-700">${b.actual_yield > 0 ? NKB.formatNumber(b.actual_yield) + ' pcs' : '<span class="text-slate-400 italic">In progress</span>'}</td>
                 <td class="py-3 px-4">${b.actual_yield > 0 ? NKB.renderVarianceBadge(b.variance_quantity, b.variance_percent) : '-'}</td>
                 <td class="py-3 px-4 text-slate-500">${NKB.formatDate(b.expiry_date)}</td>
                 <td class="py-3 px-4">${NKB.renderStatusBadge(b.status)}</td>
-                <td class="py-3 px-4 text-right space-x-1.5">
+                <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                    <button onclick="openBacktrackModal('${b.batch_number}')" class="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1">
+                        <span>🔍</span><span>Trace</span>
+                    </button>
                     ${b.status === 'MIXING' || b.status === 'BOTTLING' || b.status === 'PLANNED' ? `
                         <button onclick="openLogYieldModal('${b.id}', '${b.batch_number}', ${b.target_quantity}, ${b.tolerance_percent})" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition">
                             📝 Log Yield
@@ -395,16 +423,27 @@ async function loadDeliveries() {
     if (res.success && res.data && res.data.length > 0) {
         tbody.innerHTML = res.data.map(dr => `
             <tr class="hover:bg-slate-50 transition">
-                <td class="py-3 px-4 font-bold text-indigo-600">${dr.dr_number}</td>
+                <td class="py-3 px-4 font-bold text-indigo-600">
+                    <button onclick="openBacktrackModal('${dr.dr_number}')" class="font-bold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1 font-mono text-xs">
+                        <span>🔍</span><span>${dr.dr_number}</span>
+                    </button>
+                </td>
                 <td class="py-3 px-4 text-slate-600">${NKB.formatDate(dr.delivery_date)}</td>
                 <td class="py-3 px-4 font-bold text-slate-800">${dr.company_name}</td>
-                <td class="py-3 px-4 text-slate-600">${dr.po_number}</td>
+                <td class="py-3 px-4 text-slate-600">
+                    <button onclick="openBacktrackModal('${dr.po_number}')" class="hover:underline hover:text-indigo-600 font-mono">
+                        ${dr.po_number}
+                    </button>
+                </td>
                 <td class="py-3 px-4 font-bold text-slate-700">${NKB.formatNumber(dr.total_delivered)} pcs</td>
                 <td class="py-3 px-4 font-extrabold text-emerald-700">${dr.total_accepted > 0 ? NKB.formatNumber(dr.total_accepted) + ' pcs' : '-'}</td>
                 <td class="py-3 px-4 font-bold text-rose-600">${dr.total_rejected > 0 ? NKB.formatNumber(dr.total_rejected) + ' pcs' : '0'}</td>
                 <td class="py-3 px-4">${NKB.renderStatusBadge(dr.status)}</td>
-                <td class="py-3 px-4 text-right space-x-1.5">
-                    <a href="/print-dr.html?id=${dr.id}" target="_blank" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-block">
+                <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                    <button onclick="openBacktrackModal('${dr.dr_number}')" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1">
+                        <span>🔍</span><span>Trace</span>
+                    </button>
+                    <a href="/print-dr.html?id=${dr.id}" target="_blank" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold transition inline-block">
                         🖨️ Print DR
                     </a>
                     ${dr.status === 'ACCEPTED' ? `
@@ -430,17 +469,28 @@ async function loadInvoices() {
     if (res.success && res.data && res.data.length > 0) {
         tbody.innerHTML = res.data.map(si => `
             <tr class="hover:bg-slate-50 transition">
-                <td class="py-3 px-4 font-bold text-indigo-600">${si.invoice_number}</td>
+                <td class="py-3 px-4 font-bold text-indigo-600">
+                    <button onclick="openBacktrackModal('${si.invoice_number}')" class="font-bold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1 font-mono text-xs">
+                        <span>🔍</span><span>${si.invoice_number}</span>
+                    </button>
+                </td>
                 <td class="py-3 px-4 text-slate-600">${NKB.formatDate(si.invoice_date)} <br><span class="text-[10px] text-slate-400">Due: ${NKB.formatDate(si.due_date)}</span></td>
                 <td class="py-3 px-4 font-bold text-slate-800">${si.company_name}</td>
-                <td class="py-3 px-4 text-slate-600">${si.dr_number}</td>
+                <td class="py-3 px-4 text-slate-600">
+                    <button onclick="openBacktrackModal('${si.dr_number}')" class="hover:underline hover:text-indigo-600 font-mono">
+                        ${si.dr_number}
+                    </button>
+                </td>
                 <td class="py-3 px-4 font-extrabold text-slate-900">${NKB.formatCurrency(si.total_amount)}</td>
                 <td class="py-3 px-4 font-bold text-emerald-700">${NKB.formatCurrency(si.paid_amount)}</td>
                 <td class="py-3 px-4 font-extrabold text-rose-700">${NKB.formatCurrency(si.balance_due)}</td>
                 <td class="py-3 px-4"><span class="badge ${si.agingCategory === 'Current' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-100 text-rose-800 font-bold'}">${si.agingCategory}</span></td>
                 <td class="py-3 px-4">${NKB.renderStatusBadge(si.status)}</td>
-                <td class="py-3 px-4 text-right space-x-1.5">
-                    <a href="/print-invoice.html?id=${si.id}" target="_blank" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-block">
+                <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                    <button onclick="openBacktrackModal('${si.invoice_number}')" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1">
+                        <span>🔍</span><span>Trace</span>
+                    </button>
+                    <a href="/print-invoice.html?id=${si.id}" target="_blank" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold transition inline-block">
                         🖨️ Print SI
                     </a>
                     ${si.balance_due > 0 ? `
@@ -2736,4 +2786,297 @@ async function submitResetSystemData(e) {
         NKB.showToast(res.message || res.error || 'Failed to reset database.', 'error');
     }
 }
+
+// -------------------------------------------------------------
+// 13. UNIVERSAL 360° ORDER & DOCUMENT BACKTRACKING & TRACE
+// -------------------------------------------------------------
+async function globalBacktrackSearch() {
+    const input = document.getElementById('global-backtrack-input');
+    const term = input?.value?.trim();
+    if (!term) {
+        NKB.showToast('Please enter a PO, JO, Batch, DR, or Invoice number to backtrack.', 'warning');
+        return;
+    }
+    openBacktrackModal(term);
+}
+
+async function openBacktrackModal(term) {
+    if (!term) return;
+
+    const root = document.getElementById('modals-root');
+    root.innerHTML = `
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+            <div class="bg-white rounded-3xl max-w-4xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[92vh] flex flex-col">
+                <div class="flex justify-between items-center pb-3 border-b border-slate-100">
+                    <div class="flex items-center gap-2">
+                        <span class="p-2 bg-indigo-50 text-indigo-700 rounded-xl text-lg">🔍</span>
+                        <div>
+                            <h3 class="text-base font-black text-slate-900">360° Order Traceability & Backtrack Trail</h3>
+                            <p class="text-xs text-slate-500">Searching lineage for <strong class="text-indigo-600 font-mono">${term}</strong></p>
+                        </div>
+                    </div>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-xl">&times;</button>
+                </div>
+                <div id="backtrack-modal-body" class="flex-1 overflow-y-auto pr-1 py-8 text-center text-slate-400">
+                    <div class="animate-pulse space-y-3">
+                        <div class="text-sm font-bold text-slate-600">Retrieving full document lifecycle...</div>
+                        <div class="text-xs text-slate-400">Linking PO ➔ JO ➔ Batches ➔ DR ➔ Invoices ➔ Payments</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    const res = await NKB.api(`/api/orders/backtrack/${encodeURIComponent(term)}`);
+    const bodyEl = document.getElementById('backtrack-modal-body');
+    if (!bodyEl) return;
+
+    if (!res.success || !res.data) {
+        bodyEl.innerHTML = `
+            <div class="py-12 text-center space-y-3">
+                <div class="text-4xl">❌</div>
+                <div class="text-base font-bold text-slate-800">No Record Found</div>
+                <div class="text-xs text-slate-500 max-w-md mx-auto">${res.message || 'No linked manufacturing record matches this search query.'}</div>
+                <button onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition">Close</button>
+            </div>
+        `;
+        return;
+    }
+
+    const { po, items, jobOrders, batches, deliveries, invoices, payments, auditLogs } = res.data;
+
+    bodyEl.innerHTML = `
+        <div class="space-y-6 text-xs text-left text-slate-700">
+            <!-- Header Summary Card -->
+            <div class="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-5 rounded-2xl shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="px-2 py-0.5 bg-indigo-500/30 text-indigo-300 border border-indigo-400/30 rounded font-mono text-[11px] font-bold">PO: ${po.po_number}</span>
+                        <span class="text-xs text-slate-300 font-semibold">${NKB.formatDate(po.po_date)}</span>
+                    </div>
+                    <h2 class="text-lg font-black text-white mt-1">${po.company_name}</h2>
+                    <p class="text-[11px] text-slate-300">Contact: ${po.contact_person} (${po.client_phone || 'No phone'}) | Policy: <strong>${po.billing_policy}</strong></p>
+                </div>
+                <div class="text-right sm:border-l sm:border-slate-700/60 sm:pl-6">
+                    <div class="text-[10px] uppercase font-bold text-slate-400">Total PO Value</div>
+                    <div class="text-xl font-black text-emerald-400">${NKB.formatCurrency(po.grand_total)}</div>
+                    <div class="mt-1">${NKB.renderStatusBadge(po.status)}</div>
+                </div>
+            </div>
+
+            <!-- Visual Stages Stepper -->
+            <div class="grid grid-cols-2 sm:grid-cols-6 gap-2 text-center text-[11px] font-bold">
+                <div class="p-2.5 rounded-xl border ${po ? 'bg-indigo-50 border-indigo-200 text-indigo-900' : 'bg-slate-50 border-slate-200 text-slate-400'}">
+                    <div>🛒 1. PO</div>
+                    <div class="text-[10px] font-normal text-slate-500 mt-0.5">${items.length} Products</div>
+                </div>
+                <div class="p-2.5 rounded-xl border ${jobOrders.length > 0 ? 'bg-blue-50 border-blue-200 text-blue-900' : 'bg-slate-50 border-slate-200 text-slate-400'}">
+                    <div>⚙️ 2. JO (${jobOrders.length})</div>
+                    <div class="text-[10px] font-normal text-slate-500 mt-0.5">${jobOrders.some(j => j.status === 'COMPLETED') ? 'Fulfilled' : 'Scheduled'}</div>
+                </div>
+                <div class="p-2.5 rounded-xl border ${batches.length > 0 ? 'bg-amber-50 border-amber-200 text-amber-900' : 'bg-slate-50 border-slate-200 text-slate-400'}">
+                    <div>🧪 3. Batches (${batches.length})</div>
+                    <div class="text-[10px] font-normal text-slate-500 mt-0.5">${batches.reduce((acc, b) => acc + (b.actual_yield || 0), 0)} pcs output</div>
+                </div>
+                <div class="p-2.5 rounded-xl border ${deliveries.length > 0 ? 'bg-purple-50 border-purple-200 text-purple-900' : 'bg-slate-50 border-slate-200 text-slate-400'}">
+                    <div>🚚 4. DR (${deliveries.length})</div>
+                    <div class="text-[10px] font-normal text-slate-500 mt-0.5">${deliveries.some(d => d.signer_name) ? 'Signed' : 'Dispatched'}</div>
+                </div>
+                <div class="p-2.5 rounded-xl border ${invoices.length > 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-slate-50 border-slate-200 text-slate-400'}">
+                    <div>🧾 5. Invoice (${invoices.length})</div>
+                    <div class="text-[10px] font-normal text-slate-500 mt-0.5">${invoices.map(i => i.invoice_number).join(', ') || 'Pending'}</div>
+                </div>
+                <div class="p-2.5 rounded-xl border ${payments.length > 0 ? 'bg-teal-50 border-teal-200 text-teal-900' : 'bg-slate-50 border-slate-200 text-slate-400'}">
+                    <div>💰 6. Payments (${payments.length})</div>
+                    <div class="text-[10px] font-normal text-slate-500 mt-0.5">${NKB.formatCurrency(payments.reduce((acc, p) => acc + p.amount, 0))}</div>
+                </div>
+            </div>
+
+            <!-- Stage 1 & 2: PO Line Items & Job Orders -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- PO Ordered Products -->
+                <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                        <span class="font-bold text-slate-900 flex items-center gap-1.5"><span>🛒</span><span>Ordered Products (PO Items)</span></span>
+                        <span class="text-[11px] font-bold text-indigo-600">${items.length} Lines</span>
+                    </div>
+                    <div class="space-y-2">
+                        ${items.map(it => `
+                            <div class="p-2.5 bg-slate-50 rounded-xl border border-slate-100 flex justify-between items-center">
+                                <div>
+                                    <div class="font-bold text-slate-800">${it.product_name}</div>
+                                    <div class="text-[10px] text-slate-400 font-mono">SKU: ${it.sku} | Formula: ${it.formula_code || 'Standard'}</div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="font-black text-slate-900">${NKB.formatNumber(it.target_quantity)} pcs</div>
+                                    <div class="text-[10px] text-emerald-600 font-bold">${NKB.formatNumber(it.total_delivered_qty)} delivered</div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <!-- Job Orders -->
+                <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                        <span class="font-bold text-slate-900 flex items-center gap-1.5"><span>⚙️</span><span>Linked Job Orders (JO)</span></span>
+                        <span class="text-[11px] font-bold text-blue-600">${jobOrders.length} JOs</span>
+                    </div>
+                    ${jobOrders.length > 0 ? `
+                        <div class="space-y-2">
+                            ${jobOrders.map(jo => `
+                                <div class="p-2.5 bg-slate-50 rounded-xl border border-slate-100 flex justify-between items-center">
+                                    <div>
+                                        <div class="font-bold text-blue-700 font-mono">${jo.jo_number}</div>
+                                        <div class="text-[10px] text-slate-500">${jo.product_name} (${jo.assigned_team || 'Team Alpha'})</div>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="font-black text-slate-900">${NKB.formatNumber(jo.target_quantity)} pcs</div>
+                                        <div class="text-[10px]">${jo.status === 'COMPLETED' ? '<span class="text-emerald-700 font-bold">✅ Completed</span>' : '<span class="text-amber-700 font-bold">⏳ Active</span>'}</div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : `<div class="py-4 text-center text-slate-400 italic">No job orders issued yet.</div>`}
+                </div>
+            </div>
+
+            <!-- Stage 3 & 4: Batches & Delivery Receipts -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Batches -->
+                <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                        <span class="font-bold text-slate-900 flex items-center gap-1.5"><span>🧪</span><span>Production Batches & QC</span></span>
+                        <span class="text-[11px] font-bold text-amber-600">${batches.length} Batches</span>
+                    </div>
+                    ${batches.length > 0 ? `
+                        <div class="space-y-2">
+                            ${batches.map(b => `
+                                <div class="p-2.5 bg-slate-50 rounded-xl border border-slate-100 flex justify-between items-center">
+                                    <div>
+                                        <div class="font-bold text-amber-800 font-mono">${b.batch_number}</div>
+                                        <div class="text-[10px] text-slate-500">Exp: ${NKB.formatDate(b.expiry_date)} | ${b.product_name}</div>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="font-black text-indigo-700">${NKB.formatNumber(b.actual_yield || 0)} pcs</div>
+                                        <div class="text-[10px] text-slate-500">${NKB.renderStatusBadge(b.status)}</div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : `<div class="py-4 text-center text-slate-400 italic">No batches brewed yet.</div>`}
+                </div>
+
+                <!-- Deliveries & Digital Sign-off -->
+                <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                        <span class="font-bold text-slate-900 flex items-center gap-1.5"><span>🚚</span><span>Delivery Receipts & Client Sign-Off</span></span>
+                        <span class="text-[11px] font-bold text-purple-600">${deliveries.length} DRs</span>
+                    </div>
+                    ${deliveries.length > 0 ? `
+                        <div class="space-y-2">
+                            ${deliveries.map(dr => `
+                                <div class="p-2.5 bg-slate-50 rounded-xl border border-slate-100 space-y-1.5">
+                                    <div class="flex justify-between items-center">
+                                        <span class="font-bold text-purple-800 font-mono">${dr.dr_number}</span>
+                                        <span class="text-[10px] text-slate-500">${NKB.formatDate(dr.delivery_date)}</span>
+                                    </div>
+                                    <div class="flex justify-between items-center text-[11px]">
+                                        <span class="text-slate-600">Dispatched: <strong>${NKB.formatNumber(dr.total_delivered_qty)} pcs</strong></span>
+                                        <span class="text-emerald-700 font-bold">Accepted: ${NKB.formatNumber(dr.total_accepted_qty)} pcs</span>
+                                    </div>
+                                    ${dr.signer_name ? `
+                                        <div class="pt-1.5 border-t border-slate-200/60 text-[10px] text-emerald-800 flex items-center justify-between">
+                                            <span>✍️ Signed by: <strong>${dr.signer_name}</strong> (${dr.signer_title || 'Client Authorized'})</span>
+                                            <span class="font-mono text-[9px] text-slate-400">${dr.client_signed_at ? NKB.formatDate(dr.client_signed_at) : ''}</span>
+                                        </div>
+                                    ` : `<div class="text-[10px] text-amber-600 italic">Pending client signature</div>`}
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : `<div class="py-4 text-center text-slate-400 italic">No delivery receipts created yet.</div>`}
+                </div>
+            </div>
+
+            <!-- Stage 5 & 6: Invoices & Payments -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Sales Invoices -->
+                <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                        <span class="font-bold text-slate-900 flex items-center gap-1.5"><span>🧾</span><span>Sales Invoices (SI)</span></span>
+                        <span class="text-[11px] font-bold text-emerald-600">${invoices.length} Invoices</span>
+                    </div>
+                    ${invoices.length > 0 ? `
+                        <div class="space-y-2">
+                            ${invoices.map(si => `
+                                <div class="p-2.5 bg-slate-50 rounded-xl border border-slate-100 flex justify-between items-center">
+                                    <div>
+                                        <div class="font-bold text-emerald-800 font-mono">${si.invoice_number}</div>
+                                        <div class="text-[10px] text-slate-500">Ref: ${si.dr_number || 'DR'} | Due: ${NKB.formatDate(si.due_date)}</div>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="font-black text-slate-900">${NKB.formatCurrency(si.total_amount)}</div>
+                                        <div class="text-[10px] text-rose-600 font-bold">Bal: ${NKB.formatCurrency(si.balance_due)}</div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : `<div class="py-4 text-center text-slate-400 italic">No sales invoices generated yet.</div>`}
+                </div>
+
+                <!-- Payments -->
+                <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                        <span class="font-bold text-slate-900 flex items-center gap-1.5"><span>💰</span><span>Payments & Collections</span></span>
+                        <span class="text-[11px] font-bold text-teal-600">${payments.length} Payments</span>
+                    </div>
+                    ${payments.length > 0 ? `
+                        <div class="space-y-2">
+                            ${payments.map(pay => `
+                                <div class="p-2.5 bg-slate-50 rounded-xl border border-slate-100 flex justify-between items-center">
+                                    <div>
+                                        <div class="font-bold text-teal-800 font-mono">${pay.payment_number}</div>
+                                        <div class="text-[10px] text-slate-500">${pay.payment_method} | Ref: ${pay.reference_number}</div>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="font-black text-emerald-700">${NKB.formatCurrency(pay.amount)}</div>
+                                        <div class="text-[10px] text-slate-400">${NKB.formatDate(pay.payment_date)}</div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : `<div class="py-4 text-center text-slate-400 italic">No payments collected yet.</div>`}
+                </div>
+            </div>
+
+            <!-- Stage 7: Chronological Audit Trail & Event Timeline -->
+            <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <span class="font-bold text-slate-900 flex items-center gap-1.5"><span>📜</span><span>Chronological Event History & Audit Trail</span></span>
+                    <span class="text-[10px] text-slate-400">${auditLogs.length} Events Recorded</span>
+                </div>
+                ${auditLogs.length > 0 ? `
+                    <div class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                        ${auditLogs.map(log => `
+                            <div class="p-2 bg-slate-50 rounded-lg text-[11px] flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <span class="px-1.5 py-0.5 bg-indigo-100 text-indigo-800 rounded font-bold text-[9px]">${log.action}</span>
+                                    <span class="text-slate-800 font-semibold">${log.user_name || 'System'} (${log.user_role || 'STAFF'})</span>
+                                </div>
+                                <span class="font-mono text-[10px] text-slate-400">${NKB.formatDate(log.created_at)}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : `<div class="py-2 text-center text-slate-400 italic">No audit trail entries for this order.</div>`}
+            </div>
+
+            <div class="flex justify-end pt-2 border-t border-slate-100">
+                <button onclick="closeModal()" class="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition">
+                    Close Trace View
+                </button>
+            </div>
+        </div>
+    `;
+}
+
 
