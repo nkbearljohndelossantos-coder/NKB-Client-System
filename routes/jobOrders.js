@@ -15,7 +15,19 @@ router.get('/', authenticateToken, (req, res) => {
     let query = `
         SELECT jo.*, po.po_number, c.company_name, p.name as product_name, p.sku, p.unit,
                (SELECT COUNT(*) FROM production_batches WHERE jo_id = jo.id) as batch_count,
-               (SELECT SUM(actual_yield) FROM production_batches WHERE jo_id = jo.id) as total_yield
+               (SELECT COALESCE(SUM(actual_yield), 0) FROM production_batches WHERE jo_id = jo.id) as total_yield,
+               (SELECT COALESCE(SUM(di.delivered_quantity), 0) 
+                FROM delivery_items di 
+                JOIN delivery_receipts dr ON di.dr_id = dr.id 
+                WHERE dr.jo_id = jo.id OR di.batch_id IN (SELECT id FROM production_batches WHERE jo_id = jo.id)) as delivered_quantity,
+               (SELECT dr.dr_number 
+                FROM delivery_receipts dr 
+                WHERE dr.jo_id = jo.id OR dr.id IN (SELECT di.dr_id FROM delivery_items di JOIN production_batches pb ON di.batch_id = pb.id WHERE pb.jo_id = jo.id) 
+                ORDER BY dr.created_at DESC LIMIT 1) as latest_dr_number,
+               (SELECT dr.status 
+                FROM delivery_receipts dr 
+                WHERE dr.jo_id = jo.id OR dr.id IN (SELECT di.dr_id FROM delivery_items di JOIN production_batches pb ON di.batch_id = pb.id WHERE pb.jo_id = jo.id) 
+                ORDER BY dr.created_at DESC LIMIT 1) as latest_dr_status
         FROM job_orders jo
         JOIN purchase_orders po ON jo.po_id = po.id
         JOIN clients c ON po.client_id = c.id

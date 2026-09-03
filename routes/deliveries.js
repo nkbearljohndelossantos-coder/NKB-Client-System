@@ -187,6 +187,18 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'WAREHOUSE'), (req, re
                 unitPrice
             );
 
+            // Mark production batch as COMPLETED / DISPATCHED
+            if (item.batch_id) {
+                db.prepare("UPDATE production_batches SET status = 'COMPLETED', updated_at = datetime('now') WHERE id = ?").run(item.batch_id);
+                
+                // Automatically mark parent Job Order as COMPLETED to prevent duplicate work
+                db.prepare(`
+                    UPDATE job_orders 
+                    SET status = 'COMPLETED', updated_at = datetime('now') 
+                    WHERE id = (SELECT jo_id FROM production_batches WHERE id = ?)
+                `).run(item.batch_id);
+            }
+
             // Deduct stock from finished goods inventory for this dispatch
             recordMovement({
                 productId: item.product_id,
@@ -199,6 +211,17 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'WAREHOUSE'), (req, re
                 createdBy: req.user.id
             });
         }
+
+        if (jo_id) {
+            db.prepare("UPDATE job_orders SET status = 'COMPLETED', updated_at = datetime('now') WHERE id = ?").run(jo_id);
+        }
+
+        // Update PO status to PARTIALLY_DELIVERED or COMPLETED
+        db.prepare(`
+            UPDATE purchase_orders 
+            SET status = 'COMPLETED', updated_at = datetime('now') 
+            WHERE id = ?
+        `).run(po_id);
 
         logAudit({
             userId: req.user.id,

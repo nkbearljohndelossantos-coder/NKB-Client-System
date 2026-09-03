@@ -286,27 +286,60 @@ async function loadJobOrders() {
     const tbody = document.getElementById('table-jos-body');
 
     if (res.success && res.data && res.data.length > 0) {
-        tbody.innerHTML = res.data.map(jo => `
-            <tr class="hover:bg-slate-50 transition">
-                <td class="py-3 px-4 font-bold text-indigo-600">${jo.jo_number}</td>
-                <td class="py-3 px-4 text-slate-600">${jo.po_number}</td>
-                <td class="py-3 px-4 font-bold text-slate-800">${jo.company_name}</td>
-                <td class="py-3 px-4 font-semibold text-slate-800">${jo.product_name} <span class="text-xs text-slate-400">(${jo.sku})</span></td>
-                <td class="py-3 px-4 font-bold text-slate-700">${NKB.formatNumber(jo.target_quantity)} pcs</td>
-                <td class="py-3 px-4 text-slate-600">${jo.assigned_team}</td>
-                <td class="py-3 px-4">${NKB.renderStatusBadge(jo.status)}</td>
-                <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
-                    <a href="/print-jo.html?id=${jo.id}" target="_blank" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold transition inline-flex items-center gap-1">
-                        <span>🖨️</span><span>Print JO</span>
-                    </a>
-                    <button onclick="openCreateBatchModal('${jo.id}', '${jo.jo_number}', ${jo.target_quantity}, '${jo.product_name}')" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition">
-                        + Start Batch
-                    </button>
-                </td>
-            </tr>
-        `).join('');
+        tbody.innerHTML = res.data.map(jo => {
+            const isDelivered = jo.status === 'COMPLETED' || (jo.delivered_quantity && jo.delivered_quantity >= jo.target_quantity) || jo.latest_dr_number;
+            return `
+                <tr class="hover:bg-slate-50 transition">
+                    <td class="py-3 px-4 font-bold text-indigo-600">${jo.jo_number}</td>
+                    <td class="py-3 px-4 text-slate-600 font-semibold">${jo.po_number}</td>
+                    <td class="py-3 px-4 font-bold text-slate-800">${jo.company_name}</td>
+                    <td class="py-3 px-4 font-semibold text-slate-800">${jo.product_name} <span class="text-xs text-slate-400">(${jo.sku})</span></td>
+                    <td class="py-3 px-4 font-black text-slate-800">${NKB.formatNumber(jo.target_quantity)} pcs</td>
+                    <td class="py-3 px-4">
+                        <div class="font-bold text-slate-800">${NKB.formatNumber(jo.total_yield || 0)} <span class="text-[10px] text-slate-500 font-normal">produced</span></div>
+                        <div class="text-[11px] ${jo.delivered_quantity > 0 ? 'text-emerald-600 font-bold' : 'text-slate-400'}">${NKB.formatNumber(jo.delivered_quantity || 0)} dispatched</div>
+                    </td>
+                    <td class="py-3 px-4">
+                        ${jo.latest_dr_number ? `
+                            <span class="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md font-mono text-[11px] font-bold inline-flex items-center gap-1">
+                                <span>🚚</span><span>${jo.latest_dr_number}</span>
+                            </span>
+                        ` : `<span class="text-slate-400 italic text-[11px]">Pending Dispatch</span>`}
+                    </td>
+                    <td class="py-3 px-4">
+                        ${isDelivered ? `
+                            <span class="px-2.5 py-1 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-black inline-flex items-center gap-1 shadow-sm">
+                                <span>✅</span><span>DELIVERED / TAPOS NA</span>
+                            </span>
+                        ` : (jo.batch_count > 0 ? `
+                            <span class="px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold inline-flex items-center gap-1">
+                                <span>🧪</span><span>IN PRODUCTION</span>
+                            </span>
+                        ` : `
+                            <span class="px-2.5 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-xs font-bold inline-flex items-center gap-1">
+                                <span>🟡</span><span>PENDING BATCH</span>
+                            </span>
+                        `)}
+                    </td>
+                    <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                        <a href="/print-jo.html?id=${jo.id}" target="_blank" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold transition inline-flex items-center gap-1">
+                            <span>🖨️</span><span>Print JO</span>
+                        </a>
+                        ${isDelivered ? `
+                            <span class="px-2.5 py-1 bg-slate-100 text-slate-400 border border-slate-200 rounded-lg text-xs font-bold inline-flex items-center gap-1 cursor-not-allowed select-none" title="Tapos na at na-deliver na itong Job Order.">
+                                <span>🔒</span><span>Tapos Na</span>
+                            </span>
+                        ` : `
+                            <button onclick="openCreateBatchModal('${jo.id}', '${jo.jo_number}', ${jo.target_quantity}, '${jo.product_name}')" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition">
+                                + Start Batch
+                            </button>
+                        `}
+                    </td>
+                </tr>
+            `;
+        }).join('');
     } else {
-        tbody.innerHTML = `<tr><td colspan="8" class="py-6 text-center text-slate-400">No job orders found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="py-6 text-center text-slate-400">No job orders found.</td></tr>`;
     }
 }
 
