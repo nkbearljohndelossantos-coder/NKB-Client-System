@@ -1419,8 +1419,8 @@ async function openCreatePOModal() {
             <div class="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
                 <div class="flex justify-between items-center border-b border-slate-100 pb-3 flex-shrink-0">
                     <div>
-                        <h3 class="text-lg font-bold text-slate-900">Create Multi-Item Purchase Order (PO)</h3>
-                        <p class="text-xs text-slate-500">Order multiple cosmetic products with client-specific pricing</p>
+                        <h3 class="text-lg font-bold text-slate-900">Create Purchase Order (PO)</h3>
+                        <p class="text-xs text-slate-500">Order cosmetic products with client-specific pricing</p>
                     </div>
                     <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
                 </div>
