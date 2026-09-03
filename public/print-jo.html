@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Work Order / Production Job Order - NKB Manufacturing Corp</title>
+    <title>Job Order - NKB Manufacturing Corp</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <link rel="stylesheet" href="/css/tailwind.min.css">
     <link rel="stylesheet" href="/css/style.css">
@@ -59,9 +59,9 @@
             ← Back to Portal
         </a>
         <div class="flex items-center gap-2">
-            <span class="text-[11px] text-slate-500 font-medium">Layout: <strong>Work Order / Corporate Style (8.5" × 5.5")</strong></span>
+            <span class="text-[11px] text-slate-500 font-medium">Layout: <strong>Job Order / Corporate Style (8.5" × 5.5")</strong></span>
             <button onclick="window.print()" class="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold shadow-md shadow-blue-600/30 transition flex items-center gap-1.5">
-                <span>🖨️ Print Work / Job Order</span>
+                <span>🖨️ Print Job Order</span>
             </button>
         </div>
     </div>
@@ -85,11 +85,11 @@
             </div>
 
             <div class="w-64 text-right space-y-1.5">
-                <h2 class="text-2xl font-bold text-slate-500 tracking-wider text-right uppercase">WORK ORDER</h2>
+                <h2 class="text-2xl font-bold text-slate-500 tracking-wider text-right uppercase">JOB ORDER</h2>
                 
                 <!-- JO Number Box -->
                 <div class="rounded overflow-hidden border border-blue-600 text-center">
-                    <div class="doc-blue-header font-bold uppercase text-[9.5px] py-0.5 tracking-wider">WORK ORDER #</div>
+                    <div class="doc-blue-header font-bold uppercase text-[9.5px] py-0.5 tracking-wider">JOB ORDER #</div>
                     <div id="jo-number-display" class="bg-slate-100 font-bold font-mono text-slate-900 text-[11px] py-0.5">JO-XXXX-XXXXXX</div>
                 </div>
 
@@ -101,7 +101,7 @@
             </div>
         </div>
 
-        <!-- 3-COLUMN METADATA BAR (Requested By | Customer ID | Department) -->
+        <!-- 3-COLUMN METADATA BAR (Requested By | Customer ID / PO Ref | Department / Policy) -->
         <div class="grid grid-cols-3 border border-slate-300 text-center text-[10px]">
             <div class="border-r border-slate-300">
                 <div class="doc-grey-header font-bold uppercase py-0.5 text-[9px]">REQUESTED BY</div>
@@ -112,100 +112,66 @@
                 <div id="meta-jo-po-ref" class="py-1 font-semibold text-slate-800 font-mono">-</div>
             </div>
             <div>
-                <div class="doc-grey-header font-bold uppercase py-0.5 text-[9px]">DEPARTMENT</div>
-                <div id="meta-jo-dept" class="py-1 font-semibold text-slate-800">Cosmetic Cleanroom Production</div>
+                <div class="doc-grey-header font-bold uppercase py-0.5 text-[9px]">BILLING POLICY & TOLERANCE</div>
+                <div id="meta-jo-policy" class="py-1 font-semibold text-slate-800">-</div>
             </div>
         </div>
 
-        <!-- 2-COLUMN BLOCK: CLIENT / BILL TO | JOB DETAILS -->
+        <!-- 2-COLUMN BLOCK: BILL TO / CLIENT | JOB DETAILS & SPECIFICATIONS -->
         <div class="border border-blue-600 rounded overflow-hidden">
             <div class="grid grid-cols-12 doc-blue-header font-bold uppercase text-[9.5px] py-0.5 px-2">
-                <div class="col-span-5">CLIENT INFORMATION</div>
+                <div class="col-span-5">MANUFACTURING FOR (CLIENT)</div>
                 <div class="col-span-7 pl-2">JOB DETAILS & BATCH SPECIFICATIONS</div>
             </div>
             <div class="grid grid-cols-12 text-[10px] p-2 bg-white gap-2 min-h-[60px]">
                 <div class="col-span-5 space-y-0.5 border-r border-slate-200 pr-2">
                     <div id="jo-client-name" class="font-bold text-slate-900 text-[11px]">-</div>
-                    <div id="jo-client-contact" class="text-slate-700 font-medium">Authorized Representative</div>
-                    <div id="jo-billing-policy" class="text-slate-600 leading-tight">-</div>
-                    <div class="text-slate-500 font-mono text-[9px]">Target Batch Schedule: <strong id="jo-scheduled-date" class="text-slate-700">-</strong></div>
+                    <div id="jo-client-contact" class="text-slate-700 font-medium">Attn: Authorized Representative</div>
+                    <div class="text-slate-500 font-mono text-[9.5px]">Assigned Team: <strong id="jo-assigned-team" class="text-slate-700 font-sans">-</strong></div>
+                    <div class="text-slate-500 text-[9.5px]">Production Target: <strong id="jo-scheduled-date" class="text-slate-700 font-mono">-</strong></div>
                 </div>
                 <div class="col-span-7 pl-1 space-y-0.5 text-slate-700">
                     <div>Product Name: <strong id="jo-product-name" class="text-blue-900 font-bold">-</strong></div>
                     <div>Product SKU & Formula: <strong id="jo-product-sku" class="text-slate-900 font-mono">-</strong> <span id="jo-formula-code" class="text-slate-500 font-mono text-[9px]"></span></div>
-                    <div>Batch Tolerance Range: <strong id="jo-tolerance-text" class="text-slate-900 font-mono">±10%</strong> | Assigned Team: <strong id="jo-assigned-team" class="text-slate-800">-</strong></div>
+                    <div>Batch Tolerance Range: <strong id="jo-tolerance-text" class="text-slate-900 font-mono">±10%</strong></div>
                     <div>Job Order Status: <span id="jo-status-badge"></span></div>
                 </div>
             </div>
         </div>
 
-        <!-- LINE ITEMS / STAGES TABLE -->
+        <!-- LINE ITEMS TABLE (QTY | DESCRIPTION | SKU / CODE | TOLERANCE | TOTAL) -->
         <div class="border border-slate-300 overflow-hidden">
             <table class="w-full text-left doc-table text-[10px] border-collapse">
                 <thead class="doc-table-header font-bold uppercase text-[9px]">
                     <tr>
-                        <th class="py-1 px-2 w-12 text-center border border-slate-300">STAGE</th>
-                        <th class="py-1 px-2 border border-slate-300">PROCESS / WORK DESCRIPTION</th>
-                        <th class="py-1 px-2 w-28 text-center border border-slate-300">PARAMETER</th>
-                        <th class="py-1 px-2 w-28 text-right border border-slate-300">TARGET QTY</th>
-                        <th class="py-1 px-2 w-32 text-right border border-slate-300">STATUS</th>
+                        <th class="py-1 px-2 w-16 text-center border border-slate-300">QTY</th>
+                        <th class="py-1 px-2 border border-slate-300">PRODUCT & FORMULATION DESCRIPTION</th>
+                        <th class="py-1 px-2 w-28 text-center border border-slate-300">SKU / CODE</th>
+                        <th class="py-1 px-2 w-28 text-center border border-slate-300">TOLERANCE RANGE</th>
+                        <th class="py-1 px-2 w-32 text-right border border-slate-300">TARGET UNITS</th>
                     </tr>
                 </thead>
                 <tbody id="jo-items-tbody" class="divide-y divide-slate-200 font-medium">
-                    <tr>
-                        <td class="py-1 px-2 text-center font-bold text-slate-700">01</td>
-                        <td class="py-1 px-2 font-semibold text-slate-900">Raw Material Weighing & Dispensing</td>
-                        <td class="py-1 px-2 text-center text-slate-600">BOM Verified</td>
-                        <td class="py-1 px-2 text-right font-mono" id="stage-qty-1">-</td>
-                        <td class="py-1 px-2 text-right text-emerald-700 font-bold">COMPLETED</td>
-                    </tr>
-                    <tr>
-                        <td class="py-1 px-2 text-center font-bold text-slate-700">02</td>
-                        <td class="py-1 px-2 font-semibold text-slate-900">Laboratory Compounding & Homogenization</td>
-                        <td class="py-1 px-2 text-center text-slate-600">Phase A & B</td>
-                        <td class="py-1 px-2 text-right font-mono" id="stage-qty-2">-</td>
-                        <td class="py-1 px-2 text-right text-indigo-700 font-bold">IN PROGRESS</td>
-                    </tr>
-                    <tr>
-                        <td class="py-1 px-2 text-center font-bold text-slate-700">03</td>
-                        <td class="py-1 px-2 font-semibold text-slate-900">Quality Control In-Process Testing</td>
-                        <td class="py-1 px-2 text-center text-slate-600">pH / Viscosity</td>
-                        <td class="py-1 px-2 text-right font-mono">-</td>
-                        <td class="py-1 px-2 text-right text-slate-500 font-medium">QC CLEARANCE</td>
-                    </tr>
-                    <tr>
-                        <td class="py-1 px-2 text-center font-bold text-slate-700">04</td>
-                        <td class="py-1 px-2 font-semibold text-slate-900">Cleanroom Filling, Capping & Induction Seal</td>
-                        <td class="py-1 px-2 text-center text-slate-600">Volumetric Fill</td>
-                        <td class="py-1 px-2 text-right font-mono" id="stage-qty-4">-</td>
-                        <td class="py-1 px-2 text-right text-slate-500 font-medium">SCHEDULED</td>
-                    </tr>
-                    <tr>
-                        <td class="py-1 px-2 text-center font-bold text-slate-700">05</td>
-                        <td class="py-1 px-2 font-semibold text-slate-900">Batch Laser Coding, Labeling & Packaging</td>
-                        <td class="py-1 px-2 text-center text-slate-600">Mfg / Exp Date</td>
-                        <td class="py-1 px-2 text-right font-mono" id="stage-qty-5">-</td>
-                        <td class="py-1 px-2 text-right text-slate-500 font-medium">FINAL RELEASE</td>
-                    </tr>
+                    <tr><td colspan="5" class="py-4 text-center text-slate-400">Loading job order details...</td></tr>
                 </tbody>
             </table>
         </div>
 
-        <!-- BOTTOM BLOCK: OTHER COMMENTS (Left) | YIELD & TARGET BREAKDOWN (Right) -->
+        <!-- BOTTOM BLOCK: OTHER COMMENTS (Left) | TOTALS BREAKDOWN (Right) -->
         <div class="grid grid-cols-12 gap-3 text-[10px] items-start pt-1">
             
             <!-- Left Comments Box -->
             <div class="col-span-7 space-y-1">
                 <div class="border border-slate-300 overflow-hidden rounded">
-                    <div class="doc-grey-header font-bold uppercase text-[9px] py-0.5 px-2">PRODUCTION NOTES & COMPLIANCE</div>
+                    <div class="doc-grey-header font-bold uppercase text-[9px] py-0.5 px-2">PRODUCTION NOTES & TOLERANCE TERMS</div>
                     <div class="p-2 space-y-0.5 text-slate-600 text-[9.5px] leading-tight">
-                        <p>1. Work order complies with ISO/GMP cosmetic manufacturing protocols.</p>
-                        <p>2. Actual output within ±10% tolerance is validated upon batch yield log.</p>
-                        <p>3. Production inquiries: <strong>customerservice@nkbmanufacturing.com</strong></p>
+                        <p>1. Job Order is executed strictly in compliance with the linked Purchase Order.</p>
+                        <p>2. Actual output within the ±10% tolerance is validated upon laboratory QC sign-off.</p>
+                        <p>3. Production questions: <strong>customerservice@nkbmanufacturing.com</strong></p>
                     </div>
                 </div>
                 <div class="text-[9.5px] text-slate-700 pt-0.5">
-                    Authorized Laboratory Facility: <strong class="text-slate-900">NKB Manufacturing Cleanroom Plant</strong>
+                    Authorized Laboratory: <strong class="text-slate-900">NKB Manufacturing Cleanroom Plant</strong>
                 </div>
             </div>
 
@@ -215,7 +181,7 @@
                     <tbody class="divide-y divide-slate-200">
                         <tr>
                             <td class="py-0.5 px-2 text-slate-600 font-semibold bg-slate-50">BASE TARGET QTY</td>
-                            <td class="py-0.5 px-2 font-bold font-mono text-slate-900" id="jo-target-qty">0 pcs</td>
+                            <td class="py-0.5 px-2 font-bold font-mono text-slate-900" id="jo-base-target-qty">0 pcs</td>
                         </tr>
                         <tr>
                             <td class="py-0.5 px-2 text-slate-600 font-semibold bg-slate-50">MIN YIELD (-10%)</td>
@@ -226,8 +192,8 @@
                             <td class="py-0.5 px-2 font-mono text-slate-800" id="jo-max-yield">0 pcs</td>
                         </tr>
                         <tr class="doc-total-bar font-bold text-[11.5px]">
-                            <td class="py-1 px-2 uppercase tracking-wider text-left text-white">BATCH PLAN</td>
-                            <td class="py-1 px-2 font-mono text-white text-right font-black" id="jo-tolerance-badge">±10% TOLERANCE</td>
+                            <td class="py-1 px-2 uppercase tracking-wider text-left text-white">TOTAL TARGET</td>
+                            <td class="py-1 px-2 font-mono text-white text-right font-black" id="jo-grand-total-qty">0 pcs</td>
                         </tr>
                     </tbody>
                 </table>
@@ -236,7 +202,7 @@
 
         <!-- SIGNATURES & ACKNOWLEDGEMENT -->
         <div class="pt-2 border-t border-dashed border-slate-400 text-center text-[9px] text-slate-600 space-y-3">
-            <p class="italic">I agree that all formulation compounding, filling, and packaging have been scheduled according to standard manufacturing specifications.</p>
+            <p class="italic">I agree that all production formulations and batch quantities correspond directly to the approved Purchase Order.</p>
             
             <div class="grid grid-cols-2 gap-8 text-left pt-1">
                 <div>
@@ -285,11 +251,11 @@
                 document.getElementById('jo-number-display').textContent = jo.jo_number || '-';
                 document.getElementById('jo-date-display').textContent = NKB.formatDate(jo.created_at);
                 document.getElementById('meta-jo-po-ref').textContent = jo.po_number || '-';
+                document.getElementById('meta-jo-policy').textContent = (jo.billing_policy === 'ACTUAL_DELIVERY' ? 'Option A (Bill Actual)' : 'Option B (Fixed+Buffer)') + ` ±${jo.tolerance_percent || 10}%`;
                 document.getElementById('jo-status-badge').innerHTML = NKB.renderStatusBadge(jo.status);
 
                 document.getElementById('jo-client-name').textContent = jo.company_name || 'Valued Client';
-                document.getElementById('jo-billing-policy').textContent = `Policy: ${jo.billing_policy === 'ACTUAL_DELIVERY' ? 'Option A (Bill Actual)' : 'Option B (Fixed+Buffer)'}`;
-                document.getElementById('jo-scheduled-date').textContent = jo.scheduled_date ? NKB.formatDate(jo.scheduled_date) : 'Scheduled Production Run';
+                document.getElementById('jo-scheduled-date').textContent = jo.scheduled_date ? NKB.formatDate(jo.scheduled_date) : 'Scheduled Batch Run';
 
                 document.getElementById('jo-product-name').textContent = jo.product_name || 'Cosmetic Formulation';
                 document.getElementById('jo-product-sku').textContent = `SKU: ${jo.sku || '-'}`;
@@ -301,16 +267,42 @@
                 const minYield = Math.round(targetQty * (1 - tolerancePct / 100));
                 const maxYield = Math.round(targetQty * (1 + tolerancePct / 100));
 
-                document.getElementById('jo-target-qty').textContent = `${NKB.formatNumber(targetQty)} pcs`;
+                document.getElementById('jo-base-target-qty').textContent = `${NKB.formatNumber(targetQty)} pcs`;
                 document.getElementById('jo-tolerance-text').textContent = `±${tolerancePct}%`;
                 document.getElementById('jo-min-yield').textContent = `${NKB.formatNumber(minYield)} pcs`;
                 document.getElementById('jo-max-yield').textContent = `${NKB.formatNumber(maxYield)} pcs`;
+                document.getElementById('jo-grand-total-qty').textContent = `${NKB.formatNumber(targetQty)} pcs`;
 
-                document.getElementById('stage-qty-1').textContent = `${NKB.formatNumber(targetQty)} pcs`;
-                document.getElementById('stage-qty-2').textContent = `${NKB.formatNumber(targetQty)} pcs`;
-                document.getElementById('stage-qty-4').textContent = `${NKB.formatNumber(targetQty)} pcs`;
-                document.getElementById('stage-qty-5').textContent = `${NKB.formatNumber(targetQty)} pcs`;
+                const tbody = document.getElementById('jo-items-tbody');
+                
+                // Render exact product matching the PO
+                let rowsHtml = `
+                    <tr class="hover:bg-slate-50">
+                        <td class="py-1.5 px-2 text-center font-bold text-slate-800">${NKB.formatNumber(targetQty)}</td>
+                        <td class="py-1.5 px-2 font-semibold text-slate-900">
+                            ${jo.product_name || 'Cosmetic Formulation'} 
+                            <span class="text-[9px] text-slate-500 font-normal ml-1">(${jo.unit || 'pcs'})</span>
+                        </td>
+                        <td class="py-1.5 px-2 text-center font-mono text-slate-700 font-bold">${jo.sku || '-'}${jo.formula_code ? ' / ' + jo.formula_code : ''}</td>
+                        <td class="py-1.5 px-2 text-center font-mono text-blue-700 font-bold">±${tolerancePct}% (${NKB.formatNumber(minYield)} - ${NKB.formatNumber(maxYield)})</td>
+                        <td class="py-1.5 px-2 text-right font-bold font-mono text-slate-900">${NKB.formatNumber(targetQty)} pcs</td>
+                    </tr>
+                `;
 
+                // Add empty filler rows to match template grid aesthetic
+                for (let i = 0; i < 4; i++) {
+                    rowsHtml += `
+                        <tr>
+                            <td class="py-1 px-2 text-center text-slate-300">&nbsp;</td>
+                            <td class="py-1 px-2">&nbsp;</td>
+                            <td class="py-1 px-2 text-center">&nbsp;</td>
+                            <td class="py-1 px-2 text-center">&nbsp;</td>
+                            <td class="py-1 px-2 text-right text-slate-300">-</td>
+                        </tr>
+                    `;
+                }
+
+                tbody.innerHTML = rowsHtml;
                 document.getElementById('jo-sign-date').textContent = NKB.formatDate(jo.created_at);
 
             } catch (err) {
