@@ -5,12 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Delivery Receipt - NKB Manufacturing Corp</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400;1,700&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/css/tailwind.min.css">
     <link rel="stylesheet" href="/css/style.css">
     <style>
         @page {
             size: 8.5in 5.5in;
             margin: 4mm 6mm;
+        }
+        /* Authentic Thermal Typography */
+        .thermal-font {
+            font-family: 'Space Mono', 'Courier Prime', 'Consolas', 'Courier New', monospace !important;
+            letter-spacing: -0.02em;
         }
         @media print {
             html, body {
@@ -51,7 +59,7 @@
         }
     </style>
 </head>
-<body class="bg-slate-100 min-h-screen p-2 sm:p-6 text-slate-900 antialiased text-[11px] font-sans">
+<body class="bg-slate-100 min-h-screen p-2 sm:p-6 text-slate-900 antialiased text-[11px] thermal-font">
 
     <!-- Action Bar (Hidden on Print) -->
     <div class="max-w-4xl mx-auto mb-4 flex justify-between items-center no-print">
@@ -59,22 +67,22 @@
             ← Back to Portal
         </a>
         <div class="flex items-center gap-2">
-            <span class="text-[11px] text-slate-500 font-medium">Layout: <strong>Work Order / Corporate Style (8.5" × 5.5")</strong></span>
+            <span class="text-[11px] text-slate-500 font-medium">Font Style: <strong>Thermal Monospace POS Font (8.5" × 5.5")</strong></span>
             <button onclick="window.print()" class="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold shadow-md shadow-blue-600/30 transition flex items-center gap-1.5">
                 <span>🖨️ Print Delivery Receipt</span>
             </button>
         </div>
     </div>
 
-    <!-- Main Sheet matching Reference Image Structure -->
-    <div class="sheet-container mx-auto bg-white p-6 sm:p-8 border border-slate-900 text-slate-900 space-y-3" id="dr-printable-sheet">
+    <!-- Main Sheet matching Reference Image Structure with Thermal Font -->
+    <div class="sheet-container mx-auto bg-white p-6 sm:p-8 border border-slate-900 text-slate-900 space-y-3 thermal-font" id="dr-printable-sheet">
         
         <!-- HEADER: Left Company Info | Right Document Title & Blue Bar Boxes -->
         <div class="flex justify-between items-start">
             <div class="flex items-start gap-3">
                 <img src="/images/nkb-logo.png" alt="NKB Logo" class="header-logo h-12 w-auto object-contain mt-0.5">
                 <div>
-                    <h1 class="text-xl font-bold text-blue-700 tracking-tight leading-tight">NKB Manufacturing Corp</h1>
+                    <h1 class="text-xl font-bold text-blue-700 tracking-tight leading-tight">NKB MANUFACTURING CORP</h1>
                     <div class="text-[10px] text-blue-900/80 leading-tight space-y-0.5 mt-0.5 font-medium">
                         <p>Sampaguita Village 2, B4 L5, Twig St, Bacoor, 4102 Cavite</p>
                         <p>Phone: +63 (2) 8888-0000</p>
@@ -121,7 +129,7 @@
         <div class="border border-blue-600 rounded overflow-hidden">
             <div class="grid grid-cols-12 doc-blue-header font-bold uppercase text-[9.5px] py-0.5 px-2">
                 <div class="col-span-5">DELIVER TO (CLIENT)</div>
-                <div class="col-span-7 pl-2">DISPATCH DETAILS & POLICY SPECIFICATIONS</div>
+                <div class="col-span-7 pl-2">DISPATCH DETAILS & SPECIFICATIONS</div>
             </div>
             <div class="grid grid-cols-12 text-[10px] p-2 bg-white gap-2 min-h-[60px]">
                 <div class="col-span-5 space-y-0.5 border-r border-slate-200 pr-2">
