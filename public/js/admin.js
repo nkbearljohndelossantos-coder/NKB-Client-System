@@ -443,6 +443,11 @@ async function loadDeliveries() {
                     <button onclick="openBacktrackModal('${dr.dr_number}')" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1">
                         <span>🔍</span><span>Trace</span>
                     </button>
+                    ${dr.status === 'PENDING_CLIENT_ACCEPTANCE' || dr.status === 'DISPATCHED' ? `
+                        <button onclick="openAddQuantityToExistingDRModal('${dr.id}', '${dr.dr_number}', '${dr.company_name}')" class="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold transition inline-flex items-center gap-1">
+                            <span>➕</span><span>Dagdag Qty</span>
+                        </button>
+                    ` : ''}
                     <a href="/print-dr.html?id=${dr.id}" target="_blank" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold transition inline-block">
                         🖨️ Print DR
                     </a>
@@ -1911,8 +1916,18 @@ async function submitApproveOverrun(e, batchId) {
 }
 
 // 6. Create Delivery Receipt (DR) Modal
-function openCreateDRModal(poNumber, joNumber, batchId, batchNumber, deliveredQty, productName, clientId) {
+async function openCreateDRModal(poNumber, joNumber, batchId, batchNumber, deliveredQty, productName, clientId) {
     const baseQty = parseInt(deliveredQty) || 1000;
+
+    // Check if there are active pending DRs for this PO
+    let existingDRs = [];
+    try {
+        const drCheck = await NKB.api(`/api/deliveries?search=${encodeURIComponent(poNumber)}&status=PENDING_CLIENT_ACCEPTANCE`);
+        if (drCheck.success && Array.isArray(drCheck.data)) {
+            existingDRs = drCheck.data;
+        }
+    } catch(e) {}
+
     const root = document.getElementById('modals-root');
     root.innerHTML = `
         <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
@@ -1921,7 +1936,7 @@ function openCreateDRModal(poNumber, joNumber, batchId, batchNumber, deliveredQt
                     <div class="flex items-center gap-2">
                         <span class="p-2 bg-emerald-50 text-emerald-700 rounded-xl text-lg">🚚</span>
                         <div>
-                            <h3 class="text-base font-black text-slate-900">Create Delivery Receipt & Dispatch</h3>
+                            <h3 class="text-base font-black text-slate-900">Create / Append Delivery Receipt</h3>
                             <p class="text-xs text-slate-500">Dispatch finished goods and add extra/overrun quantity</p>
                         </div>
                     </div>
@@ -1935,6 +1950,24 @@ function openCreateDRModal(poNumber, joNumber, batchId, batchNumber, deliveredQt
                         </div>
                         <div>Batch: <strong class="text-indigo-600 font-mono">${batchNumber}</strong> (${productName})</div>
                     </div>
+
+                    ${existingDRs.length > 0 ? `
+                        <div class="p-3.5 bg-emerald-50 border border-emerald-300 rounded-2xl space-y-2">
+                            <label class="block text-emerald-950 font-bold">📄 Delivery Receipt (D.R) Number Choice:</label>
+                            <div class="space-y-1.5">
+                                <label class="flex items-center gap-2.5 cursor-pointer bg-white p-2.5 rounded-xl border-2 border-emerald-500 shadow-sm">
+                                    <input type="radio" name="dr_target_mode" value="${existingDRs[0].id}" checked class="text-emerald-600 scale-110">
+                                    <span class="text-slate-900 font-bold">
+                                        Isama sa umiiral na <span class="font-mono text-emerald-700">${existingDRs[0].dr_number}</span> <span class="text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded text-[10px] font-black uppercase">Same D.R Number</span>
+                                    </span>
+                                </label>
+                                <label class="flex items-center gap-2.5 cursor-pointer bg-white p-2 rounded-xl border border-slate-200">
+                                    <input type="radio" name="dr_target_mode" value="NEW" class="text-slate-600 scale-110">
+                                    <span class="text-slate-600">Gumawa ng Bagong D.R Number (New Separate DR)</span>
+                                </label>
+                            </div>
+                        </div>
+                    ` : ''}
 
                     <!-- Quantity Breakdown & Overrun / Dagdag Calculator -->
                     <div class="p-4 bg-emerald-50/60 border border-emerald-200 rounded-2xl space-y-3">
@@ -1992,7 +2025,7 @@ function openCreateDRModal(poNumber, joNumber, batchId, batchNumber, deliveredQt
                     <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
                         <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition">Cancel</button>
                         <button type="submit" id="btn-submit-dr" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-black shadow-lg shadow-emerald-600/30 transition flex items-center gap-1.5">
-                            <span>🚚 Issue DR & Dispatch</span>
+                            <span>🚚 Issue / Update DR</span>
                         </button>
                     </div>
                 </form>
@@ -2039,6 +2072,10 @@ async function submitCreateDR(e, poNumber, batchId) {
         return;
     }
 
+    // Check if target is existing DR
+    const drTargetMode = document.querySelector('input[name="dr_target_mode"]:checked')?.value;
+    const existingDrId = (drTargetMode && drTargetMode !== 'NEW') ? drTargetMode : null;
+
     // Fetch PO details to get product ID and PO ID
     const poListRes = await NKB.api(`/api/orders?search=${encodeURIComponent(poNumber)}`);
     if (!poListRes.success || !poListRes.data || poListRes.data.length === 0) {
@@ -2059,6 +2096,7 @@ async function submitCreateDR(e, poNumber, batchId) {
         body: JSON.stringify({
             po_id: po.id,
             jo_id: batch.jo_id,
+            existing_dr_id: existingDrId,
             driver_name: driverName,
             vehicle_plate: vehiclePlate,
             notes,
@@ -2069,11 +2107,161 @@ async function submitCreateDR(e, poNumber, batchId) {
     });
 
     if (res.success) {
-        NKB.showToast(`Delivery Receipt ${res.data.dr_number} created with ${NKB.formatNumber(deliveredQty)} pcs!`, 'success');
+        NKB.showToast(`Delivery Receipt ${res.data.dr_number} successfully ${existingDrId ? 'updated (Same DR Number)' : 'created'} with ${NKB.formatNumber(deliveredQty)} pcs!`, 'success');
         closeModal();
         switchTab('deliveries');
     } else {
         NKB.showToast(res.error || 'Failed to create DR.', 'error');
+    }
+}
+
+// 6b. Add Quantity to Existing DR Modal (Same DR Number)
+async function openAddQuantityToExistingDRModal(drId, drNumber, companyName) {
+    const res = await NKB.api(`/api/deliveries/${drId}`);
+    if (!res.success || !res.data) {
+        NKB.showToast('Unable to load DR details.', 'error');
+        return;
+    }
+    const dr = res.data;
+    const items = dr.items || [];
+
+    const root = document.getElementById('modals-root');
+    root.innerHTML = `
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
+            <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 border border-slate-200">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="p-2 bg-emerald-50 text-emerald-700 rounded-xl text-lg">➕</span>
+                        <div>
+                            <h3 class="text-base font-black text-slate-900">Dagdag Quantity sa D.R</h3>
+                            <p class="text-xs text-slate-500">I-retain ang parehong D.R Number: <strong class="text-emerald-700 font-mono">${drNumber}</strong></p>
+                        </div>
+                    </div>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-xl">&times;</button>
+                </div>
+
+                <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl flex justify-between items-center text-xs">
+                    <div>
+                        <div class="text-slate-500">Delivery Receipt:</div>
+                        <div class="font-extrabold text-emerald-900 text-sm font-mono">${drNumber}</div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-slate-500">Client:</div>
+                        <div class="font-bold text-slate-800">${companyName}</div>
+                    </div>
+                </div>
+
+                <form onsubmit="submitAddQuantityToExistingDR(event, '${drId}', '${drNumber}')" class="space-y-4 text-xs font-semibold">
+                    <div class="space-y-3">
+                        <label class="block text-slate-700 font-bold">Mga Produkto sa D.R na Ito:</label>
+                        ${items.map((it, idx) => `
+                            <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                                <div class="flex justify-between items-center">
+                                    <span class="font-bold text-slate-800">${it.product_name}</span>
+                                    <span class="text-slate-500 font-mono text-[11px]">${it.batch_number || 'Batch'}</span>
+                                </div>
+                                <div class="flex items-center justify-between text-[11px] text-slate-600">
+                                    <span>Kasalukuyang D.R Qty: <strong class="text-slate-900">${NKB.formatNumber(it.delivered_quantity)} pcs</strong></span>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200">
+                                    <div>
+                                        <label class="block text-emerald-800 text-[11px] mb-1">➕ Dagdag na Piraso (pcs):</label>
+                                        <input type="number" id="add-item-qty-${idx}" data-item-id="${it.id}" data-product-id="${it.product_id}" data-batch-id="${it.batch_id || ''}" min="0" value="0" placeholder="0" oninput="calculateDRAppendTotal(${idx}, ${it.delivered_quantity})" class="w-full px-3 py-1.5 border-2 border-emerald-400 rounded-xl bg-white font-black text-emerald-800 text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="block text-slate-500 text-[11px] mb-1">Bagong Total sa D.R:</label>
+                                        <div id="new-item-total-${idx}" class="w-full px-3 py-1.5 bg-slate-200/70 border border-slate-300 rounded-xl font-black text-slate-800 text-sm text-right">
+                                            ${NKB.formatNumber(it.delivered_quantity)} pcs
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- Quick Buttons -->
+                                <div class="flex items-center gap-1 pt-1">
+                                    <span class="text-[9px] text-slate-400">Quick add:</span>
+                                    <button type="button" onclick="quickAppendQty(${idx}, 10, ${it.delivered_quantity})" class="px-1.5 py-0.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-800 rounded text-[9px] font-bold">+10</button>
+                                    <button type="button" onclick="quickAppendQty(${idx}, 25, ${it.delivered_quantity})" class="px-1.5 py-0.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-800 rounded text-[9px] font-bold">+25</button>
+                                    <button type="button" onclick="quickAppendQty(${idx}, 50, ${it.delivered_quantity})" class="px-1.5 py-0.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-800 rounded text-[9px] font-bold">+50</button>
+                                    <button type="button" onclick="quickAppendQty(${idx}, 100, ${it.delivered_quantity})" class="px-1.5 py-0.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-800 rounded text-[9px] font-bold">+100</button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    <div>
+                        <label class="block text-slate-600 mb-1">Dagdag Notes / Remarks</label>
+                        <input type="text" id="dr-append-notes" placeholder="e.g. Added overrun production units" class="w-full px-3 py-2 border rounded-xl bg-slate-50 text-slate-900">
+                    </div>
+
+                    <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition">Cancel</button>
+                        <button type="submit" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-black shadow-lg shadow-emerald-600/30 transition flex items-center gap-1.5">
+                            <span>✅ Update ${drNumber} (Same DR)</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+}
+
+function calculateDRAppendTotal(idx, currentQty) {
+    const extraInput = document.getElementById(`add-item-qty-${idx}`);
+    const totalDiv = document.getElementById(`new-item-total-${idx}`);
+    if (extraInput && totalDiv) {
+        const extra = parseInt(extraInput.value || '0', 10);
+        const newTotal = currentQty + (isNaN(extra) ? 0 : extra);
+        totalDiv.textContent = `${NKB.formatNumber(newTotal)} pcs`;
+    }
+}
+
+function quickAppendQty(idx, amount, currentQty) {
+    const extraInput = document.getElementById(`add-item-qty-${idx}`);
+    if (extraInput) {
+        const current = parseInt(extraInput.value || '0', 10);
+        extraInput.value = current + amount;
+        calculateDRAppendTotal(idx, currentQty);
+    }
+}
+
+async function submitAddQuantityToExistingDR(e, drId, drNumber) {
+    e.preventDefault();
+    const items = [];
+    let idx = 0;
+    while (true) {
+        const input = document.getElementById(`add-item-qty-${idx}`);
+        if (!input) break;
+        const extraQty = parseInt(input.value || '0', 10);
+        if (extraQty > 0) {
+            items.push({
+                product_id: input.getAttribute('data-product-id'),
+                batch_id: input.getAttribute('data-batch-id') || null,
+                delivered_quantity: extraQty
+            });
+        }
+        idx++;
+    }
+
+    if (items.length === 0) {
+        NKB.showToast('Please enter at least 1 pcs to add to the DR.', 'warning');
+        return;
+    }
+
+    const extraNotes = document.getElementById('dr-append-notes')?.value || '';
+
+    const res = await NKB.api(`/api/deliveries/${drId}/add-quantity`, {
+        method: 'POST',
+        body: JSON.stringify({
+            items,
+            extra_notes: extraNotes
+        })
+    });
+
+    if (res.success) {
+        NKB.showToast(`Successfully added quantity to ${drNumber} (Same D.R Number preserved)!`, 'success');
+        closeModal();
+        loadDeliveries();
+    } else {
+        NKB.showToast(res.error || 'Failed to update DR quantity.', 'error');
     }
 }
 

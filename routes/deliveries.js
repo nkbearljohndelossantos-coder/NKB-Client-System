@@ -122,10 +122,10 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
 
 /**
  * POST /api/deliveries
- * Admin / Warehouse / Production creates a new Delivery Receipt
+ * Admin / Warehouse / Production creates or appends to a Delivery Receipt
  */
 router.post('/', authenticateToken, requireRoles('ADMIN', 'SUPER_ADMIN', 'WAREHOUSE', 'PRODUCTION'), (req, res) => {
-    const { po_id, jo_id, delivery_date, driver_name, vehicle_plate, notes, items } = req.body;
+    const { po_id, jo_id, delivery_date, driver_name, vehicle_plate, notes, items, existing_dr_id } = req.body;
 
     if (!po_id || !items || !Array.isArray(items) || items.length === 0) {
         return res.status(400).json({ success: false, error: 'PO ID and at least one delivery item are required.' });
@@ -141,26 +141,49 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'SUPER_ADMIN', 'WAREHO
     }
 
     const createDrTx = db.transaction(() => {
-        const drId = uuidv4();
-        const drNumber = getNextDocumentNumber('DR');
+        let drId = existing_dr_id;
+        let drNumber = null;
 
-        db.prepare(`
-            INSERT INTO delivery_receipts
-            (id, dr_number, client_id, po_id, jo_id, delivery_date, driver_name, vehicle_plate, status, notes, dispatched_by, dispatched_at, created_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING_CLIENT_ACCEPTANCE', ?, ?, datetime('now'), ?)
-        `).run(
-            drId,
-            drNumber,
-            po.client_id,
-            po_id,
-            jo_id || null,
-            delivery_date || new Date().toISOString().split('T')[0],
-            driver_name || null,
-            vehicle_plate || null,
-            notes || null,
-            req.user.id,
-            req.user.id
-        );
+        if (drId) {
+            const existingDR = db.prepare('SELECT * FROM delivery_receipts WHERE id = ?').get(drId);
+            if (!existingDR) {
+                throw new Error('Existing Delivery Receipt not found.');
+            }
+            drNumber = existingDR.dr_number;
+            
+            // Update notes/driver if provided
+            if (driver_name || vehicle_plate || notes) {
+                db.prepare(`
+                    UPDATE delivery_receipts 
+                    SET driver_name = COALESCE(?, driver_name),
+                        vehicle_plate = COALESCE(?, vehicle_plate),
+                        notes = CASE WHEN ? IS NOT NULL THEN COALESCE(notes, '') || ' | ' || ? ELSE notes END,
+                        updated_at = datetime('now')
+                    WHERE id = ?
+                `).run(driver_name || null, vehicle_plate || null, notes || null, notes || null, drId);
+            }
+        } else {
+            drId = uuidv4();
+            drNumber = getNextDocumentNumber('DR');
+
+            db.prepare(`
+                INSERT INTO delivery_receipts
+                (id, dr_number, client_id, po_id, jo_id, delivery_date, driver_name, vehicle_plate, status, notes, dispatched_by, dispatched_at, created_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING_CLIENT_ACCEPTANCE', ?, ?, datetime('now'), ?)
+            `).run(
+                drId,
+                drNumber,
+                po.client_id,
+                po_id,
+                jo_id || null,
+                delivery_date || new Date().toISOString().split('T')[0],
+                driver_name || null,
+                vehicle_plate || null,
+                notes || null,
+                req.user.id,
+                req.user.id
+            );
+        }
 
         const insertItemStmt = db.prepare(`
             INSERT INTO delivery_items
@@ -174,18 +197,34 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'SUPER_ADMIN', 'WAREHO
                 throw new Error('Delivered quantity must be greater than 0.');
             }
 
+            // Check if item already exists in this DR (e.g. adding extra overrun to same batch/product)
+            let existingItem = null;
+            if (item.batch_id) {
+                existingItem = db.prepare('SELECT * FROM delivery_items WHERE dr_id = ? AND batch_id = ?').get(drId, item.batch_id);
+            } else if (item.product_id) {
+                existingItem = db.prepare('SELECT * FROM delivery_items WHERE dr_id = ? AND product_id = ?').get(drId, item.product_id);
+            }
+
             // Fetch PO item price
             const poItem = db.prepare('SELECT unit_price FROM purchase_order_items WHERE po_id = ? AND product_id = ?').get(po_id, item.product_id);
             const unitPrice = item.unit_price !== undefined ? parseFloat(item.unit_price) : (poItem ? poItem.unit_price : 0.0);
 
-            insertItemStmt.run(
-                uuidv4(),
-                drId,
-                item.product_id,
-                item.batch_id,
-                deliveredQty,
-                unitPrice
-            );
+            if (existingItem) {
+                db.prepare(`
+                    UPDATE delivery_items 
+                    SET delivered_quantity = delivered_quantity + ?
+                    WHERE id = ?
+                `).run(deliveredQty, existingItem.id);
+            } else {
+                insertItemStmt.run(
+                    uuidv4(),
+                    drId,
+                    item.product_id,
+                    item.batch_id || null,
+                    deliveredQty,
+                    unitPrice
+                );
+            }
 
             // Mark production batch as COMPLETED / DISPATCHED
             if (item.batch_id) {
@@ -207,7 +246,7 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'SUPER_ADMIN', 'WAREHO
                 quantity: -deliveredQty,
                 referenceType: 'DR',
                 referenceId: drNumber,
-                notes: `Dispatched on ${drNumber} to client`,
+                notes: `Dispatched on ${drNumber} to client (Qty: +${deliveredQty})`,
                 createdBy: req.user.id
             });
         }
@@ -227,10 +266,10 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'SUPER_ADMIN', 'WAREHO
             userId: req.user.id,
             userName: req.user.name,
             userRole: req.user.role,
-            action: 'CREATE_DR',
+            action: existing_dr_id ? 'APPEND_DR_ITEMS' : 'CREATE_DR',
             entityType: 'DELIVERY_RECEIPT',
             entityId: drNumber,
-            details: { drId, drNumber, poId: po_id, itemsCount: items.length }
+            details: { drId, drNumber, poId: po_id, itemsCount: items.length, isAppended: !!existing_dr_id }
         });
 
         return { drId, drNumber };
@@ -240,6 +279,111 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'SUPER_ADMIN', 'WAREHO
         const result = createDrTx();
         const createdDR = db.prepare('SELECT * FROM delivery_receipts WHERE id = ?').get(result.drId);
         return res.status(201).json({ success: true, data: createdDR });
+    } catch (err) {
+        return res.status(400).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/deliveries/:id/add-quantity
+ * Direct endpoint to add extra quantity / batch to an existing DR (Same DR Number!)
+ */
+router.post('/:id/add-quantity', authenticateToken, requireRoles('ADMIN', 'SUPER_ADMIN', 'WAREHOUSE', 'PRODUCTION'), (req, res) => {
+    const { id } = req.params;
+    const { items, extra_notes } = req.body;
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ success: false, error: 'At least one item with quantity is required.' });
+    }
+
+    const dr = db.prepare('SELECT * FROM delivery_receipts WHERE id = ?').get(id);
+    if (!dr) {
+        return res.status(404).json({ success: false, error: 'Delivery Receipt not found.' });
+    }
+
+    if (dr.status !== 'PENDING_CLIENT_ACCEPTANCE' && dr.status !== 'DISPATCHED') {
+        return res.status(400).json({ success: false, error: `Cannot add items to DR in status "${dr.status}".` });
+    }
+
+    const addItemsTx = db.transaction(() => {
+        for (const item of items) {
+            const addedQty = parseInt(item.delivered_quantity || item.quantity);
+            if (isNaN(addedQty) || addedQty <= 0) {
+                throw new Error('Added quantity must be greater than 0.');
+            }
+
+            let existingItem = null;
+            if (item.batch_id) {
+                existingItem = db.prepare('SELECT * FROM delivery_items WHERE dr_id = ? AND batch_id = ?').get(id, item.batch_id);
+            } else if (item.product_id) {
+                existingItem = db.prepare('SELECT * FROM delivery_items WHERE dr_id = ? AND product_id = ?').get(id, item.product_id);
+            }
+
+            if (existingItem) {
+                db.prepare(`
+                    UPDATE delivery_items
+                    SET delivered_quantity = delivered_quantity + ?
+                    WHERE id = ?
+                `).run(addedQty, existingItem.id);
+            } else {
+                const poItem = db.prepare('SELECT unit_price FROM purchase_order_items WHERE po_id = ? AND product_id = ?').get(dr.po_id, item.product_id);
+                const unitPrice = item.unit_price !== undefined ? parseFloat(item.unit_price) : (poItem ? poItem.unit_price : 0.0);
+
+                db.prepare(`
+                    INSERT INTO delivery_items
+                    (id, dr_id, product_id, batch_id, delivered_quantity, accepted_quantity, rejected_quantity, unit_price)
+                    VALUES (?, ?, ?, ?, ?, 0, 0, ?)
+                `).run(uuidv4(), id, item.product_id, item.batch_id || null, addedQty, unitPrice);
+            }
+
+            if (item.batch_id) {
+                db.prepare("UPDATE production_batches SET status = 'COMPLETED', updated_at = datetime('now') WHERE id = ?").run(item.batch_id);
+                db.prepare(`
+                    UPDATE job_orders 
+                    SET status = 'COMPLETED', updated_at = datetime('now') 
+                    WHERE id = (SELECT jo_id FROM production_batches WHERE id = ?)
+                `).run(item.batch_id);
+            }
+
+            recordMovement({
+                productId: item.product_id,
+                batchId: item.batch_id,
+                movementType: 'DELIVERY',
+                quantity: -addedQty,
+                referenceType: 'DR',
+                referenceId: dr.dr_number,
+                notes: `Added extra +${addedQty} pcs to same DR ${dr.dr_number}`,
+                createdBy: req.user.id
+            });
+        }
+
+        if (extra_notes) {
+            db.prepare(`
+                UPDATE delivery_receipts
+                SET notes = COALESCE(notes, '') || ' | ' || ?,
+                    updated_at = datetime('now')
+                WHERE id = ?
+            `).run(extra_notes, id);
+        }
+
+        logAudit({
+            userId: req.user.id,
+            userName: req.user.name,
+            userRole: req.user.role,
+            action: 'DR_ADD_QUANTITY',
+            entityType: 'DR',
+            entityId: dr.dr_number,
+            details: `Added extra quantity to same DR ${dr.dr_number}`,
+            ipAddress: req.ip
+        });
+
+        return { dr_number: dr.dr_number, id: dr.id };
+    });
+
+    try {
+        const result = addItemsTx();
+        const updatedDR = db.prepare('SELECT * FROM delivery_receipts WHERE id = ?').get(result.id);
+        return res.json({ success: true, data: updatedDR, message: `Successfully added quantity to ${result.dr_number} (Same DR Number)!` });
     } catch (err) {
         return res.status(400).json({ success: false, error: err.message });
     }
