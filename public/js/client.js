@@ -285,8 +285,8 @@ function openClientPODoubleCheckModal() {
                     <div class="flex items-center gap-2">
                         <span class="p-2 bg-amber-100 text-amber-800 rounded-2xl text-xl">🔍</span>
                         <div>
-                            <h3 class="text-lg font-black text-slate-900">Double Check & Verification (Purchase Order)</h3>
-                            <p class="text-xs text-indigo-600 font-bold">Paki-review kung tama ang lahat ng detalye bago mag-submit</p>
+                            <h3 class="text-lg font-black text-slate-900">Purchase Order Verification & Review</h3>
+                            <p class="text-xs text-indigo-600 font-bold">Please review order details and verify quantities before submission</p>
                         </div>
                     </div>
                     <button onclick="closeClientModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
@@ -312,13 +312,13 @@ function openClientPODoubleCheckModal() {
                     <!-- Products Review Table -->
                     <div class="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
                         <div class="p-2.5 bg-indigo-50/70 border-b border-indigo-100 flex justify-between items-center">
-                            <span class="font-extrabold text-indigo-950 uppercase tracking-wider text-[11px]">Listahan ng Produkto (${pendingClientPOPayload.items.length} items)</span>
-                            <span class="text-[11px] text-slate-500 font-semibold">Tiyakin ang Tamang Dami at Presyo</span>
+                            <span class="font-extrabold text-indigo-950 uppercase tracking-wider text-[11px]">Order Line Items (${pendingClientPOPayload.items.length} items)</span>
+                            <span class="text-[11px] text-slate-500 font-semibold">Verify Quantities and Contract Rates</span>
                         </div>
                         <table class="w-full text-left text-xs">
                             <thead class="bg-slate-100/70 border-b border-slate-200 text-slate-700 font-bold uppercase text-[10px]">
                                 <tr>
-                                    <th class="py-2 px-3">Produkto</th>
+                                    <th class="py-2 px-3">Product</th>
                                     <th class="py-2 px-3 text-right">Target Qty</th>
                                     <th class="py-2 px-3 text-right">Unit Rate</th>
                                     <th class="py-2 px-3 text-right">Subtotal</th>
@@ -349,7 +349,7 @@ function openClientPODoubleCheckModal() {
                     <!-- Grand Summary Box -->
                     <div class="p-4 bg-indigo-950 text-white rounded-2xl shadow flex justify-between items-center">
                         <div>
-                            <div class="text-[10px] uppercase tracking-wider text-indigo-300 font-bold">Kabuuan (Total Output)</div>
+                            <div class="text-[10px] uppercase tracking-wider text-indigo-300 font-bold">Total Order Output</div>
                             <div class="text-base font-black text-white">${NKB.formatNumber(totalQty)} pcs (${pendingClientPOPayload.items.length} Lines)</div>
                         </div>
                         <div class="text-right">
@@ -362,14 +362,14 @@ function openClientPODoubleCheckModal() {
                 <!-- Action Buttons -->
                 <div class="flex flex-col sm:flex-row justify-between items-center gap-3 pt-3 border-t border-slate-100 flex-shrink-0">
                     <button type="button" onclick="closeClientModal()" class="w-full sm:w-auto px-4 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border-2 border-amber-300 rounded-xl font-extrabold text-xs transition flex items-center justify-center gap-1.5 shadow-sm">
-                        <span>✏️ May Mali / Baguhin (Edit Cart)</span>
+                        <span>✏️ Edit / Modify Cart</span>
                     </button>
                     <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
                         <button type="button" onclick="closeClientModal()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition">
                             Cancel
                         </button>
                         <button type="button" id="btn-client-confirm-po" onclick="confirmAndExecuteClientPOSubmit()" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-black text-xs shadow-lg shadow-emerald-600/30 transition flex items-center justify-center gap-1.5">
-                            <span>✅ Tama Lahat — Confirm & Submit P.O</span>
+                            <span>✅ Confirm & Submit Purchase Order</span>
                         </button>
                     </div>
                 </div>
