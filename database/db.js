@@ -46,6 +46,28 @@ if (useMysql) {
         }
     }
 
+    // Migration: ensure batch_code_template exists
+    try {
+        db.exec('ALTER TABLE products ADD COLUMN batch_code_template TEXT;');
+    } catch (e) {}
+    try {
+        db.exec('ALTER TABLE client_product_prices ADD COLUMN batch_code_template TEXT;');
+    } catch (e) {}
+
+    // Auto-update batch_code_template for existing products from catalog
+    try {
+        const { findBatchTemplate } = require('../services/batchCodingService');
+        const prods = db.prepare('SELECT id, name, sku, batch_code_template FROM products').all();
+        for (const p of prods) {
+            if (!p.batch_code_template) {
+                const tmpl = findBatchTemplate(p.name, p.sku);
+                db.prepare('UPDATE products SET batch_code_template = ? WHERE id = ?').run(tmpl, p.id);
+            }
+        }
+    } catch (err) {
+        console.warn('Batch template update warning:', err.message);
+    }
+
     db.transaction = function (fn) {
         return function (...args) {
             db.exec('BEGIN TRANSACTION;');

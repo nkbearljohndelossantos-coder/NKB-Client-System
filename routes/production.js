@@ -4,8 +4,59 @@ const { v4: uuidv4 } = require('uuid');
 const db = require('../database/db');
 const { authenticateToken, requireRoles } = require('../middleware/auth');
 const { getNextDocumentNumber } = require('../services/documentNumberService');
+const { generateBatchCode, findBatchTemplate, getJulianDay, get2DigitYear } = require('../services/batchCodingService');
 const { recordMovement } = require('../services/inventoryService');
 const { logAudit } = require('../services/auditService');
+
+/**
+ * GET /api/production/suggest-batch-code
+ * Preview automatic Julian Date + Brand Initial Batch Code
+ */
+router.get('/suggest-batch-code', authenticateToken, (req, res) => {
+    const { jo_id, product_id, date, custom_name } = req.query;
+    let productName = custom_name || '';
+    let sku = '';
+    let template = '';
+
+    if (jo_id) {
+        const jo = db.prepare(`
+            SELECT jo.*, p.name as product_name, p.sku, p.batch_code_template
+            FROM job_orders jo
+            JOIN products p ON jo.product_id = p.id
+            WHERE jo.id = ?
+        `).get(jo_id);
+        if (jo) {
+            productName = jo.product_name;
+            sku = jo.sku;
+            template = jo.batch_code_template;
+        }
+    } else if (product_id) {
+        const prod = db.prepare('SELECT * FROM products WHERE id = ?').get(product_id);
+        if (prod) {
+            productName = prod.name;
+            sku = prod.sku;
+            template = prod.batch_code_template;
+        }
+    }
+
+    const prodDate = date ? new Date(date) : new Date();
+    const batchCode = generateBatchCode({
+        productName,
+        sku,
+        customTemplate: template,
+        productionDate: prodDate
+    });
+
+    return res.json({
+        success: true,
+        data: {
+            batch_code: batchCode,
+            template: findBatchTemplate(productName, sku, template),
+            julian_day: getJulianDay(prodDate),
+            year_2digit: get2DigitYear(prodDate)
+        }
+    });
+});
 
 /**
  * GET /api/production/batches
@@ -107,17 +158,17 @@ router.get('/batches/:id', authenticateToken, (req, res) => {
 
 /**
  * POST /api/production/batches
- * Create a new production batch
+ * Create a new production batch with Automatic Julian Batch Coding
  */
 router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), (req, res) => {
-    const { jo_id, target_quantity, formula_code, production_date, expiry_date } = req.body;
+    const { jo_id, target_quantity, formula_code, production_date, expiry_date, batch_number: customBatchNumber } = req.body;
 
     if (!jo_id || !target_quantity) {
         return res.status(400).json({ success: false, error: 'Job Order ID and Target Quantity are required.' });
     }
 
     const jo = db.prepare(`
-        SELECT jo.*, p.shelf_life_months, p.formula_code as default_formula
+        SELECT jo.*, p.name as product_name, p.sku, p.batch_code_template, p.shelf_life_months, p.formula_code as default_formula
         FROM job_orders jo
         JOIN products p ON jo.product_id = p.id
         WHERE jo.id = ?
@@ -127,15 +178,36 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
         return res.status(404).json({ success: false, error: 'Job Order not found.' });
     }
 
+    const prodDate = production_date ? new Date(production_date) : new Date();
+
+    // Auto-generate Julian Batch Code (e.g. BSPTS26-247)
+    let baseBatchNumber = (customBatchNumber && customBatchNumber.trim()) 
+        ? customBatchNumber.trim()
+        : generateBatchCode({
+            productName: jo.product_name,
+            sku: jo.sku,
+            customTemplate: jo.batch_code_template,
+            productionDate: prodDate
+        });
+
+    // Check if batch number already exists and handle sub-sequences safely
+    let batchNumber = baseBatchNumber;
+    let counter = 1;
+    while (true) {
+        const existing = db.prepare('SELECT id FROM production_batches WHERE batch_number = ?').get(batchNumber);
+        if (!existing) break;
+        counter++;
+        batchNumber = `${baseBatchNumber}-${String(counter).padStart(2, '0')}`;
+    }
+
     const batchId = uuidv4();
-    const batchNumber = getNextDocumentNumber('BAT');
 
     // Calculate expiry date if not provided
     let expDate = expiry_date;
     if (!expDate) {
-        const prodDate = production_date ? new Date(production_date) : new Date();
-        prodDate.setMonth(prodDate.getMonth() + (jo.shelf_life_months || 24));
-        expDate = prodDate.toISOString().split('T')[0];
+        const exp = new Date(prodDate);
+        exp.setMonth(exp.getMonth() + (jo.shelf_life_months || 24));
+        expDate = exp.toISOString().split('T')[0];
     }
 
     db.prepare(`
