@@ -24,26 +24,34 @@
                 print-color-adjust: exact !important;
             }
             .no-print { display: none !important; }
-            .half-sheet {
+            .sheet-container {
                 box-shadow: none !important;
-                border: 1px solid #cbd5e1 !important;
-                padding: 8px 12px !important;
+                border: 1px solid #000000 !important;
+                padding: 10px 14px !important;
                 margin: 0 !important;
                 max-width: 100% !important;
-                border-radius: 6px !important;
+                border-radius: 0 !important;
                 page-break-inside: avoid !important;
             }
-            .header-logo { height: 32px !important; }
+            .header-logo { height: 38px !important; }
         }
         @media screen {
-            .half-sheet {
+            .sheet-container {
                 max-width: 8.5in;
                 min-height: 5.5in;
+                box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1);
             }
+        }
+        .doc-blue-header { background-color: #3b71ca; color: #ffffff; }
+        .doc-grey-header { background-color: #d1d5db; color: #111827; }
+        .doc-table-header { background-color: #3b71ca; color: #ffffff; }
+        .doc-total-bar { background-color: #3b71ca; color: #ffffff; }
+        .doc-table td, .doc-table th {
+            border: 1px solid #cbd5e1;
         }
     </style>
 </head>
-<body class="bg-slate-100 min-h-screen p-2 sm:p-6 text-slate-900 antialiased text-xs">
+<body class="bg-slate-100 min-h-screen p-2 sm:p-6 text-slate-900 antialiased text-[11px] font-sans">
 
     <!-- Action Bar (Hidden on Print) -->
     <div class="max-w-4xl mx-auto mb-4 flex justify-between items-center no-print">
@@ -51,110 +59,171 @@
             ← Back to Portal
         </a>
         <div class="flex items-center gap-2">
-            <span class="text-[11px] text-slate-500 font-medium">Layout: <strong>Half Bond Paper (8.5" × 5.5")</strong></span>
-            <button onclick="window.print()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold shadow-md shadow-indigo-600/30 transition flex items-center gap-1.5">
-                <span>🖨️ Print Invoice (Half Sheet)</span>
+            <span class="text-[11px] text-slate-500 font-medium">Layout: <strong>Work Order / Corporate Style (8.5" × 5.5")</strong></span>
+            <button onclick="window.print()" class="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold shadow-md shadow-blue-600/30 transition flex items-center gap-1.5">
+                <span>🖨️ Print Sales Invoice</span>
             </button>
         </div>
     </div>
 
-    <!-- Half Bond Paper Sheet -->
-    <div class="half-sheet mx-auto bg-white p-5 rounded-2xl shadow-lg border border-slate-200 space-y-2.5" id="invoice-printable-sheet">
+    <!-- Main Sheet matching Reference Image Structure -->
+    <div class="sheet-container mx-auto bg-white p-6 sm:p-8 border border-slate-900 text-slate-900 space-y-3" id="invoice-printable-sheet">
         
-        <!-- Header -->
-        <div class="flex justify-between items-center border-b border-slate-200 pb-2">
-            <div class="flex items-center gap-3">
-                <img src="/images/nkb-logo.png" alt="NKB Logo" class="header-logo h-10 w-auto object-contain">
+        <!-- HEADER: Left Company Info | Right Document Title & Blue Bar Boxes -->
+        <div class="flex justify-between items-start">
+            <div class="flex items-start gap-3">
+                <img src="/images/nkb-logo.png" alt="NKB Logo" class="header-logo h-12 w-auto object-contain mt-0.5">
                 <div>
-                    <h1 class="text-base font-black text-slate-900 tracking-tight leading-tight">NKB MANUFACTURING CORP.</h1>
-                    <p class="text-[9px] text-slate-500 font-medium leading-tight">TIN: 000-123-456-789-00000 | VAT Registered</p>
-                    <p class="text-[9px] text-slate-500 leading-tight">Sampaguita Village 2, B4 L5, Twig St, Bacoor, 4102 Cavite</p>
-                    <p class="text-[9px] text-slate-500 leading-tight">Billing Dept: customerservice@nkbmanufacturing.com | +63 (2) 8888-0000</p>
+                    <h1 class="text-xl font-bold text-blue-700 tracking-tight leading-tight">NKB Manufacturing Corp</h1>
+                    <div class="text-[10px] text-blue-900/80 leading-tight space-y-0.5 mt-0.5 font-medium">
+                        <p>Sampaguita Village 2, B4 L5, Twig St, Bacoor, 4102 Cavite</p>
+                        <p>TIN: 000-123-456-789-00000 | VAT Registered</p>
+                        <p>Phone: +63 (2) 8888-0000 | Email: customerservice@nkbmanufacturing.com</p>
+                        <p class="text-blue-700 font-semibold">www.nkbmanufacturing.com</p>
+                    </div>
                 </div>
             </div>
-            <div class="text-right">
-                <span class="inline-block px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded text-[10px] font-extrabold tracking-wider border border-indigo-200">
-                    SALES INVOICE
-                </span>
-                <div id="si-number-display" class="text-sm font-black text-slate-900 font-mono mt-0.5">SI-XXXX-XXXXXX</div>
-                <div class="text-[10px] text-slate-500">Date: <strong id="si-date-display" class="text-slate-800">-</strong> | Due: <strong id="si-due-display" class="text-rose-600 font-mono">-</strong></div>
+
+            <div class="w-64 text-right space-y-1.5">
+                <h2 class="text-2xl font-bold text-slate-500 tracking-wider text-right uppercase">SALES INVOICE</h2>
+                
+                <!-- Invoice Number Box -->
+                <div class="rounded overflow-hidden border border-blue-600 text-center">
+                    <div class="doc-blue-header font-bold uppercase text-[9.5px] py-0.5 tracking-wider">INVOICE #</div>
+                    <div id="si-number-display" class="bg-slate-100 font-bold font-mono text-slate-900 text-[11px] py-0.5">SI-XXXX-XXXXXX</div>
+                </div>
+
+                <!-- Date Box -->
+                <div class="rounded overflow-hidden border border-blue-600 text-center">
+                    <div class="doc-blue-header font-bold uppercase text-[9.5px] py-0.5 tracking-wider">DATE</div>
+                    <div id="si-date-display" class="bg-slate-100 font-bold text-slate-900 text-[10.5px] py-0.5">-</div>
+                </div>
             </div>
         </div>
 
-        <!-- Billed Client & Reference Grid -->
-        <div class="grid grid-cols-2 gap-3 text-[10px]">
-            <div class="p-2 bg-slate-50/70 rounded-lg border border-slate-200/80 space-y-0.5">
-                <span class="text-slate-400 font-bold uppercase text-[8px] block">Invoice To (Client):</span>
-                <div id="client-company-display" class="font-extrabold text-slate-900 text-[11px] leading-tight">-</div>
-                <div id="client-contact-display" class="text-slate-600 leading-tight">-</div>
-                <div id="client-address-display" class="text-slate-500 text-[9.5px] leading-tight truncate">-</div>
-                <div id="client-phone-display" class="text-slate-500 font-mono text-[9px]">-</div>
+        <!-- 3-COLUMN METADATA BAR (Prepared By | Customer ID | Payment Due) -->
+        <div class="grid grid-cols-3 border border-slate-300 text-center text-[10px]">
+            <div class="border-r border-slate-300">
+                <div class="doc-grey-header font-bold uppercase py-0.5 text-[9px]">PREPARED BY</div>
+                <div id="meta-si-prepared-by" class="py-1 font-semibold text-slate-800">Accounting & Billing Department</div>
             </div>
-            <div class="p-2 bg-slate-50/70 rounded-lg border border-slate-200/80 space-y-0.5 text-[9.5px]">
-                <span class="text-slate-400 font-bold uppercase text-[8px] block">Order & Policy Details:</span>
-                <div>PO Ref: <strong id="po-ref-display" class="text-indigo-700 font-mono font-bold">-</strong> | DR Ref: <strong id="dr-ref-display" class="text-slate-800 font-mono font-bold">-</strong></div>
-                <div>Billing Policy: <strong id="policy-display" class="text-slate-800">-</strong></div>
-                <div>Payment Status: <span id="payment-status-badge"></span></div>
+            <div class="border-r border-slate-300">
+                <div class="doc-grey-header font-bold uppercase py-0.5 text-[9px]">CUSTOMER ID</div>
+                <div id="meta-si-customer-id" class="py-1 font-semibold text-slate-800 font-mono">-</div>
+            </div>
+            <div>
+                <div class="doc-grey-header font-bold uppercase py-0.5 text-[9px]">PAYMENT DUE DATE</div>
+                <div id="meta-si-due-date" class="py-1 font-bold text-rose-700 font-mono">-</div>
             </div>
         </div>
 
-        <!-- Line Items Table -->
-        <div class="border border-slate-200 rounded-lg overflow-hidden text-[9.5px]">
-            <table class="w-full text-left">
-                <thead class="bg-slate-900 text-white font-bold uppercase text-[8.5px]">
+        <!-- 2-COLUMN BLOCK: BILL TO | INVOICE & ORDER DETAILS -->
+        <div class="border border-blue-600 rounded overflow-hidden">
+            <div class="grid grid-cols-12 doc-blue-header font-bold uppercase text-[9.5px] py-0.5 px-2">
+                <div class="col-span-5">BILL TO (CLIENT)</div>
+                <div class="col-span-7 pl-2">ORDER & DISPATCH REFERENCES</div>
+            </div>
+            <div class="grid grid-cols-12 text-[10px] p-2 bg-white gap-2 min-h-[60px]">
+                <div class="col-span-5 space-y-0.5 border-r border-slate-200 pr-2">
+                    <div id="client-company-display" class="font-bold text-slate-900 text-[11px]">-</div>
+                    <div id="client-contact-display" class="text-slate-700 font-medium">-</div>
+                    <div id="client-address-display" class="text-slate-600 leading-tight">-</div>
+                    <div id="client-phone-display" class="text-slate-600 font-mono">-</div>
+                </div>
+                <div class="col-span-7 pl-1 space-y-0.5 text-slate-700">
+                    <div>PO Reference: <strong id="po-ref-display" class="text-blue-900 font-mono font-bold">-</strong> | DR Ref: <strong id="dr-ref-display" class="text-slate-900 font-mono font-bold">-</strong></div>
+                    <div>Manufacturing Policy: <strong id="policy-display" class="text-slate-800">-</strong></div>
+                    <div>Payment Status: <span id="payment-status-badge"></span></div>
+                    <div class="text-[9.5px] italic text-slate-500 pt-0.5">Billed strictly based on client-accepted delivery receipt count.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- LINE ITEMS TABLE -->
+        <div class="border border-slate-300 overflow-hidden">
+            <table class="w-full text-left doc-table text-[10px] border-collapse">
+                <thead class="doc-table-header font-bold uppercase text-[9px]">
                     <tr>
-                        <th class="py-1 px-2.5">Item & Description</th>
-                        <th class="py-1 px-2.5 text-center font-mono">Billed Qty</th>
-                        <th class="py-1 px-2.5 text-right">Unit Price</th>
-                        <th class="py-1 px-2.5 text-right">Subtotal</th>
+                        <th class="py-1 px-2 w-16 text-center border border-slate-300">QTY</th>
+                        <th class="py-1 px-2 border border-slate-300">DESCRIPTION</th>
+                        <th class="py-1 px-2 w-20 text-center border border-slate-300">TAXED</th>
+                        <th class="py-1 px-2 w-28 text-right border border-slate-300">UNIT PRICE</th>
+                        <th class="py-1 px-2 w-32 text-right border border-slate-300">TOTAL</th>
                     </tr>
                 </thead>
-                <tbody id="invoice-items-tbody" class="divide-y divide-slate-100 font-medium">
-                    <tr><td colspan="4" class="py-3 text-center text-slate-400">Loading invoice items...</td></tr>
+                <tbody id="invoice-items-tbody" class="divide-y divide-slate-200 font-medium">
+                    <tr><td colspan="5" class="py-4 text-center text-slate-400">Loading invoice items...</td></tr>
                 </tbody>
             </table>
         </div>
 
-        <!-- Payment Terms & Amount Summary Grid -->
-        <div class="grid grid-cols-12 gap-3 text-[10px] items-center">
-            <div class="col-span-7 p-2 bg-slate-50 rounded-lg border border-slate-200 space-y-0.5 text-[9px]">
-                <span class="text-slate-400 font-bold uppercase text-[8px] block">Payment Instructions:</span>
-                <div>Bank: <strong>BDO Unibank</strong> • Account: <strong>NKB Manufacturing Corp.</strong></div>
-                <div class="font-mono text-slate-800">Account #: 0012-3456-7890 • Gcash: 0917-123-4567</div>
+        <!-- BOTTOM BLOCK: OTHER COMMENTS & BANK INFO (Left) | TOTALS BREAKDOWN (Right) -->
+        <div class="grid grid-cols-12 gap-3 text-[10px] items-start pt-1">
+            
+            <!-- Left Comments Box -->
+            <div class="col-span-7 space-y-1">
+                <div class="border border-slate-300 overflow-hidden rounded">
+                    <div class="doc-grey-header font-bold uppercase text-[9px] py-0.5 px-2">PAYMENT INSTRUCTIONS & TERMS</div>
+                    <div class="p-2 space-y-0.5 text-slate-600 text-[9.5px] leading-tight">
+                        <p>1. Bank Transfer: <strong>BDO Unibank</strong> • Acct Name: <strong>NKB Manufacturing Corp</strong></p>
+                        <p>2. Account #: <strong>0012-3456-7890</strong> | GCash Official: <strong>0917-123-4567</strong></p>
+                        <p>3. Billing inquiries: <strong>customerservice@nkbmanufacturing.com</strong></p>
+                    </div>
+                </div>
+                <div class="text-[9.5px] text-slate-700 pt-0.5">
+                    Make checks payable to: <strong class="text-slate-900">NKB Manufacturing Corp</strong>
+                </div>
             </div>
-            <div class="col-span-5 p-2 bg-indigo-50/40 rounded-lg border border-indigo-100 space-y-0.5 text-right">
-                <div class="flex justify-between text-slate-600 text-[9.5px]">
-                    <span>Net Total:</span>
-                    <strong id="invoice-subtotal" class="text-slate-900 font-mono">₱0.00</strong>
-                </div>
-                <div class="flex justify-between text-slate-900 font-extrabold text-[11px] border-t border-indigo-200/60 pt-0.5">
-                    <span>Grand Total:</span>
-                    <span id="invoice-grand-total" class="text-indigo-700 font-black font-mono">₱0.00</span>
-                </div>
+
+            <!-- Right Totals Table -->
+            <div class="col-span-5 border border-slate-300 overflow-hidden rounded text-[10px]">
+                <table class="w-full text-right">
+                    <tbody class="divide-y divide-slate-200">
+                        <tr>
+                            <td class="py-0.5 px-2 text-slate-600 font-semibold bg-slate-50">SUBTOTAL</td>
+                            <td class="py-0.5 px-2 font-bold font-mono text-slate-900" id="invoice-subtotal">₱0.00</td>
+                        </tr>
+                        <tr>
+                            <td class="py-0.5 px-2 text-slate-600 font-semibold bg-slate-50">TAXABLE</td>
+                            <td class="py-0.5 px-2 font-mono text-slate-800" id="invoice-taxable">₱0.00</td>
+                        </tr>
+                        <tr>
+                            <td class="py-0.5 px-2 text-slate-600 font-semibold bg-slate-50">TAX RATE</td>
+                            <td class="py-0.5 px-2 font-mono text-slate-800">12.00% VAT</td>
+                        </tr>
+                        <tr class="doc-total-bar font-bold text-[11.5px]">
+                            <td class="py-1 px-2 uppercase tracking-wider text-left text-white">TOTAL</td>
+                            <td class="py-1 px-2 font-mono text-white text-right font-black" id="invoice-grand-total">₱0.00</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
-        <!-- Signatures & Acceptance Block -->
-        <div class="grid grid-cols-2 gap-6 pt-1 border-t border-slate-200 text-[9.5px]">
-            <div>
-                <span class="text-slate-400 font-bold uppercase text-[8px] block mb-3">Prepared By:</span>
-                <div class="border-b border-slate-300 pb-0.5">
-                    <div class="font-bold text-slate-800">Accounting & Billing Dept</div>
-                    <div class="text-[8px] text-slate-400">NKB Manufacturing Corp.</div>
+        <!-- SIGNATURES & ACKNOWLEDGEMENT -->
+        <div class="pt-2 border-t border-dashed border-slate-400 text-center text-[9px] text-slate-600 space-y-3">
+            <p class="italic">I agree that all billed items and commercial quantities match delivered goods to full satisfaction.</p>
+            
+            <div class="grid grid-cols-2 gap-8 text-left pt-1">
+                <div>
+                    <div class="border-b border-slate-800 min-h-[22px] flex items-end">
+                        <span id="si-signer-name" class="font-bold text-slate-900 text-[10px]">Finance Controller / Signatory</span>
+                    </div>
+                    <div class="text-[8.5px] text-slate-500 font-semibold uppercase mt-0.5">Signature / Accounting Controller</div>
+                </div>
+                <div>
+                    <div class="border-b border-slate-800 min-h-[22px] flex items-end">
+                        <span id="si-sign-date" class="font-bold text-slate-900 text-[10px]"></span>
+                    </div>
+                    <div class="text-[8.5px] text-slate-500 font-semibold uppercase mt-0.5">Invoice / Payment Verification Date</div>
                 </div>
             </div>
-            <div>
-                <span class="text-slate-400 font-bold uppercase text-[8px] block mb-3">Authorized Sign-off:</span>
-                <div class="border-b border-slate-300 pb-0.5 flex justify-between items-end">
-                    <div class="font-bold text-slate-900">Finance Controller</div>
-                    <div class="text-emerald-700 font-bold font-mono text-[8px]">VERIFIED [DR-MATCHED]</div>
-                </div>
+
+            <div class="text-center font-bold text-blue-700 italic text-[10.5px] pt-1">
+                Thank You For Your Business!
             </div>
         </div>
 
-        <div class="text-center text-[8px] text-slate-400 pt-0.5 border-t border-slate-100">
-            NKB Manufacturing Corp. • Half Sheet Format (8.5" × 5.5") • Official Commercial Invoice
-        </div>
     </div>
 
     <script src="/js/app.js?v=2.0.4"></script>
@@ -182,7 +251,8 @@
 
                 document.getElementById('si-number-display').textContent = inv.invoice_number || '-';
                 document.getElementById('si-date-display').textContent = NKB.formatDate(inv.invoice_date || inv.created_at);
-                document.getElementById('si-due-display').textContent = inv.due_date ? NKB.formatDate(inv.due_date) : 'Due on Receipt';
+                document.getElementById('meta-si-customer-id').textContent = (inv.client_id ? inv.client_id.substring(0, 8).toUpperCase() : 'CUST-001');
+                document.getElementById('meta-si-due-date').textContent = inv.due_date ? NKB.formatDate(inv.due_date) : 'Upon Receipt';
                 document.getElementById('payment-status-badge').innerHTML = NKB.renderStatusBadge(inv.status);
 
                 document.getElementById('client-company-display').textContent = inv.company_name || 'Valued Client';
@@ -193,14 +263,14 @@
                 document.getElementById('po-ref-display').textContent = inv.po_number || '-';
                 document.getElementById('dr-ref-display').textContent = inv.dr_number || '-';
                 document.getElementById('policy-display').textContent = inv.billing_policy === 'ACTUAL_DELIVERY' 
-                    ? 'Option A (Bill Actual)' 
-                    : 'Option B (Fixed+Buffer)';
+                    ? 'Option A (Bill Actual Delivered)' 
+                    : 'Option B (Fixed + Buffer)';
 
                 const tbody = document.getElementById('invoice-items-tbody');
                 let totalAmount = 0;
 
                 if (items.length > 0) {
-                    tbody.innerHTML = items.map(item => {
+                    let rowsHtml = items.map(item => {
                         const qty = item.quantity || 0;
                         const price = item.unit_price || 0;
                         const subtotal = item.subtotal || (qty * price);
@@ -208,22 +278,41 @@
 
                         return `
                             <tr class="hover:bg-slate-50">
-                                <td class="py-1 px-2.5">
-                                    <span class="font-bold text-slate-900">${item.product_name || 'Cosmetic Product'}</span>
-                                    <span class="text-[9px] text-slate-400 ml-1 font-mono">(${item.sku || '-'})</span>
+                                <td class="py-1 px-2 text-center font-bold text-slate-900">${NKB.formatNumber(qty)}</td>
+                                <td class="py-1 px-2 font-semibold text-slate-900">
+                                    ${item.product_name || 'Cosmetic Product'} 
+                                    <span class="text-[9px] text-slate-400 font-mono font-normal ml-1">(${item.sku || '-'})</span>
                                 </td>
-                                <td class="py-1 px-2.5 text-center font-bold text-slate-900 font-mono">${NKB.formatNumber(qty)} pcs</td>
-                                <td class="py-1 px-2.5 text-right font-mono text-slate-700">${NKB.formatCurrency(price)}</td>
-                                <td class="py-1 px-2.5 text-right font-black font-mono text-indigo-900">${NKB.formatCurrency(subtotal)}</td>
+                                <td class="py-1 px-2 text-center font-semibold text-slate-700">✓</td>
+                                <td class="py-1 px-2 text-right font-mono text-slate-700">${NKB.formatCurrency(price).replace('₱', '')}</td>
+                                <td class="py-1 px-2 text-right font-bold font-mono text-slate-900">${NKB.formatCurrency(subtotal).replace('₱', '')}</td>
                             </tr>
                         `;
                     }).join('');
+
+                    // Add empty filler rows to match template grid aesthetic if fewer than 5 items
+                    const fillerCount = Math.max(0, 5 - items.length);
+                    for (let i = 0; i < fillerCount; i++) {
+                        rowsHtml += `
+                            <tr>
+                                <td class="py-1 px-2 text-center text-slate-300">&nbsp;</td>
+                                <td class="py-1 px-2">&nbsp;</td>
+                                <td class="py-1 px-2 text-center">&nbsp;</td>
+                                <td class="py-1 px-2 text-right text-slate-300">-</td>
+                                <td class="py-1 px-2 text-right text-slate-300">-</td>
+                            </tr>
+                        `;
+                    }
+
+                    tbody.innerHTML = rowsHtml;
                 } else {
-                    tbody.innerHTML = `<tr><td colspan="4" class="py-3 text-center text-slate-400">No items found.</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-slate-400">No items found.</td></tr>`;
                 }
 
                 document.getElementById('invoice-subtotal').textContent = NKB.formatCurrency(totalAmount);
+                document.getElementById('invoice-taxable').textContent = NKB.formatCurrency(totalAmount);
                 document.getElementById('invoice-grand-total').textContent = NKB.formatCurrency(inv.grand_total || totalAmount);
+                document.getElementById('si-sign-date').textContent = NKB.formatDate(inv.invoice_date || inv.created_at);
 
             } catch (err) {
                 alert('Error loading Invoice details: ' + err.message);

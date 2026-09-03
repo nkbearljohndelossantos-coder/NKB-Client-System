@@ -24,30 +24,36 @@
                 print-color-adjust: exact !important;
             }
             .no-print { display: none !important; }
-            .half-sheet {
+            .sheet-container {
                 box-shadow: none !important;
-                border: 1px solid #cbd5e1 !important;
-                padding: 8px 12px !important;
+                border: 1px solid #000000 !important;
+                padding: 10px 14px !important;
                 margin: 0 !important;
                 max-width: 100% !important;
-                border-radius: 6px !important;
+                border-radius: 0 !important;
                 page-break-inside: avoid !important;
             }
-            .compact-gap { gap: 4px !important; }
-            .compact-py { padding-top: 2px !important; padding-bottom: 2px !important; }
-            .compact-my { margin-top: 4px !important; margin-bottom: 4px !important; }
-            .signature-box { min-height: 28px !important; }
-            .header-logo { height: 32px !important; }
+            .header-logo { height: 38px !important; }
         }
         @media screen {
-            .half-sheet {
+            .sheet-container {
                 max-width: 8.5in;
                 min-height: 5.5in;
+                box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1);
             }
+        }
+        /* Template Theme Colors matching Reference */
+        .doc-blue-header { background-color: #3b71ca; color: #ffffff; }
+        .doc-grey-header { background-color: #d1d5db; color: #111827; }
+        .doc-table-header { background-color: #3b71ca; color: #ffffff; }
+        .doc-total-bar { background-color: #3b71ca; color: #ffffff; }
+        .doc-subtotal-box { background-color: #f3f4f6; }
+        .doc-table td, .doc-table th {
+            border: 1px solid #cbd5e1;
         }
     </style>
 </head>
-<body class="bg-slate-100 min-h-screen p-2 sm:p-6 text-slate-900 antialiased text-xs">
+<body class="bg-slate-100 min-h-screen p-2 sm:p-6 text-slate-900 antialiased text-[11px] font-sans">
 
     <!-- Action Bar (Hidden on Print) -->
     <div class="max-w-4xl mx-auto mb-4 flex justify-between items-center no-print">
@@ -55,108 +61,171 @@
             ← Back to Portal
         </a>
         <div class="flex items-center gap-2">
-            <span class="text-[11px] text-slate-500 font-medium">Layout: <strong>Half Bond Paper (8.5" × 5.5")</strong></span>
-            <button onclick="window.print()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold shadow-md shadow-indigo-600/30 transition flex items-center gap-1.5">
-                <span>🖨️ Print PO (Half Sheet)</span>
+            <span class="text-[11px] text-slate-500 font-medium">Layout: <strong>Work Order / Corporate Style (8.5" × 5.5")</strong></span>
+            <button onclick="window.print()" class="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold shadow-md shadow-blue-600/30 transition flex items-center gap-1.5">
+                <span>🖨️ Print Purchase Order</span>
             </button>
         </div>
     </div>
 
-    <!-- Half Bond Paper Sheet -->
-    <div class="half-sheet mx-auto bg-white p-5 rounded-2xl shadow-lg border border-slate-200 space-y-3" id="po-printable-sheet">
+    <!-- Main Sheet matching Reference Image Structure -->
+    <div class="sheet-container mx-auto bg-white p-6 sm:p-8 border border-slate-900 text-slate-900 space-y-3" id="po-printable-sheet">
         
-        <!-- Header -->
-        <div class="flex justify-between items-center border-b border-slate-200 pb-2">
-            <div class="flex items-center gap-3">
-                <img src="/images/nkb-logo.png" alt="NKB Logo" class="header-logo h-10 w-auto object-contain">
+        <!-- HEADER: Left Company Info | Right Document Title & Blue Bar Boxes -->
+        <div class="flex justify-between items-start">
+            <div class="flex items-start gap-3">
+                <img src="/images/nkb-logo.png" alt="NKB Logo" class="header-logo h-12 w-auto object-contain mt-0.5">
                 <div>
-                    <h1 class="text-base font-black text-slate-900 tracking-tight leading-tight">NKB MANUFACTURING CORP.</h1>
-                    <p class="text-[9px] text-slate-500 font-medium leading-tight">Sampaguita Village 2, B4 L5, Twig St, Bacoor, 4102 Cavite</p>
-                    <p class="text-[9px] text-slate-500 leading-tight">Tel: +63 (2) 8888-0000 | Email: customerservice@nkbmanufacturing.com</p>
+                    <h1 class="text-xl font-bold text-blue-700 tracking-tight leading-tight">NKB Manufacturing Corp</h1>
+                    <div class="text-[10px] text-blue-900/80 leading-tight space-y-0.5 mt-0.5 font-medium">
+                        <p>Sampaguita Village 2, B4 L5, Twig St, Bacoor, 4102 Cavite</p>
+                        <p>Phone: +63 (2) 8888-0000</p>
+                        <p>Email: customerservice@nkbmanufacturing.com</p>
+                        <p class="text-blue-700 font-semibold">www.nkbmanufacturing.com</p>
+                    </div>
                 </div>
             </div>
-            <div class="text-right">
-                <span class="inline-block px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded text-[10px] font-extrabold tracking-wider border border-indigo-200">
-                    PURCHASE ORDER
-                </span>
-                <div id="po-number-display" class="text-sm font-black text-slate-900 font-mono mt-0.5">PO-XXXX-XXXXXX</div>
-                <div class="text-[10px] text-slate-500">Date: <strong id="po-date-display" class="text-slate-800">-</strong></div>
+
+            <div class="w-64 text-right space-y-1.5">
+                <h2 class="text-2xl font-bold text-slate-500 tracking-wider text-right uppercase">PURCHASE ORDER</h2>
+                
+                <!-- PO Number Box -->
+                <div class="rounded overflow-hidden border border-blue-600 text-center">
+                    <div class="doc-blue-header font-bold uppercase text-[9.5px] py-0.5 tracking-wider">PURCHASE ORDER #</div>
+                    <div id="po-number-display" class="bg-slate-100 font-bold font-mono text-slate-900 text-[11px] py-0.5">PO-XXXX-XXXXXX</div>
+                </div>
+
+                <!-- Date Box -->
+                <div class="rounded overflow-hidden border border-blue-600 text-center">
+                    <div class="doc-blue-header font-bold uppercase text-[9.5px] py-0.5 tracking-wider">DATE</div>
+                    <div id="po-date-display" class="bg-slate-100 font-bold text-slate-900 text-[10.5px] py-0.5">-</div>
+                </div>
             </div>
         </div>
 
-        <!-- Client & Order Terms Grid -->
-        <div class="grid grid-cols-2 gap-4 text-[10.5px]">
-            <div class="p-2 bg-slate-50/70 rounded-lg border border-slate-200/80 space-y-0.5">
-                <span class="text-slate-400 font-bold uppercase text-[8.5px] block tracking-wider">Client (Buyer):</span>
-                <div id="client-company-display" class="font-extrabold text-slate-900 text-[11px] leading-tight">-</div>
-                <div id="client-contact-display" class="text-slate-600 leading-tight">-</div>
-                <div id="client-address-display" class="text-slate-500 text-[9.5px] leading-tight truncate">-</div>
-                <div class="text-slate-500 text-[9.5px]"><span id="client-phone-display" class="font-mono mr-2">-</span><span id="client-email-display">-</span></div>
+        <!-- 3-COLUMN METADATA BAR (Requested By | Customer ID | Department / Policy) -->
+        <div class="grid grid-cols-3 border border-slate-300 text-center text-[10px]">
+            <div class="border-r border-slate-300">
+                <div class="doc-grey-header font-bold uppercase py-0.5 text-[9px]">REQUESTED BY</div>
+                <div id="meta-requested-by" class="py-1 font-semibold text-slate-800">-</div>
             </div>
-            <div class="p-2 bg-slate-50/70 rounded-lg border border-slate-200/80 space-y-0.5 text-[10px]">
-                <span class="text-slate-400 font-bold uppercase text-[8.5px] block tracking-wider">Terms & Policy:</span>
-                <div>Billing Policy: <strong id="po-policy-display" class="text-indigo-700">-</strong></div>
-                <div>Tolerance: <strong id="po-tolerance-display" class="text-slate-900 font-mono">±10%</strong> | Status: <span id="po-status-badge"></span></div>
-                <div>Delivery Terms: <strong class="text-slate-800">Standard Production Lead Time</strong></div>
+            <div class="border-r border-slate-300">
+                <div class="doc-grey-header font-bold uppercase py-0.5 text-[9px]">CUSTOMER ID</div>
+                <div id="meta-customer-id" class="py-1 font-semibold text-slate-800 font-mono">-</div>
+            </div>
+            <div>
+                <div class="doc-grey-header font-bold uppercase py-0.5 text-[9px]">BILLING POLICY & TOLERANCE</div>
+                <div id="meta-billing-policy" class="py-1 font-semibold text-slate-800">-</div>
             </div>
         </div>
 
-        <!-- Line Items Table -->
-        <div class="border border-slate-200 rounded-lg overflow-hidden text-[10px]">
-            <table class="w-full text-left">
-                <thead class="bg-slate-900 text-white font-bold uppercase text-[9px]">
+        <!-- 2-COLUMN BLOCK: BILL TO | ORDER / JOB DETAILS -->
+        <div class="border border-blue-600 rounded overflow-hidden">
+            <div class="grid grid-cols-12 doc-blue-header font-bold uppercase text-[9.5px] py-0.5 px-2">
+                <div class="col-span-5">BILL TO</div>
+                <div class="col-span-7 pl-2">ORDER DETAILS & SPECIFICATIONS</div>
+            </div>
+            <div class="grid grid-cols-12 text-[10px] p-2 bg-white gap-2 min-h-[60px]">
+                <div class="col-span-5 space-y-0.5 border-r border-slate-200 pr-2">
+                    <div id="client-company-display" class="font-bold text-slate-900 text-[11px]">-</div>
+                    <div id="client-contact-display" class="text-slate-700 font-medium">-</div>
+                    <div id="client-address-display" class="text-slate-600 leading-tight">-</div>
+                    <div id="client-phone-display" class="text-slate-600 font-mono">-</div>
+                </div>
+                <div class="col-span-7 pl-1 space-y-0.5 text-slate-700">
+                    <div>Manufacturing Policy: <strong id="po-policy-text" class="text-blue-900">-</strong></div>
+                    <div>Batch Tolerance: <strong id="po-tolerance-text" class="text-slate-900 font-mono">±10%</strong></div>
+                    <div>Order Status: <span id="po-status-badge"></span></div>
+                    <div id="po-notes-display" class="text-[9.5px] italic text-slate-500 pt-0.5">Standard formulation and cleanroom batch compounding.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- LINE ITEMS TABLE (QTY | DESCRIPTION | TAXED / SKU | UNIT PRICE | TOTAL) -->
+        <div class="border border-slate-300 overflow-hidden">
+            <table class="w-full text-left doc-table text-[10px] border-collapse">
+                <thead class="doc-table-header font-bold uppercase text-[9px]">
                     <tr>
-                        <th class="py-1.5 px-2.5 w-8 text-center">#</th>
-                        <th class="py-1.5 px-2.5">Item & Commercial Description</th>
-                        <th class="py-1.5 px-2.5 font-mono">SKU Code</th>
-                        <th class="py-1.5 px-2.5 text-right">Target Qty</th>
-                        <th class="py-1.5 px-2.5 text-right">Unit Price</th>
-                        <th class="py-1.5 px-2.5 text-right">Subtotal</th>
+                        <th class="py-1 px-2 w-12 text-center border border-slate-300">QTY</th>
+                        <th class="py-1 px-2 border border-slate-300">DESCRIPTION</th>
+                        <th class="py-1 px-2 w-24 text-center border border-slate-300">SKU / CODE</th>
+                        <th class="py-1 px-2 w-28 text-right border border-slate-300">UNIT PRICE</th>
+                        <th class="py-1 px-2 w-32 text-right border border-slate-300">TOTAL</th>
                     </tr>
                 </thead>
-                <tbody id="po-items-tbody" class="divide-y divide-slate-100 font-medium">
-                    <tr><td colspan="6" class="py-3 text-center text-slate-400">Loading purchase order details...</td></tr>
+                <tbody id="po-items-tbody" class="divide-y divide-slate-200 font-medium">
+                    <tr><td colspan="5" class="py-4 text-center text-slate-400">Loading purchase order items...</td></tr>
                 </tbody>
             </table>
         </div>
 
-        <!-- Totals & Notes Grid -->
-        <div class="grid grid-cols-12 gap-3 text-[10px] items-center">
-            <div class="col-span-7 p-2 bg-slate-50 rounded-lg border border-slate-200 space-y-0.5">
-                <span class="text-slate-400 font-bold uppercase text-[8.5px]">Notes / Instructions:</span>
-                <p id="po-notes-display" class="text-slate-700 italic text-[9.5px] leading-tight">Standard manufacturing formulation.</p>
+        <!-- BOTTOM BLOCK: OTHER COMMENTS (Left) | TOTALS BREAKDOWN (Right) -->
+        <div class="grid grid-cols-12 gap-3 text-[10px] items-start pt-1">
+            
+            <!-- Left Comments Box -->
+            <div class="col-span-7 space-y-1">
+                <div class="border border-slate-300 overflow-hidden rounded">
+                    <div class="doc-grey-header font-bold uppercase text-[9px] py-0.5 px-2">OTHER COMMENTS / TERMS</div>
+                    <div class="p-2 space-y-0.5 text-slate-600 text-[9.5px] leading-tight">
+                        <p>1. Invoicing is governed by the agreed Manufacturing Tolerance Policy (±10%).</p>
+                        <p>2. Please refer to the P.O. # in all your correspondence and deliveries.</p>
+                        <p>3. Please send inquiries regarding this order to: <strong>customerservice@nkbmanufacturing.com</strong></p>
+                    </div>
+                </div>
+                <div class="text-[9.5px] text-slate-700 pt-0.5">
+                    Make payments payable to: <strong class="text-slate-900">NKB Manufacturing Corp</strong>
+                </div>
             </div>
-            <div class="col-span-5 p-2 bg-indigo-50/40 rounded-lg border border-indigo-100 space-y-0.5 text-right">
-                <div class="flex justify-between text-slate-600 text-[9.5px]">
-                    <span>Total Target Qty:</span>
-                    <strong id="po-total-qty" class="text-slate-900 font-mono">0 pcs</strong>
-                </div>
-                <div class="flex justify-between text-slate-900 font-extrabold text-[11px] border-t border-indigo-200/60 pt-0.5">
-                    <span>Est. Grand Total:</span>
-                    <span id="po-grand-total" class="text-indigo-700 font-black font-mono">₱0.00</span>
-                </div>
+
+            <!-- Right Totals Table -->
+            <div class="col-span-5 border border-slate-300 overflow-hidden rounded text-[10px]">
+                <table class="w-full text-right">
+                    <tbody class="divide-y divide-slate-200">
+                        <tr>
+                            <td class="py-0.5 px-2 text-slate-600 font-semibold bg-slate-50">SUBTOTAL</td>
+                            <td class="py-0.5 px-2 font-bold font-mono text-slate-900" id="po-subtotal">₱0.00</td>
+                        </tr>
+                        <tr>
+                            <td class="py-0.5 px-2 text-slate-600 font-semibold bg-slate-50">TARGET QTY</td>
+                            <td class="py-0.5 px-2 font-mono text-slate-800" id="po-total-qty">0 pcs</td>
+                        </tr>
+                        <tr>
+                            <td class="py-0.5 px-2 text-slate-600 font-semibold bg-slate-50">TAX RATE</td>
+                            <td class="py-0.5 px-2 font-mono text-slate-800">12.00% VAT</td>
+                        </tr>
+                        <tr class="doc-total-bar font-bold text-[11.5px]">
+                            <td class="py-1 px-2 uppercase tracking-wider text-left text-white">TOTAL</td>
+                            <td class="py-1 px-2 font-mono text-white text-right font-black" id="po-grand-total">₱0.00</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
-        <!-- Signatures Block -->
-        <div class="grid grid-cols-2 gap-6 pt-2 border-t border-slate-200 text-[9.5px]">
-            <div>
-                <span class="text-slate-400 font-bold uppercase text-[8px] block mb-3">Prepared / Authorized By:</span>
-                <div class="border-b border-slate-300 pb-0.5">
-                    <div id="client-signature-name" class="font-bold text-slate-800">Authorized Client Representative</div>
+        <!-- SIGNATURES & ACKNOWLEDGEMENT -->
+        <div class="pt-2 border-t border-dashed border-slate-400 text-center text-[9px] text-slate-600 space-y-3">
+            <p class="italic">I agree that all order specifications, formulations, and terms have been reviewed and accepted.</p>
+            
+            <div class="grid grid-cols-2 gap-8 text-left pt-1">
+                <div>
+                    <div class="border-b border-slate-800 min-h-[22px] flex items-end">
+                        <span id="client-sign-name" class="font-bold text-slate-900 text-[10px]"></span>
+                    </div>
+                    <div class="text-[8.5px] text-slate-500 font-semibold uppercase mt-0.5">Signature / Authorized Client Representative</div>
+                </div>
+                <div>
+                    <div class="border-b border-slate-800 min-h-[22px] flex items-end">
+                        <span id="po-sign-date" class="font-bold text-slate-900 text-[10px]"></span>
+                    </div>
+                    <div class="text-[8.5px] text-slate-500 font-semibold uppercase mt-0.5">Completed Date</div>
                 </div>
             </div>
-            <div>
-                <span class="text-slate-400 font-bold uppercase text-[8px] block mb-3">Accepted / Conformed By:</span>
-                <div class="border-b border-slate-300 pb-0.5">
-                    <div class="font-bold text-slate-800">NKB Operations & Production Head</div>
-                </div>
+
+            <div class="text-center font-bold text-blue-700 italic text-[10.5px] pt-1">
+                Thank You For Your Business!
             </div>
         </div>
 
-        <div class="text-center text-[8px] text-slate-400 pt-1 border-t border-slate-100">
-            NKB Manufacturing Corp. • Half Sheet Format (8.5" × 5.5") • ISO/GMP Cosmetic Laboratory
-        </div>
     </div>
 
     <script src="/js/app.js?v=2.0.4"></script>
@@ -186,24 +255,28 @@
                 document.getElementById('po-date-display').textContent = NKB.formatDate(po.po_date || po.created_at);
                 document.getElementById('po-status-badge').innerHTML = NKB.renderStatusBadge(po.status);
 
+                document.getElementById('meta-requested-by').textContent = po.contact_person || po.creator_name || 'Client Buyer';
+                document.getElementById('meta-customer-id').textContent = (po.client_id ? po.client_id.substring(0, 8).toUpperCase() : 'CUST-001');
+                document.getElementById('meta-billing-policy').textContent = (po.billing_policy === 'ACTUAL_DELIVERY' ? 'Option A (Bill Actual)' : 'Option B (Fixed+Buffer)') + ` ±${po.tolerance_percent || 10}%`;
+
                 document.getElementById('client-company-display').textContent = po.client_company_name || po.company_name || 'Valued Client';
                 document.getElementById('client-contact-display').textContent = `Attn: ${po.contact_person || 'Authorized Representative'}`;
                 document.getElementById('client-address-display').textContent = po.client_address || po.address || 'Metro Manila, Philippines';
                 document.getElementById('client-phone-display').textContent = po.client_phone || po.phone || '';
-                document.getElementById('client-email-display').textContent = po.client_email || po.email || '';
 
-                document.getElementById('po-policy-display').textContent = po.billing_policy === 'ACTUAL_DELIVERY' 
-                    ? 'Option A: Bill Actual Delivered Qty' 
-                    : 'Option B: Fixed PO + Buffer';
-                document.getElementById('po-tolerance-display').textContent = `±${po.tolerance_percent || 10}%`;
-                document.getElementById('po-notes-display').textContent = po.notes || 'Standard manufacturing packaging and formulation.';
+                document.getElementById('po-policy-text').textContent = po.billing_policy === 'ACTUAL_DELIVERY' 
+                    ? 'Option A: Bill Actual Delivered Quantity' 
+                    : 'Option B: Fixed Target PO + Buffer Stock';
+                document.getElementById('po-tolerance-text').textContent = `±${po.tolerance_percent || 10}%`;
+                if (po.notes) document.getElementById('po-notes-display').textContent = po.notes;
 
                 const tbody = document.getElementById('po-items-tbody');
                 let totalQty = 0;
                 let subtotal = 0;
 
                 if (items.length > 0) {
-                    tbody.innerHTML = items.map((item, idx) => {
+                    // Populate actual rows
+                    let rowsHtml = items.map((item, idx) => {
                         const itemQty = item.target_quantity || item.quantity || 0;
                         const itemPrice = item.unit_price || 0;
                         const itemSubtotal = item.subtotal || (itemQty * itemPrice);
@@ -213,24 +286,40 @@
 
                         return `
                             <tr class="hover:bg-slate-50">
-                                <td class="py-1 px-2.5 text-center text-slate-400 font-bold">${idx + 1}</td>
-                                <td class="py-1 px-2.5">
-                                    <span class="font-bold text-slate-900">${item.product_name || item.name || 'Cosmetic Product'}</span>
-                                    <span class="text-[9px] text-slate-400 font-normal ml-1">(${item.category || 'Cosmetics'})</span>
-                                </td>
-                                <td class="py-1 px-2.5 font-mono font-bold text-indigo-700">${item.product_sku || item.sku || '-'}</td>
-                                <td class="py-1 px-2.5 text-right font-bold text-slate-900 font-mono">${NKB.formatNumber(itemQty)} ${item.unit || 'pcs'}</td>
-                                <td class="py-1 px-2.5 text-right font-mono text-slate-700">${NKB.formatCurrency(itemPrice)}</td>
-                                <td class="py-1 px-2.5 text-right font-black font-mono text-indigo-900">${NKB.formatCurrency(itemSubtotal)}</td>
+                                <td class="py-1 px-2 text-center font-bold text-slate-800">${NKB.formatNumber(itemQty)}</td>
+                                <td class="py-1 px-2 font-semibold text-slate-900">${item.product_name || item.name || 'Cosmetic Product'}</td>
+                                <td class="py-1 px-2 text-center font-mono text-slate-600">${item.product_sku || item.sku || '-'}</td>
+                                <td class="py-1 px-2 text-right font-mono text-slate-700">${NKB.formatCurrency(itemPrice).replace('₱', '')}</td>
+                                <td class="py-1 px-2 text-right font-bold font-mono text-slate-900">${NKB.formatCurrency(itemSubtotal).replace('₱', '')}</td>
                             </tr>
                         `;
                     }).join('');
+
+                    // Add empty filler rows to match template grid aesthetic if fewer than 5 items
+                    const fillerCount = Math.max(0, 5 - items.length);
+                    for (let i = 0; i < fillerCount; i++) {
+                        rowsHtml += `
+                            <tr>
+                                <td class="py-1 px-2 text-center text-slate-300">&nbsp;</td>
+                                <td class="py-1 px-2">&nbsp;</td>
+                                <td class="py-1 px-2 text-center">&nbsp;</td>
+                                <td class="py-1 px-2 text-right text-slate-300">-</td>
+                                <td class="py-1 px-2 text-right text-slate-300">-</td>
+                            </tr>
+                        `;
+                    }
+
+                    tbody.innerHTML = rowsHtml;
                 } else {
-                    tbody.innerHTML = `<tr><td colspan="6" class="py-3 text-center text-slate-400">No items found in this order.</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-slate-400">No items found in this order.</td></tr>`;
                 }
 
+                document.getElementById('po-subtotal').textContent = NKB.formatCurrency(subtotal);
                 document.getElementById('po-total-qty').textContent = `${NKB.formatNumber(totalQty)} pcs`;
                 document.getElementById('po-grand-total').textContent = NKB.formatCurrency(po.grand_total || subtotal);
+
+                document.getElementById('client-sign-name').textContent = po.contact_person || po.client_company_name || '';
+                document.getElementById('po-sign-date').textContent = NKB.formatDate(po.po_date || po.created_at);
 
             } catch (err) {
                 alert('Error loading PO details: ' + err.message);
