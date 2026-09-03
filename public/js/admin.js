@@ -1912,45 +1912,119 @@ async function submitApproveOverrun(e, batchId) {
 
 // 6. Create Delivery Receipt (DR) Modal
 function openCreateDRModal(poNumber, joNumber, batchId, batchNumber, deliveredQty, productName, clientId) {
+    const baseQty = parseInt(deliveredQty) || 1000;
     const root = document.getElementById('modals-root');
     root.innerHTML = `
         <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
-            <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+            <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 border border-slate-200">
                 <div class="flex justify-between items-center border-b border-slate-100 pb-3">
-                    <h3 class="text-lg font-bold text-slate-900">Create Delivery Receipt & Dispatch</h3>
-                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold">&times;</button>
+                    <div class="flex items-center gap-2">
+                        <span class="p-2 bg-emerald-50 text-emerald-700 rounded-xl text-lg">🚚</span>
+                        <div>
+                            <h3 class="text-base font-black text-slate-900">Create Delivery Receipt & Dispatch</h3>
+                            <p class="text-xs text-slate-500">Dispatch finished goods and add extra/overrun quantity</p>
+                        </div>
+                    </div>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-xl">&times;</button>
                 </div>
                 <form onsubmit="submitCreateDR(event, '${poNumber}', '${batchId}')" class="space-y-4 text-xs font-semibold">
-                    <div class="p-3 bg-slate-50 rounded-xl space-y-1 text-slate-700">
-                        <div>PO Reference: <strong class="text-slate-900">${poNumber}</strong></div>
-                        <div>Batch: <strong class="text-indigo-600">${batchNumber}</strong> (${productName})</div>
+                    <div class="p-3 bg-slate-50 rounded-2xl space-y-1 text-slate-700 border border-slate-100">
+                        <div class="flex justify-between items-center">
+                            <span>PO Reference: <strong class="text-slate-900 font-mono">${poNumber}</strong></span>
+                            <span class="text-slate-500">JO: <strong class="text-blue-700 font-mono">${joNumber}</strong></span>
+                        </div>
+                        <div>Batch: <strong class="text-indigo-600 font-mono">${batchNumber}</strong> (${productName})</div>
                     </div>
-                    <div>
-                        <label class="block text-slate-600 mb-1">Delivered Quantity (pcs)</label>
-                        <input type="number" id="dr-delivered-qty" value="${deliveredQty}" min="1" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-900">
+
+                    <!-- Quantity Breakdown & Overrun / Dagdag Calculator -->
+                    <div class="p-4 bg-emerald-50/60 border border-emerald-200 rounded-2xl space-y-3">
+                        <div class="flex justify-between items-center">
+                            <span class="font-bold text-emerald-950 flex items-center gap-1.5">
+                                <span>📦</span><span>Dispatch Quantity & Overrun (Dagdag)</span>
+                            </span>
+                            <span class="text-[10px] text-emerald-800 font-medium">Auto-calculated</span>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-slate-700 mb-1">Base Target Qty (pcs)</label>
+                                <input type="number" id="dr-base-qty" value="${baseQty}" min="1" oninput="calculateDRTotalQty()" required class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white font-bold text-slate-900">
+                            </div>
+                            <div>
+                                <label class="block text-emerald-800 mb-1">➕ Dagdag / Excess Qty (pcs)</label>
+                                <input type="number" id="dr-extra-qty" value="0" min="0" oninput="calculateDRTotalQty()" placeholder="0" class="w-full px-3 py-2 border-2 border-emerald-400 rounded-xl bg-white font-black text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            </div>
+                        </div>
+
+                        <!-- Quick Increment Badges for Dagdag -->
+                        <div class="flex items-center gap-1.5 pt-1">
+                            <span class="text-[10px] text-slate-500">Quick add:</span>
+                            <button type="button" onclick="addDRExtraQty(10)" class="px-2 py-0.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-lg text-[10px] font-bold transition">+10</button>
+                            <button type="button" onclick="addDRExtraQty(25)" class="px-2 py-0.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-lg text-[10px] font-bold transition">+25</button>
+                            <button type="button" onclick="addDRExtraQty(50)" class="px-2 py-0.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-lg text-[10px] font-bold transition">+50</button>
+                            <button type="button" onclick="addDRExtraQty(100)" class="px-2 py-0.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-lg text-[10px] font-bold transition">+100</button>
+                            <button type="button" onclick="setDRExtraQty(0)" class="px-2 py-0.5 bg-white hover:bg-rose-100 border border-slate-300 text-slate-600 rounded-lg text-[10px] font-bold transition">Reset</button>
+                        </div>
+
+                        <div class="pt-2 border-t border-emerald-200 flex justify-between items-center">
+                            <span class="font-bold text-slate-800">Total DR Quantity to Deliver:</span>
+                            <div class="flex items-center gap-1">
+                                <input type="number" id="dr-delivered-qty" value="${baseQty}" min="1" required class="w-32 px-3 py-1.5 border-2 border-emerald-600 rounded-xl bg-white font-black text-emerald-900 text-base text-right">
+                                <span class="font-bold text-slate-600">pcs</span>
+                            </div>
+                        </div>
                     </div>
+
                     <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-slate-600 mb-1">Driver Name</label>
-                            <input type="text" id="dr-driver-name" value="Danilo Gomez" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
+                            <label class="block text-slate-600 mb-1">Driver Name *</label>
+                            <input type="text" id="dr-driver-name" value="Danilo Gomez" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 text-slate-900">
                         </div>
                         <div>
-                            <label class="block text-slate-600 mb-1">Vehicle Plate</label>
-                            <input type="text" id="dr-vehicle-plate" value="NKB-8899" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
+                            <label class="block text-slate-600 mb-1">Vehicle Plate *</label>
+                            <input type="text" id="dr-vehicle-plate" value="NKB-8899" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 text-slate-900">
                         </div>
                     </div>
                     <div>
-                        <label class="block text-slate-600 mb-1">Dispatch Notes</label>
-                        <textarea id="dr-notes" rows="2" class="w-full px-3 py-2 border rounded-xl bg-slate-50">Dispatched in protective shrink-wrapped master boxes.</textarea>
+                        <label class="block text-slate-600 mb-1">Dispatch & Packaging Notes</label>
+                        <textarea id="dr-notes" rows="2" class="w-full px-3 py-2 border rounded-xl bg-slate-50 text-slate-900">Dispatched in protective shrink-wrapped master boxes with batch certificate.</textarea>
                     </div>
                     <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl">Cancel</button>
-                        <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold">Dispatch & Issue DR</button>
+                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition">Cancel</button>
+                        <button type="submit" id="btn-submit-dr" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-black shadow-lg shadow-emerald-600/30 transition flex items-center gap-1.5">
+                            <span>🚚 Issue DR & Dispatch</span>
+                        </button>
                     </div>
                 </form>
             </div>
         </div>
     `;
+}
+
+function calculateDRTotalQty() {
+    const base = parseInt(document.getElementById('dr-base-qty')?.value || '0', 10);
+    const extra = parseInt(document.getElementById('dr-extra-qty')?.value || '0', 10);
+    const totalEl = document.getElementById('dr-delivered-qty');
+    if (totalEl) {
+        totalEl.value = Math.max(1, base + (isNaN(extra) ? 0 : extra));
+    }
+}
+
+function addDRExtraQty(amount) {
+    const extraInput = document.getElementById('dr-extra-qty');
+    if (extraInput) {
+        const current = parseInt(extraInput.value || '0', 10);
+        extraInput.value = current + amount;
+        calculateDRTotalQty();
+    }
+}
+
+function setDRExtraQty(amount) {
+    const extraInput = document.getElementById('dr-extra-qty');
+    if (extraInput) {
+        extraInput.value = amount;
+        calculateDRTotalQty();
+    }
 }
 
 async function submitCreateDR(e, poNumber, batchId) {
@@ -1959,6 +2033,11 @@ async function submitCreateDR(e, poNumber, batchId) {
     const driverName = document.getElementById('dr-driver-name').value;
     const vehiclePlate = document.getElementById('dr-vehicle-plate').value;
     const notes = document.getElementById('dr-notes').value;
+
+    if (isNaN(deliveredQty) || deliveredQty <= 0) {
+        NKB.showToast('Please enter a valid delivered quantity > 0.', 'error');
+        return;
+    }
 
     // Fetch PO details to get product ID and PO ID
     const poListRes = await NKB.api(`/api/orders?search=${encodeURIComponent(poNumber)}`);
@@ -1990,7 +2069,7 @@ async function submitCreateDR(e, poNumber, batchId) {
     });
 
     if (res.success) {
-        NKB.showToast(`Delivery Receipt ${res.data.dr_number} created! Waiting for client digital acceptance.`, 'success');
+        NKB.showToast(`Delivery Receipt ${res.data.dr_number} created with ${NKB.formatNumber(deliveredQty)} pcs!`, 'success');
         closeModal();
         switchTab('deliveries');
     } else {

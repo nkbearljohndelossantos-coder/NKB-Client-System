@@ -122,9 +122,9 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
 
 /**
  * POST /api/deliveries
- * Admin / Warehouse creates a new Delivery Receipt
+ * Admin / Warehouse / Production creates a new Delivery Receipt
  */
-router.post('/', authenticateToken, requireRoles('ADMIN', 'WAREHOUSE'), (req, res) => {
+router.post('/', authenticateToken, requireRoles('ADMIN', 'SUPER_ADMIN', 'WAREHOUSE', 'PRODUCTION'), (req, res) => {
     const { po_id, jo_id, delivery_date, driver_name, vehicle_plate, notes, items } = req.body;
 
     if (!po_id || !items || !Array.isArray(items) || items.length === 0) {

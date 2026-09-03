@@ -366,8 +366,11 @@
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
                         <h2 class="text-2xl font-black text-slate-900">Delivery Receipts (DR) & Dispatch</h2>
-                        <p class="text-sm text-slate-500">Generate dispatch receipts and monitor digital client acceptance.</p>
+                        <p class="text-sm text-slate-500">Generate dispatch receipts, add overrun/dagdag quantity, and monitor digital client acceptance.</p>
                     </div>
+                    <button onclick="switchTab('batches')" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm">
+                        <span>🚚</span><span>+ Dispatch From Ready Batches</span>
+                    </button>
                 </div>
 
                 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
