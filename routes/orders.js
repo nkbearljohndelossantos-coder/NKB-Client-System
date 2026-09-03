@@ -53,83 +53,6 @@ router.get('/', authenticateToken, enforceClientIsolation, (req, res) => {
 });
 
 /**
- * GET /api/orders/:id
- * Retrieve PO details, line items, linked Job Orders, DRs, and Invoices
- */
-router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
-    const { id } = req.params;
-
-    const po = db.prepare(`
-        SELECT po.*, c.company_name, c.contact_person, c.email as client_email, c.phone as client_phone, c.address as client_address,
-               u.name as creator_name
-        FROM purchase_orders po
-        JOIN clients c ON po.client_id = c.id
-        LEFT JOIN users u ON po.created_by = u.id
-        WHERE po.id = ?
-    `).get(id);
-
-    if (!po) {
-        return res.status(404).json({ success: false, error: 'Purchase Order not found.' });
-    }
-
-    if (req.user.role === 'CLIENT' && po.client_id !== req.clientId) {
-        return res.status(403).json({ success: false, error: 'Access denied.', code: 'FORBIDDEN' });
-    }
-
-    // Line items
-    const items = db.prepare(`
-        SELECT poi.*, p.name as product_name, p.sku, p.unit, p.category,
-               (SELECT SUM(di.delivered_quantity) 
-                FROM delivery_items di 
-                JOIN delivery_receipts d ON di.dr_id = d.id 
-                WHERE d.po_id = poi.po_id AND di.product_id = poi.product_id) as actual_delivered_total,
-               (SELECT SUM(di.accepted_quantity) 
-                FROM delivery_items di 
-                JOIN delivery_receipts d ON di.dr_id = d.id 
-                WHERE d.po_id = poi.po_id AND di.product_id = poi.product_id AND d.status IN ('ACCEPTED', 'INVOICED')) as actual_accepted_total
-        FROM purchase_order_items poi
-        JOIN products p ON poi.product_id = p.id
-        WHERE poi.po_id = ?
-    `).all(id);
-
-    // Job Orders
-    const jobOrders = db.prepare(`
-        SELECT jo.*, p.name as product_name, p.sku,
-               (SELECT actual_yield FROM production_batches WHERE jo_id = jo.id ORDER BY created_at DESC LIMIT 1) as latest_yield
-        FROM job_orders jo
-        JOIN products p ON jo.product_id = p.id
-        WHERE jo.po_id = ?
-        ORDER BY jo.created_at ASC
-    `).all(id);
-
-    // Delivery Receipts
-    const deliveries = db.prepare(`
-        SELECT dr.*,
-               (SELECT SUM(delivered_quantity) FROM delivery_items WHERE dr_id = dr.id) as total_delivered,
-               (SELECT SUM(accepted_quantity) FROM delivery_items WHERE dr_id = dr.id) as total_accepted
-        FROM delivery_receipts dr
-        WHERE dr.po_id = ?
-        ORDER BY dr.created_at ASC
-    `).all(id);
-
-    // Invoices
-    const invoices = db.prepare(`
-        SELECT * FROM sales_invoices WHERE po_id = ? ORDER BY created_at ASC
-    `).all(id);
-
-    return res.json({
-        success: true,
-        data: {
-            ...po,
-            items,
-            jobOrders,
-            deliveries,
-            invoices
-        }
-    });
-});
-
-/**
  * GET /api/orders/backtrack/:term
  * Universal 360-Degree Backtracking & Lineage Trace
  * Finds complete workflow lineage from ANY document number or ID: PO, JO, Batch, DR, Invoice, Payment!
@@ -305,6 +228,83 @@ router.get('/backtrack/:term', authenticateToken, enforceClientIsolation, (req, 
             invoices,
             payments,
             auditLogs
+        }
+    });
+});
+
+/**
+ * GET /api/orders/:id
+ * Retrieve PO details, line items, linked Job Orders, DRs, and Invoices
+ */
+router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
+    const { id } = req.params;
+
+    const po = db.prepare(`
+        SELECT po.*, c.company_name, c.contact_person, c.email as client_email, c.phone as client_phone, c.address as client_address,
+               u.name as creator_name
+        FROM purchase_orders po
+        JOIN clients c ON po.client_id = c.id
+        LEFT JOIN users u ON po.created_by = u.id
+        WHERE po.id = ?
+    `).get(id);
+
+    if (!po) {
+        return res.status(404).json({ success: false, error: 'Purchase Order not found.' });
+    }
+
+    if (req.user.role === 'CLIENT' && po.client_id !== req.clientId) {
+        return res.status(403).json({ success: false, error: 'Access denied.', code: 'FORBIDDEN' });
+    }
+
+    // Line items
+    const items = db.prepare(`
+        SELECT poi.*, p.name as product_name, p.sku, p.unit, p.category,
+               (SELECT SUM(di.delivered_quantity) 
+                FROM delivery_items di 
+                JOIN delivery_receipts d ON di.dr_id = d.id 
+                WHERE d.po_id = poi.po_id AND di.product_id = poi.product_id) as actual_delivered_total,
+               (SELECT SUM(di.accepted_quantity) 
+                FROM delivery_items di 
+                JOIN delivery_receipts d ON di.dr_id = d.id 
+                WHERE d.po_id = poi.po_id AND di.product_id = poi.product_id AND d.status IN ('ACCEPTED', 'INVOICED')) as actual_accepted_total
+        FROM purchase_order_items poi
+        JOIN products p ON poi.product_id = p.id
+        WHERE poi.po_id = ?
+    `).all(id);
+
+    // Job Orders
+    const jobOrders = db.prepare(`
+        SELECT jo.*, p.name as product_name, p.sku,
+               (SELECT actual_yield FROM production_batches WHERE jo_id = jo.id ORDER BY created_at DESC LIMIT 1) as latest_yield
+        FROM job_orders jo
+        JOIN products p ON jo.product_id = p.id
+        WHERE jo.po_id = ?
+        ORDER BY jo.created_at ASC
+    `).all(id);
+
+    // Delivery Receipts
+    const deliveries = db.prepare(`
+        SELECT dr.*,
+               (SELECT SUM(delivered_quantity) FROM delivery_items WHERE dr_id = dr.id) as total_delivered,
+               (SELECT SUM(accepted_quantity) FROM delivery_items WHERE dr_id = dr.id) as total_accepted
+        FROM delivery_receipts dr
+        WHERE dr.po_id = ?
+        ORDER BY dr.created_at ASC
+    `).all(id);
+
+    // Invoices
+    const invoices = db.prepare(`
+        SELECT * FROM sales_invoices WHERE po_id = ? ORDER BY created_at ASC
+    `).all(id);
+
+    return res.json({
+        success: true,
+        data: {
+            ...po,
+            items,
+            jobOrders,
+            deliveries,
+            invoices
         }
     });
 });
