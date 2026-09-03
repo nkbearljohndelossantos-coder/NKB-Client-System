@@ -461,14 +461,76 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
 
     try {
         const result = createOrderTx();
+        
+        // Automatically generate Job Order(s) for all product line items in this PO
+        autoGenerateJobOrdersForPO(result.poId, req.user.id);
+
         const createdPO = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(result.poId);
         const orderItems = db.prepare('SELECT * FROM purchase_order_items WHERE po_id = ?').all(result.poId);
+        const jobOrders = db.prepare('SELECT * FROM job_orders WHERE po_id = ?').all(result.poId);
         const totalTargetQty = orderItems.reduce((acc, it) => acc + (it.target_quantity || 0), 0);
-        return res.status(201).json({ success: true, data: { ...createdPO, items: orderItems, total_target_quantity: totalTargetQty } });
+        return res.status(201).json({ success: true, data: { ...createdPO, items: orderItems, jobOrders, total_target_quantity: totalTargetQty } });
     } catch (err) {
         return res.status(400).json({ success: false, error: err.message });
     }
 });
+
+/**
+ * Helper: Automatically generate Job Orders for each product in a Purchase Order
+ */
+function autoGenerateJobOrdersForPO(poId, userId) {
+    const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(poId);
+    if (!po) return [];
+
+    const items = db.prepare('SELECT * FROM purchase_order_items WHERE po_id = ?').all(poId);
+    const existingJOs = db.prepare('SELECT product_id, id FROM job_orders WHERE po_id = ?').all(poId);
+    const existingProdMap = new Map(existingJOs.map(j => [j.product_id, j.id]));
+
+    const insertJOStmt = db.prepare(`
+        INSERT INTO job_orders
+        (id, jo_number, po_id, product_id, target_quantity, scheduled_start_date, assigned_team, status, notes, created_by)
+        VALUES (?, ?, ?, ?, ?, date('now'), 'Formulation & Bottling Team Alpha', 'IN_PRODUCTION', ?, ?)
+    `);
+
+    const createdJOs = [];
+    for (const it of items) {
+        if (!existingProdMap.has(it.product_id)) {
+            const joId = uuidv4();
+            const joNumber = getNextDocumentNumber('JO');
+            insertJOStmt.run(
+                joId,
+                joNumber,
+                poId,
+                it.product_id,
+                it.target_quantity,
+                po.notes || null,
+                userId || po.created_by
+            );
+            createdJOs.push({ joId, joNumber });
+
+            logAudit({
+                userId: userId || po.created_by,
+                userName: 'System Auto-Dispatcher',
+                userRole: 'ADMIN',
+                action: 'AUTO_CREATE_JO',
+                entityType: 'JOB_ORDER',
+                entityId: joNumber,
+                details: { joId, joNumber, poId, productId: it.product_id, targetQuantity: it.target_quantity }
+            });
+        } else {
+            // Update target quantity if JO already exists
+            db.prepare('UPDATE job_orders SET target_quantity = ? WHERE id = ?').run(
+                it.target_quantity,
+                existingProdMap.get(it.product_id)
+            );
+        }
+    }
+
+    // Advance PO status to IN_PRODUCTION
+    db.prepare("UPDATE purchase_orders SET status = 'IN_PRODUCTION', updated_at = datetime('now') WHERE id = ? AND status IN ('PENDING_APPROVAL', 'APPROVED')").run(poId);
+
+    return createdJOs;
+}
 
 /**
  * POST /api/orders/:id/approve
@@ -492,6 +554,9 @@ router.post('/:id/approve', authenticateToken, requireRoles('ADMIN'), (req, res)
         WHERE id = ?
     `).run(req.user.id, id);
 
+    // Auto-generate Job Orders on approval
+    autoGenerateJobOrdersForPO(id, req.user.id);
+
     logAudit({
         userId: req.user.id,
         userName: req.user.name,
@@ -503,7 +568,7 @@ router.post('/:id/approve', authenticateToken, requireRoles('ADMIN'), (req, res)
     });
 
     const updated = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
-    return res.json({ success: true, message: 'Purchase Order approved successfully.', data: updated });
+    return res.json({ success: true, message: 'Purchase Order approved and Job Order(s) generated for production!', data: updated });
 });
 
 /**
@@ -662,9 +727,14 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
 
     try {
         const result = updateOrderTx();
+        
+        // Sync Job Orders for this updated PO
+        autoGenerateJobOrdersForPO(result.id, req.user.id);
+
         const updatedPO = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(result.id);
         const orderItems = db.prepare('SELECT * FROM purchase_order_items WHERE po_id = ?').all(result.id);
-        return res.json({ success: true, message: `Purchase Order ${result.poNumber} updated successfully!`, data: { ...updatedPO, items: orderItems } });
+        const jobOrders = db.prepare('SELECT * FROM job_orders WHERE po_id = ?').all(result.id);
+        return res.json({ success: true, message: `Purchase Order ${result.poNumber} updated successfully!`, data: { ...updatedPO, items: orderItems, jobOrders } });
     } catch (err) {
         return res.status(400).json({ success: false, error: err.message });
     }

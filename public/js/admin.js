@@ -266,11 +266,6 @@ async function loadOrders() {
                             Approve
                         </button>
                     ` : ''}
-                    ${po.status === 'APPROVED' || po.status === 'IN_PRODUCTION' ? `
-                        <button onclick="openCreateJOModal('${po.id}', '${po.po_number}', '${po.company_name}')" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition">
-                            + Job Order
-                        </button>
-                    ` : ''}
                 </td>
             </tr>
         `).join('');
