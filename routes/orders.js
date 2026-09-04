@@ -476,7 +476,7 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
 });
 
 /**
- * Helper: Automatically generate Job Orders for each product in a Purchase Order
+ * Helper: Automatically generate Sales Orders for each product in a Purchase Order
  */
 function autoGenerateJobOrdersForPO(poId, userId) {
     const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(poId);
@@ -496,7 +496,7 @@ function autoGenerateJobOrdersForPO(poId, userId) {
     for (const it of items) {
         if (!existingProdMap.has(it.product_id)) {
             const joId = uuidv4();
-            const joNumber = getNextDocumentNumber('JO');
+            const joNumber = getNextDocumentNumber('SO');
             insertJOStmt.run(
                 joId,
                 joNumber,
@@ -512,13 +512,13 @@ function autoGenerateJobOrdersForPO(poId, userId) {
                 userId: userId || po.created_by,
                 userName: 'System Auto-Dispatcher',
                 userRole: 'ADMIN',
-                action: 'AUTO_CREATE_JO',
-                entityType: 'JOB_ORDER',
+                action: 'AUTO_CREATE_SO',
+                entityType: 'SALES_ORDER',
                 entityId: joNumber,
-                details: { joId, joNumber, poId, productId: it.product_id, targetQuantity: it.target_quantity }
+                details: { joId, soNumber: joNumber, poId, productId: it.product_id, targetQuantity: it.target_quantity }
             });
         } else {
-            // Update target quantity if JO already exists
+            // Update target quantity if SO already exists
             db.prepare('UPDATE job_orders SET target_quantity = ? WHERE id = ?').run(
                 it.target_quantity,
                 existingProdMap.get(it.product_id)
@@ -554,7 +554,7 @@ router.post('/:id/approve', authenticateToken, requireRoles('ADMIN'), (req, res)
         WHERE id = ?
     `).run(req.user.id, id);
 
-    // Auto-generate Job Orders on approval
+    // Auto-generate Sales Orders on approval
     autoGenerateJobOrdersForPO(id, req.user.id);
 
     logAudit({
@@ -568,7 +568,7 @@ router.post('/:id/approve', authenticateToken, requireRoles('ADMIN'), (req, res)
     });
 
     const updated = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
-    return res.json({ success: true, message: 'Purchase Order approved and Job Order(s) generated for production!', data: updated });
+    return res.json({ success: true, message: 'Purchase Order approved and Sales Order(s) generated for production!', data: updated });
 });
 
 /**

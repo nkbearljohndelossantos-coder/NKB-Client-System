@@ -119,6 +119,7 @@ function mountApiRoutes() {
     app.use('/api/clients', require('./routes/clients'));
     app.use('/api/orders', require('./routes/orders'));
     app.use('/api/job-orders', require('./routes/jobOrders'));
+    app.use('/api/sales-orders', require('./routes/jobOrders'));
     app.use('/api/production', require('./routes/production'));
     app.use('/api/deliveries', require('./routes/deliveries'));
     app.use('/api/invoices', require('./routes/invoices'));

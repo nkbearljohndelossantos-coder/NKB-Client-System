@@ -286,10 +286,10 @@ async function approvePO(id, poNumber) {
 }
 
 // -------------------------------------------------------------
-// 3. JOB ORDERS (JO)
+// 3. SALES ORDERS (SO)
 // -------------------------------------------------------------
 async function loadJobOrders() {
-    const res = await NKB.api('/api/job-orders');
+    const res = await NKB.api('/api/sales-orders');
     const tbody = document.getElementById('table-jos-body');
 
     if (res.success && res.data && res.data.length > 0) {
@@ -324,7 +324,7 @@ async function loadJobOrders() {
                     <td class="py-3 px-4">
                         ${isDelivered ? `
                             <span class="px-2.5 py-1 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-black inline-flex items-center gap-1 shadow-sm">
-                                <span>✅</span><span>DELIVERED / TAPOS NA</span>
+                                <span>✅</span><span>DELIVERED / COMPLETED</span>
                             </span>
                         ` : (jo.batch_count > 0 ? `
                             <span class="px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold inline-flex items-center gap-1">
@@ -341,11 +341,11 @@ async function loadJobOrders() {
                             <span>🔍</span><span>Trace</span>
                         </button>
                         <a href="/print-jo.html?id=${jo.id}" target="_blank" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold transition inline-flex items-center gap-1">
-                            <span>🖨️</span><span>Print JO</span>
+                            <span>🖨️</span><span>Print SO</span>
                         </a>
                         ${isDelivered ? `
-                            <span class="px-2.5 py-1 bg-slate-100 text-slate-400 border border-slate-200 rounded-lg text-xs font-bold inline-flex items-center gap-1 cursor-not-allowed select-none" title="Tapos na at na-deliver na itong Job Order.">
-                                <span>🔒</span><span>Tapos Na</span>
+                            <span class="px-2.5 py-1 bg-slate-100 text-slate-400 border border-slate-200 rounded-lg text-xs font-bold inline-flex items-center gap-1 cursor-not-allowed select-none" title="Sales Order is fulfilled and delivered.">
+                                <span>🔒</span><span>Completed</span>
                             </span>
                         ` : `
                             <button onclick="openCreateBatchModal('${jo.id}', '${jo.jo_number}', ${jo.target_quantity}, '${jo.product_name}')" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition">
@@ -357,7 +357,7 @@ async function loadJobOrders() {
             `;
         }).join('');
     } else {
-        tbody.innerHTML = `<tr><td colspan="9" class="py-6 text-center text-slate-400">No job orders found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="py-6 text-center text-slate-400">No sales orders found.</td></tr>`;
     }
 }
 
@@ -2099,7 +2099,7 @@ async function openCreateBatchModal(joId, joNumber, targetQty, productName) {
                 </div>
                 <form onsubmit="submitCreateBatch(event, '${joId}')" class="space-y-4 text-xs font-semibold">
                     <div class="p-3 bg-slate-50 rounded-xl text-slate-600 space-y-1 border border-slate-100">
-                        <div>JO Reference: <strong class="text-slate-900">${joNumber}</strong></div>
+                        <div>SO Reference: <strong class="text-slate-900">${joNumber}</strong></div>
                         <div>Product: <strong class="text-slate-900">${productName}</strong></div>
                     </div>
 
@@ -3642,7 +3642,7 @@ async function globalBacktrackSearch() {
     const input = document.getElementById('global-backtrack-input');
     const term = input?.value?.trim();
     if (!term) {
-        NKB.showToast('Please enter a PO, JO, Batch, DR, or Invoice number to backtrack.', 'warning');
+        NKB.showToast('Please enter a PO, SO, Batch, DR, or Invoice number to backtrack.', 'warning');
         return;
     }
     openBacktrackModal(term);
@@ -3668,7 +3668,7 @@ async function openBacktrackModal(term) {
                 <div id="backtrack-modal-body" class="flex-1 overflow-y-auto pr-1 py-8 text-center text-slate-400">
                     <div class="animate-pulse space-y-3">
                         <div class="text-sm font-bold text-slate-600">Retrieving full document lifecycle...</div>
-                        <div class="text-xs text-slate-400">Linking PO ➔ JO ➔ Batches ➔ DR ➔ Invoices ➔ Payments</div>
+                        <div class="text-xs text-slate-400">Linking PO ➔ SO ➔ Batches ➔ DR ➔ Invoices ➔ Payments</div>
                     </div>
                 </div>
             </div>
@@ -3719,7 +3719,7 @@ async function openBacktrackModal(term) {
                     <div class="text-[10px] font-normal text-slate-500 mt-0.5">${items.length} Products</div>
                 </div>
                 <div class="p-2.5 rounded-xl border ${jobOrders.length > 0 ? 'bg-blue-50 border-blue-200 text-blue-900' : 'bg-slate-50 border-slate-200 text-slate-400'}">
-                    <div>⚙️ 2. JO (${jobOrders.length})</div>
+                    <div>⚙️ 2. SO (${jobOrders.length})</div>
                     <div class="text-[10px] font-normal text-slate-500 mt-0.5">${jobOrders.some(j => j.status === 'COMPLETED') ? 'Fulfilled' : 'Scheduled'}</div>
                 </div>
                 <div class="p-2.5 rounded-xl border ${batches.length > 0 ? 'bg-amber-50 border-amber-200 text-amber-900' : 'bg-slate-50 border-slate-200 text-slate-400'}">
@@ -3740,7 +3740,7 @@ async function openBacktrackModal(term) {
                 </div>
             </div>
 
-            <!-- Stage 1 & 2: PO Line Items & Job Orders -->
+            <!-- Stage 1 & 2: PO Line Items & Sales Orders -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <!-- PO Ordered Products -->
                 <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
@@ -3764,11 +3764,11 @@ async function openBacktrackModal(term) {
                     </div>
                 </div>
 
-                <!-- Job Orders -->
+                <!-- Sales Orders -->
                 <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
                     <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-                        <span class="font-bold text-slate-900 flex items-center gap-1.5"><span>⚙️</span><span>Linked Job Orders (JO)</span></span>
-                        <span class="text-[11px] font-bold text-blue-600">${jobOrders.length} JOs</span>
+                        <span class="font-bold text-slate-900 flex items-center gap-1.5"><span>⚙️</span><span>Linked Sales Orders (SO)</span></span>
+                        <span class="text-[11px] font-bold text-blue-600">${jobOrders.length} SOs</span>
                     </div>
                     ${jobOrders.length > 0 ? `
                         <div class="space-y-2">
@@ -3785,7 +3785,7 @@ async function openBacktrackModal(term) {
                                 </div>
                             `).join('')}
                         </div>
-                    ` : `<div class="py-4 text-center text-slate-400 italic">No job orders issued yet.</div>`}
+                    ` : `<div class="py-4 text-center text-slate-400 italic">No sales orders issued yet.</div>`}
                 </div>
             </div>
 

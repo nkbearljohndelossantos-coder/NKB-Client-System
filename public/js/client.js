@@ -476,7 +476,7 @@ async function loadClientTracking() {
                         <div>
                             <span class="text-xs font-mono text-indigo-600 font-bold">BATCH: ${b.batch_number}</span>
                             <h3 class="text-lg font-black text-slate-900">${b.product_name} <span class="text-xs font-normal text-slate-400">(${b.sku})</span></h3>
-                            <div class="text-xs text-slate-500">PO Ref: <strong class="text-slate-700">${b.po_number}</strong> | JO Ref: <strong class="text-slate-700">${b.jo_number}</strong></div>
+                            <div class="text-xs text-slate-500">PO Ref: <strong class="text-slate-700">${b.po_number}</strong> | SO Ref: <strong class="text-slate-700">${b.jo_number}</strong></div>
                         </div>
                         <div class="text-right">
                             ${NKB.renderStatusBadge(b.status)}

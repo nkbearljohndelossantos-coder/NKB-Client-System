@@ -115,7 +115,7 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), (req, r
     }
 
     const joId = uuidv4();
-    const joNumber = getNextDocumentNumber('JO');
+    const joNumber = getNextDocumentNumber('SO');
 
     const tx = db.transaction(() => {
         db.prepare(`
@@ -146,10 +146,10 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), (req, r
             userId: req.user.id,
             userName: req.user.name,
             userRole: req.user.role,
-            action: 'CREATE_JO',
-            entityType: 'JOB_ORDER',
+            action: 'CREATE_SO',
+            entityType: 'SALES_ORDER',
             entityId: joNumber,
-            details: { joId, joNumber, poId: po_id, target_quantity }
+            details: { joId, soNumber: joNumber, poId: po_id, target_quantity }
         });
 
         return joId;

@@ -66,7 +66,7 @@
                 </button>
                 <button onclick="switchTab('job-orders')" id="tab-btn-job-orders" class="sidebar-btn w-full flex items-center gap-3 px-3 py-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 transition">
                     <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                    <span>Job Orders</span>
+                    <span>Sales Orders (SO)</span>
                 </button>
                 <button onclick="switchTab('production')" id="tab-btn-production" class="sidebar-btn w-full flex items-center gap-3 px-3 py-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 transition">
                     <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
@@ -296,12 +296,12 @@
                 </div>
             </section>
 
-            <!-- TAB: JOB ORDERS -->
+            <!-- TAB: SALES ORDERS -->
             <section id="view-job-orders" class="space-y-6 hidden">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                        <h2 class="text-2xl font-black text-slate-900">Job Orders (JO)</h2>
-                        <p class="text-sm text-slate-500">Production line schedules linked to approved client purchase orders.</p>
+                        <h2 class="text-2xl font-black text-slate-900">Sales Orders (SO)</h2>
+                        <p class="text-sm text-slate-500">Sales orders generated from approved client purchase orders for production scheduling.</p>
                     </div>
                 </div>
 
@@ -310,7 +310,7 @@
                         <table class="w-full text-left text-xs">
                             <thead class="bg-slate-50 border-y border-slate-200 text-slate-600 font-bold uppercase tracking-wider">
                                 <tr>
-                                    <th class="py-3 px-4">JO Number</th>
+                                    <th class="py-3 px-4">SO Number</th>
                                     <th class="py-3 px-4">PO Ref</th>
                                     <th class="py-3 px-4">Client</th>
                                     <th class="py-3 px-4">Product</th>
@@ -322,7 +322,7 @@
                                 </tr>
                             </thead>
                             <tbody id="table-jos-body" class="divide-y divide-slate-100 font-medium">
-                                <tr><td colspan="9" class="py-6 text-center text-slate-400">Loading job orders...</td></tr>
+                                <tr><td colspan="9" class="py-6 text-center text-slate-400">Loading sales orders...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -344,7 +344,7 @@
                             <thead class="bg-slate-50 border-y border-slate-200 text-slate-600 font-bold uppercase tracking-wider">
                                 <tr>
                                     <th class="py-3 px-4">Batch Number</th>
-                                    <th class="py-3 px-4">JO Ref</th>
+                                    <th class="py-3 px-4">SO Ref</th>
                                     <th class="py-3 px-4">Product</th>
                                     <th class="py-3 px-4">Target Qty</th>
                                     <th class="py-3 px-4">Actual Yield</th>
@@ -618,7 +618,7 @@
                         <div class="flex items-center gap-2 text-amber-700 font-bold text-xs">
                             <span>🧪</span><span>Production Supervisor</span>
                         </div>
-                        <p class="text-[11px] text-slate-500 mt-1">Job orders, compounding batches, formula codes, and yield logging.</p>
+                        <p class="text-[11px] text-slate-500 mt-1">Sales orders, compounding batches, formula codes, and yield logging.</p>
                     </div>
                     <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
                         <div class="flex items-center gap-2 text-purple-700 font-bold text-xs">
@@ -673,7 +673,7 @@
                                 <h3 class="font-bold text-rose-900 text-sm">Super Admin Database Reset & Maintenance</h3>
                             </div>
                             <p class="text-xs text-rose-700 mt-1">
-                                Clear all transaction records (POs, Job Orders, Batches, Deliveries, Invoices, Payments, and Stock counts) to start fresh.
+                                Clear all transaction records (POs, Sales Orders, Batches, Deliveries, Invoices, Payments, and Stock counts) to start fresh.
                                 <strong>Users, Staff accounts, and RBAC Roles are permanently preserved.</strong>
                             </p>
                         </div>
@@ -718,7 +718,7 @@
     <!-- MODALS CONTAINER -->
     <div id="modals-root"></div>
 
-    <script src="/js/app.js?v=2.0.5"></script>
-    <script src="/js/admin.js?v=2.0.5"></script>
+    <script src="/js/app.js?v=2.0.6"></script>
+    <script src="/js/admin.js?v=2.0.6"></script>
 </body>
 </html>
