@@ -493,10 +493,28 @@ function autoGenerateJobOrdersForPO(poId, userId) {
     `);
 
     const createdJOs = [];
+    const basePONumber = po.po_number || '';
+    const poSuffix = basePONumber.replace(/^(PO-?)/i, ''); // e.g. "2026-0001"
+    let itemIndex = 0;
+
     for (const it of items) {
         if (!existingProdMap.has(it.product_id)) {
             const joId = uuidv4();
-            const joNumber = getNextDocumentNumber('SO');
+            
+            // JO / SO starts with the exact same number as the PO (e.g. SO-2026-0001)
+            let joNumber;
+            if (items.length === 1) {
+                joNumber = `SO-${poSuffix}`;
+            } else {
+                joNumber = `SO-${poSuffix}-${itemIndex + 1}`;
+            }
+
+            // Check if joNumber already exists (safety fallback)
+            const existingNum = db.prepare('SELECT id FROM job_orders WHERE jo_number = ?').get(joNumber);
+            if (existingNum) {
+                joNumber = getNextDocumentNumber('SO');
+            }
+
             insertJOStmt.run(
                 joId,
                 joNumber,
@@ -524,6 +542,7 @@ function autoGenerateJobOrdersForPO(poId, userId) {
                 existingProdMap.get(it.product_id)
             );
         }
+        itemIndex++;
     }
 
     // Advance PO status to IN_PRODUCTION

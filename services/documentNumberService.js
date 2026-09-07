@@ -41,7 +41,7 @@ function getNextDocumentNumber(docType) {
         nextSeq = 1;
     }
     
-    const formattedSeq = String(nextSeq).padStart(6, '0');
+    const formattedSeq = String(nextSeq).padStart(4, '0');
     return `${docType}-${year}-${formattedSeq}`;
 }
 
