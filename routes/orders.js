@@ -370,7 +370,10 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
             if (req.user.role === 'CLIENT') {
                 unitPrice = expectedClientPrice;
             } else {
-                unitPrice = item.unit_price !== undefined && item.unit_price !== null ? parseFloat(item.unit_price) : expectedClientPrice;
+                unitPrice = (item.unit_price !== undefined && item.unit_price !== null && !isNaN(parseFloat(item.unit_price))) ? parseFloat(item.unit_price) : expectedClientPrice;
+            }
+            if (isNaN(unitPrice) || unitPrice < 0) {
+                unitPrice = expectedClientPrice || product.default_price || 0.0;
             }
 
             const lineSubtotal = targetQty * unitPrice;
@@ -742,7 +745,10 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
             if (req.user.role === 'CLIENT') {
                 unitPrice = expectedClientPrice;
             } else {
-                unitPrice = item.unit_price !== undefined && item.unit_price !== null ? parseFloat(item.unit_price) : expectedClientPrice;
+                unitPrice = (item.unit_price !== undefined && item.unit_price !== null && !isNaN(parseFloat(item.unit_price))) ? parseFloat(item.unit_price) : expectedClientPrice;
+            }
+            if (isNaN(unitPrice) || unitPrice < 0) {
+                unitPrice = expectedClientPrice || product.default_price || 0.0;
             }
 
             const lineSubtotal = targetQty * unitPrice;

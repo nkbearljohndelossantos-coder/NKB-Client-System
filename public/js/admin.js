@@ -1659,8 +1659,9 @@ async function submitSaveDraftPO(e) {
     }
 
     for (const item of adminPOLineItems) {
-        if (!item.product_id || item.target_quantity <= 0) {
-            NKB.showToast('All product lines must have valid quantity > 0.', 'error');
+        const qty = parseInt(item.target_quantity, 10);
+        if (!item.product_id || isNaN(qty) || qty <= 0) {
+            NKB.showToast('All product lines must have a valid quantity greater than 0.', 'error');
             return;
         }
     }
@@ -1674,8 +1675,8 @@ async function submitSaveDraftPO(e) {
             is_draft: true,
             items: adminPOLineItems.map(it => ({
                 product_id: it.product_id,
-                target_quantity: it.target_quantity,
-                unit_price: it.unit_price
+                target_quantity: parseInt(it.target_quantity, 10),
+                unit_price: parseFloat(it.unit_price) || 0
             }))
         })
     });
@@ -1707,8 +1708,9 @@ async function submitEditDraftPO(e, poId, poNumber) {
     }
 
     for (const item of adminPOLineItems) {
-        if (!item.product_id || item.target_quantity <= 0) {
-            NKB.showToast('All product lines must have valid quantity > 0.', 'error');
+        const qty = parseInt(item.target_quantity, 10);
+        if (!item.product_id || isNaN(qty) || qty <= 0) {
+            NKB.showToast('All product lines must have a valid quantity greater than 0.', 'error');
             return;
         }
     }
@@ -1722,8 +1724,8 @@ async function submitEditDraftPO(e, poId, poNumber) {
             is_draft: true,
             items: adminPOLineItems.map(it => ({
                 product_id: it.product_id,
-                target_quantity: it.target_quantity,
-                unit_price: it.unit_price
+                target_quantity: parseInt(it.target_quantity, 10),
+                unit_price: parseFloat(it.unit_price) || 0
             }))
         })
     });
@@ -1755,8 +1757,9 @@ function submitCreatePO(e) {
     }
 
     for (const item of adminPOLineItems) {
-        if (!item.product_id || item.target_quantity <= 0) {
-            NKB.showToast('All product lines must have valid quantity > 0.', 'error');
+        const qty = parseInt(item.target_quantity, 10);
+        if (!item.product_id || isNaN(qty) || qty <= 0) {
+            NKB.showToast('All product lines must have a valid quantity greater than 0.', 'error');
             return;
         }
     }
@@ -1797,8 +1800,9 @@ function submitEditPO(e, poId, poNumber, proceed = false) {
     }
 
     for (const item of adminPOLineItems) {
-        if (!item.product_id || item.target_quantity <= 0) {
-            NKB.showToast('All product lines must have valid quantity > 0.', 'error');
+        const qty = parseInt(item.target_quantity, 10);
+        if (!item.product_id || isNaN(qty) || qty <= 0) {
+            NKB.showToast('All product lines must have a valid quantity greater than 0.', 'error');
             return;
         }
     }
