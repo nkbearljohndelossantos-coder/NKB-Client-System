@@ -17,6 +17,18 @@ router.get('/overview', authenticateToken, enforceClientIsolation, (req, res) =>
             WHERE client_id = ? AND status NOT IN ('COMPLETED', 'CANCELLED')
         `).get(clientId);
 
+        const draftPOs = db.prepare(`
+            SELECT COUNT(*) as count, COALESCE(SUM(grand_total), 0) as total_val
+            FROM purchase_orders 
+            WHERE client_id = ? AND status = 'DRAFT'
+        `).get(clientId);
+
+        const activePOs = db.prepare(`
+            SELECT COUNT(*) as count, COALESCE(SUM(grand_total), 0) as total_val
+            FROM purchase_orders 
+            WHERE client_id = ? AND status IN ('PENDING_APPROVAL', 'APPROVED', 'IN_PRODUCTION', 'PARTIALLY_DELIVERED')
+        `).get(clientId);
+
         const pendingAcceptanceDRs = db.prepare(`
             SELECT COUNT(*) as count
             FROM delivery_receipts
@@ -47,6 +59,8 @@ router.get('/overview', authenticateToken, enforceClientIsolation, (req, res) =>
             data: {
                 openPOs: openPOs.count,
                 openPOsValue: openPOs.total_val,
+                draftPOs: draftPOs.count,
+                activePOs: activePOs.count,
                 pendingDRs: pendingAcceptanceDRs.count,
                 unpaidInvoices: unpaidInvoices.count,
                 outstandingBalance: unpaidInvoices.total_balance,
@@ -59,6 +73,8 @@ router.get('/overview', authenticateToken, enforceClientIsolation, (req, res) =>
     // Admin Dashboard KPI
     const totalClients = db.prepare('SELECT COUNT(*) as count FROM clients WHERE is_active = 1').get().count;
     const openPOs = db.prepare("SELECT COUNT(*) as count FROM purchase_orders WHERE status NOT IN ('COMPLETED', 'CANCELLED')").get().count;
+    const draftPOs = db.prepare("SELECT COUNT(*) as count FROM purchase_orders WHERE status = 'DRAFT'").get().count;
+    const activePOs = db.prepare("SELECT COUNT(*) as count FROM purchase_orders WHERE status IN ('PENDING_APPROVAL', 'APPROVED', 'IN_PRODUCTION', 'PARTIALLY_DELIVERED')").get().count;
     const activeBatches = db.prepare("SELECT COUNT(*) as count FROM production_batches WHERE status IN ('MIXING', 'BOTTLING', 'QC_PASSED', 'EXCEPTION_REQUIRES_APPROVAL')").get().count;
     const pendingApprovalBatches = db.prepare("SELECT COUNT(*) as count FROM production_batches WHERE status = 'EXCEPTION_REQUIRES_APPROVAL'").get().count;
     const pendingAcceptanceDRs = db.prepare("SELECT COUNT(*) as count FROM delivery_receipts WHERE status = 'PENDING_CLIENT_ACCEPTANCE'").get().count;
@@ -78,6 +94,8 @@ router.get('/overview', authenticateToken, enforceClientIsolation, (req, res) =>
         data: {
             totalClients,
             openPOs,
+            draftPOs,
+            activePOs,
             activeBatches,
             pendingApprovalBatches,
             pendingAcceptanceDRs,

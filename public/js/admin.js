@@ -152,6 +152,11 @@ async function loadDashboard() {
     if (kpiRes.success && kpiRes.data) {
         const d = kpiRes.data;
         setElText('kpi-open-pos', NKB.formatNumber(d.openPOs));
+        if (d.draftPOs > 0) {
+            setElText('kpi-open-pos-detail', `${NKB.formatNumber(d.activePOs)} active · ${NKB.formatNumber(d.draftPOs)} draft`);
+        } else {
+            setElText('kpi-open-pos-detail', `${NKB.formatNumber(d.openPOs)} active purchase orders`);
+        }
         setElText('kpi-active-batches', NKB.formatNumber(d.activeBatches));
         setElText('kpi-pending-approval-batches', `${d.pendingApprovalBatches} over-tolerance requiring approval`);
         setElText('kpi-unbilled-drs', NKB.formatNumber(d.unbilledAcceptedDRs));

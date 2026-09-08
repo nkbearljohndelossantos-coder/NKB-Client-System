@@ -65,6 +65,11 @@ async function loadClientDashboard() {
             if (el) el.textContent = text;
         };
         setElText('client-kpi-open-pos', NKB.formatNumber(d.openPOs));
+        if (d.draftPOs > 0) {
+            setElText('client-kpi-open-pos-detail', `${NKB.formatNumber(d.activePOs)} active · ${NKB.formatNumber(d.draftPOs)} draft`);
+        } else {
+            setElText('client-kpi-open-pos-detail', `Orders in production`);
+        }
         setElText('client-kpi-pending-drs', NKB.formatNumber(d.pendingDRs));
         setElText('client-kpi-unpaid-invoices', NKB.formatCurrency(d.outstandingBalance));
         setElText('client-kpi-buffer-units', `${NKB.formatNumber(d.availableBufferUnits)} pcs`);
