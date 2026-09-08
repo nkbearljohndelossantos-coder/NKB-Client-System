@@ -315,7 +315,7 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
  * Create a new Purchase Order
  */
 router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
-    let { client_id, expected_delivery_date, tolerance_percent, billing_policy, notes, items, tax_percent } = req.body;
+    let { client_id, expected_delivery_date, tolerance_percent, billing_policy, notes, items, tax_percent, is_draft, status } = req.body;
 
     if (req.user.role === 'CLIENT') {
         client_id = req.clientId;
