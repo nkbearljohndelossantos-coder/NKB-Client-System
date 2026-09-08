@@ -378,6 +378,47 @@ function openClientPODoubleCheckModal() {
     `;
 }
 
+async function saveClientCartAsDraft() {
+    if (clientCartItems.length === 0) {
+        NKB.showToast('Please add at least one product to your order before saving as draft.', 'error');
+        return;
+    }
+
+    for (const item of clientCartItems) {
+        if (!item.product_id || item.target_quantity <= 0) {
+            NKB.showToast('All items must have valid quantity > 0.', 'error');
+            return;
+        }
+    }
+
+    const policy = document.querySelector('input[name="client_billing_policy"]:checked')?.value || 'ACTUAL_DELIVERY';
+    const notes = document.getElementById('client-order-notes')?.value || '';
+
+    const res = await NKB.api('/api/orders', {
+        method: 'POST',
+        body: JSON.stringify({
+            tolerance_percent: 10.0,
+            billing_policy: policy,
+            notes,
+            is_draft: true,
+            items: clientCartItems.map(item => ({
+                product_id: item.product_id,
+                target_quantity: item.target_quantity,
+                unit_price: item.unit_price
+            }))
+        })
+    });
+
+    if (res.success) {
+        NKB.showToast(`💾 Purchase Order ${res.data?.po_number || ''} saved as Draft!`, 'success');
+        clientCartItems = [];
+        renderClientCart();
+        switchClientTab('my-orders');
+    } else {
+        NKB.showToast(res.error || 'Failed to save draft order.', 'error');
+    }
+}
+
 function closeClientModal() {
     const modalRoot = document.getElementById('client-modals-root');
     if (modalRoot) modalRoot.innerHTML = '';
@@ -415,7 +456,7 @@ async function confirmAndExecuteClientPOSubmit() {
     } else {
         if (btn) {
             btn.disabled = false;
-            btn.textContent = '✅ Tama Lahat — Confirm & Submit P.O';
+            btn.textContent = '✅ Confirm & Submit Purchase Order';
         }
         NKB.showToast(res.error || 'Failed to submit order.', 'error');
     }
@@ -437,15 +478,31 @@ async function loadClientOrders() {
                 <td class="py-3 px-4"><span class="badge ${po.billing_policy === 'ACTUAL_DELIVERY' ? 'bg-indigo-50 text-indigo-700' : 'bg-purple-50 text-purple-700'}">${po.billing_policy}</span></td>
                 <td class="py-3 px-4 font-extrabold text-slate-900">${NKB.formatCurrency(po.grand_total)}</td>
                 <td class="py-3 px-4">${NKB.renderStatusBadge(po.status)}</td>
-                <td class="py-3 px-4 text-right">
+                <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
                     <a href="/print-po.html?id=${po.id}" target="_blank" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold transition inline-flex items-center gap-1">
                         <span>🖨️</span><span>Print PO</span>
                     </a>
+                    ${po.status === 'DRAFT' ? `
+                        <button onclick="proceedClientDraftPO('${po.id}', '${po.po_number}')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition inline-flex items-center gap-1 shadow-sm">
+                            <span>▶️</span><span>Proceed PO</span>
+                        </button>
+                    ` : ''}
                 </td>
             </tr>
         `).join('');
     } else {
         tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-slate-400">No orders found.</td></tr>`;
+    }
+}
+
+async function proceedClientDraftPO(id, poNumber) {
+    if (!confirm(`Finalize and Submit Purchase Order ${poNumber} for processing?`)) return;
+    const res = await NKB.api(`/api/orders/${id}/proceed`, { method: 'POST' });
+    if (res.success) {
+        NKB.showToast(`Purchase Order ${poNumber} submitted successfully!`, 'success');
+        loadClientOrders();
+    } else {
+        NKB.showToast(res.error || 'Failed to submit PO.', 'error');
     }
 }
 

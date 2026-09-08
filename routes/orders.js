@@ -395,8 +395,15 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
         const taxAmount = (subtotal * taxRate) / 100;
         const grandTotal = subtotal + taxAmount;
 
-        // Auto-approve if created by Admin/SuperAdmin, otherwise PENDING_APPROVAL
-        const initialStatus = (req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN') ? 'APPROVED' : 'PENDING_APPROVAL';
+        // Auto-approve if created by Admin/SuperAdmin, otherwise PENDING_APPROVAL; or DRAFT if is_draft is true
+        let initialStatus;
+        if (is_draft === true || is_draft === 'true' || is_draft === 1) {
+            initialStatus = 'DRAFT';
+        } else if (req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN') {
+            initialStatus = 'APPROVED';
+        } else {
+            initialStatus = 'PENDING_APPROVAL';
+        }
 
         db.prepare(`
             INSERT INTO purchase_orders
@@ -443,7 +450,7 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
             userId: req.user.id,
             userName: req.user.name,
             userRole: req.user.role,
-            action: 'CREATE_PO',
+            action: initialStatus === 'DRAFT' ? 'DRAFT_PO' : 'CREATE_PO',
             entityType: 'PURCHASE_ORDER',
             entityId: poNumber,
             details: {
@@ -452,7 +459,8 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
                 clientId: client_id,
                 grandTotal,
                 tolerance,
-                policy
+                policy,
+                status: initialStatus
             }
         });
 
@@ -462,14 +470,20 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
     try {
         const result = createOrderTx();
         
-        // Automatically generate Job Order(s) for all product line items in this PO
-        autoGenerateJobOrdersForPO(result.poId, req.user.id);
+        // Only generate Job Orders / Sales Orders if not a DRAFT
+        if (result.status !== 'DRAFT') {
+            autoGenerateJobOrdersForPO(result.poId, req.user.id);
+        }
 
         const createdPO = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(result.poId);
         const orderItems = db.prepare('SELECT * FROM purchase_order_items WHERE po_id = ?').all(result.poId);
         const jobOrders = db.prepare('SELECT * FROM job_orders WHERE po_id = ?').all(result.poId);
         const totalTargetQty = orderItems.reduce((acc, it) => acc + (it.target_quantity || 0), 0);
-        return res.status(201).json({ success: true, data: { ...createdPO, items: orderItems, jobOrders, total_target_quantity: totalTargetQty } });
+        return res.status(201).json({
+            success: true,
+            message: result.status === 'DRAFT' ? 'Purchase Order saved as Draft.' : 'Purchase Order created successfully!',
+            data: { ...createdPO, items: orderItems, jobOrders, total_target_quantity: totalTargetQty }
+        });
     } catch (err) {
         return res.status(400).json({ success: false, error: err.message });
     }
@@ -591,12 +605,72 @@ router.post('/:id/approve', authenticateToken, requireRoles('ADMIN'), (req, res)
 });
 
 /**
+ * POST /api/orders/:id/proceed
+ * Finalize/Proceed a DRAFT Purchase Order -> Dispatches Sales Order(s)
+ */
+router.post('/:id/proceed', authenticateToken, enforceClientIsolation, (req, res) => {
+    const { id } = req.params;
+
+    const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
+    if (!po) {
+        return res.status(404).json({ success: false, error: 'Purchase Order not found.' });
+    }
+
+    if (req.user.role === 'CLIENT' && po.client_id !== req.clientId) {
+        return res.status(403).json({ success: false, error: 'Access denied.', code: 'FORBIDDEN' });
+    }
+
+    if (po.status !== 'DRAFT' && po.status !== 'PENDING_APPROVAL') {
+        return res.status(400).json({ success: false, error: `Cannot proceed order with status "${po.status}".` });
+    }
+
+    const newStatus = (req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN') ? 'APPROVED' : 'PENDING_APPROVAL';
+
+    db.prepare(`
+        UPDATE purchase_orders
+        SET status = ?,
+            approved_by = ?,
+            approved_at = ?,
+            updated_at = datetime('now')
+        WHERE id = ?
+    `).run(
+        newStatus,
+        newStatus === 'APPROVED' ? req.user.id : null,
+        newStatus === 'APPROVED' ? new Date().toISOString() : null,
+        id
+    );
+
+    // Auto-generate Sales Orders if approved
+    let generatedSOs = [];
+    if (newStatus === 'APPROVED') {
+        generatedSOs = autoGenerateJobOrdersForPO(id, req.user.id);
+    }
+
+    logAudit({
+        userId: req.user.id,
+        userName: req.user.name,
+        userRole: req.user.role,
+        action: 'PROCEED_PO',
+        entityType: 'PURCHASE_ORDER',
+        entityId: po.po_number,
+        details: { poId: id, previousStatus: po.status, newStatus, generatedSOs }
+    });
+
+    const updated = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
+    return res.json({
+        success: true,
+        message: `Purchase Order ${po.po_number} finalized and Sales Order(s) dispatched to production!`,
+        data: updated
+    });
+});
+
+/**
  * PUT /api/orders/:id
  * Edit/Update an existing Purchase Order
  */
 router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
     const { id } = req.params;
-    let { client_id, expected_delivery_date, tolerance_percent, billing_policy, notes, items, tax_percent } = req.body;
+    let { client_id, expected_delivery_date, tolerance_percent, billing_policy, notes, items, tax_percent, is_draft, proceed } = req.body;
 
     const existingPO = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
     if (!existingPO) {
@@ -629,6 +703,22 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
     const tolerance = tolerance_percent !== undefined ? parseFloat(tolerance_percent) : existingPO.tolerance_percent;
     const policy = billing_policy || existingPO.billing_policy;
     const taxRate = tax_percent !== undefined ? parseFloat(tax_percent) : existingPO.tax_percent;
+
+    // Determine target status
+    let nextStatus = existingPO.status;
+    let willApprove = false;
+    if (existingPO.status === 'DRAFT') {
+        if (proceed === true || proceed === 'true' || is_draft === false || is_draft === 'false') {
+            if (req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN') {
+                nextStatus = 'APPROVED';
+                willApprove = true;
+            } else {
+                nextStatus = 'PENDING_APPROVAL';
+            }
+        } else {
+            nextStatus = 'DRAFT';
+        }
+    }
 
     const updateOrderTx = db.transaction(() => {
         let subtotal = 0.0;
@@ -683,11 +773,14 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
                 expected_delivery_date = ?,
                 tolerance_percent = ?,
                 billing_policy = ?,
+                status = ?,
                 notes = ?,
                 subtotal = ?,
                 tax_percent = ?,
                 tax_amount = ?,
                 grand_total = ?,
+                approved_by = CASE WHEN ? = 1 THEN ? ELSE approved_by END,
+                approved_at = CASE WHEN ? = 1 THEN datetime('now') ELSE approved_at END,
                 updated_at = datetime('now')
             WHERE id = ?
         `).run(
@@ -695,11 +788,15 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
             expected_delivery_date || existingPO.expected_delivery_date,
             tolerance,
             policy,
+            nextStatus,
             notes !== undefined ? notes : existingPO.notes,
             subtotal,
             taxRate,
             taxAmount,
             grandTotal,
+            willApprove ? 1 : 0,
+            req.user.id,
+            willApprove ? 1 : 0,
             id
         );
 
@@ -729,7 +826,7 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
             userId: req.user.id,
             userName: req.user.name,
             userRole: req.user.role,
-            action: 'UPDATE_PO',
+            action: (nextStatus === 'APPROVED' && existingPO.status === 'DRAFT') ? 'PROCEED_PO' : 'UPDATE_PO',
             entityType: 'PURCHASE_ORDER',
             entityId: existingPO.po_number,
             details: {
@@ -737,23 +834,32 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
                 poNumber: existingPO.po_number,
                 clientId: client_id,
                 grandTotal,
-                itemCount: processedItems.length
+                itemCount: processedItems.length,
+                status: nextStatus
             }
         });
 
-        return { id, poNumber: existingPO.po_number, grandTotal };
+        return { id, poNumber: existingPO.po_number, grandTotal, status: nextStatus };
     });
 
     try {
         const result = updateOrderTx();
         
-        // Sync Job Orders for this updated PO
-        autoGenerateJobOrdersForPO(result.id, req.user.id);
+        // Sync/Generate Job Orders for this updated PO if not a DRAFT
+        if (result.status !== 'DRAFT') {
+            autoGenerateJobOrdersForPO(result.id, req.user.id);
+        }
 
         const updatedPO = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(result.id);
         const orderItems = db.prepare('SELECT * FROM purchase_order_items WHERE po_id = ?').all(result.id);
         const jobOrders = db.prepare('SELECT * FROM job_orders WHERE po_id = ?').all(result.id);
-        return res.json({ success: true, message: `Purchase Order ${result.poNumber} updated successfully!`, data: { ...updatedPO, items: orderItems, jobOrders } });
+        return res.json({
+            success: true,
+            message: result.status === 'DRAFT' 
+                ? `Purchase Order ${result.poNumber} saved as Draft.` 
+                : `Purchase Order ${result.poNumber} updated and dispatched to production!`,
+            data: { ...updatedPO, items: orderItems, jobOrders }
+        });
     } catch (err) {
         return res.status(400).json({ success: false, error: err.message });
     }
