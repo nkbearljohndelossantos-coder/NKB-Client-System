@@ -7,6 +7,17 @@ let monthlySalesChart = null;
 let cachedClients = [];
 let cachedProducts = [];
 let cachedPayments = [];
+let cachedEmployees = [];
+
+async function ensureEmployeesLoaded() {
+    if (!cachedEmployees || cachedEmployees.length === 0) {
+        const res = await NKB.api('/api/employees');
+        if (res.success && Array.isArray(res.data)) {
+            cachedEmployees = res.data;
+        }
+    }
+    return cachedEmployees;
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
     await NKB.init();
@@ -163,11 +174,18 @@ async function loadDashboard() {
             <tr class="hover:bg-slate-50 transition">
                 <td class="py-3 px-4 font-bold text-indigo-600">${dr.dr_number}</td>
                 <td class="py-3 px-4 font-bold text-slate-800">${dr.company_name}</td>
-                <td class="py-3 px-4 text-slate-600">${dr.po_number}</td>
+                <td class="py-3 px-4">
+                    <button onclick="openViewPOModal('${dr.po_id}')" class="font-bold text-indigo-600 hover:text-indigo-800 hover:underline" title="View Purchase Order Details">
+                        ${dr.po_number}
+                    </button>
+                </td>
                 <td class="py-3 px-4 font-extrabold text-emerald-700">${NKB.formatNumber(dr.total_accepted)} pcs</td>
                 <td class="py-3 px-4 text-slate-500">${dr.signer_name || 'Authorized'}</td>
                 <td class="py-3 px-4"><span class="badge ${dr.billing_policy === 'ACTUAL_DELIVERY' ? 'bg-indigo-50 text-indigo-700' : 'bg-purple-50 text-purple-700'}">${dr.billing_policy}</span></td>
-                <td class="py-3 px-4 text-right">
+                <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                    <button onclick="openViewPOModal('${dr.po_id}')" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold text-xs transition" title="View Purchase Order">
+                        👁️ View PO
+                    </button>
                     <button onclick="openGenerateInvoiceModal('${dr.id}', '${dr.dr_number}', '${dr.company_name}', ${dr.total_accepted})" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-xs shadow-sm transition">
                         ⚡ Generate Invoice
                     </button>
@@ -282,13 +300,20 @@ async function loadJobOrders() {
         tbody.innerHTML = res.data.map(jo => `
             <tr class="hover:bg-slate-50 transition">
                 <td class="py-3 px-4 font-bold text-indigo-600">${jo.jo_number}</td>
-                <td class="py-3 px-4 text-slate-600">${jo.po_number}</td>
+                <td class="py-3 px-4">
+                    <button onclick="openViewPOModal('${jo.po_id}')" class="font-bold text-indigo-600 hover:text-indigo-800 hover:underline" title="View Purchase Order Details">
+                        ${jo.po_number}
+                    </button>
+                </td>
                 <td class="py-3 px-4 font-bold text-slate-800">${jo.company_name}</td>
                 <td class="py-3 px-4 font-semibold text-slate-800">${jo.product_name} <span class="text-xs text-slate-400">(${jo.sku})</span></td>
                 <td class="py-3 px-4 font-bold text-slate-700">${NKB.formatNumber(jo.target_quantity)} pcs</td>
-                <td class="py-3 px-4 text-slate-600">${jo.assigned_team}</td>
+                <td class="py-3 px-4 text-slate-600 font-medium">${jo.assigned_team}</td>
                 <td class="py-3 px-4">${NKB.renderStatusBadge(jo.status)}</td>
-                <td class="py-3 px-4 text-right">
+                <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                    <button onclick="openViewPOModal('${jo.po_id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition" title="View Purchase Order Details">
+                        👁️ View PO
+                    </button>
                     <button onclick="openCreateBatchModal('${jo.id}', '${jo.jo_number}', ${jo.target_quantity}, '${jo.product_name}')" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition">
                         + Start Batch
                     </button>
@@ -311,14 +336,31 @@ async function loadBatches() {
         tbody.innerHTML = res.data.map(b => `
             <tr class="hover:bg-slate-50 transition">
                 <td class="py-3 px-4 font-bold text-indigo-600">${b.batch_number}</td>
-                <td class="py-3 px-4 text-slate-600">${b.jo_number} / ${b.po_number}</td>
-                <td class="py-3 px-4 font-semibold text-slate-800">${b.product_name}</td>
+                <td class="py-3 px-4">
+                    <button onclick="openViewPOModal('${b.po_id}')" class="font-bold text-indigo-600 hover:text-indigo-800 hover:underline" title="View Purchase Order Details">
+                        ${b.po_number}
+                    </button>
+                    <div class="text-[11px] text-slate-400 font-medium">JO: ${b.jo_number}</div>
+                </td>
+                <td class="py-3 px-4">
+                    <div class="font-semibold text-slate-800">${b.product_name}</div>
+                    ${b.compounding_operator || b.bottling_lead || b.qc_inspector ? `
+                        <div class="text-[10px] text-slate-400 flex flex-wrap gap-1 mt-0.5">
+                            ${b.compounding_operator ? `<span class="bg-amber-50 text-amber-800 px-1.5 py-0.5 rounded" title="Compounding Operator">🥣 ${b.compounding_operator}</span>` : ''}
+                            ${b.bottling_lead ? `<span class="bg-indigo-50 text-indigo-800 px-1.5 py-0.5 rounded" title="Bottling Line Lead">🧴 ${b.bottling_lead}</span>` : ''}
+                            ${b.qc_inspector ? `<span class="bg-emerald-50 text-emerald-800 px-1.5 py-0.5 rounded" title="QC Inspector">🔬 ${b.qc_inspector}</span>` : ''}
+                        </div>
+                    ` : ''}
+                </td>
                 <td class="py-3 px-4 font-bold text-slate-700">${NKB.formatNumber(b.target_quantity)} pcs</td>
                 <td class="py-3 px-4 font-extrabold text-indigo-700">${b.actual_yield > 0 ? NKB.formatNumber(b.actual_yield) + ' pcs' : '<span class="text-slate-400 italic">In progress</span>'}</td>
                 <td class="py-3 px-4">${b.actual_yield > 0 ? NKB.renderVarianceBadge(b.variance_quantity, b.variance_percent) : '-'}</td>
                 <td class="py-3 px-4 text-slate-500">${NKB.formatDate(b.expiry_date)}</td>
                 <td class="py-3 px-4">${NKB.renderStatusBadge(b.status)}</td>
-                <td class="py-3 px-4 text-right space-x-1.5">
+                <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                    <button onclick="openViewPOModal('${b.po_id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-block" title="View Purchase Order Details">
+                        👁️ View PO
+                    </button>
                     ${b.status === 'MIXING' || b.status === 'BOTTLING' || b.status === 'PLANNED' ? `
                         <button onclick="openLogYieldModal('${b.id}', '${b.batch_number}', ${b.target_quantity}, ${b.tolerance_percent})" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition">
                             📝 Log Yield
@@ -355,12 +397,19 @@ async function loadDeliveries() {
                 <td class="py-3 px-4 font-bold text-indigo-600">${dr.dr_number}</td>
                 <td class="py-3 px-4 text-slate-600">${NKB.formatDate(dr.delivery_date)}</td>
                 <td class="py-3 px-4 font-bold text-slate-800">${dr.company_name}</td>
-                <td class="py-3 px-4 text-slate-600">${dr.po_number}</td>
+                <td class="py-3 px-4">
+                    <button onclick="openViewPOModal('${dr.po_id}')" class="font-bold text-indigo-600 hover:text-indigo-800 hover:underline" title="View Purchase Order Details">
+                        ${dr.po_number}
+                    </button>
+                </td>
                 <td class="py-3 px-4 font-bold text-slate-700">${NKB.formatNumber(dr.total_delivered)} pcs</td>
                 <td class="py-3 px-4 font-extrabold text-emerald-700">${dr.total_accepted > 0 ? NKB.formatNumber(dr.total_accepted) + ' pcs' : '-'}</td>
                 <td class="py-3 px-4 font-bold text-rose-600">${dr.total_rejected > 0 ? NKB.formatNumber(dr.total_rejected) + ' pcs' : '0'}</td>
                 <td class="py-3 px-4">${NKB.renderStatusBadge(dr.status)}</td>
-                <td class="py-3 px-4 text-right space-x-1.5">
+                <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                    <button onclick="openViewPOModal('${dr.po_id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-block" title="View Purchase Order Details">
+                        👁️ View PO
+                    </button>
                     <a href="/print-dr.html?id=${dr.id}" target="_blank" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-block">
                         🖨️ Print DR
                     </a>
@@ -390,13 +439,25 @@ async function loadInvoices() {
                 <td class="py-3 px-4 font-bold text-indigo-600">${si.invoice_number}</td>
                 <td class="py-3 px-4 text-slate-600">${NKB.formatDate(si.invoice_date)} <br><span class="text-[10px] text-slate-400">Due: ${NKB.formatDate(si.due_date)}</span></td>
                 <td class="py-3 px-4 font-bold text-slate-800">${si.company_name}</td>
-                <td class="py-3 px-4 text-slate-600">${si.dr_number}</td>
+                <td class="py-3 px-4">
+                    <div class="text-slate-700 font-medium">${si.dr_number}</div>
+                    ${si.po_id ? `
+                        <button onclick="openViewPOModal('${si.po_id}')" class="text-[11px] font-bold text-indigo-600 hover:underline block mt-0.5" title="View Purchase Order Details">
+                            PO: ${si.po_number}
+                        </button>
+                    ` : ''}
+                </td>
                 <td class="py-3 px-4 font-extrabold text-slate-900">${NKB.formatCurrency(si.total_amount)}</td>
                 <td class="py-3 px-4 font-bold text-emerald-700">${NKB.formatCurrency(si.paid_amount)}</td>
                 <td class="py-3 px-4 font-extrabold text-rose-700">${NKB.formatCurrency(si.balance_due)}</td>
                 <td class="py-3 px-4"><span class="badge ${si.agingCategory === 'Current' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-100 text-rose-800 font-bold'}">${si.agingCategory}</span></td>
                 <td class="py-3 px-4">${NKB.renderStatusBadge(si.status)}</td>
-                <td class="py-3 px-4 text-right space-x-1.5">
+                <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                    ${si.po_id ? `
+                        <button onclick="openViewPOModal('${si.po_id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-block" title="View Purchase Order Details">
+                            👁️ View PO
+                        </button>
+                    ` : ''}
                     <a href="/print-invoice.html?id=${si.id}" target="_blank" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-block">
                         🖨️ Print SI
                     </a>
@@ -825,12 +886,20 @@ async function loadBufferStock() {
             <tr class="hover:bg-slate-50 transition">
                 <td class="py-3 px-4 font-bold text-slate-800">${bs.company_name}</td>
                 <td class="py-3 px-4 font-semibold text-slate-800">${bs.product_name} <span class="text-xs text-slate-400">(${bs.sku})</span></td>
-                <td class="py-3 px-4 text-slate-600">${bs.po_number} / ${bs.batch_number}</td>
+                <td class="py-3 px-4">
+                    <button onclick="openViewPOModal('${bs.source_po_id}')" class="font-bold text-indigo-600 hover:text-indigo-800 hover:underline" title="View Purchase Order Details">
+                        ${bs.po_number}
+                    </button>
+                    <div class="text-[11px] text-slate-400 font-medium">Batch: ${bs.batch_number}</div>
+                </td>
                 <td class="py-3 px-4 font-bold text-slate-700">${NKB.formatNumber(bs.initial_quantity)} pcs</td>
                 <td class="py-3 px-4 font-semibold text-purple-700">${NKB.formatNumber(bs.quantity_released)} pcs</td>
                 <td class="py-3 px-4 font-extrabold text-emerald-700">${NKB.formatNumber(bs.quantity_remaining)} pcs</td>
                 <td class="py-3 px-4">${NKB.renderStatusBadge(bs.status)}</td>
-                <td class="py-3 px-4 text-right">
+                <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                    <button onclick="openViewPOModal('${bs.source_po_id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-block" title="View Purchase Order Details">
+                        👁️ View PO
+                    </button>
                     ${bs.quantity_remaining > 0 ? `
                         <button onclick="openReleaseBufferModal('${bs.id}', ${bs.quantity_remaining}, '${bs.company_name}', '${bs.product_name}')" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition">
                             Release Stock
@@ -1951,8 +2020,12 @@ async function submitCreatePO(e) {
 // -------------------------------------------------------------
 async function openCreateJOModal(poId, poNumber, clientName) {
     const root = document.getElementById('modals-root');
-    const orderRes = await NKB.api(`/api/orders/${poId}`);
+    const [orderRes, employees] = await Promise.all([
+        NKB.api(`/api/orders/${poId}`),
+        ensureEmployeesLoaded()
+    ]);
     const poItems = (orderRes.success && orderRes.data && orderRes.data.items) ? orderRes.data.items : [];
+    const prodStaff = employees.filter(e => e.department === 'Production' || e.department === 'Compounding');
 
     root.innerHTML = `
         <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
@@ -1980,8 +2053,13 @@ async function openCreateJOModal(poId, poNumber, clientName) {
                         <input type="number" id="jo-target-qty" value="${poItems.length > 0 ? poItems[0].target_quantity : 1000}" min="1" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-900">
                     </div>
                     <div>
-                        <label class="block text-slate-600 mb-1">Assigned Team</label>
-                        <input type="text" id="jo-team" value="Formulation & Bottling Team Alpha" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
+                        <label class="block text-slate-600 mb-1">Assigned Production Supervisor / Team Lead *</label>
+                        <select id="jo-team" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-900">
+                            <option value="Formulation & Bottling Team Alpha">Formulation & Bottling Team Alpha (Standard)</option>
+                            ${prodStaff.map(e => `
+                                <option value="${e.name} (${e.department})">${e.name} — ${e.department} [${e.employee_id}]</option>
+                            `).join('')}
+                        </select>
                     </div>
                     <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
                         <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold">Cancel</button>
@@ -2028,28 +2106,75 @@ async function submitCreateJO(e, poId) {
     }
 }
 
-// 3. Create Production Batch Modal
-function openCreateBatchModal(joId, joNumber, targetQty, productName) {
+// -------------------------------------------------------------
+// 3. CREATE PRODUCTION BATCH MODAL
+// -------------------------------------------------------------
+async function openCreateBatchModal(joId, joNumber, targetQty, productName) {
     const root = document.getElementById('modals-root');
+    const employees = await ensureEmployeesLoaded();
+
+    const compoundingStaff = employees.filter(e => e.department === 'Compounding' || e.department === 'Production' || e.department === 'R&D');
+    const bottlingStaff = employees.filter(e => e.department === 'Production');
+    const qcStaff = employees.filter(e => e.department === 'QC' || e.department === 'Regulatory');
+
     root.innerHTML = `
         <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
-            <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
                 <div class="flex justify-between items-center border-b border-slate-100 pb-3">
-                    <h3 class="text-lg font-bold text-slate-900">Start Production Batch</h3>
-                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold">&times;</button>
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-900">Start Production Batch</h3>
+                        <p class="text-xs text-slate-500">JO Reference: <strong>${joNumber}</strong></p>
+                    </div>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
                 </div>
                 <form onsubmit="submitCreateBatch(event, '${joId}')" class="space-y-4 text-xs font-semibold">
                     <div class="p-3 bg-slate-50 rounded-xl text-slate-600 space-y-1">
-                        <div>JO Reference: <strong class="text-slate-900">${joNumber}</strong></div>
                         <div>Product: <strong class="text-slate-900">${productName}</strong></div>
                     </div>
                     <div>
-                        <label class="block text-slate-600 mb-1">Target Batch Quantity (pcs)</label>
-                        <input type="number" id="batch-target-qty" value="${targetQty}" min="1" required class="w-full px-3 py-2 border rounded-xl bg-slate-50">
+                        <label class="block text-slate-600 mb-1">Target Batch Quantity (pcs) *</label>
+                        <input type="number" id="batch-target-qty" value="${targetQty}" min="1" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-900">
                     </div>
-                    <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl">Cancel</button>
-                        <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold">Start Batch</button>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-slate-600 mb-1">🥣 Compounding Chemist / Operator *</label>
+                            <select id="batch-compounding-operator" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-medium text-slate-900">
+                                ${compoundingStaff.map(e => `
+                                    <option value="${e.name}" ${e.department === 'Compounding' ? 'selected' : ''}>${e.name} (${e.department})</option>
+                                `).join('')}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 mb-1">🧴 Bottling & Packaging Lead *</label>
+                            <select id="batch-bottling-lead" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-medium text-slate-900">
+                                ${bottlingStaff.map((e, idx) => `
+                                    <option value="${e.name}" ${idx === 0 ? 'selected' : ''}>${e.name} [${e.employee_id}]</option>
+                                `).join('')}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-slate-600 mb-1">🔬 Quality Control (QC) Inspector *</label>
+                            <select id="batch-qc-inspector" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-medium text-slate-900">
+                                ${qcStaff.map((e, idx) => `
+                                    <option value="${e.name}" ${idx === 0 ? 'selected' : ''}>${e.name} (${e.department})</option>
+                                `).join('')}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 mb-1">🏭 Line / Cleanroom Assignment</label>
+                            <select id="batch-line-assignment" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-medium text-slate-900">
+                                <option value="Cleanroom Line 1 (Alpha)">Cleanroom Line 1 (Alpha)</option>
+                                <option value="Cleanroom Line 2 (Beta)">Cleanroom Line 2 (Beta)</option>
+                                <option value="High-Speed Bottling Line 3">High-Speed Bottling Line 3</option>
+                                <option value="Compounding Kettle Area A">Compounding Kettle Area A</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold">Cancel</button>
+                        <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-md shadow-indigo-600/30">Start Batch</button>
                     </div>
                 </form>
             </div>
@@ -2060,17 +2185,25 @@ function openCreateBatchModal(joId, joNumber, targetQty, productName) {
 async function submitCreateBatch(e, joId) {
     e.preventDefault();
     const targetQty = parseInt(document.getElementById('batch-target-qty').value);
+    const compoundingOperator = document.getElementById('batch-compounding-operator')?.value || '';
+    const bottlingLead = document.getElementById('batch-bottling-lead')?.value || '';
+    const qcInspector = document.getElementById('batch-qc-inspector')?.value || '';
+    const lineAssignment = document.getElementById('batch-line-assignment')?.value || '';
 
     const res = await NKB.api('/api/production/batches', {
         method: 'POST',
         body: JSON.stringify({
             jo_id: joId,
-            target_quantity: targetQty
+            target_quantity: targetQty,
+            compounding_operator: compoundingOperator,
+            bottling_lead: bottlingLead,
+            qc_inspector: qcInspector,
+            line_assignment: lineAssignment
         })
     });
 
     if (res.success) {
-        NKB.showToast(`Batch ${res.data.batch_number} started!`, 'success');
+        NKB.showToast(`Batch ${res.data.batch_number} started with assigned operators!`, 'success');
         closeModal();
         switchTab('production');
     } else {

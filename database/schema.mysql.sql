@@ -45,6 +45,20 @@ CREATE TABLE IF NOT EXISTS users (
     CONSTRAINT fk_users_client FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 3b. Employees Roster Table
+CREATE TABLE IF NOT EXISTS employees (
+    id VARCHAR(36) NOT NULL PRIMARY KEY,
+    employee_id VARCHAR(50) NOT NULL UNIQUE,
+    name VARCHAR(255) NOT NULL,
+    department VARCHAR(100) NULL,
+    credit_limit DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    current_balance DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
+    barcode_number VARCHAR(100) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- 4. Products Table
 CREATE TABLE IF NOT EXISTS products (
     id VARCHAR(36) NOT NULL PRIMARY KEY,
@@ -153,6 +167,10 @@ CREATE TABLE IF NOT EXISTS production_batches (
     variance_quantity INT NOT NULL DEFAULT 0,
     variance_percent DECIMAL(5,2) NOT NULL DEFAULT 0.00,
     status ENUM('PLANNED', 'MIXING', 'BOTTLING', 'QC_PASSED', 'EXCEPTION_REQUIRES_APPROVAL', 'APPROVED_FOR_DISPATCH', 'COMPLETED', 'REJECTED') NOT NULL DEFAULT 'PLANNED',
+    compounding_operator VARCHAR(255) NULL,
+    bottling_lead VARCHAR(255) NULL,
+    qc_inspector VARCHAR(255) NULL,
+    line_assignment VARCHAR(100) NULL,
     qc_notes TEXT NULL,
     qc_passed_by VARCHAR(36) NULL,
     qc_passed_at DATETIME NULL,

@@ -25,6 +25,20 @@ CREATE TABLE IF NOT EXISTS users (
     FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL
 );
 
+-- Employees Roster Table
+CREATE TABLE IF NOT EXISTS employees (
+    id TEXT PRIMARY KEY,
+    employee_id TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    department TEXT,
+    credit_limit REAL DEFAULT 0,
+    current_balance REAL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'active',
+    barcode_number TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- Clients Table
 CREATE TABLE IF NOT EXISTS clients (
     id TEXT PRIMARY KEY,
@@ -150,6 +164,10 @@ CREATE TABLE IF NOT EXISTS production_batches (
     variance_quantity INTEGER NOT NULL DEFAULT 0,
     variance_percent REAL NOT NULL DEFAULT 0.0,
     status TEXT NOT NULL DEFAULT 'PLANNED' CHECK (status IN ('PLANNED', 'MIXING', 'BOTTLING', 'QC_PASSED', 'EXCEPTION_REQUIRES_APPROVAL', 'APPROVED_FOR_DISPATCH', 'COMPLETED', 'REJECTED')),
+    compounding_operator TEXT,
+    bottling_lead TEXT,
+    qc_inspector TEXT,
+    line_assignment TEXT,
     qc_notes TEXT,
     qc_passed_by TEXT,
     qc_passed_at TEXT,

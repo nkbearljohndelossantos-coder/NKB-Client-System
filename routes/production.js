@@ -15,7 +15,7 @@ router.get('/batches', authenticateToken, (req, res) => {
 
     let query = `
         SELECT b.*, p.name as product_name, p.sku, p.unit,
-               jo.jo_number, po.po_number, po.tolerance_percent, po.billing_policy,
+               jo.jo_number, po.id as po_id, po.po_number, po.tolerance_percent, po.billing_policy,
                c.company_name, c.id as client_id
         FROM production_batches b
         JOIN job_orders jo ON b.jo_id = jo.id
@@ -110,7 +110,17 @@ router.get('/batches/:id', authenticateToken, (req, res) => {
  * Create a new production batch
  */
 router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), (req, res) => {
-    const { jo_id, target_quantity, formula_code, production_date, expiry_date } = req.body;
+    const {
+        jo_id,
+        target_quantity,
+        formula_code,
+        production_date,
+        expiry_date,
+        compounding_operator,
+        bottling_lead,
+        qc_inspector,
+        line_assignment
+    } = req.body;
 
     if (!jo_id || !target_quantity) {
         return res.status(400).json({ success: false, error: 'Job Order ID and Target Quantity are required.' });
@@ -140,8 +150,8 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
 
     db.prepare(`
         INSERT INTO production_batches
-        (id, batch_number, jo_id, product_id, formula_code, production_date, expiry_date, target_quantity, actual_yield, variance_quantity, variance_percent, status, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0.0, 'MIXING', ?)
+        (id, batch_number, jo_id, product_id, formula_code, production_date, expiry_date, target_quantity, actual_yield, variance_quantity, variance_percent, status, compounding_operator, bottling_lead, qc_inspector, line_assignment, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0.0, 'MIXING', ?, ?, ?, ?, ?)
     `).run(
         batchId,
         batchNumber,
@@ -151,6 +161,10 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
         production_date || new Date().toISOString().split('T')[0],
         expDate,
         parseInt(target_quantity),
+        compounding_operator || null,
+        bottling_lead || null,
+        qc_inspector || null,
+        line_assignment || 'Line 1 (Alpha)',
         req.user.id
     );
 
@@ -161,7 +175,7 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
         action: 'CREATE_BATCH',
         entityType: 'PRODUCTION_BATCH',
         entityId: batchNumber,
-        details: { batchId, batchNumber, joId: jo_id, target_quantity }
+        details: { batchId, batchNumber, joId: jo_id, target_quantity, compounding_operator, bottling_lead, qc_inspector }
     });
 
     const created = db.prepare('SELECT * FROM production_batches WHERE id = ?').get(batchId);

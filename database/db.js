@@ -46,6 +46,18 @@ if (useMysql) {
         }
     }
 
+    // Auto-migrate schema upgrades for existing database
+    try {
+        const batchCols = ['compounding_operator', 'bottling_lead', 'qc_inspector', 'line_assignment'];
+        for (const col of batchCols) {
+            try {
+                db.exec(`ALTER TABLE production_batches ADD COLUMN ${col} TEXT;`);
+            } catch (_) {}
+        }
+    } catch (migErr) {
+        console.warn('Migration note:', migErr.message);
+    }
+
     db.transaction = function (fn) {
         return function (...args) {
             db.exec('BEGIN TRANSACTION;');

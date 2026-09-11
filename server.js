@@ -127,6 +127,7 @@ function mountApiRoutes() {
     app.use('/api/reports', require('./routes/reports'));
     app.use('/api/audit-logs', require('./routes/auditLogs'));
     app.use('/api/users', require('./routes/users'));
+    app.use('/api/employees', require('./routes/employees'));
 }
 
 function loadDatabaseAndRoutes() {

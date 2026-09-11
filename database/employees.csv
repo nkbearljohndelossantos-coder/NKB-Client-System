@@ -1,0 +1,107 @@
+employee_id,name,department,credit_limit,current_balance,status,barcode_number
+NKB052026-0001,"Bella, Katherine A.",CEO,,850.00,active,NKB052026-0001
+NKB052026-0002,"Bella, Norvin L.",COO,,35561.10,active,NKB052026-0002
+NKB052026-0003,"Alonzo, Merry Jean I.",Production,,21088.97,active,NKB052026-0003
+NKB052026-0004,"Atayde, Emmie M.",Production,,21095.04,active,NKB052026-0004
+NKB052026-0005,"Atayde, Marvin G.",Security,,0.00,active,NKB052026-0005
+NKB052026-0006,"Bautista, Allen L.",Production,,6198.80,active,NKB052026-0006
+NKB052026-0007,"Bombita, Raniella Camille",Production,,200577.61,active,NKB052026-0007
+NKB052026-0008,"Boston, Kem Mariel",Regulatory,,1370.00,active,NKB052026-0008
+NKB052026-0009,"Catalan, Jhon Jhon B.",Production,,1057.00,active,NKB052026-0009
+NKB052026-0010,"Catindig, Renar A.",Compounding,,2667.00,active,NKB052026-0010
+NKB052026-0011,"Corral, Rodolfo C.",Maintenance,,16906.00,active,NKB052026-0011
+NKB052026-0012,"Cuya, Roberto",Construction,,4442.00,active,NKB052026-0012
+NKB052026-0013,"De Jesus, Khayle Nicole G.",Production,,0.00,active,NKB052026-0013
+NKB052026-0014,"Delos Santos, Earl John",Inventory / Warehouse,,9872.00,active,NKB052026-0014
+NKB052026-0015,"Garcia, Jayvee G.",Production,,31820.60,active,NKB052026-0015
+NKB052026-0016,"Guillermo, Jaime",Construction,,12389.80,active,NKB052026-0016
+NKB052026-0017,"Gutierrez, Heramae",Purchasing,,2473.00,active,NKB052026-0017
+NKB052026-0018,"Ilano, Maximo Jr. R.",Marketing,,1383.00,active,NKB052026-0018
+NKB052026-0019,"Jurado, Genevieve Anne A.",HR,,9251.01,active,NKB052026-0019
+NKB052026-0020,"Luy, Rodello",Inventory / Warehouse,,1674.00,active,NKB052026-0020
+NKB052026-0021,"Macafe, Angelita",R&D,,1140.00,active,NKB052026-0021
+NKB052026-0022,"Mananquil, Mark Gleen",Production,,2489.00,active,NKB052026-0022
+NKB052026-0023,"Mangulabnan, Ana Marie V.",Housekeeping,,400.00,active,NKB052026-0023
+NKB052026-0024,"Manuel, Nannette",Coop,,4448.00,active,NKB052026-0024
+NKB052026-0025,"Martin, Michelle",Business Development,,1020.00,active,NKB052026-0025
+NKB052026-0026,"Mendoza, Sonny",Production,,5704.00,active,NKB052026-0026
+NKB052026-0027,"Mercado, Jaycel D.",Inventory / Warehouse,,14244.01,active,NKB052026-0027
+NKB052026-0028,"Mirambil, Ricky O.",Security,,13334.00,active,NKB052026-0028
+NKB052026-0029,"Mirambil, Rommel M.",Production,,4103.50,active,NKB052026-0029
+NKB052026-0030,"Mirambil, Rosanna O.",Housekeeping,,8016.60,active,NKB052026-0030
+NKB052026-0031,"Molina, Rose Ann",Vyuceutical,,4358.00,active,NKB052026-0031
+NKB052026-0032,"Nabong, Dorina",Accounting,,3233.00,active,NKB052026-0032
+NKB052026-0033,"Nobleza, Glenn L.",Maintenance,,0.00,active,NKB052026-0033
+NKB052026-0034,"Obamos, Rodalia G.",Production,,2162.00,active,NKB052026-0034
+NKB052026-0035,"Panis, Priman",Construction,,7389.00,active,NKB052026-0035
+NKB052026-0036,"Prudencio, Ronaldo",Production,,1359.00,active,NKB052026-0036
+NKB052026-0037,"Razo, Dennis R.",Accounting,,999.00,active,NKB052026-0037
+NKB052026-0038,"Santos, Sharmaine E.",Accounting,,10838.60,active,NKB052026-0038
+NKB052026-0039,"Valiao, Reynan P.",Marketing,,0.00,active,NKB052026-0039
+NKB052026-0040,Madelo Edwin,Accounting,,1430.60,active,NKB052026-0040
+PRJ2026-0001,"Amolo, Wenjielyn",Production,,1635.04,active,PRJ2026-0001
+PRJ2026-0002,"Bombita, Rafael Rannie",Production,,18240.16,active,PRJ2026-0002
+PRJ2026-0003,"Cama�a, Rose Pauline",Production,,136.00,active,PRJ2026-0003
+PRJ2026-0004,"Carel, Carlo Jay",Production,,3756.00,active,PRJ2026-0004
+PRJ2026-0005,"Cate, Dominick",Production,,685.00,active,PRJ2026-0005
+PRJ2026-0006,"Cedillo, Jamrex",Production,,1776.00,active,PRJ2026-0006
+PRJ2026-0007,"Corral, Rex C.",Production,,4567.00,active,PRJ2026-0007
+PRJ2026-0008,"Dalanon, Mark B.",Production,,105.00,active,PRJ2026-0008
+PRJ2026-0009,"Dalanon, Mars B.",Production,,14591.80,active,PRJ2026-0009
+PRJ2026-0010,"Del Rosario, Mary Ann",Maintenance,,0.00,active,PRJ2026-0010
+PRJ2026-0011,"Del Socorro, Mary Grace",Production,,194.00,active,PRJ2026-0011
+PRJ2026-0012,"Dela Cruz, Vincent Lloyd",Inventory / Warehouse,,1314.00,active,PRJ2026-0012
+PRJ2026-0013,"Fabio, Marilou",QC,,3213.00,active,PRJ2026-0013
+PRJ2026-0014,"Gerero, Raquel",Production,,12031.00,active,PRJ2026-0014
+PRJ2026-0015,"Laungayan, Jason",Security,,3051.12,active,PRJ2026-0015
+PRJ2026-0016,"Laungayan, Marivic",Production,,2666.00,active,PRJ2026-0016
+PRJ2026-0017,"Macol, Vincent",Production,,19356.67,active,PRJ2026-0017
+PRJ2026-0018,"Maglangit, Melina",Maintenance,,4328.80,active,PRJ2026-0018
+PRJ2026-0019,"Mejorada, Roselyn",Production,,27688.81,active,PRJ2026-0019
+PRJ2026-0020,"Mendoza, Marife",Production,,0.00,active,PRJ2026-0020
+PRJ2026-0021,"Mirambil, Darius",Production,,8914.82,active,PRJ2026-0021
+PRJ2026-0022,"Mirambil, Leo",Silkscreen,,3768.00,active,PRJ2026-0022
+PRJ2026-0023,"Mirambil, Michael",Production,,4065.00,active,PRJ2026-0023
+PRJ2026-0024,"Omandac, Jayson",Production,,1341.00,active,PRJ2026-0024
+PRJ2026-0025,"Orongan, Jocelyn",Production,,1723.00,active,PRJ2026-0025
+PRJ2026-0026,"Padilla, Creiver John",Production,,0.00,active,PRJ2026-0026
+PRJ2026-0027,"Presentacion, Jaysie G.",Production,,5476.00,active,PRJ2026-0027
+PRJ2026-0028,"Regala, Ronald",Production,,6078.82,active,PRJ2026-0028
+PRJ2026-0029,"Soriano, Joel",Production,,0.00,active,PRJ2026-0029
+PRJ2026-0030,"Soriano, Joylen",Production,,748.01,active,PRJ2026-0030
+PRJ2026-0031,"Valle, Leonard",Production,,4657.00,active,PRJ2026-0031
+PRJ2026-0032,"Bobadilla, Michael",Production,,0.00,active,PRJ2026-0032
+NKB052026-0041,"Garcia, Jonnel",Logistics,,5033.00,active,NKB052026-0041
+PRJ2026-0033,Magan Edmar John,Construction,,0.00,active,PRJ2026-0033
+PRJ2026-0034,"Mananquil,Elmedio Jr",Construction,,0.00,active,PRJ2026-0034
+PRJ2026-0035,"Taruc, Michael",Construction,,0.00,active,PRJ2026-0035
+PRJ2026-0036,"Guillermo, Isagani",Construction,,5277.00,active,PRJ2026-0036
+NKBCANTEEN,Canteen,,,0.00,active,NKBCANTEEN
+NKBPETTYCASH,Petty Cash,,,12912.00,active,NKBPETTYCASH
+VYU2026-0001,"Boston, Monet",Vyuceutical,,3929.10,active,VYU2026-0001
+PRJ2026-0038,"Mirambil, Monica",Production,,649.00,active,PRJ2026-0038
+VYU2026-0002,"ROCERO, JUSTINE",Vyuceutical,,0.00,active,VYU2026-0002
+VYU2026-0003,"MARBIBI, MELANIE D",Vyuceutical,,50.00,active,VYU2026-0003
+PRJ2026-0037,"SALCEDO, ANA O.",Production,,87.00,active,PRJ2026-0037
+NKB072026-0041,"NGOHO, JILLIANA MARIE B.",,,0.00,active,NKB072026-0041
+PRJ2026-0039,"BERTUDAZO, CHARLOTTE R.",Maintenance,,665.20,active,PRJ2026-0039
+NKB202607200109,Joylen Soriano,Printing,,0.00,inactive,NKB202607200109
+NKB202607200110,JAYCEL MERCADO,Inventory / Warehouse,,0.00,inactive,NKB202607200110
+NKB202607200111,jhon jhon catalan,Printing,,0.00,active,NKB202607200111
+NKB202607200112,merry jean alonzo,Admin,,0.00,inactive,NKB202607200112
+NKB202607210113,Rose Pauline Olives Camaña,QC,,0.00,inactive,NKB202607210113
+NKB202607210114,Rose Pauline Olives Camaña,QC,,0.00,inactive,NKB202607210114
+NKB202607240115,Joylen Soriano,Printing,,0.00,inactive,NKB202607240115
+NKB202607240116,Joylen Soriano,Printing,,0.00,inactive,NKB202607240116
+NKB202607260117,Mars dalanon,Silkscreen,,0.00,inactive,NKB202607260117
+NKB202607260118,Leo Mirambil,Silkscreen,,0.00,inactive,NKB202607260118
+NKB202607260119,Mars dalanon,Silkscreen,,0.00,inactive,NKB202607260119
+NKB202607260120,Leonard Valle,Silkscreen,,0.00,inactive,NKB202607260120
+NKB202607260121,Marife mendoza,Production,,0.00,active,NKB202607260121
+NKB202607260122,Jamrex cedillo,Production,,0.00,active,NKB202607260122
+NKB202607260123,Jamrex Cedillo,Production,,0.00,active,NKB202607260123
+NKB072026-0042,"Mendoza, Porchia Soffia Louisse",Marketing,,657.00,active,NKB072026-0042
+NKB072026-0043,"Taguan, Angelica T.",Marketing,,0.00,active,NKB072026-0043
+NKB082026-0044,"Pellazar, Mavick Pauleen Roma",Marketing,,35.00,active,NKB082026-0044
+NKB082026-0045,Alexandra Cinco,Marketing,,185.00,active,NKB082026-0045
+NKB-20260815-0012,"Camaña, Rose Pauline",Production,,0.00,active,NKB-20260815-0012

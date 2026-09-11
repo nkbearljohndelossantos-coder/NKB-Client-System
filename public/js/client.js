@@ -344,7 +344,17 @@ async function loadClientTracking() {
                         <div>
                             <span class="text-xs font-mono text-indigo-600 font-bold">BATCH: ${b.batch_number}</span>
                             <h3 class="text-lg font-black text-slate-900">${b.product_name} <span class="text-xs font-normal text-slate-400">(${b.sku})</span></h3>
-                            <div class="text-xs text-slate-500">PO Ref: <strong class="text-slate-700">${b.po_number}</strong> | JO Ref: <strong class="text-slate-700">${b.jo_number}</strong></div>
+                            <div class="text-xs text-slate-500 flex flex-wrap items-center gap-2 mt-1">
+                                <span>PO Ref:</span>
+                                <button onclick="openViewPOModal('${b.po_id}')" class="font-bold text-indigo-600 hover:text-indigo-800 hover:underline inline-flex items-center gap-1" title="View Purchase Order Details">
+                                    ${b.po_number}
+                                </button>
+                                <span class="text-slate-300">|</span>
+                                <span>JO Ref: <strong class="text-slate-700">${b.jo_number}</strong></span>
+                                <button onclick="openViewPOModal('${b.po_id}')" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md text-[11px] font-bold transition inline-flex items-center gap-1" title="View Purchase Order Details">
+                                    👁️ View PO
+                                </button>
+                            </div>
                         </div>
                         <div class="text-right">
                             ${NKB.renderStatusBadge(b.status)}
@@ -368,11 +378,11 @@ async function loadClientTracking() {
                         </div>
                         <div class="p-3 rounded-xl ${step >= 4 ? 'bg-indigo-50 border-2 border-indigo-500' : 'bg-slate-50 border border-slate-200'}">
                             <div class="text-xs font-bold ${step >= 4 ? 'text-indigo-900' : 'text-slate-400'}">4. QC Lab Testing</div>
-                            <div class="text-[10px] text-slate-500 mt-0.5">Micro & viscosity pass</div>
+                            <div class="text-[10px] text-slate-500 mt-0.5">Tolerance & release</div>
                         </div>
                         <div class="p-3 rounded-xl ${step >= 5 ? 'bg-emerald-50 border-2 border-emerald-500' : 'bg-slate-50 border border-slate-200'}">
-                            <div class="text-xs font-bold ${step >= 5 ? 'text-emerald-900' : 'text-slate-400'}">5. Ready / Dispatched</div>
-                            <div class="text-[10px] text-slate-500 mt-0.5">Dispatched to client</div>
+                            <div class="text-xs font-bold ${step >= 5 ? 'text-emerald-900' : 'text-slate-400'}">5. Ready for Dispatch</div>
+                            <div class="text-[10px] text-slate-500 mt-0.5">DR delivery pending</div>
                         </div>
                     </div>
 
@@ -391,12 +401,18 @@ async function loadClientTracking() {
             `;
         }).join('');
     } else {
-        container.innerHTML = `<div class="p-8 text-center bg-white rounded-3xl border text-slate-400 font-medium">No active production batches found.</div>`;
+        container.innerHTML = `
+            <div class="bg-white rounded-3xl p-12 text-center border border-slate-200 text-slate-400">
+                <div class="text-4xl mb-3">⚗️</div>
+                <div class="font-bold text-slate-600">No active production runs right now.</div>
+                <div class="text-xs text-slate-400 mt-1">Once your Purchase Order is approved, real-time batching will appear here.</div>
+            </div>
+        `;
     }
 }
 
 // -------------------------------------------------------------
-// 5. DELIVERIES & DIGITAL DR ACCEPTANCE
+// 5. MY DELIVERIES & DIGITAL ACCEPTANCE
 // -------------------------------------------------------------
 async function loadClientDeliveries() {
     const res = await NKB.api('/api/deliveries');
@@ -407,11 +423,18 @@ async function loadClientDeliveries() {
             <tr class="hover:bg-slate-50 transition">
                 <td class="py-3 px-4 font-bold text-indigo-600">${dr.dr_number}</td>
                 <td class="py-3 px-4 text-slate-600">${NKB.formatDate(dr.delivery_date)}</td>
-                <td class="py-3 px-4 text-slate-600">${dr.po_number}</td>
+                <td class="py-3 px-4">
+                    <button onclick="openViewPOModal('${dr.po_id}')" class="font-bold text-indigo-600 hover:text-indigo-800 hover:underline" title="View Purchase Order Details">
+                        ${dr.po_number}
+                    </button>
+                </td>
                 <td class="py-3 px-4 font-bold text-slate-700">${NKB.formatNumber(dr.total_delivered)} pcs</td>
                 <td class="py-3 px-4 font-extrabold text-emerald-700">${dr.total_accepted > 0 ? NKB.formatNumber(dr.total_accepted) + ' pcs' : '<span class="text-amber-600 italic">Pending sign-off</span>'}</td>
                 <td class="py-3 px-4">${NKB.renderStatusBadge(dr.status)}</td>
-                <td class="py-3 px-4 text-right space-x-1.5">
+                <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                    <button onclick="openViewPOModal('${dr.po_id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-block" title="View Purchase Order Details">
+                        👁️ View PO
+                    </button>
                     <a href="/print-dr.html?id=${dr.id}" target="_blank" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-block">
                         🖨️ View DR
                     </a>
@@ -667,12 +690,24 @@ async function loadClientInvoices() {
                 <td class="py-3 px-4 font-bold text-indigo-600">${si.invoice_number}</td>
                 <td class="py-3 px-4 text-slate-600">${NKB.formatDate(si.invoice_date)}</td>
                 <td class="py-3 px-4 text-slate-600">${NKB.formatDate(si.due_date)}</td>
-                <td class="py-3 px-4 text-slate-600">${si.dr_number}</td>
+                <td class="py-3 px-4">
+                    <div class="text-slate-700 font-medium">${si.dr_number}</div>
+                    ${si.po_id ? `
+                        <button onclick="openViewPOModal('${si.po_id}')" class="text-[11px] font-bold text-indigo-600 hover:underline block mt-0.5" title="View Purchase Order Details">
+                            PO: ${si.po_number}
+                        </button>
+                    ` : ''}
+                </td>
                 <td class="py-3 px-4 font-extrabold text-slate-900">${NKB.formatCurrency(si.total_amount)}</td>
                 <td class="py-3 px-4 font-bold text-emerald-700">${NKB.formatCurrency(si.paid_amount)}</td>
                 <td class="py-3 px-4 font-extrabold text-rose-700">${NKB.formatCurrency(si.balance_due)}</td>
                 <td class="py-3 px-4">${NKB.renderStatusBadge(si.status)}</td>
-                <td class="py-3 px-4 text-right space-x-1.5">
+                <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                    ${si.po_id ? `
+                        <button onclick="openViewPOModal('${si.po_id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-block" title="View Purchase Order Details">
+                            👁️ View PO
+                        </button>
+                    ` : ''}
                     <a href="/print-invoice.html?id=${si.id}" target="_blank" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-block">
                         🖨️ View SI
                     </a>
@@ -695,16 +730,26 @@ async function loadClientBuffer() {
         tbody.innerHTML = res.data.map(bs => `
             <tr class="hover:bg-slate-50 transition">
                 <td class="py-3 px-4 font-bold text-slate-800">${bs.product_name} <span class="text-xs text-slate-400">(${bs.sku})</span></td>
-                <td class="py-3 px-4 text-slate-600">${bs.po_number} / ${bs.batch_number}</td>
+                <td class="py-3 px-4">
+                    <button onclick="openViewPOModal('${bs.source_po_id}')" class="font-bold text-indigo-600 hover:underline" title="View Purchase Order Details">
+                        ${bs.po_number}
+                    </button>
+                    <div class="text-[11px] text-slate-400 font-medium">Batch: ${bs.batch_number}</div>
+                </td>
                 <td class="py-3 px-4 text-slate-600">${NKB.formatDate(bs.date_reserved)}</td>
                 <td class="py-3 px-4 font-bold text-slate-700">${NKB.formatNumber(bs.initial_quantity)} pcs</td>
                 <td class="py-3 px-4 font-semibold text-purple-700">${NKB.formatNumber(bs.quantity_released)} pcs</td>
                 <td class="py-3 px-4 font-extrabold text-emerald-700">${NKB.formatNumber(bs.quantity_remaining)} pcs</td>
                 <td class="py-3 px-4">${NKB.renderStatusBadge(bs.status)}</td>
+                <td class="py-3 px-4 text-right">
+                    <button onclick="openViewPOModal('${bs.source_po_id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-block" title="View Purchase Order Details">
+                        👁️ View PO
+                    </button>
+                </td>
             </tr>
         `).join('');
     } else {
-        tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-slate-400">No reserved buffer stock in warehouse.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="py-6 text-center text-slate-400">No reserved buffer stock in warehouse.</td></tr>`;
     }
 }
 
