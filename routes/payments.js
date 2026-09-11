@@ -13,10 +13,24 @@ router.get('/', authenticateToken, enforceClientIsolation, (req, res) => {
     const { invoiceId, clientId } = req.query;
 
     let query = `
-        SELECT p.*, si.invoice_number, si.total_amount, c.company_name, u.name as recorded_by_name
+        SELECT 
+            p.*, 
+            si.invoice_number, 
+            si.total_amount as invoice_total_amount,
+            si.paid_amount as invoice_paid_amount,
+            si.balance_due as invoice_balance_due,
+            si.status as invoice_status,
+            si.due_date as invoice_due_date,
+            c.company_name, 
+            c.contact_person,
+            po.po_number,
+            dr.dr_number,
+            u.name as recorded_by_name
         FROM payments p
         JOIN sales_invoices si ON p.invoice_id = si.id
         JOIN clients c ON p.client_id = c.id
+        LEFT JOIN purchase_orders po ON si.po_id = po.id
+        LEFT JOIN delivery_receipts dr ON si.dr_id = dr.id
         LEFT JOIN users u ON p.recorded_by = u.id
         WHERE 1=1
     `;
@@ -35,10 +49,123 @@ router.get('/', authenticateToken, enforceClientIsolation, (req, res) => {
         params.push(invoiceId);
     }
 
-    query += ' ORDER BY p.payment_date DESC';
+    query += ' ORDER BY p.payment_date DESC, p.created_at DESC';
     const payments = db.prepare(query).all(...params);
 
-    return res.json({ success: true, data: payments });
+    const totalPaid = payments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+
+    let arSummaryQuery = `
+        SELECT 
+            COALESCE(SUM(total_amount), 0) as total_invoiced,
+            COALESCE(SUM(paid_amount), 0) as total_collected,
+            COALESCE(SUM(balance_due), 0) as total_ar,
+            COUNT(*) as total_invoices
+        FROM sales_invoices
+        WHERE 1=1
+    `;
+    const arParams = [];
+    if (req.user.role === 'CLIENT') {
+        arSummaryQuery += ' AND client_id = ?';
+        arParams.push(req.clientId);
+    } else if (clientId) {
+        arSummaryQuery += ' AND client_id = ?';
+        arParams.push(clientId);
+    }
+    const arSummary = db.prepare(arSummaryQuery).get(...arParams);
+
+    return res.json({ 
+        success: true, 
+        data: payments,
+        summary: {
+            totalPaid,
+            totalTransactions: payments.length,
+            totalInvoiced: arSummary ? arSummary.total_invoiced : 0,
+            totalAR: arSummary ? arSummary.total_ar : 0
+        }
+    });
+});
+
+/**
+ * GET /api/payments/export-csv
+ * Direct CSV download endpoint for payments
+ */
+router.get('/export-csv', authenticateToken, enforceClientIsolation, (req, res) => {
+    let query = `
+        SELECT 
+            p.*, 
+            si.invoice_number, 
+            si.total_amount as invoice_total_amount,
+            si.paid_amount as invoice_paid_amount,
+            si.balance_due as invoice_balance_due,
+            si.status as invoice_status,
+            c.company_name, 
+            c.contact_person,
+            po.po_number,
+            dr.dr_number,
+            u.name as recorded_by_name
+        FROM payments p
+        JOIN sales_invoices si ON p.invoice_id = si.id
+        JOIN clients c ON p.client_id = c.id
+        LEFT JOIN purchase_orders po ON si.po_id = po.id
+        LEFT JOIN delivery_receipts dr ON si.dr_id = dr.id
+        LEFT JOIN users u ON p.recorded_by = u.id
+        WHERE 1=1
+    `;
+    const params = [];
+    if (req.user.role === 'CLIENT') {
+        query += ' AND p.client_id = ?';
+        params.push(req.clientId);
+    }
+    query += ' ORDER BY p.payment_date DESC, p.created_at DESC';
+    const payments = db.prepare(query).all(...params);
+
+    const escapeCsv = (val) => {
+        if (val == null) return '""';
+        return `"${String(val).replace(/"/g, '""')}"`;
+    };
+
+    const headers = [
+        '#', 'Payment Number', 'Payment Date', 'Invoice Number', 'PO Number', 'DR Number',
+        'Client Company', 'Contact Person', 'Payment Method', 'Reference Number',
+        'Amount Paid (PHP)', 'Invoice Total (PHP)', 'Invoice Balance Due (PHP)',
+        'Invoice Status', 'Recorded By', 'Notes', 'Created At'
+    ];
+
+    const rows = [headers.map(escapeCsv).join(',')];
+    let totalPaid = 0;
+
+    payments.forEach((p, idx) => {
+        const amt = parseFloat(p.amount) || 0;
+        totalPaid += amt;
+        rows.push([
+            idx + 1,
+            escapeCsv(p.payment_number),
+            escapeCsv(p.payment_date),
+            escapeCsv(p.invoice_number),
+            escapeCsv(p.po_number || ''),
+            escapeCsv(p.dr_number || ''),
+            escapeCsv(p.company_name),
+            escapeCsv(p.contact_person || ''),
+            escapeCsv((p.payment_method || '').replace(/_/g, ' ')),
+            escapeCsv(p.reference_number),
+            amt.toFixed(2),
+            (parseFloat(p.invoice_total_amount || p.total_amount) || 0).toFixed(2),
+            (parseFloat(p.invoice_balance_due != null ? p.invoice_balance_due : 0)).toFixed(2),
+            escapeCsv((p.invoice_status || 'PAID').replace(/_/g, ' ')),
+            escapeCsv(p.recorded_by_name || 'Staff'),
+            escapeCsv(p.notes || ''),
+            escapeCsv(p.created_at || '')
+        ].join(','));
+    });
+
+    // Total footer row
+    rows.push('');
+    rows.push(['"TOTAL"', '""', '""', '""', '""', '""', '""', '""', '""', '"TOTAL PAID:"', totalPaid.toFixed(2)].join(','));
+
+    const csvContent = '\uFEFF' + rows.join('\r\n');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="NKB_Payments_Report_${new Date().toISOString().split('T')[0]}.csv"`);
+    return res.send(csvContent);
 });
 
 /**

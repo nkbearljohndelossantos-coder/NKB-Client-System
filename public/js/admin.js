@@ -6,6 +6,7 @@ let yieldChart = null;
 let monthlySalesChart = null;
 let cachedClients = [];
 let cachedProducts = [];
+let cachedPayments = [];
 
 document.addEventListener('DOMContentLoaded', async () => {
     await NKB.init();
@@ -49,45 +50,31 @@ function applyRoleBasedUI() {
     };
 
     if (role === 'PRODUCTION') {
-        hideTab('dashboard');
-        hideTab('orders');
+        hideTab('deliveries');
         hideTab('invoices');
         hideTab('payments');
         hideTab('buffer');
         hideTab('clients');
-        hideTab('products');
         hideTab('users');
-        hideTab('reports');
         hideTab('audit');
-        const mgmtHdr = document.getElementById('sidebar-mgmt-header');
-        if (mgmtHdr) mgmtHdr.style.display = 'none';
-
-        // Default to Job Orders view
-        switchTab('job-orders');
     } else if (role === 'WAREHOUSE') {
-        hideTab('dashboard');
         hideTab('orders');
         hideTab('job-orders');
         hideTab('production');
         hideTab('invoices');
         hideTab('payments');
         hideTab('clients');
-        hideTab('products');
         hideTab('users');
-        hideTab('reports');
         hideTab('audit');
-        const mgmtHdr = document.getElementById('sidebar-mgmt-header');
-        if (mgmtHdr) mgmtHdr.style.display = 'none';
-
-        switchTab('deliveries');
     } else if (role === 'ACCOUNTING') {
         hideTab('job-orders');
         hideTab('production');
-        hideTab('buffer');
+        hideTab('deliveries');
+        hideTab('clients');
         hideTab('users');
         hideTab('audit');
     } else if (role === 'ADMIN') {
-        // Admin sees operational tools
+        // Admin sees everything except super-admin exclusive config
     }
 }
 
@@ -152,11 +139,6 @@ async function loadDashboard() {
     if (kpiRes.success && kpiRes.data) {
         const d = kpiRes.data;
         setElText('kpi-open-pos', NKB.formatNumber(d.openPOs));
-        if (d.draftPOs > 0) {
-            setElText('kpi-open-pos-detail', `${NKB.formatNumber(d.activePOs)} active · ${NKB.formatNumber(d.draftPOs)} draft`);
-        } else {
-            setElText('kpi-open-pos-detail', `${NKB.formatNumber(d.openPOs)} active purchase orders`);
-        }
         setElText('kpi-active-batches', NKB.formatNumber(d.activeBatches));
         setElText('kpi-pending-approval-batches', `${d.pendingApprovalBatches} over-tolerance requiring approval`);
         setElText('kpi-unbilled-drs', NKB.formatNumber(d.unbilledAcceptedDRs));
@@ -243,56 +225,30 @@ async function loadOrders() {
     if (res.success && res.data && res.data.length > 0) {
         tbody.innerHTML = res.data.map(po => `
             <tr class="hover:bg-slate-50 transition">
-                <td class="py-3 px-4">
-                    <button onclick="openBacktrackModal('${po.po_number}')" class="font-bold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1 font-mono text-xs">
-                        <span>🔍</span><span>${po.po_number}</span>
-                    </button>
-                </td>
+                <td class="py-3 px-4 font-bold text-indigo-600">${po.po_number}</td>
                 <td class="py-3 px-4 text-slate-600">${NKB.formatDate(po.po_date)}</td>
                 <td class="py-3 px-4 font-bold text-slate-800">${po.company_name}</td>
+                <td class="py-3 px-4"><span class="badge bg-slate-100 text-slate-700">±${po.tolerance_percent}%</span></td>
                 <td class="py-3 px-4"><span class="badge ${po.billing_policy === 'ACTUAL_DELIVERY' ? 'bg-indigo-50 text-indigo-700' : 'bg-purple-50 text-purple-700'}">${po.billing_policy}</span></td>
                 <td class="py-3 px-4 font-bold text-slate-700">${NKB.formatNumber(po.total_target_quantity)} pcs</td>
                 <td class="py-3 px-4 font-extrabold text-slate-900">${NKB.formatCurrency(po.grand_total)}</td>
                 <td class="py-3 px-4">${NKB.renderStatusBadge(po.status)}</td>
-                <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
-                    <button onclick="openBacktrackModal('${po.po_number}')" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1">
-                        <span>🔍</span><span>Trace</span>
-                    </button>
-                    <a href="/print-po.html?id=${po.id}" target="_blank" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold transition inline-flex items-center gap-1">
-                        <span>🖨️</span><span>Print PO</span>
-                    </a>
-                    ${(po.status === 'PENDING_APPROVAL' || po.status === 'APPROVED' || po.status === 'DRAFT') ? `
-                        <button onclick="openEditPOModal('${po.id}')" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Edit Purchase Order">
-                            <span>✏️</span><span>Edit</span>
-                        </button>
-                    ` : ''}
-                    ${po.status === 'DRAFT' ? `
-                        <button onclick="proceedDraftPO('${po.id}', '${po.po_number}')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition inline-flex items-center gap-1 shadow-sm" title="Finalize PO and dispatch to production">
-                            <span>▶️</span><span>Proceed PO</span>
-                        </button>
-                    ` : ''}
+                <td class="py-3 px-4 text-right space-x-1.5">
                     ${po.status === 'PENDING_APPROVAL' ? `
                         <button onclick="approvePO('${po.id}', '${po.po_number}')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition">
                             Approve
+                        </button>
+                    ` : ''}
+                    ${po.status === 'APPROVED' || po.status === 'IN_PRODUCTION' ? `
+                        <button onclick="openCreateJOModal('${po.id}', '${po.po_number}', '${po.company_name}')" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition">
+                            + Job Order
                         </button>
                     ` : ''}
                 </td>
             </tr>
         `).join('');
     } else {
-        tbody.innerHTML = `<tr><td colspan="8" class="py-6 text-center text-slate-400">No purchase orders found.</td></tr>`;
-    }
-}
-
-async function proceedDraftPO(id, poNumber) {
-    if (!confirm(`Finalize and Proceed Purchase Order ${poNumber}?\n\nThis will approve the PO and automatically dispatch the corresponding Sales Order(s) for compounding and production.`)) return;
-    const res = await NKB.api(`/api/orders/${id}/proceed`, { method: 'POST' });
-    if (res.success) {
-        NKB.showToast(`Purchase Order ${poNumber} finalized and dispatched to production!`, 'success');
-        loadOrders();
-        if (typeof loadJobOrders === 'function') loadJobOrders();
-    } else {
-        NKB.showToast(res.error || 'Failed to proceed PO.', 'error');
+        tbody.innerHTML = `<tr><td colspan="9" class="py-6 text-center text-slate-400">No purchase orders found.</td></tr>`;
     }
 }
 
@@ -308,78 +264,31 @@ async function approvePO(id, poNumber) {
 }
 
 // -------------------------------------------------------------
-// 3. SALES ORDERS (SO)
+// 3. JOB ORDERS (JO)
 // -------------------------------------------------------------
 async function loadJobOrders() {
-    const res = await NKB.api('/api/sales-orders');
+    const res = await NKB.api('/api/job-orders');
     const tbody = document.getElementById('table-jos-body');
 
     if (res.success && res.data && res.data.length > 0) {
-        tbody.innerHTML = res.data.map(jo => {
-            const isDelivered = jo.status === 'COMPLETED' || (jo.delivered_quantity && jo.delivered_quantity >= jo.target_quantity) || jo.latest_dr_number;
-            return `
-                <tr class="hover:bg-slate-50 transition">
-                    <td class="py-3 px-4 font-bold text-indigo-600">
-                        <button onclick="openBacktrackModal('${jo.jo_number}')" class="font-bold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1 font-mono text-xs">
-                            <span>🔍</span><span>${jo.jo_number}</span>
-                        </button>
-                    </td>
-                    <td class="py-3 px-4 text-slate-600 font-semibold">
-                        <button onclick="openBacktrackModal('${jo.po_number}')" class="hover:underline hover:text-indigo-600 font-mono">
-                            ${jo.po_number}
-                        </button>
-                    </td>
-                    <td class="py-3 px-4 font-bold text-slate-800">${jo.company_name}</td>
-                    <td class="py-3 px-4 font-semibold text-slate-800">${jo.product_name} <span class="text-xs text-slate-400">(${jo.sku})</span></td>
-                    <td class="py-3 px-4 font-black text-slate-800">${NKB.formatNumber(jo.target_quantity)} pcs</td>
-                    <td class="py-3 px-4">
-                        <div class="font-bold text-slate-800">${NKB.formatNumber(jo.total_yield || 0)} <span class="text-[10px] text-slate-500 font-normal">produced</span></div>
-                        <div class="text-[11px] ${jo.delivered_quantity > 0 ? 'text-emerald-600 font-bold' : 'text-slate-400'}">${NKB.formatNumber(jo.delivered_quantity || 0)} dispatched</div>
-                    </td>
-                    <td class="py-3 px-4">
-                        ${jo.latest_dr_number ? `
-                            <button onclick="openBacktrackModal('${jo.latest_dr_number}')" class="px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-md font-mono text-[11px] font-bold inline-flex items-center gap-1 transition">
-                                <span>🚚</span><span>${jo.latest_dr_number}</span>
-                            </button>
-                        ` : `<span class="text-slate-400 italic text-[11px]">Pending Dispatch</span>`}
-                    </td>
-                    <td class="py-3 px-4">
-                        ${isDelivered ? `
-                            <span class="px-2.5 py-1 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-black inline-flex items-center gap-1 shadow-sm">
-                                <span>✅</span><span>DELIVERED / COMPLETED</span>
-                            </span>
-                        ` : (jo.batch_count > 0 ? `
-                            <span class="px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold inline-flex items-center gap-1">
-                                <span>🧪</span><span>IN PRODUCTION</span>
-                            </span>
-                        ` : `
-                            <span class="px-2.5 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-xs font-bold inline-flex items-center gap-1">
-                                <span>🟡</span><span>PENDING BATCH</span>
-                            </span>
-                        `)}
-                    </td>
-                    <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
-                        <button onclick="openBacktrackModal('${jo.jo_number}')" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1">
-                            <span>🔍</span><span>Trace</span>
-                        </button>
-                        <a href="/print-jo.html?id=${jo.id}" target="_blank" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold transition inline-flex items-center gap-1">
-                            <span>🖨️</span><span>Print SO</span>
-                        </a>
-                        ${isDelivered ? `
-                            <span class="px-2.5 py-1 bg-slate-100 text-slate-400 border border-slate-200 rounded-lg text-xs font-bold inline-flex items-center gap-1 cursor-not-allowed select-none" title="Sales Order is fulfilled and delivered.">
-                                <span>🔒</span><span>Completed</span>
-                            </span>
-                        ` : `
-                            <button onclick="openCreateBatchModal('${jo.id}', '${jo.jo_number}', ${jo.target_quantity}, '${jo.product_name}')" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition">
-                                + Start Batch
-                            </button>
-                        `}
-                    </td>
-                </tr>
-            `;
-        }).join('');
+        tbody.innerHTML = res.data.map(jo => `
+            <tr class="hover:bg-slate-50 transition">
+                <td class="py-3 px-4 font-bold text-indigo-600">${jo.jo_number}</td>
+                <td class="py-3 px-4 text-slate-600">${jo.po_number}</td>
+                <td class="py-3 px-4 font-bold text-slate-800">${jo.company_name}</td>
+                <td class="py-3 px-4 font-semibold text-slate-800">${jo.product_name} <span class="text-xs text-slate-400">(${jo.sku})</span></td>
+                <td class="py-3 px-4 font-bold text-slate-700">${NKB.formatNumber(jo.target_quantity)} pcs</td>
+                <td class="py-3 px-4 text-slate-600">${jo.assigned_team}</td>
+                <td class="py-3 px-4">${NKB.renderStatusBadge(jo.status)}</td>
+                <td class="py-3 px-4 text-right">
+                    <button onclick="openCreateBatchModal('${jo.id}', '${jo.jo_number}', ${jo.target_quantity}, '${jo.product_name}')" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition">
+                        + Start Batch
+                    </button>
+                </td>
+            </tr>
+        `).join('');
     } else {
-        tbody.innerHTML = `<tr><td colspan="9" class="py-6 text-center text-slate-400">No sales orders found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="py-6 text-center text-slate-400">No job orders found.</td></tr>`;
     }
 }
 
@@ -393,25 +302,15 @@ async function loadBatches() {
     if (res.success && res.data && res.data.length > 0) {
         tbody.innerHTML = res.data.map(b => `
             <tr class="hover:bg-slate-50 transition">
-                <td class="py-3 px-4 font-bold text-indigo-600">
-                    <button onclick="openBacktrackModal('${b.batch_number}')" class="font-bold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1 font-mono text-xs">
-                        <span>🔍</span><span>${b.batch_number}</span>
-                    </button>
-                </td>
-                <td class="py-3 px-4 text-slate-600">
-                    <button onclick="openBacktrackModal('${b.jo_number}')" class="hover:underline hover:text-indigo-600 font-mono">${b.jo_number}</button> / 
-                    <button onclick="openBacktrackModal('${b.po_number}')" class="hover:underline hover:text-indigo-600 font-mono">${b.po_number}</button>
-                </td>
+                <td class="py-3 px-4 font-bold text-indigo-600">${b.batch_number}</td>
+                <td class="py-3 px-4 text-slate-600">${b.jo_number} / ${b.po_number}</td>
                 <td class="py-3 px-4 font-semibold text-slate-800">${b.product_name}</td>
                 <td class="py-3 px-4 font-bold text-slate-700">${NKB.formatNumber(b.target_quantity)} pcs</td>
                 <td class="py-3 px-4 font-extrabold text-indigo-700">${b.actual_yield > 0 ? NKB.formatNumber(b.actual_yield) + ' pcs' : '<span class="text-slate-400 italic">In progress</span>'}</td>
                 <td class="py-3 px-4">${b.actual_yield > 0 ? NKB.renderVarianceBadge(b.variance_quantity, b.variance_percent) : '-'}</td>
                 <td class="py-3 px-4 text-slate-500">${NKB.formatDate(b.expiry_date)}</td>
                 <td class="py-3 px-4">${NKB.renderStatusBadge(b.status)}</td>
-                <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
-                    <button onclick="openBacktrackModal('${b.batch_number}')" class="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1">
-                        <span>🔍</span><span>Trace</span>
-                    </button>
+                <td class="py-3 px-4 text-right space-x-1.5">
                     ${b.status === 'MIXING' || b.status === 'BOTTLING' || b.status === 'PLANNED' ? `
                         <button onclick="openLogYieldModal('${b.id}', '${b.batch_number}', ${b.target_quantity}, ${b.tolerance_percent})" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition">
                             📝 Log Yield
@@ -445,32 +344,16 @@ async function loadDeliveries() {
     if (res.success && res.data && res.data.length > 0) {
         tbody.innerHTML = res.data.map(dr => `
             <tr class="hover:bg-slate-50 transition">
-                <td class="py-3 px-4 font-bold text-indigo-600">
-                    <button onclick="openBacktrackModal('${dr.dr_number}')" class="font-bold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1 font-mono text-xs">
-                        <span>🔍</span><span>${dr.dr_number}</span>
-                    </button>
-                </td>
+                <td class="py-3 px-4 font-bold text-indigo-600">${dr.dr_number}</td>
                 <td class="py-3 px-4 text-slate-600">${NKB.formatDate(dr.delivery_date)}</td>
                 <td class="py-3 px-4 font-bold text-slate-800">${dr.company_name}</td>
-                <td class="py-3 px-4 text-slate-600">
-                    <button onclick="openBacktrackModal('${dr.po_number}')" class="hover:underline hover:text-indigo-600 font-mono">
-                        ${dr.po_number}
-                    </button>
-                </td>
+                <td class="py-3 px-4 text-slate-600">${dr.po_number}</td>
                 <td class="py-3 px-4 font-bold text-slate-700">${NKB.formatNumber(dr.total_delivered)} pcs</td>
                 <td class="py-3 px-4 font-extrabold text-emerald-700">${dr.total_accepted > 0 ? NKB.formatNumber(dr.total_accepted) + ' pcs' : '-'}</td>
                 <td class="py-3 px-4 font-bold text-rose-600">${dr.total_rejected > 0 ? NKB.formatNumber(dr.total_rejected) + ' pcs' : '0'}</td>
                 <td class="py-3 px-4">${NKB.renderStatusBadge(dr.status)}</td>
-                <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
-                    <button onclick="openBacktrackModal('${dr.dr_number}')" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1">
-                        <span>🔍</span><span>Trace</span>
-                    </button>
-                    ${dr.status === 'PENDING_CLIENT_ACCEPTANCE' || dr.status === 'DISPATCHED' ? `
-                        <button onclick="openAddQuantityToExistingDRModal('${dr.id}', '${dr.dr_number}', '${dr.company_name}')" class="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold transition inline-flex items-center gap-1">
-                            <span>➕</span><span>Dagdag Qty</span>
-                        </button>
-                    ` : ''}
-                    <a href="/print-dr.html?id=${dr.id}" target="_blank" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold transition inline-block">
+                <td class="py-3 px-4 text-right space-x-1.5">
+                    <a href="/print-dr.html?id=${dr.id}" target="_blank" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-block">
                         🖨️ Print DR
                     </a>
                     ${dr.status === 'ACCEPTED' ? `
@@ -496,28 +379,17 @@ async function loadInvoices() {
     if (res.success && res.data && res.data.length > 0) {
         tbody.innerHTML = res.data.map(si => `
             <tr class="hover:bg-slate-50 transition">
-                <td class="py-3 px-4 font-bold text-indigo-600">
-                    <button onclick="openBacktrackModal('${si.invoice_number}')" class="font-bold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1 font-mono text-xs">
-                        <span>🔍</span><span>${si.invoice_number}</span>
-                    </button>
-                </td>
+                <td class="py-3 px-4 font-bold text-indigo-600">${si.invoice_number}</td>
                 <td class="py-3 px-4 text-slate-600">${NKB.formatDate(si.invoice_date)} <br><span class="text-[10px] text-slate-400">Due: ${NKB.formatDate(si.due_date)}</span></td>
                 <td class="py-3 px-4 font-bold text-slate-800">${si.company_name}</td>
-                <td class="py-3 px-4 text-slate-600">
-                    <button onclick="openBacktrackModal('${si.dr_number}')" class="hover:underline hover:text-indigo-600 font-mono">
-                        ${si.dr_number}
-                    </button>
-                </td>
+                <td class="py-3 px-4 text-slate-600">${si.dr_number}</td>
                 <td class="py-3 px-4 font-extrabold text-slate-900">${NKB.formatCurrency(si.total_amount)}</td>
                 <td class="py-3 px-4 font-bold text-emerald-700">${NKB.formatCurrency(si.paid_amount)}</td>
                 <td class="py-3 px-4 font-extrabold text-rose-700">${NKB.formatCurrency(si.balance_due)}</td>
                 <td class="py-3 px-4"><span class="badge ${si.agingCategory === 'Current' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-100 text-rose-800 font-bold'}">${si.agingCategory}</span></td>
                 <td class="py-3 px-4">${NKB.renderStatusBadge(si.status)}</td>
-                <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
-                    <button onclick="openBacktrackModal('${si.invoice_number}')" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1">
-                        <span>🔍</span><span>Trace</span>
-                    </button>
-                    <a href="/print-invoice.html?id=${si.id}" target="_blank" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold transition inline-block">
+                <td class="py-3 px-4 text-right space-x-1.5">
+                    <a href="/print-invoice.html?id=${si.id}" target="_blank" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-block">
                         🖨️ Print SI
                     </a>
                     ${si.balance_due > 0 ? `
@@ -534,28 +406,403 @@ async function loadInvoices() {
 }
 
 // -------------------------------------------------------------
-// 7. PAYMENTS
+// 7. PAYMENTS & AR
 // -------------------------------------------------------------
 async function loadPayments() {
     const res = await NKB.api('/api/payments');
-    const tbody = document.getElementById('table-payments-body');
+    cachedPayments = (res.success && Array.isArray(res.data)) ? res.data : [];
 
-    if (res.success && res.data && res.data.length > 0) {
-        tbody.innerHTML = res.data.map(p => `
-            <tr class="hover:bg-slate-50 transition">
-                <td class="py-3 px-4 font-bold text-indigo-600">${p.payment_number}</td>
-                <td class="py-3 px-4 text-slate-600">${NKB.formatDate(p.payment_date)}</td>
-                <td class="py-3 px-4 font-semibold text-slate-800">${p.invoice_number}</td>
-                <td class="py-3 px-4 font-bold text-slate-800">${p.company_name}</td>
-                <td class="py-3 px-4"><span class="badge bg-slate-100 text-slate-700">${p.payment_method.replace(/_/g, ' ')}</span></td>
-                <td class="py-3 px-4 font-mono text-slate-600">${p.reference_number}</td>
-                <td class="py-3 px-4 font-extrabold text-emerald-700">${NKB.formatCurrency(p.amount)}</td>
-                <td class="py-3 px-4 text-slate-500">${p.recorded_by_name || 'Accounting Staff'}</td>
-            </tr>
-        `).join('');
-    } else {
-        tbody.innerHTML = `<tr><td colspan="8" class="py-6 text-center text-slate-400">No payments recorded.</td></tr>`;
+    // Calculate totals
+    const totalPaid = cachedPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+    const totalCount = cachedPayments.length;
+    const summary = res.summary || {};
+    const totalAR = parseFloat(summary.totalAR != null ? summary.totalAR : 0);
+    const totalInvoiced = parseFloat(summary.totalInvoiced != null ? summary.totalInvoiced : 0);
+    const avgAmount = totalCount > 0 ? (totalPaid / totalCount) : 0;
+    const collectionRate = totalInvoiced > 0 ? ((totalPaid / totalInvoiced) * 100).toFixed(1) : (totalPaid > 0 ? '100' : '0');
+
+    // Update KPI cards in view-payments
+    const setEl = (id, text) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = text;
+    };
+
+    setEl('payments-kpi-total-paid', NKB.formatCurrency(totalPaid));
+    setEl('payments-kpi-count', `${totalCount} verified collection${totalCount === 1 ? '' : 's'}`);
+    setEl('payments-kpi-total-ar', NKB.formatCurrency(totalAR));
+    setEl('payments-kpi-total-invoiced', NKB.formatCurrency(totalInvoiced));
+    setEl('payments-kpi-collection-rate', `${collectionRate}% Collection Rate`);
+    setEl('payments-kpi-avg-amount', NKB.formatCurrency(avgAmount));
+    setEl('table-footer-total-paid', NKB.formatCurrency(totalPaid));
+    setEl('payments-visible-count', `Showing all (${totalCount})`);
+
+    // Reset filters
+    const searchInput = document.getElementById('payments-search-input');
+    if (searchInput) searchInput.value = '';
+    const methodFilter = document.getElementById('payments-method-filter');
+    if (methodFilter) methodFilter.value = '';
+
+    renderPaymentsRows(cachedPayments, totalPaid);
+}
+
+function renderPaymentsRows(paymentsList, currentTotal) {
+    const tbody = document.getElementById('table-payments-body');
+    if (!tbody) return;
+
+    if (!paymentsList || paymentsList.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-slate-400 font-medium">No payment records found.</td></tr>`;
+        const footerTotal = document.getElementById('table-footer-total-paid');
+        if (footerTotal) footerTotal.textContent = NKB.formatCurrency(0);
+        return;
     }
+
+    const calcTotal = currentTotal != null ? currentTotal : paymentsList.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+    const footerTotal = document.getElementById('table-footer-total-paid');
+    if (footerTotal) footerTotal.textContent = NKB.formatCurrency(calcTotal);
+
+    tbody.innerHTML = paymentsList.map(p => `
+        <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+            <td class="py-3 px-4 font-bold text-indigo-600">${p.payment_number}</td>
+            <td class="py-3 px-4 text-slate-600 whitespace-nowrap">${NKB.formatDate(p.payment_date)}</td>
+            <td class="py-3 px-4">
+                <div class="font-semibold text-slate-800">${p.invoice_number}</div>
+                ${p.po_number ? `<div class="text-[10px] text-slate-400">PO: ${p.po_number}</div>` : ''}
+            </td>
+            <td class="py-3 px-4">
+                <div class="font-bold text-slate-800">${p.company_name}</div>
+                ${p.contact_person ? `<div class="text-[10px] text-slate-400">${p.contact_person}</div>` : ''}
+            </td>
+            <td class="py-3 px-4">
+                <span class="badge bg-slate-100 text-slate-700 font-bold">${(p.payment_method || '').replace(/_/g, ' ')}</span>
+            </td>
+            <td class="py-3 px-4 font-mono text-slate-600">${p.reference_number || '—'}</td>
+            <td class="py-3 px-4 text-right font-extrabold text-emerald-700 text-sm whitespace-nowrap">${NKB.formatCurrency(p.amount)}</td>
+            <td class="py-3 px-4">${NKB.renderStatusBadge(p.invoice_status || 'PAID')}</td>
+            <td class="py-3 px-4 text-slate-500 whitespace-nowrap">${p.recorded_by_name || 'Accounting Staff'}</td>
+        </tr>
+    `).join('');
+}
+
+function filterPaymentsTable() {
+    if (!cachedPayments) return;
+    const query = (document.getElementById('payments-search-input')?.value || '').trim().toLowerCase();
+    const method = (document.getElementById('payments-method-filter')?.value || '').trim();
+
+    const filtered = cachedPayments.filter(p => {
+        const matchesQuery = !query || 
+            (p.payment_number && p.payment_number.toLowerCase().includes(query)) ||
+            (p.invoice_number && p.invoice_number.toLowerCase().includes(query)) ||
+            (p.company_name && p.company_name.toLowerCase().includes(query)) ||
+            (p.reference_number && p.reference_number.toLowerCase().includes(query)) ||
+            (p.po_number && p.po_number.toLowerCase().includes(query)) ||
+            (p.contact_person && p.contact_person.toLowerCase().includes(query));
+
+        const matchesMethod = !method || p.payment_method === method;
+        return matchesQuery && matchesMethod;
+    });
+
+    const filteredTotal = filtered.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+    const countEl = document.getElementById('payments-visible-count');
+    if (countEl) {
+        countEl.textContent = `Showing ${filtered.length} of ${cachedPayments.length}`;
+    }
+
+    renderPaymentsRows(filtered, filteredTotal);
+}
+
+function exportPaymentsToExcel() {
+    if (!cachedPayments || cachedPayments.length === 0) {
+        NKB.showToast('No payment records available to export.', 'warning');
+        return;
+    }
+
+    const totalPaid = cachedPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+    const currentDate = new Date().toISOString().split('T')[0];
+
+    // Verify SheetJS is available
+    if (typeof XLSX !== 'undefined') {
+        const rows = [
+            ['NKB MANUFACTURING & TRADING'],
+            ['B2B PAYMENTS & ACCOUNTS RECEIVABLE (AR) COLLECTION REPORT'],
+            [`Export Date: ${new Date().toLocaleString()}`, '', `Total Records: ${cachedPayments.length}`, '', `Total Amount Paid: PHP ${totalPaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
+            [], // spacer row
+            [
+                '#',
+                'Payment No.',
+                'Payment Date',
+                'Invoice No.',
+                'PO No.',
+                'DR No.',
+                'Client Company',
+                'Contact Person',
+                'Payment Method',
+                'Reference / Check No.',
+                'Amount Paid (PHP)',
+                'Invoice Total (PHP)',
+                'Invoice Balance Due (PHP)',
+                'Invoice Status',
+                'Recorded By',
+                'Notes',
+                'Recorded Timestamp'
+            ]
+        ];
+
+        cachedPayments.forEach((p, idx) => {
+            rows.push([
+                idx + 1,
+                p.payment_number || '',
+                p.payment_date || '',
+                p.invoice_number || '',
+                p.po_number || '',
+                p.dr_number || '',
+                p.company_name || '',
+                p.contact_person || '',
+                (p.payment_method || '').replace(/_/g, ' '),
+                p.reference_number || '',
+                parseFloat(p.amount) || 0,
+                parseFloat(p.invoice_total_amount || p.total_amount) || 0,
+                parseFloat(p.invoice_balance_due != null ? p.invoice_balance_due : 0),
+                (p.invoice_status || 'PAID').replace(/_/g, ' '),
+                p.recorded_by_name || 'Staff',
+                p.notes || '',
+                p.created_at || ''
+            ]);
+        });
+
+        // Summary Total Row
+        rows.push([]);
+        rows.push([
+            'TOTAL',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            'TOTAL PAID:',
+            totalPaid,
+            '',
+            '',
+            '',
+            '',
+            '',
+            ''
+        ]);
+
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+
+        // Styling: Column auto-widths
+        ws['!cols'] = [
+            { wch: 6 },  // #
+            { wch: 18 }, // Payment No.
+            { wch: 14 }, // Payment Date
+            { wch: 16 }, // Invoice No.
+            { wch: 16 }, // PO No.
+            { wch: 16 }, // DR No.
+            { wch: 30 }, // Client Company
+            { wch: 22 }, // Contact Person
+            { wch: 18 }, // Method
+            { wch: 22 }, // Reference No.
+            { wch: 20 }, // Amount Paid
+            { wch: 20 }, // Invoice Total
+            { wch: 24 }, // Invoice Balance Due
+            { wch: 16 }, // Invoice Status
+            { wch: 20 }, // Recorded By
+            { wch: 28 }, // Notes
+            { wch: 22 }  // Timestamp
+        ];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Payments & AR');
+        XLSX.writeFile(wb, `NKB_Payments_AR_Report_${currentDate}.xlsx`);
+        NKB.showToast(`Exported ${cachedPayments.length} payment records to Excel successfully!`, 'success');
+    } else {
+        exportPaymentsToCSV();
+    }
+}
+
+function exportPaymentsToCSV() {
+    if (!cachedPayments || cachedPayments.length === 0) {
+        NKB.showToast('No payment records available to export.', 'warning');
+        return;
+    }
+
+    const totalPaid = cachedPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+    const currentDate = new Date().toISOString().split('T')[0];
+
+    const headers = [
+        '#', 'Payment Number', 'Payment Date', 'Invoice Number', 'PO Number', 'DR Number',
+        'Client Company', 'Contact Person', 'Payment Method', 'Reference Number',
+        'Amount Paid (PHP)', 'Invoice Total (PHP)', 'Invoice Balance Due (PHP)',
+        'Invoice Status', 'Recorded By', 'Notes', 'Recorded Timestamp'
+    ];
+
+    const escapeCsv = (val) => {
+        if (val == null) return '""';
+        return `"${String(val).replace(/"/g, '""')}"`;
+    };
+
+    const csvRows = [];
+    csvRows.push(['NKB MANUFACTURING & TRADING - PAYMENTS & AR REPORT']);
+    csvRows.push([`Export Date: ${new Date().toLocaleString()}`, `Total Records: ${cachedPayments.length}`, `Total Paid: PHP ${totalPaid.toFixed(2)}`]);
+    csvRows.push([]);
+    csvRows.push(headers.map(escapeCsv).join(','));
+
+    cachedPayments.forEach((p, idx) => {
+        csvRows.push([
+            idx + 1,
+            escapeCsv(p.payment_number),
+            escapeCsv(p.payment_date),
+            escapeCsv(p.invoice_number),
+            escapeCsv(p.po_number || ''),
+            escapeCsv(p.dr_number || ''),
+            escapeCsv(p.company_name),
+            escapeCsv(p.contact_person || ''),
+            escapeCsv((p.payment_method || '').replace(/_/g, ' ')),
+            escapeCsv(p.reference_number),
+            (parseFloat(p.amount) || 0).toFixed(2),
+            (parseFloat(p.invoice_total_amount || p.total_amount) || 0).toFixed(2),
+            (parseFloat(p.invoice_balance_due != null ? p.invoice_balance_due : 0)).toFixed(2),
+            escapeCsv((p.invoice_status || 'PAID').replace(/_/g, ' ')),
+            escapeCsv(p.recorded_by_name || 'Staff'),
+            escapeCsv(p.notes || ''),
+            escapeCsv(p.created_at || '')
+        ].join(','));
+    });
+
+    csvRows.push([]);
+    csvRows.push([
+        '"TOTAL"', '""', '""', '""', '""', '""', '""', '""', '""', '"TOTAL PAID:"',
+        totalPaid.toFixed(2), '""', '""', '""', '""', '""', '""'
+    ].join(','));
+
+    const blob = new Blob(['\uFEFF' + csvRows.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `NKB_Payments_AR_Report_${currentDate}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    NKB.showToast(`Exported ${cachedPayments.length} payment records to CSV successfully!`, 'success');
+}
+
+function printPaymentsReport() {
+    if (!cachedPayments || cachedPayments.length === 0) {
+        NKB.showToast('No payment records to print.', 'warning');
+        return;
+    }
+
+    const totalPaid = cachedPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+    const printWindow = window.open('', '_blank', 'width=1100,height=850');
+    
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>NKB Payments & Collections Report</title>
+            <style>
+                @page { size: landscape; margin: 12mm; }
+                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; margin: 20px; color: #0f172a; font-size: 11px; }
+                .header-container { border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: flex-end; }
+                h1 { font-size: 18px; font-weight: 900; margin: 0 0 4px; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; }
+                .subtitle { font-size: 11px; color: #64748b; margin: 0; }
+                .kpi-cards { display: flex; gap: 16px; margin-bottom: 16px; }
+                .kpi-card { border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 14px; flex: 1; background: #f8fafc; }
+                .kpi-label { font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: 700; letter-spacing: 0.5px; }
+                .kpi-value { font-size: 18px; font-weight: 900; color: #0f172a; margin-top: 2px; }
+                .text-emerald { color: #047857; }
+                table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+                th { background: #f1f5f9; text-align: left; padding: 7px 9px; border: 1px solid #cbd5e1; font-weight: 700; font-size: 10px; text-transform: uppercase; }
+                td { padding: 7px 9px; border: 1px solid #e2e8f0; font-size: 10px; }
+                tr:nth-child(even) { background: #f8fafc; }
+                .text-right { text-align: right; }
+                .font-bold { font-weight: bold; }
+                .font-mono { font-family: monospace; }
+                .total-row { background: #e2e8f0 !important; font-weight: 900; }
+                .report-footer { margin-top: 30px; border-top: 1px solid #cbd5e1; padding-top: 12px; font-size: 10px; color: #64748b; display: flex; justify-content: space-between; }
+                @media print {
+                    body { margin: 0; }
+                    .no-print { display: none !important; }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="header-container">
+                <div>
+                    <h1>NKB Manufacturing & Trading</h1>
+                    <p class="subtitle">Official B2B Payments & Accounts Receivable (AR) Collection Ledger</p>
+                </div>
+                <div style="text-align: right;">
+                    <div style="font-size: 11px; color: #64748b;">Generated: ${new Date().toLocaleString()}</div>
+                    <button class="no-print" onclick="window.print()" style="margin-top: 6px; padding: 6px 14px; background: #0f172a; color: white; border: none; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer;">🖨️ Print / Save as PDF</button>
+                </div>
+            </div>
+
+            <div class="kpi-cards">
+                <div class="kpi-card">
+                    <div class="kpi-label">Total Amount Paid</div>
+                    <div class="kpi-value text-emerald">${NKB.formatCurrency(totalPaid)}</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">Total Verified Transactions</div>
+                    <div class="kpi-value">${cachedPayments.length}</div>
+                </div>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 30px;">#</th>
+                        <th>Payment No.</th>
+                        <th>Date</th>
+                        <th>Invoice</th>
+                        <th>Client Company</th>
+                        <th>Method</th>
+                        <th>Reference / Check No.</th>
+                        <th class="text-right">Amount Paid</th>
+                        <th>Status</th>
+                        <th>Recorded By</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${cachedPayments.map((p, idx) => `
+                        <tr>
+                            <td>${idx + 1}</td>
+                            <td class="font-bold">${p.payment_number}</td>
+                            <td>${NKB.formatDate(p.payment_date)}</td>
+                            <td>${p.invoice_number}</td>
+                            <td class="font-bold">${p.company_name}</td>
+                            <td>${(p.payment_method || '').replace(/_/g, ' ')}</td>
+                            <td class="font-mono">${p.reference_number || '—'}</td>
+                            <td class="text-right font-bold text-emerald" style="font-size: 11px;">${NKB.formatCurrency(p.amount)}</td>
+                            <td>${p.invoice_status || 'PAID'}</td>
+                            <td>${p.recorded_by_name || 'Staff'}</td>
+                        </tr>
+                    `).join('')}
+                    <tr class="total-row">
+                        <td colspan="7" class="text-right font-bold">TOTAL AMOUNT OF PAID:</td>
+                        <td class="text-right font-bold text-emerald" style="font-size: 12px;">${NKB.formatCurrency(totalPaid)}</td>
+                        <td colspan="2"></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="report-footer">
+                <div>Report automatically compiled by NKB ERP System.</div>
+                <div>Confidential - Internal Accounting & Audit Document</div>
+            </div>
+            <script>
+                window.onload = function() { window.print(); };
+            </script>
+        </body>
+        </html>
+    `);
+    printWindow.document.close();
 }
 
 // -------------------------------------------------------------
@@ -604,6 +851,7 @@ async function loadClients() {
                 <td class="py-3 px-4 font-semibold text-slate-800">${c.contact_person}</td>
                 <td class="py-3 px-4 text-slate-600">${c.email} <br><span class="text-xs text-slate-400">${c.phone}</span></td>
                 <td class="py-3 px-4"><span class="badge ${c.default_billing_policy === 'ACTUAL_DELIVERY' ? 'bg-indigo-50 text-indigo-700' : 'bg-purple-50 text-purple-700'}">${c.default_billing_policy}</span></td>
+                <td class="py-3 px-4 font-bold text-slate-700">±${c.default_tolerance_percent}%</td>
                 <td class="py-3 px-4 font-bold text-emerald-700">${NKB.formatCurrency(c.credit_limit)}</td>
                 <td class="py-3 px-4">
                     ${c.user_id ? `
@@ -649,17 +897,6 @@ async function loadProducts() {
             <tr class="hover:bg-slate-50 transition">
                 <td class="py-3 px-4 font-mono font-bold text-indigo-600">${p.sku}</td>
                 <td class="py-3 px-4 font-bold text-slate-900">${p.name}</td>
-                <td class="py-3 px-4">
-                    ${p.client_name ? `
-                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[11px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                            <span>🏢</span><span>${p.client_name}</span>
-                        </span>
-                    ` : `
-                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10.5px] font-medium bg-slate-100 text-slate-500">
-                            <span>🌐</span><span>All Clients</span>
-                        </span>
-                    `}
-                </td>
                 <td class="py-3 px-4"><span class="badge bg-slate-100 text-slate-700">${p.category}</span></td>
                 <td class="py-3 px-4 font-mono text-slate-600">${p.formula_code || '-'}</td>
                 <td class="py-3 px-4 font-extrabold text-slate-900">${NKB.formatCurrency(p.default_price)}</td>
@@ -679,7 +916,7 @@ async function loadProducts() {
             </tr>
         `).join('');
     } else {
-        tbody.innerHTML = `<tr><td colspan="10" class="py-6 text-center text-slate-400">No products found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="py-6 text-center text-slate-400">No products found.</td></tr>`;
     }
 }
 
@@ -1276,9 +1513,13 @@ async function openEditClientModal(clientId) {
                             </select>
                         </div>
                         <div>
-                            <label class="block text-slate-600 mb-1">Credit Limit (₱)</label>
-                            <input type="number" step="1000" id="edit-client-credit" value="${client.credit_limit || 500000}" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
+                            <label class="block text-slate-600 mb-1">Default Tolerance %</label>
+                            <input type="number" step="0.1" id="edit-client-tolerance" value="${client.default_tolerance_percent}" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
                         </div>
+                    </div>
+                    <div>
+                        <label class="block text-slate-600 mb-1">Credit Limit (₱)</label>
+                        <input type="number" step="1000" id="edit-client-credit" value="${client.credit_limit || 500000}" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
                     </div>
                     <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
                         <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl">Cancel</button>
@@ -1299,6 +1540,7 @@ async function submitEditClient(e, clientId) {
     const tin = document.getElementById('edit-client-tin').value;
     const address = document.getElementById('edit-client-address').value;
     const default_billing_policy = document.getElementById('edit-client-policy').value;
+    const default_tolerance_percent = parseFloat(document.getElementById('edit-client-tolerance').value);
     const credit_limit = parseFloat(document.getElementById('edit-client-credit').value);
 
     const res = await NKB.api(`/api/clients/${clientId}`, {
@@ -1311,6 +1553,7 @@ async function submitEditClient(e, clientId) {
             tin,
             address,
             default_billing_policy,
+            default_tolerance_percent,
             credit_limit
         })
     });
@@ -1436,18 +1679,22 @@ async function openCreatePOModal() {
             <div class="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
                 <div class="flex justify-between items-center border-b border-slate-100 pb-3 flex-shrink-0">
                     <div>
-                        <h3 class="text-lg font-bold text-slate-900">Create Purchase Order (PO)</h3>
-                        <p class="text-xs text-slate-500">Order cosmetic products with client-specific pricing</p>
+                        <h3 class="text-lg font-bold text-slate-900">Create Multi-Item Purchase Order (PO)</h3>
+                        <p class="text-xs text-slate-500">Order multiple cosmetic products with client-specific pricing</p>
                     </div>
                     <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
                 </div>
                 <form id="form-create-po" onsubmit="submitCreatePO(event)" class="space-y-4 text-xs font-semibold flex-1 overflow-y-auto pr-1">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div>
                             <label class="block text-slate-600 mb-1">Select Client *</label>
                             <select id="po-client-id" onchange="onAdminPOClientChanged()" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-900">
-                                ${cachedClients.map(c => `<option value="${c.id}">${c.company_name}</option>`).join('')}
+                                ${cachedClients.map(c => `<option value="${c.id}">${c.company_name} (±${c.default_tolerance_percent}%)</option>`).join('')}
                             </select>
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 mb-1">Tolerance %</label>
+                            <input type="number" step="0.1" id="po-tolerance" value="10.0" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold">
                         </div>
                         <div>
                             <label class="block text-slate-600 mb-1">Billing Policy</label>
@@ -1498,16 +1745,9 @@ async function openCreatePOModal() {
                         </div>
                     </div>
 
-                    <div class="flex flex-col sm:flex-row justify-between items-center gap-2 pt-2 border-t border-slate-100 flex-shrink-0">
-                        <button type="button" onclick="submitSaveDraftPO(event)" class="w-full sm:w-auto px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl font-bold flex items-center justify-center gap-1.5 transition">
-                            <span>💾</span><span>Save as Draft</span>
-                        </button>
-                        <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
-                            <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold">Cancel</button>
-                            <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-md shadow-indigo-600/30 flex items-center justify-center gap-1.5">
-                                <span>🔍</span><span>Double Check & Review PO</span>
-                            </button>
-                        </div>
+                    <div class="flex justify-end gap-2 pt-2 border-t border-slate-100 flex-shrink-0">
+                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold">Cancel</button>
+                        <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-md shadow-indigo-600/30">Submit Purchase Order</button>
                     </div>
                 </form>
             </div>
@@ -1517,503 +1757,17 @@ async function openCreatePOModal() {
     await onAdminPOClientChanged();
 }
 
-// Open Edit PO Modal
-async function openEditPOModal(poId) {
-    const root = document.getElementById('modals-root');
-    const orderRes = await NKB.api(`/api/orders/${poId}`);
-    if (!orderRes.success || !orderRes.data) {
-        NKB.showToast('Purchase Order not found.', 'error');
-        return;
-    }
-    const po = orderRes.data;
-    const isDraft = po.status === 'DRAFT';
-
-    // Load client catalog for this PO's client
-    const catalogRes = await NKB.api(`/api/products?clientId=${po.client_id}&forPO=true`);
-    adminPOCatalog = (catalogRes.success && catalogRes.data) ? catalogRes.data : [];
-
-    // Pre-populate line items from existing PO
-    adminPOLineItems = (po.items || []).map(it => ({
-        product_id: it.product_id,
-        target_quantity: it.target_quantity || 0,
-        unit_price: it.unit_price || 0
-    }));
-
-    if (adminPOLineItems.length === 0 && adminPOCatalog.length > 0) {
-        addAdminPOLineItem();
-    }
-
-    root.innerHTML = `
-        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
-            <div class="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col border ${isDraft ? 'border-indigo-300' : 'border-amber-300'}">
-                <div class="flex justify-between items-center border-b border-slate-100 pb-3 flex-shrink-0">
-                    <div>
-                        <div class="flex items-center gap-2">
-                            <span class="px-2 py-0.5 ${isDraft ? 'bg-slate-100 text-slate-800' : 'bg-amber-100 text-amber-800'} rounded font-mono text-xs font-extrabold">${isDraft ? '📝 Draft Mode' : '✏️ Edit Mode'}</span>
-                            <h3 class="text-lg font-bold text-slate-900">Edit Purchase Order: <span class="text-indigo-600 font-mono">${po.po_number}</span></h3>
-                        </div>
-                        <p class="text-xs text-slate-500">${isDraft ? 'Update draft specifications or finalize to dispatch for production' : `Modify line items, quantities, or unit prices for ${po.company_name}`}</p>
-                    </div>
-                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
-                </div>
-                <form id="form-edit-po" onsubmit="submitEditPO(event, '${po.id}', '${po.po_number}', false)" class="space-y-4 text-xs font-semibold flex-1 overflow-y-auto pr-1">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-slate-600 mb-1">Client Company</label>
-                            <select id="edit-po-client-id" onchange="onAdminPOClientChanged()" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-900">
-                                ${cachedClients.map(c => `<option value="${c.id}" ${c.id === po.client_id ? 'selected' : ''}>${c.company_name}</option>`).join('')}
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-slate-600 mb-1">Billing Policy</label>
-                            <select id="edit-po-billing-policy" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold">
-                                <option value="ACTUAL_DELIVERY" ${po.billing_policy === 'ACTUAL_DELIVERY' ? 'selected' : ''}>Option A: Bill Actual Delivered</option>
-                                <option value="FIXED_PO_BUFFER" ${po.billing_policy === 'FIXED_PO_BUFFER' ? 'selected' : ''}>Option B: Fixed PO + Buffer Stock</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- Line Items Section -->
-                    <div class="space-y-2 pt-2 border-t border-slate-100">
-                        <div class="flex justify-between items-center">
-                            <span class="text-xs font-bold uppercase tracking-wider text-slate-700">Order Products (Line Items)</span>
-                            <button type="button" onclick="addAdminPOLineItem()" class="px-3 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition flex items-center gap-1">
-                                <span>➕</span><span>Add Product Line</span>
-                            </button>
-                        </div>
-
-                        <div class="overflow-x-auto border border-slate-200 rounded-xl">
-                            <table class="w-full text-left text-xs">
-                                <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase">
-                                    <tr>
-                                        <th class="py-2.5 px-3">Product</th>
-                                        <th class="py-2.5 px-3 w-28">Target Qty (pcs)</th>
-                                        <th class="py-2.5 px-3 w-28">Unit Price (₱)</th>
-                                        <th class="py-2.5 px-3 w-28">Subtotal (₱)</th>
-                                        <th class="py-2.5 px-2 w-12 text-center">Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="admin-po-lines-body" class="divide-y divide-slate-100 font-medium">
-                                    <!-- Dynamic Rows -->
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <!-- Summary & Totals -->
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-200">
-                        <div>
-                            <label class="block text-slate-600 mb-1">Packaging / Batch Notes</label>
-                            <textarea id="edit-po-notes" rows="2" placeholder="Formulation variants, packaging specifics..." class="w-full px-3 py-2 border rounded-xl bg-white">${po.notes || ''}</textarea>
-                        </div>
-                        <div class="space-y-1.5 text-right flex flex-col justify-center">
-                            <div class="text-slate-500">Total Items: <strong id="admin-po-total-items" class="text-slate-900">0</strong></div>
-                            <div class="text-slate-500">Total Target Quantity: <strong id="admin-po-total-qty" class="text-slate-900">0 pcs</strong></div>
-                            <div class="text-base font-extrabold text-indigo-900 pt-1 border-t border-slate-200">Grand Total: <span id="admin-po-grand-total">₱0.00</span></div>
-                        </div>
-                    </div>
-
-                    <div class="flex flex-col sm:flex-row justify-between items-center gap-2 pt-2 border-t border-slate-100 flex-shrink-0">
-                        ${isDraft ? `
-                            <button type="button" onclick="submitEditDraftPO(event, '${po.id}', '${po.po_number}')" class="w-full sm:w-auto px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl font-bold flex items-center justify-center gap-1.5 transition">
-                                <span>💾</span><span>Save Changes to Draft</span>
-                            </button>
-                            <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
-                                <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold">Cancel</button>
-                                <button type="button" onclick="submitEditPO(event, '${po.id}', '${po.po_number}', true)" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow-md shadow-emerald-600/30 flex items-center justify-center gap-1.5">
-                                    <span>🚀</span><span>Proceed & Submit PO</span>
-                                </button>
-                            </div>
-                        ` : `
-                            <div></div>
-                            <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
-                                <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold">Cancel</button>
-                                <button type="submit" class="px-5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-bold shadow-md shadow-amber-600/30 flex items-center gap-1.5">
-                                    <span>🔍</span><span>Double Check & Save Changes</span>
-                                </button>
-                            </div>
-                        `}
-                    </div>
-                </form>
-            </div>
-        </div>
-    `;
-
-    renderAdminPOLineItems();
-}
-
-async function submitSaveDraftPO(e) {
-    if (e && e.preventDefault) e.preventDefault();
-    const clientId = document.getElementById('po-client-id')?.value;
-    const policy = document.getElementById('po-billing-policy')?.value || 'ACTUAL_DELIVERY';
-    const notes = document.getElementById('po-notes')?.value || '';
-
-    if (!clientId) {
-        NKB.showToast('Please select a client.', 'error');
-        return;
-    }
-
-    if (!adminPOLineItems || adminPOLineItems.length === 0) {
-        NKB.showToast('Please add at least one product line item to save as draft.', 'error');
-        return;
-    }
-
-    for (const item of adminPOLineItems) {
-        const qty = parseInt(item.target_quantity, 10);
-        if (!item.product_id || isNaN(qty) || qty <= 0) {
-            NKB.showToast('All product lines must have a valid quantity greater than 0.', 'error');
-            return;
-        }
-    }
-
-    const res = await NKB.api('/api/orders', {
-        method: 'POST',
-        body: JSON.stringify({
-            client_id: clientId,
-            billing_policy: policy,
-            notes,
-            is_draft: true,
-            items: adminPOLineItems.map(it => ({
-                product_id: it.product_id,
-                target_quantity: parseInt(it.target_quantity, 10),
-                unit_price: parseFloat(it.unit_price) || 0
-            }))
-        })
-    });
-
-    if (res.success) {
-        const poNum = res.data?.po_number || '';
-        NKB.showToast(`💾 Purchase Order ${poNum} saved as Draft!`, 'success');
-        closeModal();
-        loadOrders();
-    } else {
-        NKB.showToast(res.error || 'Failed to save Draft PO.', 'error');
-    }
-}
-
-async function submitEditDraftPO(e, poId, poNumber) {
-    if (e && e.preventDefault) e.preventDefault();
-    const clientId = document.getElementById('edit-po-client-id')?.value;
-    const policy = document.getElementById('edit-po-billing-policy')?.value || 'ACTUAL_DELIVERY';
-    const notes = document.getElementById('edit-po-notes')?.value || '';
-
-    if (!clientId) {
-        NKB.showToast('Please select a client.', 'error');
-        return;
-    }
-
-    if (!adminPOLineItems || adminPOLineItems.length === 0) {
-        NKB.showToast('Please add at least one product line item.', 'error');
-        return;
-    }
-
-    for (const item of adminPOLineItems) {
-        const qty = parseInt(item.target_quantity, 10);
-        if (!item.product_id || isNaN(qty) || qty <= 0) {
-            NKB.showToast('All product lines must have a valid quantity greater than 0.', 'error');
-            return;
-        }
-    }
-
-    const res = await NKB.api(`/api/orders/${poId}`, {
-        method: 'PUT',
-        body: JSON.stringify({
-            client_id: clientId,
-            billing_policy: policy,
-            notes,
-            is_draft: true,
-            items: adminPOLineItems.map(it => ({
-                product_id: it.product_id,
-                target_quantity: parseInt(it.target_quantity, 10),
-                unit_price: parseFloat(it.unit_price) || 0
-            }))
-        })
-    });
-
-    if (res.success) {
-        NKB.showToast(`💾 Purchase Order ${poNumber} draft updated!`, 'success');
-        closeModal();
-        loadOrders();
-    } else {
-        NKB.showToast(res.error || 'Failed to update Draft PO.', 'error');
-    }
-}
-
-// -------------------------------------------------------------
-// DOUBLE CHECK & REVIEW PURCHASE ORDER MODAL
-// -------------------------------------------------------------
-let pendingPOPayload = null;
-
-function submitCreatePO(e) {
-    e.preventDefault();
-    const clientId = document.getElementById('po-client-id').value;
-    const clientObj = cachedClients.find(c => c.id === clientId);
-    const policy = document.getElementById('po-billing-policy').value;
-    const notes = document.getElementById('po-notes').value;
-
-    if (!adminPOLineItems || adminPOLineItems.length === 0) {
-        NKB.showToast('Please add at least one product line item to the order.', 'error');
-        return;
-    }
-
-    for (const item of adminPOLineItems) {
-        const qty = parseInt(item.target_quantity, 10);
-        if (!item.product_id || isNaN(qty) || qty <= 0) {
-            NKB.showToast('All product lines must have a valid quantity greater than 0.', 'error');
-            return;
-        }
-    }
-
-    const payload = {
-        client_id: clientId,
-        client_name: clientObj ? clientObj.company_name : 'Selected Client',
-        billing_policy: policy,
-        notes,
-        is_edit: false,
-        proceed: true,
-        items: adminPOLineItems.map(item => {
-            const prod = adminPOCatalog.find(p => p.id === item.product_id) || cachedProducts.find(p => p.id === item.product_id);
-            return {
-                product_id: item.product_id,
-                product_name: prod ? prod.name : 'Cosmetic Item',
-                sku: prod ? (prod.effective_sku || prod.sku) : '',
-                target_quantity: item.target_quantity,
-                unit_price: item.unit_price,
-                subtotal: (item.target_quantity || 0) * (item.unit_price || 0)
-            };
-        })
-    };
-
-    openPODoubleCheckModal(payload);
-}
-
-function submitEditPO(e, poId, poNumber, proceed = false) {
-    if (e && e.preventDefault) e.preventDefault();
-    const clientId = document.getElementById('edit-po-client-id').value;
-    const clientObj = cachedClients.find(c => c.id === clientId);
-    const policy = document.getElementById('edit-po-billing-policy').value;
-    const notes = document.getElementById('edit-po-notes').value;
-
-    if (!adminPOLineItems || adminPOLineItems.length === 0) {
-        NKB.showToast('Please add at least one product line item to the order.', 'error');
-        return;
-    }
-
-    for (const item of adminPOLineItems) {
-        const qty = parseInt(item.target_quantity, 10);
-        if (!item.product_id || isNaN(qty) || qty <= 0) {
-            NKB.showToast('All product lines must have a valid quantity greater than 0.', 'error');
-            return;
-        }
-    }
-
-    const payload = {
-        edit_po_id: poId,
-        po_number: poNumber,
-        client_id: clientId,
-        client_name: clientObj ? clientObj.company_name : 'Selected Client',
-        billing_policy: policy,
-        notes,
-        is_edit: true,
-        proceed: proceed,
-        items: adminPOLineItems.map(item => {
-            const prod = adminPOCatalog.find(p => p.id === item.product_id) || cachedProducts.find(p => p.id === item.product_id);
-            return {
-                product_id: item.product_id,
-                product_name: prod ? prod.name : 'Cosmetic Item',
-                sku: prod ? (prod.effective_sku || prod.sku) : '',
-                target_quantity: item.target_quantity,
-                unit_price: item.unit_price,
-                subtotal: (item.target_quantity || 0) * (item.unit_price || 0)
-            };
-        })
-    };
-
-    openPODoubleCheckModal(payload);
-}
-
-function openPODoubleCheckModal(payload) {
-    pendingPOPayload = payload;
-    const root = document.getElementById('modals-root');
-
-    const totalQty = payload.items.reduce((acc, it) => acc + (it.target_quantity || 0), 0);
-    const grandTotal = payload.items.reduce((acc, it) => acc + (it.subtotal || 0), 0);
-
-    root.innerHTML = `
-        <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
-            <div class="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border-2 border-indigo-200 space-y-4 max-h-[92vh] flex flex-col">
-                <div class="flex justify-between items-center pb-3 border-b border-slate-100 flex-shrink-0">
-                    <div class="flex items-center gap-2">
-                        <span class="p-2 bg-amber-100 text-amber-800 rounded-2xl text-xl">🔍</span>
-                        <div>
-                            <h3 class="text-lg font-black text-slate-900">Purchase Order Verification & Review</h3>
-                            <p class="text-xs text-indigo-600 font-bold">Please verify order details and quantities before final submission</p>
-                        </div>
-                    </div>
-                    <button onclick="reopenPOEditForm()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
-                </div>
-
-                <div class="flex-1 overflow-y-auto space-y-4 pr-1 text-xs">
-                    <!-- Client & Policy Summary Card -->
-                    <div class="p-4 bg-slate-50 border border-slate-200 rounded-2xl grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                            <span class="text-slate-400 text-[10px] uppercase font-bold block">Client / Brand Company</span>
-                            <span class="text-sm font-black text-slate-900">🏢 ${payload.client_name}</span>
-                        </div>
-                        <div>
-                            <span class="text-slate-400 text-[10px] uppercase font-bold block">Billing Policy</span>
-                            <span class="inline-block px-2 py-0.5 mt-0.5 rounded text-[11px] font-bold ${payload.billing_policy === 'ACTUAL_DELIVERY' ? 'bg-indigo-100 text-indigo-800' : 'bg-purple-100 text-purple-800'}">
-                                ${payload.billing_policy === 'ACTUAL_DELIVERY' ? 'Option A: Bill Actual Delivered' : 'Option B: Fixed PO + Buffer Stock'}
-                            </span>
-                        </div>
-                        ${payload.notes ? `
-                            <div class="sm:col-span-2 pt-2 border-t border-slate-200">
-                                <span class="text-slate-400 text-[10px] uppercase font-bold block">Batch / Packaging Notes</span>
-                                <span class="text-slate-700 italic">${payload.notes}</span>
-                            </div>
-                        ` : ''}
-                    </div>
-
-                    <!-- Products Review Table -->
-                    <div class="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                        <div class="p-2.5 bg-indigo-50/70 border-b border-indigo-100 flex justify-between items-center">
-                            <span class="font-extrabold text-indigo-950 uppercase tracking-wider text-[11px]">Order Line Items (${payload.items.length} items)</span>
-                            <span class="text-[11px] text-slate-500 font-semibold">Verify Quantities and Rates</span>
-                        </div>
-                        <table class="w-full text-left text-xs">
-                            <thead class="bg-slate-100/70 border-b border-slate-200 text-slate-700 font-bold uppercase text-[10px]">
-                                <tr>
-                                    <th class="py-2 px-3">Product</th>
-                                    <th class="py-2 px-3 text-right">Target Qty</th>
-                                    <th class="py-2 px-3 text-right">Unit Price</th>
-                                    <th class="py-2 px-3 text-right">Subtotal</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-slate-100 font-medium">
-                                ${payload.items.map(it => `
-                                    <tr class="hover:bg-slate-50">
-                                        <td class="py-2.5 px-3">
-                                             <div class="font-bold text-slate-900">${it.product_name}</div>
-                                            <div class="text-[10px] text-slate-400 font-mono">${it.sku}</div>
-                                        </td>
-                                        <td class="py-2.5 px-3 text-right font-black text-slate-800">
-                                            ${NKB.formatNumber(it.target_quantity)} pcs
-                                        </td>
-                                        <td class="py-2.5 px-3 text-right font-semibold text-slate-700">
-                                            ${NKB.formatCurrency(it.unit_price)}
-                                        </td>
-                                        <td class="py-2.5 px-3 text-right font-black text-indigo-900">
-                                            ${NKB.formatCurrency(it.subtotal)}
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <!-- Grand Summary Box -->
-                    <div class="p-4 bg-indigo-950 text-white rounded-2xl shadow flex justify-between items-center">
-                        <div>
-                            <div class="text-[10px] uppercase tracking-wider text-indigo-300 font-bold">Total Order Output</div>
-                            <div class="text-base font-black text-white">${NKB.formatNumber(totalQty)} pcs (${payload.items.length} Lines)</div>
-                        </div>
-                        <div class="text-right">
-                            <div class="text-[10px] uppercase tracking-wider text-indigo-300 font-bold">Grand Total Amount</div>
-                            <div class="text-xl font-black text-emerald-400">${NKB.formatCurrency(grandTotal)}</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Double Check Action Buttons -->
-                <div class="flex flex-col sm:flex-row justify-between items-center gap-3 pt-3 border-t border-slate-100 flex-shrink-0">
-                    <button type="button" onclick="reopenPOEditForm()" class="w-full sm:w-auto px-4 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border-2 border-amber-300 rounded-xl font-extrabold text-xs transition flex items-center justify-center gap-1.5 shadow-sm">
-                        <span>✏️ Edit / Modify Details</span>
-                    </button>
-                    <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
-                        <button type="button" onclick="closeModal()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition">
-                            Cancel
-                        </button>
-                        <button type="button" id="btn-confirm-po" onclick="confirmAndExecutePOSubmit()" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-black text-xs shadow-lg shadow-emerald-600/30 transition flex items-center justify-center gap-1.5">
-                            <span>✅ Confirm & Submit Purchase Order</span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-}
-
-function reopenPOEditForm() {
-    if (!pendingPOPayload) {
-        closeModal();
-        return;
-    }
-    if (pendingPOPayload.is_edit) {
-        openEditPOModal(pendingPOPayload.edit_po_id);
-    } else {
-        openCreatePOModal();
-    }
-}
-
-async function confirmAndExecutePOSubmit() {
-    if (!pendingPOPayload) return;
-    const btn = document.getElementById('btn-confirm-po');
-    if (btn) {
-        btn.disabled = true;
-        btn.textContent = 'Processing...';
-    }
-
-    const isEdit = pendingPOPayload.is_edit;
-    const url = isEdit ? `/api/orders/${pendingPOPayload.edit_po_id}` : '/api/orders';
-    const method = isEdit ? 'PUT' : 'POST';
-
-    const res = await NKB.api(url, {
-        method,
-        body: JSON.stringify({
-            client_id: pendingPOPayload.client_id,
-            billing_policy: pendingPOPayload.billing_policy,
-            notes: pendingPOPayload.notes,
-            proceed: pendingPOPayload.proceed || false,
-            items: pendingPOPayload.items.map(it => ({
-                product_id: it.product_id,
-                target_quantity: it.target_quantity,
-                unit_price: it.unit_price
-            }))
-        })
-    });
-
-    if (res.success) {
-        const poNum = res.data?.po_number || pendingPOPayload.po_number || '';
-        NKB.showToast(`🎉 Purchase Order ${poNum} ${isEdit ? 'updated' : 'created'} successfully!`, 'success');
-        closeModal();
-        pendingPOPayload = null;
-        loadOrders();
-        if (typeof loadJobOrders === 'function') loadJobOrders();
-    } else {
-        if (btn) {
-            btn.disabled = false;
-            btn.textContent = '✅ Confirm & Submit Purchase Order';
-        }
-        NKB.showToast(res.error || 'Failed to submit Purchase Order.', 'error');
-    }
-}
-
 async function onAdminPOClientChanged() {
-    const clientSelect = document.getElementById('po-client-id') || document.getElementById('edit-po-client-id');
+    const clientSelect = document.getElementById('po-client-id');
     if (!clientSelect) return;
     const clientId = clientSelect.value;
 
-    // Fetch ONLY products assigned to this specific client
-    const res = await NKB.api(`/api/products?clientId=${clientId}&forPO=true`);
+    const res = await NKB.api(`/api/products?clientId=${clientId}`);
     if (res.success && res.data) {
         adminPOCatalog = res.data;
-    } else {
-        adminPOCatalog = [];
     }
 
-    // Reset line items to match the newly selected client's catalog
-    adminPOLineItems = [];
-    if (adminPOCatalog.length > 0) {
+    if (adminPOLineItems.length === 0 && adminPOCatalog.length > 0) {
         addAdminPOLineItem();
     } else {
         renderAdminPOLineItems();
@@ -2025,8 +1779,8 @@ function addAdminPOLineItem() {
     const defaultProd = adminPOCatalog[0];
     adminPOLineItems.push({
         product_id: defaultProd.id,
-        target_quantity: 0,
-        unit_price: defaultProd.default_price || 0
+        target_quantity: 1000,
+        unit_price: defaultProd.default_price
     });
     renderAdminPOLineItems();
 }
@@ -2042,42 +1796,18 @@ function removeAdminPOLineItem(index) {
 
 function updateAdminPOLineItem(index, field, value) {
     if (!adminPOLineItems[index]) return;
-
     if (field === 'product_id') {
         const prod = adminPOCatalog.find(p => p.id === value);
         adminPOLineItems[index].product_id = value;
         if (prod) {
-            adminPOLineItems[index].unit_price = prod.default_price || 0;
-            const priceInput = document.getElementById(`admin-po-line-price-${index}`);
-            if (priceInput) priceInput.value = prod.default_price || 0;
+            adminPOLineItems[index].unit_price = prod.default_price;
         }
     } else if (field === 'target_quantity') {
         adminPOLineItems[index].target_quantity = parseInt(value) || 0;
     } else if (field === 'unit_price') {
         adminPOLineItems[index].unit_price = parseFloat(value) || 0;
     }
-
-    // In-place calculation without re-rendering the whole DOM (preserves input focus & continuous typing)
-    const lineSubtotal = (adminPOLineItems[index].target_quantity || 0) * (adminPOLineItems[index].unit_price || 0);
-    const subtotalEl = document.getElementById(`admin-po-line-subtotal-${index}`);
-    if (subtotalEl) {
-        subtotalEl.textContent = NKB.formatCurrency(lineSubtotal);
-    }
-
-    // Update PO Summary Totals
-    let totalQty = 0;
-    let grandTotal = 0;
-    for (const item of adminPOLineItems) {
-        totalQty += item.target_quantity || 0;
-        grandTotal += (item.target_quantity || 0) * (item.unit_price || 0);
-    }
-
-    const elTotalItems = document.getElementById('admin-po-total-items');
-    if (elTotalItems) elTotalItems.textContent = adminPOLineItems.length;
-    const elTotalQty = document.getElementById('admin-po-total-qty');
-    if (elTotalQty) elTotalQty.textContent = `${NKB.formatNumber(totalQty)} pcs`;
-    const elGrandTotal = document.getElementById('admin-po-grand-total');
-    if (elGrandTotal) elGrandTotal.textContent = NKB.formatCurrency(grandTotal);
+    renderAdminPOLineItems();
 }
 
 function renderAdminPOLineItems() {
@@ -2093,32 +1823,29 @@ function renderAdminPOLineItems() {
         grandTotal += lineSubtotal;
 
         return `
-            <tr class="hover:bg-slate-50 transition" id="admin-po-row-${idx}">
+            <tr class="hover:bg-slate-50 transition">
                 <td class="py-2.5 px-3">
                     <select onchange="updateAdminPOLineItem(${idx}, 'product_id', this.value)" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white font-medium">
                         ${adminPOCatalog.map(p => `
                             <option value="${p.id}" ${p.id === item.product_id ? 'selected' : ''}>
-                                ${p.name} (${p.effective_sku || p.sku}) - ₱${(p.default_price || 0).toFixed(2)}${p.has_custom_price ? ' [Custom]' : ''}
+                                ${p.name} (${p.effective_sku || p.sku}) - ₱${p.default_price.toFixed(2)}${p.has_custom_price ? ' [Custom]' : ''}
                             </option>
                         `).join('')}
                     </select>
                 </td>
                 <td class="py-2.5 px-3">
                     <input type="number" min="1" step="1" 
-                           value="${item.target_quantity > 0 ? item.target_quantity : ''}" 
-                           placeholder="0"
+                           value="${item.target_quantity}" 
                            oninput="updateAdminPOLineItem(${idx}, 'target_quantity', this.value)" 
-                           class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500">
+                           class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-900">
                 </td>
                 <td class="py-2.5 px-3">
                     <input type="number" min="0" step="0.01" 
-                           id="admin-po-line-price-${idx}"
-                           value="${item.unit_price !== undefined ? item.unit_price : ''}" 
-                           placeholder="0.00"
+                           value="${item.unit_price}" 
                            oninput="updateAdminPOLineItem(${idx}, 'unit_price', this.value)" 
-                           class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-indigo-900 focus:ring-2 focus:ring-indigo-500">
+                           class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-indigo-900">
                 </td>
-                <td class="py-2.5 px-3 font-extrabold text-slate-900" id="admin-po-line-subtotal-${idx}">
+                <td class="py-2.5 px-3 font-extrabold text-slate-900">
                     ${NKB.formatCurrency(lineSubtotal)}
                 </td>
                 <td class="py-2.5 px-2 text-center">
@@ -2136,6 +1863,49 @@ function renderAdminPOLineItems() {
     if (elTotalQty) elTotalQty.textContent = `${NKB.formatNumber(totalQty)} pcs`;
     const elGrandTotal = document.getElementById('admin-po-grand-total');
     if (elGrandTotal) elGrandTotal.textContent = NKB.formatCurrency(grandTotal);
+}
+
+async function submitCreatePO(e) {
+    e.preventDefault();
+    const clientId = document.getElementById('po-client-id').value;
+    const tolerance = parseFloat(document.getElementById('po-tolerance').value);
+    const policy = document.getElementById('po-billing-policy').value;
+    const notes = document.getElementById('po-notes').value;
+
+    if (!adminPOLineItems || adminPOLineItems.length === 0) {
+        NKB.showToast('Please add at least one product line item to the order.', 'error');
+        return;
+    }
+
+    for (const item of adminPOLineItems) {
+        if (!item.product_id || item.target_quantity <= 0) {
+            NKB.showToast('All product lines must have valid quantity > 0.', 'error');
+            return;
+        }
+    }
+
+    const res = await NKB.api('/api/orders', {
+        method: 'POST',
+        body: JSON.stringify({
+            client_id: clientId,
+            tolerance_percent: tolerance,
+            billing_policy: policy,
+            notes,
+            items: adminPOLineItems.map(item => ({
+                product_id: item.product_id,
+                target_quantity: item.target_quantity,
+                unit_price: item.unit_price
+            }))
+        })
+    });
+
+    if (res.success) {
+        NKB.showToast(`Purchase Order ${res.data.po_number} created successfully!`, 'success');
+        closeModal();
+        loadOrders();
+    } else {
+        NKB.showToast(res.error || 'Failed to create PO.', 'error');
+    }
 }
 
 // -------------------------------------------------------------
@@ -2220,91 +1990,44 @@ async function submitCreateJO(e, poId) {
     }
 }
 
-// 3. Create Production Batch Modal with Automatic Julian Batch Coding
-async function openCreateBatchModal(joId, joNumber, targetQty, productName) {
-    const today = new Date().toISOString().split('T')[0];
+// 3. Create Production Batch Modal
+function openCreateBatchModal(joId, joNumber, targetQty, productName) {
     const root = document.getElementById('modals-root');
-    
-    // Quick local Julian calculation for instant display
-    const d = new Date();
-    const start = new Date(d.getFullYear(), 0, 0);
-    const diff = (d - start) + ((start.getTimezoneOffset() - d.getTimezoneOffset()) * 60 * 1000);
-    const oneDay = 1000 * 60 * 60 * 24;
-    const julianDay = String(Math.floor(diff / oneDay)).padStart(3, '0');
-    const yr2 = String(d.getFullYear()).slice(-2);
-
     root.innerHTML = `
         <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
             <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
                 <div class="flex justify-between items-center border-b border-slate-100 pb-3">
-                    <div>
-                        <h3 class="text-lg font-bold text-slate-900">Start Production Batch</h3>
-                        <p class="text-[11px] text-indigo-600 font-semibold">Automatic Julian Date & Brand Batch Coding</p>
-                    </div>
-                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
+                    <h3 class="text-lg font-bold text-slate-900">Start Production Batch</h3>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold">&times;</button>
                 </div>
                 <form onsubmit="submitCreateBatch(event, '${joId}')" class="space-y-4 text-xs font-semibold">
-                    <div class="p-3 bg-slate-50 rounded-xl text-slate-600 space-y-1 border border-slate-100">
-                        <div>SO Reference: <strong class="text-slate-900">${joNumber}</strong></div>
+                    <div class="p-3 bg-slate-50 rounded-xl text-slate-600 space-y-1">
+                        <div>JO Reference: <strong class="text-slate-900">${joNumber}</strong></div>
                         <div>Product: <strong class="text-slate-900">${productName}</strong></div>
                     </div>
-
-                    <!-- Auto Julian Batch Code Display -->
-                    <div class="p-3 bg-indigo-50/60 border border-indigo-200 rounded-xl space-y-1.5">
-                        <div class="flex justify-between items-center">
-                            <label class="block text-indigo-900 font-bold">Auto Batch Code (Julian Format)</label>
-                            <span class="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[9.5px] font-mono">YY-JulianDay</span>
-                        </div>
-                        <input type="text" id="batch-code-input" required class="w-full px-3 py-2 border-2 border-indigo-300 rounded-lg bg-white font-mono font-bold text-indigo-950 text-sm focus:outline-none focus:border-indigo-600">
-                        <div class="text-[10px] text-slate-500 italic">Formula: Brand Initial + Year (${yr2}) - Julian Day (${julianDay})</div>
+                    <div>
+                        <label class="block text-slate-600 mb-1">Target Batch Quantity (pcs)</label>
+                        <input type="number" id="batch-target-qty" value="${targetQty}" min="1" required class="w-full px-3 py-2 border rounded-xl bg-slate-50">
                     </div>
-
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-slate-600 mb-1">Production Date</label>
-                            <input type="date" id="batch-prod-date" value="${today}" onchange="updateBatchCodePreview('${joId}')" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-medium">
-                        </div>
-                        <div>
-                            <label class="block text-slate-600 mb-1">Target Batch Qty (pcs)</label>
-                            <input type="number" id="batch-target-qty" value="${targetQty}" min="1" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold">
-                        </div>
-                    </div>
-
                     <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
                         <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl">Cancel</button>
-                        <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-md shadow-indigo-600/30">Start Batch</button>
+                        <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold">Start Batch</button>
                     </div>
                 </form>
             </div>
         </div>
     `;
-
-    // Fetch precise suggested batch code from backend service
-    updateBatchCodePreview(joId);
-}
-
-async function updateBatchCodePreview(joId) {
-    const prodDate = document.getElementById('batch-prod-date') ? document.getElementById('batch-prod-date').value : '';
-    const res = await NKB.api(`/api/production/suggest-batch-code?jo_id=${joId}&date=${prodDate}`);
-    if (res.success && res.data && res.data.batch_code) {
-        const input = document.getElementById('batch-code-input');
-        if (input) input.value = res.data.batch_code;
-    }
 }
 
 async function submitCreateBatch(e, joId) {
     e.preventDefault();
     const targetQty = parseInt(document.getElementById('batch-target-qty').value);
-    const prodDate = document.getElementById('batch-prod-date').value;
-    const batchNumber = document.getElementById('batch-code-input').value;
 
     const res = await NKB.api('/api/production/batches', {
         method: 'POST',
         body: JSON.stringify({
             jo_id: joId,
-            target_quantity: targetQty,
-            production_date: prodDate,
-            batch_number: batchNumber
+            target_quantity: targetQty
         })
     });
 
@@ -2475,148 +2198,46 @@ async function submitApproveOverrun(e, batchId) {
 }
 
 // 6. Create Delivery Receipt (DR) Modal
-async function openCreateDRModal(poNumber, joNumber, batchId, batchNumber, deliveredQty, productName, clientId) {
-    const baseQty = parseInt(deliveredQty) || 1000;
-
-    // Check if there are active pending DRs for this PO
-    let existingDRs = [];
-    try {
-        const drCheck = await NKB.api(`/api/deliveries?search=${encodeURIComponent(poNumber)}&status=PENDING_CLIENT_ACCEPTANCE`);
-        if (drCheck.success && Array.isArray(drCheck.data)) {
-            existingDRs = drCheck.data;
-        }
-    } catch(e) {}
-
+function openCreateDRModal(poNumber, joNumber, batchId, batchNumber, deliveredQty, productName, clientId) {
     const root = document.getElementById('modals-root');
     root.innerHTML = `
         <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
-            <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 border border-slate-200">
+            <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
                 <div class="flex justify-between items-center border-b border-slate-100 pb-3">
-                    <div class="flex items-center gap-2">
-                        <span class="p-2 bg-emerald-50 text-emerald-700 rounded-xl text-lg">🚚</span>
-                        <div>
-                            <h3 class="text-base font-black text-slate-900">Create / Append Delivery Receipt</h3>
-                            <p class="text-xs text-slate-500">Dispatch finished goods and add extra/overrun quantity</p>
-                        </div>
-                    </div>
-                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-xl">&times;</button>
+                    <h3 class="text-lg font-bold text-slate-900">Create Delivery Receipt & Dispatch</h3>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold">&times;</button>
                 </div>
                 <form onsubmit="submitCreateDR(event, '${poNumber}', '${batchId}')" class="space-y-4 text-xs font-semibold">
-                    <div class="p-3 bg-slate-50 rounded-2xl space-y-1 text-slate-700 border border-slate-100">
-                        <div class="flex justify-between items-center">
-                            <span>PO Reference: <strong class="text-slate-900 font-mono">${poNumber}</strong></span>
-                            <span class="text-slate-500">JO: <strong class="text-blue-700 font-mono">${joNumber}</strong></span>
-                        </div>
-                        <div>Batch: <strong class="text-indigo-600 font-mono">${batchNumber}</strong> (${productName})</div>
+                    <div class="p-3 bg-slate-50 rounded-xl space-y-1 text-slate-700">
+                        <div>PO Reference: <strong class="text-slate-900">${poNumber}</strong></div>
+                        <div>Batch: <strong class="text-indigo-600">${batchNumber}</strong> (${productName})</div>
                     </div>
-
-                    ${existingDRs.length > 0 ? `
-                        <div class="p-3.5 bg-emerald-50 border border-emerald-300 rounded-2xl space-y-2">
-                            <label class="block text-emerald-950 font-bold">📄 Delivery Receipt (D.R) Number Choice:</label>
-                            <div class="space-y-1.5">
-                                <label class="flex items-center gap-2.5 cursor-pointer bg-white p-2.5 rounded-xl border-2 border-emerald-500 shadow-sm">
-                                    <input type="radio" name="dr_target_mode" value="${existingDRs[0].id}" checked class="text-emerald-600 scale-110">
-                                    <span class="text-slate-900 font-bold">
-                                        Isama sa umiiral na <span class="font-mono text-emerald-700">${existingDRs[0].dr_number}</span> <span class="text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded text-[10px] font-black uppercase">Same D.R Number</span>
-                                    </span>
-                                </label>
-                                <label class="flex items-center gap-2.5 cursor-pointer bg-white p-2 rounded-xl border border-slate-200">
-                                    <input type="radio" name="dr_target_mode" value="NEW" class="text-slate-600 scale-110">
-                                    <span class="text-slate-600">Gumawa ng Bagong D.R Number (New Separate DR)</span>
-                                </label>
-                            </div>
-                        </div>
-                    ` : ''}
-
-                    <!-- Quantity Breakdown & Overrun / Dagdag Calculator -->
-                    <div class="p-4 bg-emerald-50/60 border border-emerald-200 rounded-2xl space-y-3">
-                        <div class="flex justify-between items-center">
-                            <span class="font-bold text-emerald-950 flex items-center gap-1.5">
-                                <span>📦</span><span>Dispatch Quantity & Overrun (Dagdag)</span>
-                            </span>
-                            <span class="text-[10px] text-emerald-800 font-medium">Auto-calculated</span>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block text-slate-700 mb-1">Base Target Qty (pcs)</label>
-                                <input type="number" id="dr-base-qty" value="${baseQty}" min="1" oninput="calculateDRTotalQty()" required class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white font-bold text-slate-900">
-                            </div>
-                            <div>
-                                <label class="block text-emerald-800 mb-1">➕ Dagdag / Excess Qty (pcs)</label>
-                                <input type="number" id="dr-extra-qty" value="0" min="0" oninput="calculateDRTotalQty()" placeholder="0" class="w-full px-3 py-2 border-2 border-emerald-400 rounded-xl bg-white font-black text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                            </div>
-                        </div>
-
-                        <!-- Quick Increment Badges for Dagdag -->
-                        <div class="flex items-center gap-1.5 pt-1">
-                            <span class="text-[10px] text-slate-500">Quick add:</span>
-                            <button type="button" onclick="addDRExtraQty(10)" class="px-2 py-0.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-lg text-[10px] font-bold transition">+10</button>
-                            <button type="button" onclick="addDRExtraQty(25)" class="px-2 py-0.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-lg text-[10px] font-bold transition">+25</button>
-                            <button type="button" onclick="addDRExtraQty(50)" class="px-2 py-0.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-lg text-[10px] font-bold transition">+50</button>
-                            <button type="button" onclick="addDRExtraQty(100)" class="px-2 py-0.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-lg text-[10px] font-bold transition">+100</button>
-                            <button type="button" onclick="setDRExtraQty(0)" class="px-2 py-0.5 bg-white hover:bg-rose-100 border border-slate-300 text-slate-600 rounded-lg text-[10px] font-bold transition">Reset</button>
-                        </div>
-
-                        <div class="pt-2 border-t border-emerald-200 flex justify-between items-center">
-                            <span class="font-bold text-slate-800">Total DR Quantity to Deliver:</span>
-                            <div class="flex items-center gap-1">
-                                <input type="number" id="dr-delivered-qty" value="${baseQty}" min="1" required class="w-32 px-3 py-1.5 border-2 border-emerald-600 rounded-xl bg-white font-black text-emerald-900 text-base text-right">
-                                <span class="font-bold text-slate-600">pcs</span>
-                            </div>
-                        </div>
+                    <div>
+                        <label class="block text-slate-600 mb-1">Delivered Quantity (pcs)</label>
+                        <input type="number" id="dr-delivered-qty" value="${deliveredQty}" min="1" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-900">
                     </div>
-
                     <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-slate-600 mb-1">Driver Name *</label>
-                            <input type="text" id="dr-driver-name" value="Danilo Gomez" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 text-slate-900">
+                            <label class="block text-slate-600 mb-1">Driver Name</label>
+                            <input type="text" id="dr-driver-name" value="Danilo Gomez" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
                         </div>
                         <div>
-                            <label class="block text-slate-600 mb-1">Vehicle Plate *</label>
-                            <input type="text" id="dr-vehicle-plate" value="NKB-8899" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 text-slate-900">
+                            <label class="block text-slate-600 mb-1">Vehicle Plate</label>
+                            <input type="text" id="dr-vehicle-plate" value="NKB-8899" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
                         </div>
                     </div>
                     <div>
-                        <label class="block text-slate-600 mb-1">Dispatch & Packaging Notes</label>
-                        <textarea id="dr-notes" rows="2" class="w-full px-3 py-2 border rounded-xl bg-slate-50 text-slate-900">Dispatched in protective shrink-wrapped master boxes with batch certificate.</textarea>
+                        <label class="block text-slate-600 mb-1">Dispatch Notes</label>
+                        <textarea id="dr-notes" rows="2" class="w-full px-3 py-2 border rounded-xl bg-slate-50">Dispatched in protective shrink-wrapped master boxes.</textarea>
                     </div>
                     <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition">Cancel</button>
-                        <button type="submit" id="btn-submit-dr" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-black shadow-lg shadow-emerald-600/30 transition flex items-center gap-1.5">
-                            <span>🚚 Issue / Update DR</span>
-                        </button>
+                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl">Cancel</button>
+                        <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold">Dispatch & Issue DR</button>
                     </div>
                 </form>
             </div>
         </div>
     `;
-}
-
-function calculateDRTotalQty() {
-    const base = parseInt(document.getElementById('dr-base-qty')?.value || '0', 10);
-    const extra = parseInt(document.getElementById('dr-extra-qty')?.value || '0', 10);
-    const totalEl = document.getElementById('dr-delivered-qty');
-    if (totalEl) {
-        totalEl.value = Math.max(1, base + (isNaN(extra) ? 0 : extra));
-    }
-}
-
-function addDRExtraQty(amount) {
-    const extraInput = document.getElementById('dr-extra-qty');
-    if (extraInput) {
-        const current = parseInt(extraInput.value || '0', 10);
-        extraInput.value = current + amount;
-        calculateDRTotalQty();
-    }
-}
-
-function setDRExtraQty(amount) {
-    const extraInput = document.getElementById('dr-extra-qty');
-    if (extraInput) {
-        extraInput.value = amount;
-        calculateDRTotalQty();
-    }
 }
 
 async function submitCreateDR(e, poNumber, batchId) {
@@ -2625,15 +2246,6 @@ async function submitCreateDR(e, poNumber, batchId) {
     const driverName = document.getElementById('dr-driver-name').value;
     const vehiclePlate = document.getElementById('dr-vehicle-plate').value;
     const notes = document.getElementById('dr-notes').value;
-
-    if (isNaN(deliveredQty) || deliveredQty <= 0) {
-        NKB.showToast('Please enter a valid delivered quantity > 0.', 'error');
-        return;
-    }
-
-    // Check if target is existing DR
-    const drTargetMode = document.querySelector('input[name="dr_target_mode"]:checked')?.value;
-    const existingDrId = (drTargetMode && drTargetMode !== 'NEW') ? drTargetMode : null;
 
     // Fetch PO details to get product ID and PO ID
     const poListRes = await NKB.api(`/api/orders?search=${encodeURIComponent(poNumber)}`);
@@ -2655,7 +2267,6 @@ async function submitCreateDR(e, poNumber, batchId) {
         body: JSON.stringify({
             po_id: po.id,
             jo_id: batch.jo_id,
-            existing_dr_id: existingDrId,
             driver_name: driverName,
             vehicle_plate: vehiclePlate,
             notes,
@@ -2666,161 +2277,11 @@ async function submitCreateDR(e, poNumber, batchId) {
     });
 
     if (res.success) {
-        NKB.showToast(`Delivery Receipt ${res.data.dr_number} successfully ${existingDrId ? 'updated (Same DR Number)' : 'created'} with ${NKB.formatNumber(deliveredQty)} pcs!`, 'success');
+        NKB.showToast(`Delivery Receipt ${res.data.dr_number} created! Waiting for client digital acceptance.`, 'success');
         closeModal();
         switchTab('deliveries');
     } else {
         NKB.showToast(res.error || 'Failed to create DR.', 'error');
-    }
-}
-
-// 6b. Add Quantity to Existing DR Modal (Same DR Number)
-async function openAddQuantityToExistingDRModal(drId, drNumber, companyName) {
-    const res = await NKB.api(`/api/deliveries/${drId}`);
-    if (!res.success || !res.data) {
-        NKB.showToast('Unable to load DR details.', 'error');
-        return;
-    }
-    const dr = res.data;
-    const items = dr.items || [];
-
-    const root = document.getElementById('modals-root');
-    root.innerHTML = `
-        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
-            <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 border border-slate-200">
-                <div class="flex justify-between items-center border-b border-slate-100 pb-3">
-                    <div class="flex items-center gap-2">
-                        <span class="p-2 bg-emerald-50 text-emerald-700 rounded-xl text-lg">➕</span>
-                        <div>
-                            <h3 class="text-base font-black text-slate-900">Dagdag Quantity sa D.R</h3>
-                            <p class="text-xs text-slate-500">I-retain ang parehong D.R Number: <strong class="text-emerald-700 font-mono">${drNumber}</strong></p>
-                        </div>
-                    </div>
-                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-xl">&times;</button>
-                </div>
-
-                <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl flex justify-between items-center text-xs">
-                    <div>
-                        <div class="text-slate-500">Delivery Receipt:</div>
-                        <div class="font-extrabold text-emerald-900 text-sm font-mono">${drNumber}</div>
-                    </div>
-                    <div class="text-right">
-                        <div class="text-slate-500">Client:</div>
-                        <div class="font-bold text-slate-800">${companyName}</div>
-                    </div>
-                </div>
-
-                <form onsubmit="submitAddQuantityToExistingDR(event, '${drId}', '${drNumber}')" class="space-y-4 text-xs font-semibold">
-                    <div class="space-y-3">
-                        <label class="block text-slate-700 font-bold">Mga Produkto sa D.R na Ito:</label>
-                        ${items.map((it, idx) => `
-                            <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
-                                <div class="flex justify-between items-center">
-                                    <span class="font-bold text-slate-800">${it.product_name}</span>
-                                    <span class="text-slate-500 font-mono text-[11px]">${it.batch_number || 'Batch'}</span>
-                                </div>
-                                <div class="flex items-center justify-between text-[11px] text-slate-600">
-                                    <span>Kasalukuyang D.R Qty: <strong class="text-slate-900">${NKB.formatNumber(it.delivered_quantity)} pcs</strong></span>
-                                </div>
-                                <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200">
-                                    <div>
-                                        <label class="block text-emerald-800 text-[11px] mb-1">➕ Dagdag na Piraso (pcs):</label>
-                                        <input type="number" id="add-item-qty-${idx}" data-item-id="${it.id}" data-product-id="${it.product_id}" data-batch-id="${it.batch_id || ''}" min="0" value="0" placeholder="0" oninput="calculateDRAppendTotal(${idx}, ${it.delivered_quantity})" class="w-full px-3 py-1.5 border-2 border-emerald-400 rounded-xl bg-white font-black text-emerald-800 text-sm">
-                                    </div>
-                                    <div>
-                                        <label class="block text-slate-500 text-[11px] mb-1">Bagong Total sa D.R:</label>
-                                        <div id="new-item-total-${idx}" class="w-full px-3 py-1.5 bg-slate-200/70 border border-slate-300 rounded-xl font-black text-slate-800 text-sm text-right">
-                                            ${NKB.formatNumber(it.delivered_quantity)} pcs
-                                        </div>
-                                    </div>
-                                </div>
-                                <!-- Quick Buttons -->
-                                <div class="flex items-center gap-1 pt-1">
-                                    <span class="text-[9px] text-slate-400">Quick add:</span>
-                                    <button type="button" onclick="quickAppendQty(${idx}, 10, ${it.delivered_quantity})" class="px-1.5 py-0.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-800 rounded text-[9px] font-bold">+10</button>
-                                    <button type="button" onclick="quickAppendQty(${idx}, 25, ${it.delivered_quantity})" class="px-1.5 py-0.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-800 rounded text-[9px] font-bold">+25</button>
-                                    <button type="button" onclick="quickAppendQty(${idx}, 50, ${it.delivered_quantity})" class="px-1.5 py-0.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-800 rounded text-[9px] font-bold">+50</button>
-                                    <button type="button" onclick="quickAppendQty(${idx}, 100, ${it.delivered_quantity})" class="px-1.5 py-0.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-800 rounded text-[9px] font-bold">+100</button>
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-
-                    <div>
-                        <label class="block text-slate-600 mb-1">Dagdag Notes / Remarks</label>
-                        <input type="text" id="dr-append-notes" placeholder="e.g. Added overrun production units" class="w-full px-3 py-2 border rounded-xl bg-slate-50 text-slate-900">
-                    </div>
-
-                    <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition">Cancel</button>
-                        <button type="submit" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-black shadow-lg shadow-emerald-600/30 transition flex items-center gap-1.5">
-                            <span>✅ Update ${drNumber} (Same DR)</span>
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    `;
-}
-
-function calculateDRAppendTotal(idx, currentQty) {
-    const extraInput = document.getElementById(`add-item-qty-${idx}`);
-    const totalDiv = document.getElementById(`new-item-total-${idx}`);
-    if (extraInput && totalDiv) {
-        const extra = parseInt(extraInput.value || '0', 10);
-        const newTotal = currentQty + (isNaN(extra) ? 0 : extra);
-        totalDiv.textContent = `${NKB.formatNumber(newTotal)} pcs`;
-    }
-}
-
-function quickAppendQty(idx, amount, currentQty) {
-    const extraInput = document.getElementById(`add-item-qty-${idx}`);
-    if (extraInput) {
-        const current = parseInt(extraInput.value || '0', 10);
-        extraInput.value = current + amount;
-        calculateDRAppendTotal(idx, currentQty);
-    }
-}
-
-async function submitAddQuantityToExistingDR(e, drId, drNumber) {
-    e.preventDefault();
-    const items = [];
-    let idx = 0;
-    while (true) {
-        const input = document.getElementById(`add-item-qty-${idx}`);
-        if (!input) break;
-        const extraQty = parseInt(input.value || '0', 10);
-        if (extraQty > 0) {
-            items.push({
-                product_id: input.getAttribute('data-product-id'),
-                batch_id: input.getAttribute('data-batch-id') || null,
-                delivered_quantity: extraQty
-            });
-        }
-        idx++;
-    }
-
-    if (items.length === 0) {
-        NKB.showToast('Please enter at least 1 pcs to add to the DR.', 'warning');
-        return;
-    }
-
-    const extraNotes = document.getElementById('dr-append-notes')?.value || '';
-
-    const res = await NKB.api(`/api/deliveries/${drId}/add-quantity`, {
-        method: 'POST',
-        body: JSON.stringify({
-            items,
-            extra_notes: extraNotes
-        })
-    });
-
-    if (res.success) {
-        NKB.showToast(`Successfully added quantity to ${drNumber} (Same D.R Number preserved)!`, 'success');
-        closeModal();
-        loadDeliveries();
-    } else {
-        NKB.showToast(res.error || 'Failed to update DR quantity.', 'error');
     }
 }
 
@@ -2956,6 +2417,7 @@ async function submitRecordPayment(e, invoiceId, balanceDue) {
         NKB.showToast(res.message, 'success');
         closeModal();
         loadInvoices();
+        loadPayments();
     } else {
         NKB.showToast(res.error || 'Failed to record payment.', 'error');
     }
@@ -3056,12 +2518,18 @@ function openCreateClientModal() {
                         <label class="block text-slate-600 mb-1">Business Address *</label>
                         <input type="text" id="client-address" required placeholder="Building, Street, City, Metro Manila" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
                     </div>
-                    <div>
-                        <label class="block text-slate-600 mb-1">Default Billing Policy</label>
-                        <select id="client-policy" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
-                            <option value="ACTUAL_DELIVERY">Option A: Bill Actual Delivered</option>
-                            <option value="FIXED_PO_BUFFER">Option B: Fixed PO + Buffer</option>
-                        </select>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-slate-600 mb-1">Default Billing Policy</label>
+                            <select id="client-policy" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
+                                <option value="ACTUAL_DELIVERY">Option A: Bill Actual Delivered</option>
+                                <option value="FIXED_PO_BUFFER">Option B: Fixed PO + Buffer</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 mb-1">Default Tolerance %</label>
+                            <input type="number" step="0.1" id="client-tolerance" value="10.0" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
+                        </div>
                     </div>
 
                     <!-- Client Portal Login Account Generator -->
@@ -3099,6 +2567,7 @@ async function submitCreateClient(e) {
     const tin = document.getElementById('client-tin').value;
     const address = document.getElementById('client-address').value;
     const policy = document.getElementById('client-policy').value;
+    const tolerance = parseFloat(document.getElementById('client-tolerance').value);
     const createAccount = document.getElementById('client-create-account').checked;
     const defaultPassword = document.getElementById('client-default-pass').value;
 
@@ -3112,6 +2581,7 @@ async function submitCreateClient(e) {
             tin,
             address,
             default_billing_policy: policy,
+            default_tolerance_percent: tolerance,
             create_portal_account: createAccount,
             default_password: defaultPassword
         })
@@ -3229,11 +2699,9 @@ async function submitResetClientCredentials(e, clientId, companyName, email) {
     }
 }
 
-// 11. Create & Edit Product Modals (With Client Assignment & Batch Coding)
+// 11. Create Product Modal
 function openCreateProductModal() {
     const root = document.getElementById('modals-root');
-    const clientOptions = cachedClients.map(c => `<option value="${c.id}">${c.company_name}</option>`).join('');
-
     root.innerHTML = `
         <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
             <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 border border-slate-200">
@@ -3247,7 +2715,7 @@ function openCreateProductModal() {
                     </div>
                     <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-xl">&times;</button>
                 </div>
-                <form onsubmit="submitCreateProduct(event)" class="space-y-3 text-xs font-semibold">
+                <form onsubmit="submitCreateProduct(event)" class="space-y-3.5 text-xs font-semibold">
                     <div class="grid grid-cols-2 gap-3">
                         <div>
                             <label class="block text-slate-700 font-bold mb-1">SKU / Item Code *</label>
@@ -3256,58 +2724,40 @@ function openCreateProductModal() {
                         <div>
                             <label class="block text-slate-700 font-bold mb-1">Category *</label>
                             <select id="prod-category" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 font-bold focus:ring-2 focus:ring-indigo-500">
-                                <option value="Cosmetics & Skincare">Cosmetics & Skincare</option>
                                 <option value="Body Care">Body Care</option>
                                 <option value="Face Care">Face Care</option>
                                 <option value="Sun Care">Sun Care</option>
                                 <option value="Bath & Body">Bath & Body</option>
                                 <option value="Hair Care">Hair Care</option>
+                                <option value="Cosmetics">Cosmetics</option>
                                 <option value="Skincare Treatment">Skincare Treatment</option>
                             </select>
                         </div>
                     </div>
-
                     <div>
                         <label class="block text-slate-700 font-bold mb-1">Product Commercial Name *</label>
-                        <input type="text" id="prod-name" oninput="autoSuggestProductBatchTemplate(this.value)" required placeholder="e.g. BELLA SKIN PERFECT TINT SUNSCREEN" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500">
+                        <input type="text" id="prod-name" required placeholder="e.g. Vitamin C Brightening Body Lotion 300ml" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500">
                     </div>
-
-                    <!-- Designated Client Selector -->
-                    <div class="p-3 bg-indigo-50/60 border border-indigo-200 rounded-2xl space-y-1.5">
-                        <label class="block text-indigo-950 font-bold">🏢 Designated Client / Brand Owner</label>
-                        <select id="prod-client-id" class="w-full px-3 py-2 border border-indigo-300 rounded-xl bg-white font-bold text-slate-900 text-xs focus:ring-2 focus:ring-indigo-500">
-                            <option value="">🌐 All Clients / Generic Product</option>
-                            ${clientOptions}
-                        </select>
-                        <p class="text-[10px] text-slate-500 italic">When a client is selected, this product will strictly appear only on that client's PO catalog.</p>
-                    </div>
-
                     <div class="grid grid-cols-2 gap-3">
                         <div>
                             <label class="block text-slate-700 font-bold mb-1">Default Unit Price (₱) *</label>
                             <input type="number" step="0.01" min="0" id="prod-price" required placeholder="120.00" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white font-extrabold text-indigo-900 text-sm focus:ring-2 focus:ring-indigo-500">
                         </div>
                         <div>
-                            <label class="block text-slate-700 font-bold mb-1">Batch Code Template</label>
-                            <input type="text" id="prod-batch-template" placeholder="BSPTSXX-XXX" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 font-mono focus:ring-2 focus:ring-indigo-500">
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-3 gap-3">
-                        <div>
                             <label class="block text-slate-700 font-bold mb-1">Formula Code</label>
-                            <input type="text" id="prod-formula" placeholder="FORM-V1" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 font-mono">
-                        </div>
-                        <div>
-                            <label class="block text-slate-700 font-bold mb-1">Unit</label>
-                            <input type="text" id="prod-unit" value="pcs" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900">
-                        </div>
-                        <div>
-                            <label class="block text-slate-700 font-bold mb-1">Shelf Life (Mos)</label>
-                            <input type="number" id="prod-shelf-life" value="24" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900">
+                            <input type="text" id="prod-formula" placeholder="FORM-VLC-V1" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 font-mono focus:ring-2 focus:ring-indigo-500">
                         </div>
                     </div>
-
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-slate-700 font-bold mb-1">Unit of Measure</label>
+                            <input type="text" id="prod-unit" value="pcs" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-slate-700 font-bold mb-1">Shelf Life (Months)</label>
+                            <input type="number" id="prod-shelf-life" value="24" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                    </div>
                     <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
                         <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition">Cancel</button>
                         <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-black shadow-lg shadow-indigo-600/30 transition">Save Product</button>
@@ -3318,14 +2768,6 @@ function openCreateProductModal() {
     `;
 }
 
-function autoSuggestProductBatchTemplate(name) {
-    const input = document.getElementById('prod-batch-template');
-    if (!input || !name) return;
-    const words = name.trim().split(/\s+/).filter(Boolean);
-    const initials = words.map(w => w[0].toUpperCase()).slice(0, 5).join('');
-    input.value = `${initials}XX-XXX`;
-}
-
 async function submitCreateProduct(e) {
     e.preventDefault();
     const sku = document.getElementById('prod-sku').value;
@@ -3333,8 +2775,6 @@ async function submitCreateProduct(e) {
     const name = document.getElementById('prod-name').value;
     const price = parseFloat(document.getElementById('prod-price').value);
     const formula = document.getElementById('prod-formula').value;
-    const batchTemplate = document.getElementById('prod-batch-template').value;
-    const clientId = document.getElementById('prod-client-id').value;
     const unit = document.getElementById('prod-unit').value;
     const shelfLife = parseInt(document.getElementById('prod-shelf-life').value);
 
@@ -3346,8 +2786,6 @@ async function submitCreateProduct(e) {
             name,
             default_price: price,
             formula_code: formula,
-            batch_code_template: batchTemplate,
-            client_id: clientId || null,
             unit,
             shelf_life_months: shelfLife
         })
@@ -3360,142 +2798,6 @@ async function submitCreateProduct(e) {
         loadProducts();
     } else {
         NKB.showToast(res.error || 'Failed to add product.', 'error');
-    }
-}
-
-async function openEditProductModal(productId) {
-    const root = document.getElementById('modals-root');
-    const res = await NKB.api(`/api/products/${productId}`);
-    if (!res.success || !res.data) {
-        NKB.showToast('Product not found.', 'error');
-        return;
-    }
-    const p = res.data;
-    const clientOptions = cachedClients.map(c => `
-        <option value="${c.id}" ${p.client_id === c.id ? 'selected' : ''}>${c.company_name}</option>
-    `).join('');
-
-    root.innerHTML = `
-        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
-            <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 border border-slate-200">
-                <div class="flex justify-between items-center border-b border-slate-100 pb-3">
-                    <div class="flex items-center gap-2">
-                        <span class="text-2xl">✏️</span>
-                        <div>
-                            <h3 class="text-lg font-black text-slate-900">Edit Product & Formula</h3>
-                            <p class="text-xs text-slate-500">${p.name} (${p.sku})</p>
-                        </div>
-                    </div>
-                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-xl">&times;</button>
-                </div>
-                <form onsubmit="submitEditProduct(event, '${productId}')" class="space-y-3 text-xs font-semibold">
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-slate-700 font-bold mb-1">SKU / Item Code *</label>
-                            <input type="text" id="edit-prod-sku" value="${p.sku}" required class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 font-mono uppercase focus:ring-2 focus:ring-indigo-500">
-                        </div>
-                        <div>
-                            <label class="block text-slate-700 font-bold mb-1">Category *</label>
-                            <select id="edit-prod-category" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 font-bold focus:ring-2 focus:ring-indigo-500">
-                                <option value="Cosmetics & Skincare" ${p.category === 'Cosmetics & Skincare' ? 'selected' : ''}>Cosmetics & Skincare</option>
-                                <option value="Body Care" ${p.category === 'Body Care' ? 'selected' : ''}>Body Care</option>
-                                <option value="Face Care" ${p.category === 'Face Care' ? 'selected' : ''}>Face Care</option>
-                                <option value="Sun Care" ${p.category === 'Sun Care' ? 'selected' : ''}>Sun Care</option>
-                                <option value="Bath & Body" ${p.category === 'Bath & Body' ? 'selected' : ''}>Bath & Body</option>
-                                <option value="Hair Care" ${p.category === 'Hair Care' ? 'selected' : ''}>Hair Care</option>
-                                <option value="Skincare Treatment" ${p.category === 'Skincare Treatment' ? 'selected' : ''}>Skincare Treatment</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div>
-                        <label class="block text-slate-700 font-bold mb-1">Product Commercial Name *</label>
-                        <input type="text" id="edit-prod-name" value="${p.name}" required class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500">
-                    </div>
-
-                    <!-- Designated Client Selector -->
-                    <div class="p-3 bg-indigo-50/60 border border-indigo-200 rounded-2xl space-y-1.5">
-                        <label class="block text-indigo-950 font-bold">🏢 Designated Client / Brand Owner</label>
-                        <select id="edit-prod-client-id" class="w-full px-3 py-2 border border-indigo-300 rounded-xl bg-white font-bold text-slate-900 text-xs focus:ring-2 focus:ring-indigo-500">
-                            <option value="">🌐 All Clients / Generic Product</option>
-                            ${clientOptions}
-                        </select>
-                        <p class="text-[10px] text-slate-500 italic">When a client is selected, this product will strictly appear only on that client's PO catalog.</p>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-slate-700 font-bold mb-1">Default Unit Price (₱) *</label>
-                            <input type="number" step="0.01" min="0" id="edit-prod-price" value="${p.default_price}" required class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white font-extrabold text-indigo-900 text-sm focus:ring-2 focus:ring-indigo-500">
-                        </div>
-                        <div>
-                            <label class="block text-slate-700 font-bold mb-1">Batch Code Template</label>
-                            <input type="text" id="edit-prod-batch-template" value="${p.batch_code_template || ''}" placeholder="BSPTSXX-XXX" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 font-mono focus:ring-2 focus:ring-indigo-500">
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-3 gap-3">
-                        <div>
-                            <label class="block text-slate-700 font-bold mb-1">Formula Code</label>
-                            <input type="text" id="edit-prod-formula" value="${p.formula_code || ''}" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 font-mono">
-                        </div>
-                        <div>
-                            <label class="block text-slate-700 font-bold mb-1">Shelf Life (Mos)</label>
-                            <input type="number" id="edit-prod-shelf-life" value="${p.shelf_life_months}" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900">
-                        </div>
-                        <div>
-                            <label class="block text-slate-700 font-bold mb-1">Status</label>
-                            <select id="edit-prod-status" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 font-bold">
-                                <option value="1" ${p.is_active ? 'selected' : ''}>Active</option>
-                                <option value="0" ${!p.is_active ? 'selected' : ''}>Inactive</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
-                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition">Cancel</button>
-                        <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-black shadow-lg shadow-indigo-600/30 transition">Update Product</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    `;
-}
-
-async function submitEditProduct(e, productId) {
-    e.preventDefault();
-    const sku = document.getElementById('edit-prod-sku').value;
-    const category = document.getElementById('edit-prod-category').value;
-    const name = document.getElementById('edit-prod-name').value;
-    const price = parseFloat(document.getElementById('edit-prod-price').value);
-    const formula = document.getElementById('edit-prod-formula').value;
-    const batchTemplate = document.getElementById('edit-prod-batch-template').value;
-    const clientId = document.getElementById('edit-prod-client-id').value;
-    const shelfLife = parseInt(document.getElementById('edit-prod-shelf-life').value);
-    const isActive = parseInt(document.getElementById('edit-prod-status').value);
-
-    const res = await NKB.api(`/api/products/${productId}`, {
-        method: 'PUT',
-        body: JSON.stringify({
-            sku,
-            category,
-            name,
-            default_price: price,
-            formula_code: formula,
-            batch_code_template: batchTemplate,
-            client_id: clientId || null,
-            shelf_life_months: shelfLife,
-            is_active: isActive
-        })
-    });
-
-    if (res.success) {
-        NKB.showToast(`Product "${name}" updated successfully!`, 'success');
-        closeModal();
-        await loadInitialData();
-        loadProducts();
-    } else {
-        NKB.showToast(res.error || 'Failed to update product.', 'error');
     }
 }
 
@@ -3676,401 +2978,3 @@ async function promptResetUserPassword(userId, email) {
         NKB.showToast(res.message || res.error || 'Failed to reset password.', 'error');
     }
 }
-
-// -------------------------------------------------------------
-// 12. SUPER ADMIN FACTORY RESET (PRESERVE USERS & ROLES)
-// -------------------------------------------------------------
-function openResetSystemDataModal() {
-    if (NKB.user?.role !== 'SUPER_ADMIN') {
-        NKB.showToast('Access Denied: Only Super Admin can perform database resets.', 'error');
-        return;
-    }
-
-    const root = document.getElementById('modals-root');
-    root.innerHTML = `
-        <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
-            <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border-2 border-rose-300 space-y-4">
-                <div class="flex justify-between items-center pb-2 border-b border-rose-100">
-                    <div class="flex items-center gap-2">
-                        <span class="p-2 bg-rose-100 text-rose-700 rounded-xl text-lg">⚠️</span>
-                        <div>
-                            <h3 class="text-base font-black text-rose-900">Database Factory Reset</h3>
-                            <p class="text-[11px] text-rose-600 font-semibold">Clear transactions while preserving all accounts & roles</p>
-                        </div>
-                    </div>
-                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
-                </div>
-
-                <div class="p-4 bg-rose-50 border border-rose-200 rounded-2xl text-xs space-y-2 text-rose-800">
-                    <p class="font-bold text-rose-900">This action will permanently delete:</p>
-                    <ul class="list-disc pl-5 space-y-0.5 text-[11px]">
-                        <li>All Purchase Orders (POs) and Line Items</li>
-                        <li>All Job Orders (JOs) & Production Batches</li>
-                        <li>All Delivery Receipts (DRs) & Client Signatures</li>
-                        <li>All Sales Invoices & Payment Collections</li>
-                        <li>All Warehouse Stock counts (reset to 0)</li>
-                    </ul>
-                    <div class="pt-2 border-t border-rose-200 text-emerald-800 font-bold text-[11px] flex items-center gap-1.5">
-                        <span>🛡️</span>
-                        <span>PRESERVED: All Users, Staff, RBAC Roles, Clients, and Products will NOT be deleted.</span>
-                    </div>
-                </div>
-
-                <form onsubmit="submitResetSystemData(event)" class="space-y-3 text-xs font-semibold">
-                    <div>
-                        <label class="block text-slate-700 mb-1">
-                            Type <strong class="text-rose-600 font-mono select-all">CONFIRM-RESET</strong> to verify:
-                        </label>
-                        <input type="text" id="reset-confirm-keyword" required placeholder="CONFIRM-RESET" class="w-full px-3 py-2 border-2 border-rose-200 rounded-xl bg-slate-50 font-mono text-sm uppercase text-slate-900 focus:border-rose-600 focus:outline-none">
-                    </div>
-
-                    <div>
-                        <label class="block text-slate-700 mb-1">Enter Super Admin Password:</label>
-                        <input type="password" id="reset-admin-password" required placeholder="••••••••" class="w-full px-3 py-2 border rounded-xl bg-slate-50 text-slate-900 focus:ring-2 focus:ring-rose-500 focus:outline-none">
-                    </div>
-
-                    <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition">
-                            Cancel
-                        </button>
-                        <button type="submit" id="btn-submit-reset" class="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-black shadow-lg shadow-rose-600/30 transition flex items-center gap-1.5">
-                            <span>🔴 Permanently Reset Database</span>
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    `;
-}
-
-async function submitResetSystemData(e) {
-    e.preventDefault();
-    const keyword = document.getElementById('reset-confirm-keyword').value.trim();
-    const password = document.getElementById('reset-admin-password').value;
-    const btn = document.getElementById('btn-submit-reset');
-
-    if (keyword !== 'CONFIRM-RESET') {
-        NKB.showToast('Please type CONFIRM-RESET exactly as shown.', 'error');
-        return;
-    }
-
-    if (!password) {
-        NKB.showToast('Please enter your Super Admin password.', 'error');
-        return;
-    }
-
-    btn.disabled = true;
-    btn.innerHTML = '<span>⏳ Resetting Database...</span>';
-
-    const res = await NKB.api('/api/users/reset-system-data', {
-        method: 'POST',
-        body: JSON.stringify({
-            confirmation_keyword: keyword,
-            admin_password: password
-        })
-    });
-
-    if (res.success) {
-        closeModal();
-        alert('🎉 ' + res.message);
-        window.location.reload();
-    } else {
-        btn.disabled = false;
-        btn.innerHTML = '<span>🔴 Permanently Reset Database</span>';
-        NKB.showToast(res.message || res.error || 'Failed to reset database.', 'error');
-    }
-}
-
-// -------------------------------------------------------------
-// 13. UNIVERSAL 360° ORDER & DOCUMENT BACKTRACKING & TRACE
-// -------------------------------------------------------------
-async function globalBacktrackSearch() {
-    const input = document.getElementById('global-backtrack-input');
-    const term = input?.value?.trim();
-    if (!term) {
-        NKB.showToast('Please enter a PO, SO, Batch, DR, or Invoice number to backtrack.', 'warning');
-        return;
-    }
-    openBacktrackModal(term);
-}
-
-async function openBacktrackModal(term) {
-    if (!term) return;
-
-    const root = document.getElementById('modals-root');
-    root.innerHTML = `
-        <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
-            <div class="bg-white rounded-3xl max-w-4xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[92vh] flex flex-col">
-                <div class="flex justify-between items-center pb-3 border-b border-slate-100">
-                    <div class="flex items-center gap-2">
-                        <span class="p-2 bg-indigo-50 text-indigo-700 rounded-xl text-lg">🔍</span>
-                        <div>
-                            <h3 class="text-base font-black text-slate-900">360° Order Traceability & Backtrack Trail</h3>
-                            <p class="text-xs text-slate-500">Searching lineage for <strong class="text-indigo-600 font-mono">${term}</strong></p>
-                        </div>
-                    </div>
-                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-xl">&times;</button>
-                </div>
-                <div id="backtrack-modal-body" class="flex-1 overflow-y-auto pr-1 py-8 text-center text-slate-400">
-                    <div class="animate-pulse space-y-3">
-                        <div class="text-sm font-bold text-slate-600">Retrieving full document lifecycle...</div>
-                        <div class="text-xs text-slate-400">Linking PO ➔ SO ➔ Batches ➔ DR ➔ Invoices ➔ Payments</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-
-    const res = await NKB.api(`/api/orders/backtrack/${encodeURIComponent(term)}`);
-    const bodyEl = document.getElementById('backtrack-modal-body');
-    if (!bodyEl) return;
-
-    if (!res.success || !res.data) {
-        bodyEl.innerHTML = `
-            <div class="py-12 text-center space-y-3">
-                <div class="text-4xl">❌</div>
-                <div class="text-base font-bold text-slate-800">No Record Found</div>
-                <div class="text-xs text-slate-500 max-w-md mx-auto">${res.message || 'No linked manufacturing record matches this search query.'}</div>
-                <button onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition">Close</button>
-            </div>
-        `;
-        return;
-    }
-
-    const { po, items, jobOrders, batches, deliveries, invoices, payments, auditLogs } = res.data;
-
-    bodyEl.innerHTML = `
-        <div class="space-y-6 text-xs text-left text-slate-700">
-            <!-- Header Summary Card -->
-            <div class="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-5 rounded-2xl shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                    <div class="flex items-center gap-2">
-                        <span class="px-2 py-0.5 bg-indigo-500/30 text-indigo-300 border border-indigo-400/30 rounded font-mono text-[11px] font-bold">PO: ${po.po_number}</span>
-                        <span class="text-xs text-slate-300 font-semibold">${NKB.formatDate(po.po_date)}</span>
-                    </div>
-                    <h2 class="text-lg font-black text-white mt-1">${po.company_name}</h2>
-                    <p class="text-[11px] text-slate-300">Contact: ${po.contact_person} (${po.client_phone || 'No phone'}) | Policy: <strong>${po.billing_policy}</strong></p>
-                </div>
-                <div class="text-right sm:border-l sm:border-slate-700/60 sm:pl-6">
-                    <div class="text-[10px] uppercase font-bold text-slate-400">Total PO Value</div>
-                    <div class="text-xl font-black text-emerald-400">${NKB.formatCurrency(po.grand_total)}</div>
-                    <div class="mt-1">${NKB.renderStatusBadge(po.status)}</div>
-                </div>
-            </div>
-
-            <!-- Visual Stages Stepper -->
-            <div class="grid grid-cols-2 sm:grid-cols-6 gap-2 text-center text-[11px] font-bold">
-                <div class="p-2.5 rounded-xl border ${po ? 'bg-indigo-50 border-indigo-200 text-indigo-900' : 'bg-slate-50 border-slate-200 text-slate-400'}">
-                    <div>🛒 1. PO</div>
-                    <div class="text-[10px] font-normal text-slate-500 mt-0.5">${items.length} Products</div>
-                </div>
-                <div class="p-2.5 rounded-xl border ${jobOrders.length > 0 ? 'bg-blue-50 border-blue-200 text-blue-900' : 'bg-slate-50 border-slate-200 text-slate-400'}">
-                    <div>⚙️ 2. SO (${jobOrders.length})</div>
-                    <div class="text-[10px] font-normal text-slate-500 mt-0.5">${jobOrders.some(j => j.status === 'COMPLETED') ? 'Fulfilled' : 'Scheduled'}</div>
-                </div>
-                <div class="p-2.5 rounded-xl border ${batches.length > 0 ? 'bg-amber-50 border-amber-200 text-amber-900' : 'bg-slate-50 border-slate-200 text-slate-400'}">
-                    <div>🧪 3. Batches (${batches.length})</div>
-                    <div class="text-[10px] font-normal text-slate-500 mt-0.5">${batches.reduce((acc, b) => acc + (b.actual_yield || 0), 0)} pcs output</div>
-                </div>
-                <div class="p-2.5 rounded-xl border ${deliveries.length > 0 ? 'bg-purple-50 border-purple-200 text-purple-900' : 'bg-slate-50 border-slate-200 text-slate-400'}">
-                    <div>🚚 4. DR (${deliveries.length})</div>
-                    <div class="text-[10px] font-normal text-slate-500 mt-0.5">${deliveries.some(d => d.signer_name) ? 'Signed' : 'Dispatched'}</div>
-                </div>
-                <div class="p-2.5 rounded-xl border ${invoices.length > 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-slate-50 border-slate-200 text-slate-400'}">
-                    <div>🧾 5. Invoice (${invoices.length})</div>
-                    <div class="text-[10px] font-normal text-slate-500 mt-0.5">${invoices.map(i => i.invoice_number).join(', ') || 'Pending'}</div>
-                </div>
-                <div class="p-2.5 rounded-xl border ${payments.length > 0 ? 'bg-teal-50 border-teal-200 text-teal-900' : 'bg-slate-50 border-slate-200 text-slate-400'}">
-                    <div>💰 6. Payments (${payments.length})</div>
-                    <div class="text-[10px] font-normal text-slate-500 mt-0.5">${NKB.formatCurrency(payments.reduce((acc, p) => acc + p.amount, 0))}</div>
-                </div>
-            </div>
-
-            <!-- Stage 1 & 2: PO Line Items & Sales Orders -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <!-- PO Ordered Products -->
-                <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
-                    <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-                        <span class="font-bold text-slate-900 flex items-center gap-1.5"><span>🛒</span><span>Ordered Products (PO Items)</span></span>
-                        <span class="text-[11px] font-bold text-indigo-600">${items.length} Lines</span>
-                    </div>
-                    <div class="space-y-2">
-                        ${items.map(it => `
-                            <div class="p-2.5 bg-slate-50 rounded-xl border border-slate-100 flex justify-between items-center">
-                                <div>
-                                    <div class="font-bold text-slate-800">${it.product_name}</div>
-                                    <div class="text-[10px] text-slate-400 font-mono">SKU: ${it.sku} | Formula: ${it.formula_code || 'Standard'}</div>
-                                </div>
-                                <div class="text-right">
-                                    <div class="font-black text-slate-900">${NKB.formatNumber(it.target_quantity)} pcs</div>
-                                    <div class="text-[10px] text-emerald-600 font-bold">${NKB.formatNumber(it.total_delivered_qty)} delivered</div>
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-
-                <!-- Sales Orders -->
-                <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
-                    <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-                        <span class="font-bold text-slate-900 flex items-center gap-1.5"><span>⚙️</span><span>Linked Sales Orders (SO)</span></span>
-                        <span class="text-[11px] font-bold text-blue-600">${jobOrders.length} SOs</span>
-                    </div>
-                    ${jobOrders.length > 0 ? `
-                        <div class="space-y-2">
-                            ${jobOrders.map(jo => `
-                                <div class="p-2.5 bg-slate-50 rounded-xl border border-slate-100 flex justify-between items-center">
-                                    <div>
-                                        <div class="font-bold text-blue-700 font-mono">${jo.jo_number}</div>
-                                        <div class="text-[10px] text-slate-500">${jo.product_name} (${jo.assigned_team || 'Team Alpha'})</div>
-                                    </div>
-                                    <div class="text-right">
-                                        <div class="font-black text-slate-900">${NKB.formatNumber(jo.target_quantity)} pcs</div>
-                                        <div class="text-[10px]">${jo.status === 'COMPLETED' ? '<span class="text-emerald-700 font-bold">✅ Completed</span>' : '<span class="text-amber-700 font-bold">⏳ Active</span>'}</div>
-                                    </div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    ` : `<div class="py-4 text-center text-slate-400 italic">No sales orders issued yet.</div>`}
-                </div>
-            </div>
-
-            <!-- Stage 3 & 4: Batches & Delivery Receipts -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <!-- Batches -->
-                <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
-                    <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-                        <span class="font-bold text-slate-900 flex items-center gap-1.5"><span>🧪</span><span>Production Batches & QC</span></span>
-                        <span class="text-[11px] font-bold text-amber-600">${batches.length} Batches</span>
-                    </div>
-                    ${batches.length > 0 ? `
-                        <div class="space-y-2">
-                            ${batches.map(b => `
-                                <div class="p-2.5 bg-slate-50 rounded-xl border border-slate-100 flex justify-between items-center">
-                                    <div>
-                                        <div class="font-bold text-amber-800 font-mono">${b.batch_number}</div>
-                                        <div class="text-[10px] text-slate-500">Exp: ${NKB.formatDate(b.expiry_date)} | ${b.product_name}</div>
-                                    </div>
-                                    <div class="text-right">
-                                        <div class="font-black text-indigo-700">${NKB.formatNumber(b.actual_yield || 0)} pcs</div>
-                                        <div class="text-[10px] text-slate-500">${NKB.renderStatusBadge(b.status)}</div>
-                                    </div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    ` : `<div class="py-4 text-center text-slate-400 italic">No batches brewed yet.</div>`}
-                </div>
-
-                <!-- Deliveries & Digital Sign-off -->
-                <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
-                    <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-                        <span class="font-bold text-slate-900 flex items-center gap-1.5"><span>🚚</span><span>Delivery Receipts & Client Sign-Off</span></span>
-                        <span class="text-[11px] font-bold text-purple-600">${deliveries.length} DRs</span>
-                    </div>
-                    ${deliveries.length > 0 ? `
-                        <div class="space-y-2">
-                            ${deliveries.map(dr => `
-                                <div class="p-2.5 bg-slate-50 rounded-xl border border-slate-100 space-y-1.5">
-                                    <div class="flex justify-between items-center">
-                                        <span class="font-bold text-purple-800 font-mono">${dr.dr_number}</span>
-                                        <span class="text-[10px] text-slate-500">${NKB.formatDate(dr.delivery_date)}</span>
-                                    </div>
-                                    <div class="flex justify-between items-center text-[11px]">
-                                        <span class="text-slate-600">Dispatched: <strong>${NKB.formatNumber(dr.total_delivered_qty)} pcs</strong></span>
-                                        <span class="text-emerald-700 font-bold">Accepted: ${NKB.formatNumber(dr.total_accepted_qty)} pcs</span>
-                                    </div>
-                                    ${dr.signer_name ? `
-                                        <div class="pt-1.5 border-t border-slate-200/60 text-[10px] text-emerald-800 flex items-center justify-between">
-                                            <span>✍️ Signed by: <strong>${dr.signer_name}</strong> (${dr.signer_title || 'Client Authorized'})</span>
-                                            <span class="font-mono text-[9px] text-slate-400">${dr.client_signed_at ? NKB.formatDate(dr.client_signed_at) : ''}</span>
-                                        </div>
-                                    ` : `<div class="text-[10px] text-amber-600 italic">Pending client signature</div>`}
-                                </div>
-                            `).join('')}
-                        </div>
-                    ` : `<div class="py-4 text-center text-slate-400 italic">No delivery receipts created yet.</div>`}
-                </div>
-            </div>
-
-            <!-- Stage 5 & 6: Invoices & Payments -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <!-- Sales Invoices -->
-                <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
-                    <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-                        <span class="font-bold text-slate-900 flex items-center gap-1.5"><span>🧾</span><span>Sales Invoices (SI)</span></span>
-                        <span class="text-[11px] font-bold text-emerald-600">${invoices.length} Invoices</span>
-                    </div>
-                    ${invoices.length > 0 ? `
-                        <div class="space-y-2">
-                            ${invoices.map(si => `
-                                <div class="p-2.5 bg-slate-50 rounded-xl border border-slate-100 flex justify-between items-center">
-                                    <div>
-                                        <div class="font-bold text-emerald-800 font-mono">${si.invoice_number}</div>
-                                        <div class="text-[10px] text-slate-500">Ref: ${si.dr_number || 'DR'} | Due: ${NKB.formatDate(si.due_date)}</div>
-                                    </div>
-                                    <div class="text-right">
-                                        <div class="font-black text-slate-900">${NKB.formatCurrency(si.total_amount)}</div>
-                                        <div class="text-[10px] text-rose-600 font-bold">Bal: ${NKB.formatCurrency(si.balance_due)}</div>
-                                    </div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    ` : `<div class="py-4 text-center text-slate-400 italic">No sales invoices generated yet.</div>`}
-                </div>
-
-                <!-- Payments -->
-                <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
-                    <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-                        <span class="font-bold text-slate-900 flex items-center gap-1.5"><span>💰</span><span>Payments & Collections</span></span>
-                        <span class="text-[11px] font-bold text-teal-600">${payments.length} Payments</span>
-                    </div>
-                    ${payments.length > 0 ? `
-                        <div class="space-y-2">
-                            ${payments.map(pay => `
-                                <div class="p-2.5 bg-slate-50 rounded-xl border border-slate-100 flex justify-between items-center">
-                                    <div>
-                                        <div class="font-bold text-teal-800 font-mono">${pay.payment_number}</div>
-                                        <div class="text-[10px] text-slate-500">${pay.payment_method} | Ref: ${pay.reference_number}</div>
-                                    </div>
-                                    <div class="text-right">
-                                        <div class="font-black text-emerald-700">${NKB.formatCurrency(pay.amount)}</div>
-                                        <div class="text-[10px] text-slate-400">${NKB.formatDate(pay.payment_date)}</div>
-                                    </div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    ` : `<div class="py-4 text-center text-slate-400 italic">No payments collected yet.</div>`}
-                </div>
-            </div>
-
-            <!-- Stage 7: Chronological Audit Trail & Event Timeline -->
-            <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
-                <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-                    <span class="font-bold text-slate-900 flex items-center gap-1.5"><span>📜</span><span>Chronological Event History & Audit Trail</span></span>
-                    <span class="text-[10px] text-slate-400">${auditLogs.length} Events Recorded</span>
-                </div>
-                ${auditLogs.length > 0 ? `
-                    <div class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                        ${auditLogs.map(log => `
-                            <div class="p-2 bg-slate-50 rounded-lg text-[11px] flex items-center justify-between">
-                                <div class="flex items-center gap-2">
-                                    <span class="px-1.5 py-0.5 bg-indigo-100 text-indigo-800 rounded font-bold text-[9px]">${log.action}</span>
-                                    <span class="text-slate-800 font-semibold">${log.user_name || 'System'} (${log.user_role || 'STAFF'})</span>
-                                </div>
-                                <span class="font-mono text-[10px] text-slate-400">${NKB.formatDate(log.timestamp || log.created_at)}</span>
-                            </div>
-                        `).join('')}
-                    </div>
-                ` : `<div class="py-2 text-center text-slate-400 italic">No audit trail entries for this order.</div>`}
-            </div>
-
-            <div class="flex justify-end pt-2 border-t border-slate-100">
-                <button onclick="closeModal()" class="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition">
-                    Close Trace View
-                </button>
-            </div>
-        </div>
-    `;
-}
-
-
