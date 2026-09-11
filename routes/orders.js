@@ -191,8 +191,9 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
             } else {
                 unitPrice = item.unit_price !== undefined && item.unit_price !== null ? parseFloat(item.unit_price) : expectedClientPrice;
             }
+            unitPrice = Math.round((Number(unitPrice) || 0) * 100) / 100;
 
-            const lineSubtotal = targetQty * unitPrice;
+            const lineSubtotal = Math.round(targetQty * unitPrice * 100) / 100;
             subtotal += lineSubtotal;
 
             // Compute agreed tolerance bounds
@@ -211,8 +212,8 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
             });
         }
 
-        const taxAmount = (subtotal * taxRate) / 100;
-        const grandTotal = subtotal + taxAmount;
+        const taxAmount = Math.round(((subtotal * taxRate) / 100) * 100) / 100;
+        const grandTotal = Math.round((subtotal + taxAmount) * 100) / 100;
 
         // Auto-approve if created by Admin/SuperAdmin, otherwise PENDING_APPROVAL
         const initialStatus = (req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN') ? 'APPROVED' : 'PENDING_APPROVAL';

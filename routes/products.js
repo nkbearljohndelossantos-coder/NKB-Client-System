@@ -20,7 +20,7 @@ router.get('/', authenticateToken, (req, res) => {
     const params = [];
 
     if (targetClientId) {
-        if (req.query.assignedOnly === 'true') {
+        if (req.query.assignedOnly === 'true' || req.user.role === 'CLIENT') {
             query = `
                 SELECT p.id,
                        COALESCE(cpp.custom_sku, p.sku) as sku,

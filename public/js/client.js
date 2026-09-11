@@ -134,7 +134,7 @@ function renderProductCards() {
             <div class="pt-2 border-t border-slate-100 flex items-center justify-between gap-3">
                 <div>
                     <span class="text-[10px] text-slate-400 uppercase font-semibold">Your Price</span>
-                    <div class="text-base font-extrabold text-indigo-950">₱${p.default_price.toFixed(2)}<span class="text-xs text-slate-400 font-normal"> / ${p.unit || 'pc'}</span></div>
+                    <div class="text-base font-extrabold text-indigo-950">₱${Number(p.default_price || 0).toFixed(2)}<span class="text-xs text-slate-400 font-normal"> / ${p.unit || 'pc'}</span></div>
                 </div>
                 <div class="flex items-center gap-2">
                     <input type="number" min="50" step="50" value="500" id="catalog-qty-${p.id}" class="w-20 px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 text-center focus:ring-2 focus:ring-indigo-500">
@@ -164,7 +164,7 @@ function addToClientCart(productId) {
             product_id: prod.id,
             name: prod.name,
             sku: prod.effective_sku || prod.sku,
-            unit_price: prod.default_price,
+            unit_price: Number(prod.default_price || 0),
             target_quantity: qty
         });
     }
@@ -222,8 +222,8 @@ function renderClientCart() {
                                onchange="updateClientCartQty(${idx}, this.value)" 
                                class="w-20 px-2 py-1 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 text-center focus:ring-2 focus:ring-indigo-500">
                     </td>
-                    <td class="py-2.5 px-2 font-semibold text-slate-700">
-                        ₱${item.unit_price.toFixed(2)}
+                    <td class="py-2.5 px-2 font-bold text-indigo-950 font-mono">
+                        ₱${Number(item.unit_price || 0).toFixed(2)}
                     </td>
                     <td class="py-2.5 px-2 font-extrabold text-indigo-900">
                         ${NKB.formatCurrency(lineSubtotal)}
@@ -262,7 +262,7 @@ async function submitClientPO(e) {
             items: clientCartItems.map(item => ({
                 product_id: item.product_id,
                 target_quantity: item.target_quantity,
-                unit_price: item.unit_price
+                unit_price: Math.round(Number(item.unit_price || 0) * 100) / 100
             }))
         })
     });

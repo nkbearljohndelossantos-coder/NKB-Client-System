@@ -1721,7 +1721,7 @@ async function openCreatePOModal() {
                                     <tr>
                                         <th class="py-2.5 px-3">Product</th>
                                         <th class="py-2.5 px-3 w-28">Target Qty (pcs)</th>
-                                        <th class="py-2.5 px-3 w-28">Unit Price (₱)</th>
+                                        <th class="py-2.5 px-3 w-32">Unit Price (₱)</th>
                                         <th class="py-2.5 px-3 w-28">Subtotal (₱)</th>
                                         <th class="py-2.5 px-2 w-12 text-center">Action</th>
                                     </tr>
@@ -1781,7 +1781,7 @@ function addAdminPOLineItem() {
     adminPOLineItems.push({
         product_id: defaultProd.id,
         target_quantity: 1000,
-        unit_price: defaultProd.default_price
+        unit_price: Number(defaultProd.default_price || 0)
     });
     renderAdminPOLineItems();
 }
@@ -1809,7 +1809,11 @@ function updateAdminPOLineItem(index, field, value) {
         adminPOLineItems[index].target_quantity = parseInt(value, 10) || 0;
     } else if (field === 'unit_price') {
         const parsed = parseFloat(value);
-        adminPOLineItems[index].unit_price = isNaN(parsed) ? 0 : parsed;
+        if (!isNaN(parsed)) {
+            adminPOLineItems[index].unit_price = parsed;
+        } else if (value === '' || value === null) {
+            adminPOLineItems[index].unit_price = 0;
+        }
     }
 
     // Update line total and summary totals without re-rendering inputs (preserves typing and decimal points)
@@ -1862,11 +1866,14 @@ function renderAdminPOLineItems() {
                            class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-900">
                 </td>
                 <td class="py-2.5 px-3">
-                    <input type="number" min="0" step="0.01" inputmode="decimal"
-                           value="${Number(item.unit_price || 0).toFixed(2)}" 
-                           oninput="updateAdminPOLineItem(${idx}, 'unit_price', this.value)" 
-                           onblur="if(this.value && !isNaN(this.value)) { this.value = parseFloat(this.value).toFixed(2); updateAdminPOLineItem(${idx}, 'unit_price', this.value); }"
-                           class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-indigo-900">
+                    <div class="relative flex items-center">
+                        <span class="absolute left-2.5 text-slate-400 font-semibold text-xs pointer-events-none">₱</span>
+                        <input type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"
+                               value="${item.unit_price !== undefined && item.unit_price !== null ? Number(item.unit_price).toFixed(2) : '0.00'}" 
+                               oninput="updateAdminPOLineItem(${idx}, 'unit_price', this.value)" 
+                               onblur="if(this.value && !isNaN(this.value)) { this.value = parseFloat(this.value).toFixed(2); updateAdminPOLineItem(${idx}, 'unit_price', this.value); }"
+                               class="w-full pl-6 pr-2 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-indigo-900 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    </div>
                 </td>
                 <td id="admin-po-line-total-${idx}" class="py-2.5 px-3 font-extrabold text-slate-900">
                     ${NKB.formatCurrency(lineSubtotal)}
@@ -1917,7 +1924,7 @@ async function submitCreatePO(e) {
             items: adminPOLineItems.map(item => ({
                 product_id: item.product_id,
                 target_quantity: item.target_quantity,
-                unit_price: item.unit_price
+                unit_price: Math.round(Number(item.unit_price || 0) * 100) / 100
             }))
         })
     });
