@@ -225,7 +225,9 @@ async function loadOrders() {
     if (res.success && res.data && res.data.length > 0) {
         tbody.innerHTML = res.data.map(po => `
             <tr class="hover:bg-slate-50 transition">
-                <td class="py-3 px-4 font-bold text-indigo-600">${po.po_number}</td>
+                <td class="py-3 px-4 font-bold text-indigo-600 cursor-pointer hover:underline" onclick="openViewPOModal('${po.id}')" title="Click to view full PO details">
+                    ${po.po_number}
+                </td>
                 <td class="py-3 px-4 text-slate-600">${NKB.formatDate(po.po_date)}</td>
                 <td class="py-3 px-4 font-bold text-slate-800">${po.company_name}</td>
                 <td class="py-3 px-4"><span class="badge bg-slate-100 text-slate-700">±${po.tolerance_percent}%</span></td>
@@ -233,14 +235,20 @@ async function loadOrders() {
                 <td class="py-3 px-4 font-bold text-slate-700">${NKB.formatNumber(po.total_target_quantity)} pcs</td>
                 <td class="py-3 px-4 font-extrabold text-slate-900">${NKB.formatCurrency(po.grand_total)}</td>
                 <td class="py-3 px-4">${NKB.renderStatusBadge(po.status)}</td>
-                <td class="py-3 px-4 text-right space-x-1.5">
+                <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                    <button onclick="openViewPOModal('${po.id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="View Full Order Info">
+                        <span>👁️ View</span>
+                    </button>
+                    <a href="/print-po.html?id=${po.id}" target="_blank" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Print Purchase Order">
+                        <span>🖨️ Print</span>
+                    </a>
                     ${po.status === 'PENDING_APPROVAL' ? `
                         <button onclick="approvePO('${po.id}', '${po.po_number}')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition">
                             Approve
                         </button>
                     ` : ''}
                     ${po.status === 'APPROVED' || po.status === 'IN_PRODUCTION' ? `
-                        <button onclick="openCreateJOModal('${po.id}', '${po.po_number}', '${po.company_name}')" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition">
+                        <button onclick="openCreateJOModal('${po.id}', '${po.po_number}', '${po.company_name.replace(/'/g, "\\'")}')" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition">
                             + Job Order
                         </button>
                     ` : ''}

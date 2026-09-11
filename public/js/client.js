@@ -83,16 +83,24 @@ async function loadClientDashboard() {
     if (ordersRes.success && ordersRes.data && ordersRes.data.length > 0) {
         tbody.innerHTML = ordersRes.data.slice(0, 5).map(po => `
             <tr class="hover:bg-slate-50 transition">
-                <td class="py-3 px-4 font-bold text-indigo-600">${po.po_number}</td>
+                <td class="py-3 px-4 font-bold text-indigo-600 cursor-pointer hover:underline" onclick="openViewPOModal('${po.id}')" title="Click to view full PO details">${po.po_number}</td>
                 <td class="py-3 px-4 text-slate-600">${NKB.formatDate(po.po_date)}</td>
                 <td class="py-3 px-4"><span class="badge bg-slate-100 text-slate-700">±${po.tolerance_percent}%</span></td>
                 <td class="py-3 px-4"><span class="badge ${po.billing_policy === 'ACTUAL_DELIVERY' ? 'bg-indigo-50 text-indigo-700' : 'bg-purple-50 text-purple-700'}">${po.billing_policy}</span></td>
                 <td class="py-3 px-4 font-extrabold text-slate-900">${NKB.formatCurrency(po.grand_total)}</td>
                 <td class="py-3 px-4">${NKB.renderStatusBadge(po.status)}</td>
+                <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                    <button onclick="openViewPOModal('${po.id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="View Full Order Info">
+                        <span>👁️ View</span>
+                    </button>
+                    <a href="/print-po.html?id=${po.id}" target="_blank" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Print Purchase Order">
+                        <span>🖨️ Print</span>
+                    </a>
+                </td>
             </tr>
         `).join('');
     } else {
-        tbody.innerHTML = `<tr><td colspan="6" class="py-6 text-center text-slate-400">No purchase orders placed yet.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-slate-400">No purchase orders placed yet.</td></tr>`;
     }
 }
 
@@ -287,17 +295,25 @@ async function loadClientOrders() {
     if (res.success && res.data && res.data.length > 0) {
         tbody.innerHTML = res.data.map(po => `
             <tr class="hover:bg-slate-50 transition">
-                <td class="py-3 px-4 font-bold text-indigo-600">${po.po_number}</td>
+                <td class="py-3 px-4 font-bold text-indigo-600 cursor-pointer hover:underline" onclick="openViewPOModal('${po.id}')" title="Click to view full PO details">${po.po_number}</td>
                 <td class="py-3 px-4 text-slate-600">${NKB.formatDate(po.po_date)}</td>
                 <td class="py-3 px-4 font-bold text-slate-800">${NKB.formatNumber(po.total_target_quantity)} pcs</td>
                 <td class="py-3 px-4"><span class="badge bg-slate-100 text-slate-700">±${po.tolerance_percent}%</span></td>
                 <td class="py-3 px-4"><span class="badge ${po.billing_policy === 'ACTUAL_DELIVERY' ? 'bg-indigo-50 text-indigo-700' : 'bg-purple-50 text-purple-700'}">${po.billing_policy}</span></td>
                 <td class="py-3 px-4 font-extrabold text-slate-900">${NKB.formatCurrency(po.grand_total)}</td>
                 <td class="py-3 px-4">${NKB.renderStatusBadge(po.status)}</td>
+                <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                    <button onclick="openViewPOModal('${po.id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="View Full Order Info">
+                        <span>👁️ View</span>
+                    </button>
+                    <a href="/print-po.html?id=${po.id}" target="_blank" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Print Purchase Order">
+                        <span>🖨️ Print</span>
+                    </a>
+                </td>
             </tr>
         `).join('');
     } else {
-        tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-slate-400">No orders found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="py-6 text-center text-slate-400">No orders found.</td></tr>`;
     }
 }
 

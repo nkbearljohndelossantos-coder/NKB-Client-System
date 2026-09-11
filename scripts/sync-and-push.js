@@ -46,75 +46,89 @@ console.log(`🚀 Starting Automated Deployment & GitHub Sync...`);
 console.log(`📝 Commit Message: "${commitMessage}"`);
 console.log(`📦 Found ${files.length} project files to sync.`);
 
-const conn = new Client();
+let attempts = 0;
+const MAX_ATTEMPTS = 3;
 
-conn.on('ready', () => {
-    console.log('✅ Connected to VPS via SSH');
-    conn.sftp(async (err, sftp) => {
-        if (err) {
-            console.error('❌ SFTP initialization failed:', err);
-            conn.end();
-            return;
-        }
+function connectSSH() {
+    attempts++;
+    console.log(`🔌 Connecting to VPS (attempt ${attempts}/${MAX_ATTEMPTS})...`);
+    const conn = new Client();
 
-        let errors = 0;
-        console.log(`📤 Uploading ${files.length} project files...`);
-
-        // Upload in controlled batches of 5 to preserve socket stability
-        const BATCH_SIZE = 5;
-        for (let i = 0; i < files.length; i += BATCH_SIZE) {
-            const chunk = files.slice(i, i + BATCH_SIZE);
-            await Promise.all(chunk.map(file => {
-                return new Promise((resolve) => {
-                    const localFile = path.join(LOCAL_DIR, file);
-                    const remoteFile = `${REMOTE_DIR}/${file}`;
-                    sftp.fastPut(localFile, remoteFile, (err) => {
-                        if (err) {
-                            errors++;
-                            console.error(`⚠️ Upload error for ${file}:`, err.message);
-                        }
-                        resolve();
-                    });
-                });
-            }));
-        }
-
-        console.log(`📤 Upload finished (${errors} errors).`);
-        console.log('🔄 Committing and Pushing to GitHub from VPS...');
-
-        const safeMsg = commitMessage.replace(/"/g, '\\"');
-        const gitCommands = [
-            'git config --global user.name "Earl John Delos Santos"',
-            'git config --global user.email "nkb.earljohndelossantos@gmail.com"',
-            `cd ${REMOTE_DIR}`,
-            'git add -A',
-            `git commit -m "${safeMsg}" || echo "No new git changes to commit"`,
-            'git push origin main',
-            'pm2 restart nkb-client-app'
-        ].join(' && ');
-
-        conn.exec(gitCommands, (err, stream) => {
+    conn.on('ready', () => {
+        console.log('✅ Connected to VPS via SSH');
+        conn.sftp(async (err, sftp) => {
             if (err) {
-                console.error('❌ Git execution failed:', err);
+                console.error('❌ SFTP initialization failed:', err);
                 conn.end();
                 return;
             }
-            stream.on('close', (code) => {
-                console.log(`\n🎉 Process completed with exit code: ${code}`);
-                console.log('🌐 Live URL: http://my.nkbmanufacturing.com');
-                console.log('🐙 GitHub Repo: https://github.com/nkbearljohndelossantos-coder/NKB-Client-System');
-                conn.end();
-            }).on('data', (data) => process.stdout.write(data))
-              .stderr.on('data', (data) => process.stderr.write(data));
+
+            let errors = 0;
+            console.log(`📤 Uploading ${files.length} project files...`);
+
+            // Upload in controlled batches of 5 to preserve socket stability
+            const BATCH_SIZE = 5;
+            for (let i = 0; i < files.length; i += BATCH_SIZE) {
+                const chunk = files.slice(i, i + BATCH_SIZE);
+                await Promise.all(chunk.map(file => {
+                    return new Promise((resolve) => {
+                        const localFile = path.join(LOCAL_DIR, file);
+                        const remoteFile = `${REMOTE_DIR}/${file}`;
+                        sftp.fastPut(localFile, remoteFile, (err) => {
+                            if (err) {
+                                errors++;
+                                console.error(`⚠️ Upload error for ${file}:`, err.message);
+                            }
+                            resolve();
+                        });
+                    });
+                }));
+            }
+
+            console.log(`📤 Upload finished (${errors} errors).`);
+            console.log('🔄 Committing and Pushing to GitHub from VPS...');
+
+            const safeMsg = commitMessage.replace(/"/g, '\\"');
+            const gitCommands = [
+                'git config --global user.name "Earl John Delos Santos"',
+                'git config --global user.email "nkb.earljohndelossantos@gmail.com"',
+                `cd ${REMOTE_DIR}`,
+                'git add -A',
+                `git commit -m "${safeMsg}" || echo "No new git changes to commit"`,
+                'git push origin main',
+                'pm2 restart nkb-client-app'
+            ].join(' && ');
+
+            conn.exec(gitCommands, (err, stream) => {
+                if (err) {
+                    console.error('❌ Git execution failed:', err);
+                    conn.end();
+                    return;
+                }
+                stream.on('close', (code) => {
+                    console.log(`\n🎉 Process completed with exit code: ${code}`);
+                    console.log('🌐 Live URL: http://my.nkbmanufacturing.com');
+                    console.log('🐙 GitHub Repo: https://github.com/nkbearljohndelossantos-coder/NKB-Client-System');
+                    conn.end();
+                }).on('data', (data) => process.stdout.write(data))
+                  .stderr.on('data', (data) => process.stderr.write(data));
+            });
         });
+    }).on('error', (err) => {
+        console.error(`❌ SSH connection error (attempt ${attempts}):`, err.message);
+        conn.end();
+        if (attempts < MAX_ATTEMPTS) {
+            console.log('⏳ Retrying in 4 seconds...');
+            setTimeout(connectSSH, 4000);
+        }
+    }).connect({
+        host: VPS_HOST,
+        port: 22,
+        username: VPS_USER,
+        password: VPS_PASS,
+        readyTimeout: 60000,
+        keepaliveInterval: 10000
     });
-}).on('error', (err) => {
-    console.error('❌ SSH connection error:', err.message);
-}).connect({
-    host: VPS_HOST,
-    port: 22,
-    username: VPS_USER,
-    password: VPS_PASS,
-    readyTimeout: 30000,
-    keepaliveInterval: 10000
-});
+}
+
+connectSSH();

@@ -60,11 +60,13 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
     const { id } = req.params;
 
     const po = db.prepare(`
-        SELECT po.*, c.company_name, c.contact_person, c.email as client_email, c.phone as client_phone, c.address as client_address,
-               u.name as creator_name
+        SELECT po.*, c.company_name, c.contact_person, c.email as client_email, c.phone as client_phone, c.address as client_address, c.tin as client_tin,
+               u.name as creator_name,
+               u2.name as approver_name
         FROM purchase_orders po
         JOIN clients c ON po.client_id = c.id
         LEFT JOIN users u ON po.created_by = u.id
+        LEFT JOIN users u2 ON po.approved_by = u2.id
         WHERE po.id = ?
     `).get(id);
 
