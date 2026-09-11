@@ -461,6 +461,7 @@ router.post('/:id/pricing', authenticateToken, requireRoles('ADMIN', 'SUPER_ADMI
     if (isNaN(parsedPrice) || parsedPrice < 0) {
         parsedPrice = product.default_price;
     }
+    parsedPrice = Math.round(parsedPrice * 100) / 100;
 
     const activeFlag = is_assigned !== undefined ? (is_assigned ? 1 : 0) : (is_active !== undefined ? (is_active ? 1 : 0) : 1);
 
@@ -526,6 +527,7 @@ router.post('/:id/pricing/batch', authenticateToken, requireRoles('ADMIN', 'SUPE
             if (isNaN(parsedPrice) || parsedPrice < 0) {
                 parsedPrice = product.default_price;
             }
+            parsedPrice = Math.round(parsedPrice * 100) / 100;
 
             const existing = db.prepare('SELECT id FROM client_product_prices WHERE client_id = ? AND product_id = ?').get(clientId, item.product_id);
             if (existing) {
@@ -569,7 +571,7 @@ router.post('/:id/products', authenticateToken, requireRoles('ADMIN', 'SUPER_ADM
     const { id: clientId } = req.params;
     const { name, sku, category, description, unit, default_price, formula_code, shelf_life_months } = req.body;
 
-    if (!name || !sku || default_price === undefined || default_price === null) {
+    if (!name || !sku || default_price === undefined || default_price === null || default_price === '') {
         return res.status(400).json({ success: false, error: 'Product name, SKU, and price are required.' });
     }
 
@@ -578,7 +580,7 @@ router.post('/:id/products', authenticateToken, requireRoles('ADMIN', 'SUPER_ADM
         return res.status(404).json({ success: false, error: 'Client not found.' });
     }
 
-    const parsedPrice = parseFloat(default_price);
+    const parsedPrice = Math.round(parseFloat(default_price) * 100) / 100;
     if (isNaN(parsedPrice) || parsedPrice < 0) {
         return res.status(400).json({ success: false, error: 'Price must be a positive number.' });
     }

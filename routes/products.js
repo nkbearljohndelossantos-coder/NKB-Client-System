@@ -139,7 +139,7 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'SUPER_A
         return res.status(400).json({ success: false, error: 'SKU, Name, and Default Price are required.' });
     }
 
-    const parsedPrice = parseFloat(default_price);
+    const parsedPrice = Math.round(parseFloat(default_price) * 100) / 100;
     if (Number.isNaN(parsedPrice) || parsedPrice < 0) {
         return res.status(400).json({ success: false, error: 'Default price must be a valid positive number.' });
     }
@@ -225,7 +225,7 @@ router.put('/:id', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), (req,
         category !== undefined ? category : null,
         description !== undefined ? description : null,
         unit !== undefined ? unit : null,
-        default_price !== undefined ? parseFloat(default_price) : null,
+        default_price !== undefined ? Math.round(parseFloat(default_price) * 100) / 100 : null,
         formula_code !== undefined ? formula_code : null,
         shelf_life_months !== undefined ? parseInt(shelf_life_months) : null,
         is_active !== undefined ? parseInt(is_active) : null,

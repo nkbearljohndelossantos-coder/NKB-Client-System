@@ -1070,7 +1070,7 @@ async function openClientPricingModal(clientId, companyName) {
                         </div>
                         <div>
                             <label class="block text-slate-600 mb-1">Contract Price (₱) *</label>
-                            <input type="number" step="0.01" min="0" id="assign-custom-price" required placeholder="120.00" class="w-full px-2.5 py-1.5 border border-indigo-300 rounded-lg bg-white font-bold text-indigo-900">
+                            <input type="number" step="0.01" min="0" inputmode="decimal" id="assign-custom-price" required placeholder="120.00" onblur="if(this.value && !isNaN(this.value)) this.value = parseFloat(this.value).toFixed(2)" class="w-full px-2.5 py-1.5 border border-indigo-300 rounded-lg bg-white font-bold text-indigo-900">
                         </div>
                         <div class="sm:col-span-2 flex items-end justify-end">
                             <button type="submit" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold shadow-sm">
@@ -1112,7 +1112,7 @@ async function openClientPricingModal(clientId, companyName) {
                         </div>
                         <div>
                             <label class="block text-slate-600 mb-1">Contract Price (₱) *</label>
-                            <input type="number" step="0.01" min="0" id="new-client-prod-price" required placeholder="150.00" class="w-full px-2.5 py-1.5 border rounded-lg bg-white font-bold text-indigo-900">
+                            <input type="number" step="0.01" min="0" inputmode="decimal" id="new-client-prod-price" required placeholder="150.00" onblur="if(this.value && !isNaN(this.value)) this.value = parseFloat(this.value).toFixed(2)" class="w-full px-2.5 py-1.5 border rounded-lg bg-white font-bold text-indigo-900">
                         </div>
                         <div>
                             <label class="block text-slate-600 mb-1">Unit</label>
@@ -1196,7 +1196,7 @@ function onSelectMasterProductToAssign() {
     if (nameInput) nameInput.value = name;
     if (skuInput) skuInput.value = sku;
     if (formulaInput) formulaInput.value = formula;
-    if (priceInput) priceInput.value = price;
+    if (priceInput) priceInput.value = price && !isNaN(price) ? parseFloat(price).toFixed(2) : '';
 }
 
 async function submitAssignMasterProduct(e, clientId) {
@@ -1252,7 +1252,7 @@ async function loadClientPricingData(clientId) {
                 assignSelect.innerHTML = '<option value="">-- All master products are already assigned --</option>';
             } else {
                 assignSelect.innerHTML = '<option value="">-- Choose a product from catalog --</option>' + 
-                    availableMaster.map(p => `<option value="${p.id}" data-sku="${p.sku}" data-name="${p.name}" data-formula="${p.formula_code || ''}" data-price="${p.default_price}">${p.name} (${p.sku}) - ₱${p.default_price.toFixed(2)}</option>`).join('');
+                    availableMaster.map(p => `<option value="${p.id}" data-sku="${p.sku}" data-name="${p.name}" data-formula="${p.formula_code || ''}" data-price="${Number(p.default_price).toFixed(2)}">${p.name} (${p.sku}) - ₱${Number(p.default_price).toFixed(2)}</option>`).join('');
             }
         }
 
@@ -1263,7 +1263,7 @@ async function loadClientPricingData(clientId) {
                 <tr class="hover:bg-slate-50 transition" data-product-id="${p.product_id}" data-search="${(p.name + ' ' + p.sku + ' ' + (p.custom_name || '')).toLowerCase()}">
                     <td class="py-2.5 px-3">
                         <div class="font-bold text-slate-900">${p.name}</div>
-                        <div class="text-[10px] text-slate-400 font-mono">${p.sku} • Base: ₱${p.default_price.toFixed(2)}</div>
+                        <div class="text-[10px] text-slate-400 font-mono">${p.sku} • Base: ₱${Number(p.default_price).toFixed(2)}</div>
                     </td>
                     <td class="py-2.5 px-3">
                         <input type="text" 
@@ -1289,10 +1289,11 @@ async function loadClientPricingData(clientId) {
                     <td class="py-2.5 px-3">
                         <div class="relative">
                             <span class="absolute left-2.5 top-2 text-slate-400 font-bold">₱</span>
-                            <input type="number" step="0.01" min="0" 
+                            <input type="number" step="0.01" min="0" inputmode="decimal"
                                    name="price-${p.product_id}" 
-                                   value="${p.custom_price !== null && p.custom_price !== undefined ? p.custom_price : p.default_price}" 
-                                   placeholder="${p.default_price.toFixed(2)}" 
+                                   value="${(p.custom_price !== null && p.custom_price !== undefined ? Number(p.custom_price) : Number(p.default_price)).toFixed(2)}" 
+                                   placeholder="${Number(p.default_price).toFixed(2)}" 
+                                   onblur="if(this.value && !isNaN(this.value)) this.value = parseFloat(this.value).toFixed(2)"
                                    class="w-28 pl-6 pr-2 py-1.5 border ${p.has_custom_price ? 'border-indigo-500 bg-indigo-50/50 font-bold text-indigo-900' : 'border-slate-300 bg-white'} rounded-lg text-xs focus:ring-2 focus:ring-indigo-500">
                         </div>
                     </td>
@@ -1605,7 +1606,7 @@ async function openEditProductModal(productId) {
                     <div class="grid grid-cols-2 gap-3">
                         <div>
                             <label class="block text-slate-600 mb-1">Default Unit Price (₱)</label>
-                            <input type="number" step="0.01" id="edit-prod-price" required value="${prod.default_price}" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
+                            <input type="number" step="0.01" min="0" inputmode="decimal" id="edit-prod-price" required value="${Number(prod.default_price || 0).toFixed(2)}" onblur="if(this.value && !isNaN(this.value)) this.value = parseFloat(this.value).toFixed(2)" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
                         </div>
                         <div>
                             <label class="block text-slate-600 mb-1">Formula Code</label>
@@ -1800,14 +1801,35 @@ function updateAdminPOLineItem(index, field, value) {
         const prod = adminPOCatalog.find(p => p.id === value);
         adminPOLineItems[index].product_id = value;
         if (prod) {
-            adminPOLineItems[index].unit_price = prod.default_price;
+            adminPOLineItems[index].unit_price = Number(prod.default_price || 0);
         }
+        renderAdminPOLineItems();
+        return;
     } else if (field === 'target_quantity') {
-        adminPOLineItems[index].target_quantity = parseInt(value) || 0;
+        adminPOLineItems[index].target_quantity = parseInt(value, 10) || 0;
     } else if (field === 'unit_price') {
-        adminPOLineItems[index].unit_price = parseFloat(value) || 0;
+        const parsed = parseFloat(value);
+        adminPOLineItems[index].unit_price = isNaN(parsed) ? 0 : parsed;
     }
-    renderAdminPOLineItems();
+
+    // Update line total and summary totals without re-rendering inputs (preserves typing and decimal points)
+    const lineSubtotal = (adminPOLineItems[index].target_quantity || 0) * (adminPOLineItems[index].unit_price || 0);
+    const lineTotalEl = document.getElementById(`admin-po-line-total-${index}`);
+    if (lineTotalEl) lineTotalEl.textContent = NKB.formatCurrency(lineSubtotal);
+
+    let totalQty = 0;
+    let grandTotal = 0;
+    adminPOLineItems.forEach(item => {
+        totalQty += item.target_quantity || 0;
+        grandTotal += (item.target_quantity || 0) * (item.unit_price || 0);
+    });
+
+    const elTotalItems = document.getElementById('admin-po-total-items');
+    if (elTotalItems) elTotalItems.textContent = adminPOLineItems.length;
+    const elTotalQty = document.getElementById('admin-po-total-qty');
+    if (elTotalQty) elTotalQty.textContent = `${NKB.formatNumber(totalQty)} pcs`;
+    const elGrandTotal = document.getElementById('admin-po-grand-total');
+    if (elGrandTotal) elGrandTotal.textContent = NKB.formatCurrency(grandTotal);
 }
 
 function renderAdminPOLineItems() {
@@ -1828,7 +1850,7 @@ function renderAdminPOLineItems() {
                     <select onchange="updateAdminPOLineItem(${idx}, 'product_id', this.value)" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white font-medium">
                         ${adminPOCatalog.map(p => `
                             <option value="${p.id}" ${p.id === item.product_id ? 'selected' : ''}>
-                                ${p.name} (${p.effective_sku || p.sku}) - ₱${p.default_price.toFixed(2)}${p.has_custom_price ? ' [Custom]' : ''}
+                                ${p.name} (${p.effective_sku || p.sku}) - ₱${Number(p.default_price).toFixed(2)}${p.has_custom_price ? ' [Contract Rate]' : ''}
                             </option>
                         `).join('')}
                     </select>
@@ -1840,12 +1862,13 @@ function renderAdminPOLineItems() {
                            class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-900">
                 </td>
                 <td class="py-2.5 px-3">
-                    <input type="number" min="0" step="0.01" 
-                           value="${item.unit_price}" 
+                    <input type="number" min="0" step="0.01" inputmode="decimal"
+                           value="${Number(item.unit_price || 0).toFixed(2)}" 
                            oninput="updateAdminPOLineItem(${idx}, 'unit_price', this.value)" 
+                           onblur="if(this.value && !isNaN(this.value)) { this.value = parseFloat(this.value).toFixed(2); updateAdminPOLineItem(${idx}, 'unit_price', this.value); }"
                            class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-indigo-900">
                 </td>
-                <td class="py-2.5 px-3 font-extrabold text-slate-900">
+                <td id="admin-po-line-total-${idx}" class="py-2.5 px-3 font-extrabold text-slate-900">
                     ${NKB.formatCurrency(lineSubtotal)}
                 </td>
                 <td class="py-2.5 px-2 text-center">
@@ -2369,7 +2392,7 @@ function openRecordPaymentModal(invoiceId, invoiceNumber, balanceDue, clientName
                     </div>
                     <div>
                         <label class="block text-slate-600 mb-1">Payment Amount (₱)</label>
-                        <input type="number" step="0.01" id="pay-amount" max="${balanceDue}" value="${balanceDue}" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-emerald-800">
+                        <input type="number" step="0.01" min="0.01" max="${Number(balanceDue).toFixed(2)}" value="${Number(balanceDue).toFixed(2)}" inputmode="decimal" onblur="if(this.value && !isNaN(this.value)) this.value = parseFloat(this.value).toFixed(2)" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-emerald-800">
                     </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
@@ -2741,7 +2764,7 @@ function openCreateProductModal() {
                     <div class="grid grid-cols-2 gap-3">
                         <div>
                             <label class="block text-slate-700 font-bold mb-1">Default Unit Price (₱) *</label>
-                            <input type="number" step="0.01" min="0" id="prod-price" required placeholder="120.00" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white font-extrabold text-indigo-900 text-sm focus:ring-2 focus:ring-indigo-500">
+                            <input type="number" step="0.01" min="0" inputmode="decimal" id="prod-price" required placeholder="120.00" onblur="if(this.value && !isNaN(this.value)) this.value = parseFloat(this.value).toFixed(2)" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white font-extrabold text-indigo-900 text-sm focus:ring-2 focus:ring-indigo-500">
                         </div>
                         <div>
                             <label class="block text-slate-700 font-bold mb-1">Formula Code</label>
