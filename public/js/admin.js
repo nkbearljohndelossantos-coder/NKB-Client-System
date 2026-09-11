@@ -2804,6 +2804,20 @@ async function submitCreateProduct(e) {
 // -------------------------------------------------------------
 // 11. STAFF & RBAC USER MANAGEMENT
 // -------------------------------------------------------------
+async function ensureClientsLoaded() {
+    if (!cachedClients || cachedClients.length === 0) {
+        try {
+            const res = await NKB.api('/api/clients');
+            if (res.success && res.data) {
+                cachedClients = res.data;
+            }
+        } catch (e) {
+            console.error('Error fetching clients:', e);
+        }
+    }
+    return cachedClients || [];
+}
+
 async function loadUsers() {
     const search = document.getElementById('filter-users-search')?.value || '';
     const tbody = document.getElementById('table-users-body');
@@ -2826,6 +2840,15 @@ async function loadUsers() {
         'CLIENT': 'bg-blue-100 text-blue-800 border-blue-200'
     };
 
+    const roleIcons = {
+        'SUPER_ADMIN': '🛡️',
+        'ADMIN': '👑',
+        'PRODUCTION': '🧪',
+        'WAREHOUSE': '🚚',
+        'ACCOUNTING': '💰',
+        'CLIENT': '🏢'
+    };
+
     tbody.innerHTML = res.data.map(u => `
         <tr class="hover:bg-slate-50 transition">
             <td class="py-3 px-4">
@@ -2833,8 +2856,9 @@ async function loadUsers() {
                 <div class="text-[11px] text-slate-400 font-mono">${u.email}</div>
             </td>
             <td class="py-3 px-4">
-                <span class="inline-block px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold border ${roleBadges[u.role] || 'bg-slate-100 text-slate-800 border-slate-200'}">
-                    ${u.role}
+                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold border ${roleBadges[u.role] || 'bg-slate-100 text-slate-800 border-slate-200'}">
+                    <span>${roleIcons[u.role] || '👤'}</span>
+                    <span>${u.role}</span>
                 </span>
             </td>
             <td class="py-3 px-4 font-medium text-slate-700">
@@ -2848,9 +2872,12 @@ async function loadUsers() {
             <td class="py-3 px-4 text-slate-500 font-mono text-[11px]">
                 ${NKB.formatDate(u.created_at)}
             </td>
-            <td class="py-3 px-4 text-right space-x-1">
-                <button onclick="promptResetUserPassword('${u.id}', '${u.email}')" class="px-2.5 py-1 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold shadow-sm transition">
-                    🔑 Reset Pwd
+            <td class="py-3 px-4 text-right space-x-1 whitespace-nowrap">
+                <button onclick="openEditUserModal('${u.id}')" class="px-2.5 py-1 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-semibold shadow-sm transition inline-flex items-center gap-1">
+                    <span>✏️</span> Edit
+                </button>
+                <button onclick="promptResetUserPassword('${u.id}', '${u.email}')" class="px-2.5 py-1 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold shadow-sm transition inline-flex items-center gap-1">
+                    <span>🔑</span> Reset
                 </button>
                 <button onclick="toggleUserStatus('${u.id}', ${u.is_active})" class="px-2.5 py-1 ${u.is_active ? 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100' : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'} border rounded-lg text-xs font-semibold transition">
                     ${u.is_active ? 'Deactivate' : 'Activate'}
@@ -2860,51 +2887,69 @@ async function loadUsers() {
     `).join('');
 }
 
-function openCreateUserModal() {
+function toggleClientDropdown(role, containerId = 'client-select-container') {
+    const container = document.getElementById(containerId);
+    if (container) {
+        container.style.display = (role === 'CLIENT') ? 'block' : 'none';
+    }
+}
+
+async function openCreateUserModal() {
+    await ensureClientsLoaded();
     const root = document.getElementById('modals-root');
-    const clientOptions = cachedClients.map(c => `<option value="${c.id}">${c.company_name} (${c.client_code})</option>`).join('');
+    const isSuperAdmin = NKB.user && NKB.user.role === 'SUPER_ADMIN';
+
+    const clientOptions = (cachedClients || []).map(c => `
+        <option value="${c.id}">${c.company_name} (${c.client_code || 'ID: ' + c.id.slice(0, 6)})</option>
+    `).join('');
 
     root.innerHTML = `
         <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
-                <div class="flex justify-between items-center border-b pb-3">
-                    <h3 class="text-base font-extrabold text-slate-900">Add Staff Member / Portal User</h3>
-                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">✕</button>
-                </div>
-                <form onsubmit="submitCreateUser(event)" class="space-y-3 text-xs">
-                    <div>
-                        <label class="block text-slate-600 mb-1 font-semibold">Full Name</label>
-                        <input type="text" id="usr-name" placeholder="Juan dela Cruz" required class="w-full px-3 py-2 border rounded-xl bg-slate-50">
-                    </div>
-                    <div>
-                        <label class="block text-slate-600 mb-1 font-semibold">Corporate / Login Email</label>
-                        <input type="email" id="usr-email" placeholder="staff@nkbmanufacturing.com" required class="w-full px-3 py-2 border rounded-xl bg-slate-50">
-                    </div>
-                    <div>
-                        <label class="block text-slate-600 mb-1 font-semibold">Initial Password (min 8 chars)</label>
-                        <input type="password" id="usr-pwd" placeholder="••••••••" required minlength="8" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
-                    </div>
-                    <div class="grid grid-cols-2 gap-3">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 text-base font-bold">➕</div>
                         <div>
-                            <label class="block text-slate-600 mb-1 font-semibold">Assigned Enterprise Role</label>
-                            <select id="usr-role" onchange="toggleClientDropdown(this.value)" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold">
-                                <option value="PRODUCTION">🧪 Production Supervisor</option>
-                                <option value="WAREHOUSE">🚚 Logistics & Warehouse</option>
-                                <option value="ACCOUNTING">💰 Senior Accountant</option>
-                                <option value="ADMIN">👑 Operations Manager</option>
-                                <option value="CLIENT">🏢 B2B Client Portal</option>
-                            </select>
+                            <h3 class="text-base font-extrabold text-slate-900">Add Staff Member / Portal User</h3>
+                            <p class="text-[11px] text-slate-500">Create login credentials and assign enterprise access privileges.</p>
                         </div>
-                        <div id="client-select-container" style="display: none;">
-                            <label class="block text-slate-600 mb-1 font-semibold">Link to Client Company</label>
-                            <select id="usr-client-id" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
-                                ${clientOptions}
-                            </select>
-                        </div>
+                    </div>
+                    <button onclick="closeModal()" class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 font-bold flex items-center justify-center transition">✕</button>
+                </div>
+                <form onsubmit="submitCreateUser(event)" class="space-y-3.5 text-xs">
+                    <div>
+                        <label class="block text-slate-700 mb-1 font-bold">Full Name <span class="text-rose-500">*</span></label>
+                        <input type="text" id="usr-name" placeholder="Juan dela Cruz" required class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition">
+                    </div>
+                    <div>
+                        <label class="block text-slate-700 mb-1 font-bold">Corporate / Login Email <span class="text-rose-500">*</span></label>
+                        <input type="email" id="usr-email" placeholder="staff@nkbmanufacturing.com" required class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition">
+                    </div>
+                    <div>
+                        <label class="block text-slate-700 mb-1 font-bold">Initial Password <span class="text-rose-500">*</span></label>
+                        <input type="password" id="usr-pwd" placeholder="Minimum 8 characters" required minlength="8" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition">
+                    </div>
+                    <div>
+                        <label class="block text-slate-700 mb-1 font-bold">Assigned Enterprise Role <span class="text-rose-500">*</span></label>
+                        <select id="usr-role" onchange="toggleClientDropdown(this.value, 'client-select-container')" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 transition">
+                            <option value="PRODUCTION">🧪 Production Supervisor (Formulas & Batches)</option>
+                            <option value="WAREHOUSE">🚚 Logistics & Warehouse (Inventory & DR)</option>
+                            <option value="ACCOUNTING">💰 Senior Accountant (Invoices & AR)</option>
+                            <option value="ADMIN">👑 Operations Manager (Admin)</option>
+                            ${isSuperAdmin ? '<option value="SUPER_ADMIN">🛡️ Executive Super Admin (Full Control)</option>' : ''}
+                            <option value="CLIENT">🏢 B2B Client Portal User</option>
+                        </select>
+                    </div>
+                    <div id="client-select-container" style="display: none;" class="p-3 bg-blue-50/70 border border-blue-100 rounded-xl space-y-1">
+                        <label class="block text-blue-900 font-bold">Link to Client Company <span class="text-rose-500">*</span></label>
+                        <select id="usr-client-id" class="w-full px-3 py-2 border border-blue-200 rounded-lg bg-white text-slate-800">
+                            ${clientOptions ? clientOptions : '<option value="">No clients found - create a client first</option>'}
+                        </select>
+                        <p class="text-[10px] text-blue-600">This user will only have isolated access to their company's orders, invoices, and DRs.</p>
                     </div>
                     <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
-                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold">Cancel</button>
-                        <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold">Create User Account</button>
+                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition">Cancel</button>
+                        <button type="submit" id="btn-create-user-submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-lg shadow-indigo-600/20 transition">Create User Account</button>
                     </div>
                 </form>
             </div>
@@ -2912,32 +2957,213 @@ function openCreateUserModal() {
     `;
 }
 
-function toggleClientDropdown(role) {
-    const container = document.getElementById('client-select-container');
-    if (container) {
-        container.style.display = (role === 'CLIENT') ? 'block' : 'none';
+async function submitCreateUser(e) {
+    e.preventDefault();
+    const name = document.getElementById('usr-name')?.value.trim();
+    const email = document.getElementById('usr-email')?.value.trim();
+    const password = document.getElementById('usr-pwd')?.value;
+    const role = document.getElementById('usr-role')?.value;
+    const client_id = role === 'CLIENT' ? document.getElementById('usr-client-id')?.value : null;
+
+    if (!name || !email || !password || !role) {
+        NKB.showToast('Please fill out all required fields.', 'error');
+        return;
+    }
+
+    if (role === 'CLIENT' && !client_id) {
+        NKB.showToast('Please select a client company for client portal users.', 'error');
+        return;
+    }
+
+    const submitBtn = document.getElementById('btn-create-user-submit');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerText = 'Creating...';
+    }
+
+    try {
+        const res = await NKB.api('/api/users', {
+            method: 'POST',
+            body: JSON.stringify({ name, email, password, role, client_id })
+        });
+
+        if (res.success) {
+            NKB.showToast(`User ${name} created with role ${role}!`, 'success');
+            closeModal();
+            loadUsers();
+        } else {
+            NKB.showToast(res.message || res.error || 'Failed to create user.', 'error');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerText = 'Create User Account';
+            }
+        }
+    } catch (err) {
+        NKB.showToast('Network error while creating user.', 'error');
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerText = 'Create User Account';
+        }
     }
 }
 
-async function submitCreateUser(e) {
-    e.preventDefault();
-    const name = document.getElementById('usr-name').value;
-    const email = document.getElementById('usr-email').value;
-    const password = document.getElementById('usr-pwd').value;
-    const role = document.getElementById('usr-role').value;
-    const client_id = role === 'CLIENT' ? document.getElementById('usr-client-id')?.value : null;
+async function openEditUserModal(userId) {
+    await ensureClientsLoaded();
+    const root = document.getElementById('modals-root');
+    if (!root) return;
 
-    const res = await NKB.api('/api/users', {
-        method: 'POST',
-        body: JSON.stringify({ name, email, password, role, client_id })
-    });
+    root.innerHTML = `
+        <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl p-6 shadow-2xl border border-slate-200 text-center space-y-2">
+                <div class="inline-block animate-spin text-2xl">⏳</div>
+                <p class="text-xs font-bold text-slate-700">Loading user profile...</p>
+            </div>
+        </div>
+    `;
 
-    if (res.success) {
-        NKB.showToast(`User ${name} created with role ${role}!`, 'success');
+    const res = await NKB.api(`/api/users/${userId}`);
+    if (!res.success || !res.data) {
         closeModal();
-        loadUsers();
-    } else {
-        NKB.showToast(res.message || res.error || 'Failed to create user.', 'error');
+        NKB.showToast(res.message || res.error || 'Failed to load user details.', 'error');
+        return;
+    }
+
+    const u = res.data;
+    const isCurrentUserSuperAdmin = NKB.user && NKB.user.role === 'SUPER_ADMIN';
+    const isTargetSuperAdmin = u.role === 'SUPER_ADMIN';
+    const isSelf = NKB.user && NKB.user.id === u.id;
+
+    if (isTargetSuperAdmin && !isCurrentUserSuperAdmin) {
+        closeModal();
+        alert('Only Super Administrators have permission to edit Super Admin accounts.');
+        return;
+    }
+
+    const clientOptions = (cachedClients || []).map(c => `
+        <option value="${c.id}" ${u.client_id === c.id ? 'selected' : ''}>${c.company_name} (${c.client_code || 'ID: ' + c.id.slice(0, 6)})</option>
+    `).join('');
+
+    root.innerHTML = `
+        <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 text-base font-bold">✏️</div>
+                        <div>
+                            <h3 class="text-base font-extrabold text-slate-900">Edit Staff Member / Portal User</h3>
+                            <p class="text-[11px] text-slate-500">Update account credentials, RBAC role, client assignment, or status.</p>
+                        </div>
+                    </div>
+                    <button onclick="closeModal()" class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 font-bold flex items-center justify-center transition">✕</button>
+                </div>
+                <form onsubmit="submitEditUser(event, '${u.id}')" class="space-y-3.5 text-xs">
+                    <div>
+                        <label class="block text-slate-700 mb-1 font-bold">Full Name <span class="text-rose-500">*</span></label>
+                        <input type="text" id="usr-edit-name" value="${u.name ? u.name.replace(/"/g, '&quot;') : ''}" required class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition">
+                    </div>
+                    <div>
+                        <label class="block text-slate-700 mb-1 font-bold">Corporate / Login Email <span class="text-rose-500">*</span></label>
+                        <input type="email" id="usr-edit-email" value="${u.email ? u.email.replace(/"/g, '&quot;') : ''}" required class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition">
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-slate-700 mb-1 font-bold">Assigned Role <span class="text-rose-500">*</span></label>
+                            <select id="usr-edit-role" onchange="toggleClientDropdown(this.value, 'usr-edit-client-container')" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 transition">
+                                <option value="PRODUCTION" ${u.role === 'PRODUCTION' ? 'selected' : ''}>🧪 Production Supervisor</option>
+                                <option value="WAREHOUSE" ${u.role === 'WAREHOUSE' ? 'selected' : ''}>🚚 Logistics & Warehouse</option>
+                                <option value="ACCOUNTING" ${u.role === 'ACCOUNTING' ? 'selected' : ''}>💰 Senior Accountant</option>
+                                <option value="ADMIN" ${u.role === 'ADMIN' ? 'selected' : ''}>👑 Operations Manager</option>
+                                ${isCurrentUserSuperAdmin ? `<option value="SUPER_ADMIN" ${u.role === 'SUPER_ADMIN' ? 'selected' : ''}>🛡️ Executive Super Admin</option>` : ''}
+                                <option value="CLIENT" ${u.role === 'CLIENT' ? 'selected' : ''}>🏢 B2B Client Portal</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-slate-700 mb-1 font-bold">Account Status <span class="text-rose-500">*</span></label>
+                            <select id="usr-edit-status" ${isSelf ? 'disabled' : ''} class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 transition">
+                                <option value="1" ${u.is_active ? 'selected' : ''}>● Active</option>
+                                <option value="0" ${!u.is_active ? 'selected' : ''}>○ Deactivated</option>
+                            </select>
+                            ${isSelf ? '<p class="text-[10px] text-amber-600 mt-0.5 font-medium">Cannot deactivate yourself</p>' : ''}
+                        </div>
+                    </div>
+                    <div id="usr-edit-client-container" style="display: ${u.role === 'CLIENT' ? 'block' : 'none'};" class="p-3 bg-blue-50/70 border border-blue-100 rounded-xl space-y-1">
+                        <label class="block text-blue-900 font-bold">Link to Client Company <span class="text-rose-500">*</span></label>
+                        <select id="usr-edit-client-id" class="w-full px-3 py-2 border border-blue-200 rounded-lg bg-white text-slate-800">
+                            ${clientOptions ? clientOptions : '<option value="">No clients found - create a client first</option>'}
+                        </select>
+                    </div>
+                    <div class="pt-2 border-t border-slate-100">
+                        <label class="block text-slate-700 mb-1 font-bold">New Password <span class="text-slate-400 font-normal">(Optional)</span></label>
+                        <input type="password" id="usr-edit-pwd" placeholder="Leave blank to keep existing password" minlength="8" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition">
+                        <p class="text-[10px] text-slate-400 mt-1">Leave blank to retain current password. If updating, minimum 8 characters.</p>
+                    </div>
+                    <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition">Cancel</button>
+                        <button type="submit" id="btn-edit-user-submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-lg shadow-indigo-600/20 transition">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+}
+
+async function submitEditUser(e, userId) {
+    e.preventDefault();
+    const name = document.getElementById('usr-edit-name')?.value.trim();
+    const email = document.getElementById('usr-edit-email')?.value.trim();
+    const role = document.getElementById('usr-edit-role')?.value;
+    const client_id = role === 'CLIENT' ? document.getElementById('usr-edit-client-id')?.value : null;
+    const is_active_el = document.getElementById('usr-edit-status');
+    const is_active = is_active_el ? parseInt(is_active_el.value, 10) : 1;
+    const password = document.getElementById('usr-edit-pwd')?.value.trim();
+
+    if (!name || !email || !role) {
+        NKB.showToast('Name, email, and role are required.', 'error');
+        return;
+    }
+
+    if (role === 'CLIENT' && !client_id) {
+        NKB.showToast('Please select a client company for client portal users.', 'error');
+        return;
+    }
+
+    if (password && password.length < 8) {
+        NKB.showToast('New password must be at least 8 characters long.', 'error');
+        return;
+    }
+
+    const submitBtn = document.getElementById('btn-edit-user-submit');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerText = 'Saving...';
+    }
+
+    try {
+        const payload = { name, email, role, is_active, client_id };
+        if (password) payload.password = password;
+
+        const res = await NKB.api(`/api/users/${userId}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload)
+        });
+
+        if (res.success) {
+            NKB.showToast(`User ${name} updated successfully!`, 'success');
+            closeModal();
+            loadUsers();
+        } else {
+            NKB.showToast(res.message || res.error || 'Failed to update user.', 'error');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerText = 'Save Changes';
+            }
+        }
+    } catch (err) {
+        NKB.showToast('Network error while updating user.', 'error');
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerText = 'Save Changes';
+        }
     }
 }
 

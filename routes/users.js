@@ -161,7 +161,7 @@ router.post('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN)
  */
 router.put('/:id', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN), (req, res) => {
     const { id } = req.params;
-    const { name, role, is_active, client_id } = req.body;
+    const { name, email, role, is_active, client_id, password } = req.body;
 
     const targetUser = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
     if (!targetUser) {
@@ -177,6 +177,23 @@ router.put('/:id', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMI
         });
     }
 
+    // Email update and duplicate check
+    let updatedEmail = targetUser.email;
+    if (email) {
+        const cleanEmail = email.trim().toLowerCase();
+        if (cleanEmail !== targetUser.email.toLowerCase()) {
+            const existing = db.prepare('SELECT id FROM users WHERE LOWER(email) = ? AND id != ?').get(cleanEmail, id);
+            if (existing) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'DUPLICATE_EMAIL',
+                    message: 'A user with this email address already exists.'
+                });
+            }
+            updatedEmail = cleanEmail;
+        }
+    }
+
     let updatedRole = targetUser.role;
     if (role) {
         const cleanRole = role.toUpperCase().trim();
@@ -189,15 +206,49 @@ router.put('/:id', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMI
         updatedRole = cleanRole;
     }
 
+    // Role-based client constraint
+    if (updatedRole === ROLES.CLIENT && !client_id && !targetUser.client_id) {
+        return res.status(400).json({
+            success: false,
+            error: 'CLIENT_ID_REQUIRED',
+            message: 'Client users must be linked to a client company.'
+        });
+    }
+
     const updatedName = name ? name.trim() : targetUser.name;
     const updatedStatus = is_active !== undefined ? (is_active ? 1 : 0) : targetUser.is_active;
-    const updatedClientId = updatedRole === ROLES.CLIENT ? (client_id || targetUser.client_id) : null;
+
+    // Prevent self-deactivation
+    if (req.user.id === id && updatedStatus === 0) {
+        return res.status(400).json({
+            success: false,
+            error: 'SELF_DEACTIVATION',
+            message: 'You cannot deactivate your own active account.'
+        });
+    }
+
+    const updatedClientId = updatedRole === ROLES.CLIENT ? (client_id !== undefined ? client_id : targetUser.client_id) : null;
+
+    // Optional password update
+    let updatedPasswordHash = targetUser.password_hash;
+    let passwordChanged = false;
+    if (password && password.trim().length > 0) {
+        if (password.trim().length < 8) {
+            return res.status(400).json({
+                success: false,
+                error: 'WEAK_PASSWORD',
+                message: 'New password must be at least 8 characters long.'
+            });
+        }
+        updatedPasswordHash = bcrypt.hashSync(password.trim(), 12);
+        passwordChanged = true;
+    }
 
     db.prepare(`
         UPDATE users
-        SET name = ?, role = ?, is_active = ?, client_id = ?, updated_at = datetime('now')
+        SET name = ?, email = ?, password_hash = ?, role = ?, is_active = ?, client_id = ?, updated_at = datetime('now')
         WHERE id = ?
-    `).run(updatedName, updatedRole, updatedStatus, updatedClientId, id);
+    `).run(updatedName, updatedEmail, updatedPasswordHash, updatedRole, updatedStatus, updatedClientId, id);
 
     logAudit({
         userId: req.user.id,
@@ -207,13 +258,20 @@ router.put('/:id', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMI
         entityType: 'USER',
         entityId: id,
         details: {
-            old: { name: targetUser.name, role: targetUser.role, isActive: targetUser.is_active },
-            new: { name: updatedName, role: updatedRole, isActive: updatedStatus }
+            old: { name: targetUser.name, email: targetUser.email, role: targetUser.role, isActive: targetUser.is_active },
+            new: { name: updatedName, email: updatedEmail, role: updatedRole, isActive: updatedStatus, passwordChanged }
         },
         ipAddress: req.ip
     });
 
-    const updated = db.prepare('SELECT id, name, email, role, is_active, updated_at FROM users WHERE id = ?').get(id);
+    const updated = db.prepare(`
+        SELECT u.id, u.name, u.email, u.role, u.is_active, u.created_at, u.updated_at,
+               c.id as client_id, c.company_name
+        FROM users u
+        LEFT JOIN clients c ON u.client_id = c.id
+        WHERE u.id = ?
+    `).get(id);
+
     return res.json({
         success: true,
         message: 'User profile updated successfully.',
