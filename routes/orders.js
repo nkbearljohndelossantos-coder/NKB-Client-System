@@ -53,186 +53,6 @@ router.get('/', authenticateToken, enforceClientIsolation, (req, res) => {
 });
 
 /**
- * GET /api/orders/backtrack/:term
- * Universal 360-Degree Backtracking & Lineage Trace
- * Finds complete workflow lineage from ANY document number or ID: PO, JO, Batch, DR, Invoice, Payment!
- */
-router.get('/backtrack/:term', authenticateToken, enforceClientIsolation, (req, res) => {
-    const rawTerm = req.params.term.trim();
-    
-    // Resolve PO ID from any given document number or ID
-    let poId = null;
-
-    // 1. Direct PO check (id or po_number)
-    const poMatch = db.prepare('SELECT id FROM purchase_orders WHERE id = ? OR po_number LIKE ?').get(rawTerm, rawTerm);
-    if (poMatch) poId = poMatch.id;
-
-    // 2. JO check (id or jo_number)
-    if (!poId) {
-        const joMatch = db.prepare('SELECT po_id FROM job_orders WHERE id = ? OR jo_number LIKE ?').get(rawTerm, rawTerm);
-        if (joMatch) poId = joMatch.po_id;
-    }
-
-    // 3. Batch check (id or batch_number)
-    if (!poId) {
-        const batchMatch = db.prepare(`
-            SELECT jo.po_id 
-            FROM production_batches pb 
-            JOIN job_orders jo ON pb.jo_id = jo.id 
-            WHERE pb.id = ? OR pb.batch_number LIKE ?
-        `).get(rawTerm, rawTerm);
-        if (batchMatch) poId = batchMatch.po_id;
-    }
-
-    // 4. DR check (id or dr_number)
-    if (!poId) {
-        const drMatch = db.prepare('SELECT po_id FROM delivery_receipts WHERE id = ? OR dr_number LIKE ?').get(rawTerm, rawTerm);
-        if (drMatch) poId = drMatch.po_id;
-    }
-
-    // 5. Invoice check (id or invoice_number)
-    if (!poId) {
-        const invMatch = db.prepare('SELECT po_id FROM sales_invoices WHERE id = ? OR invoice_number LIKE ?').get(rawTerm, rawTerm);
-        if (invMatch) poId = invMatch.po_id;
-    }
-
-    // 6. Payment check (id, payment_number, reference_number)
-    if (!poId) {
-        const payMatch = db.prepare(`
-            SELECT si.po_id 
-            FROM payments p 
-            JOIN sales_invoices si ON p.invoice_id = si.id 
-            WHERE p.id = ? OR p.payment_number LIKE ? OR p.reference_number LIKE ?
-        `).get(rawTerm, rawTerm, rawTerm);
-        if (payMatch) poId = payMatch.po_id;
-    }
-
-    if (!poId) {
-        return res.status(404).json({
-            success: false,
-            error: 'NOT_FOUND',
-            message: `No record found matching "${rawTerm}". Please check PO, JO, Batch, DR, or Invoice number.`
-        });
-    }
-
-    // Fetch Full PO Details
-    const po = db.prepare(`
-        SELECT po.*, c.company_name, c.contact_person, c.email as client_email, c.phone as client_phone, c.address as client_address,
-               u.name as creator_name
-        FROM purchase_orders po
-        JOIN clients c ON po.client_id = c.id
-        LEFT JOIN users u ON po.created_by = u.id
-        WHERE po.id = ?
-    `).get(poId);
-
-    if (req.user.role === 'CLIENT' && po.client_id !== req.clientId) {
-        return res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Access denied.' });
-    }
-
-    // Items
-    const items = db.prepare(`
-        SELECT poi.*, p.name as product_name, p.sku, p.unit, p.formula_code,
-               (SELECT COALESCE(SUM(di.delivered_quantity), 0) FROM delivery_items di JOIN delivery_receipts dr ON di.dr_id = dr.id WHERE dr.po_id = poi.po_id AND di.product_id = poi.product_id) as total_delivered_qty
-        FROM purchase_order_items poi
-        JOIN products p ON poi.product_id = p.id
-        WHERE poi.po_id = ?
-    `).all(poId);
-
-    // Job Orders
-    const jobOrders = db.prepare(`
-        SELECT jo.*, p.name as product_name, p.sku,
-               (SELECT COUNT(*) FROM production_batches WHERE jo_id = jo.id) as batch_count,
-               (SELECT COALESCE(SUM(actual_yield), 0) FROM production_batches WHERE jo_id = jo.id) as total_yield
-        FROM job_orders jo
-        JOIN products p ON jo.product_id = p.id
-        WHERE jo.po_id = ?
-        ORDER BY jo.created_at ASC
-    `).all(poId);
-
-    // Production Batches
-    const batches = db.prepare(`
-        SELECT pb.*, jo.jo_number, p.name as product_name, p.sku, u.name as logged_by_name
-        FROM production_batches pb
-        JOIN job_orders jo ON pb.jo_id = jo.id
-        JOIN products p ON pb.product_id = p.id
-        LEFT JOIN users u ON pb.created_by = u.id
-        WHERE jo.po_id = ?
-        ORDER BY pb.created_at ASC
-    `).all(poId);
-
-    // Delivery Receipts + Signatures
-    const deliveries = db.prepare(`
-        SELECT dr.*,
-               (SELECT COUNT(*) FROM delivery_items WHERE dr_id = dr.id) as items_count,
-               (SELECT COALESCE(SUM(delivered_quantity), 0) FROM delivery_items WHERE dr_id = dr.id) as total_delivered_qty,
-               (SELECT COALESCE(SUM(accepted_quantity), 0) FROM delivery_items WHERE dr_id = dr.id) as total_accepted_qty,
-               da.signer_name, da.signer_title, da.signature_data, da.accepted_at as client_signed_at,
-               u.name as dispatched_by_name
-        FROM delivery_receipts dr
-        LEFT JOIN dr_acceptances da ON da.dr_id = dr.id
-        LEFT JOIN users u ON dr.dispatched_by = u.id
-        WHERE dr.po_id = ?
-        ORDER BY dr.created_at ASC
-    `).all(poId);
-
-    // Delivery Items detailed list
-    const deliveryItems = db.prepare(`
-        SELECT di.*, dr.dr_number, p.name as product_name, p.sku, pb.batch_number, pb.expiry_date
-        FROM delivery_items di
-        JOIN delivery_receipts dr ON di.dr_id = dr.id
-        JOIN products p ON di.product_id = p.id
-        LEFT JOIN production_batches pb ON di.batch_id = pb.id
-        WHERE dr.po_id = ?
-        ORDER BY dr.created_at ASC
-    `).all(poId);
-
-    // Sales Invoices
-    const invoices = db.prepare(`
-        SELECT si.*, dr.dr_number, u.name as creator_name
-        FROM sales_invoices si
-        LEFT JOIN delivery_receipts dr ON si.dr_id = dr.id
-        LEFT JOIN users u ON si.created_by = u.id
-        WHERE si.po_id = ?
-        ORDER BY si.created_at ASC
-    `).all(poId);
-
-    // Payments
-    const payments = db.prepare(`
-        SELECT pay.*, si.invoice_number, u.name as recorded_by_name
-        FROM payments pay
-        JOIN sales_invoices si ON pay.invoice_id = si.id
-        LEFT JOIN users u ON pay.recorded_by = u.id
-        WHERE si.po_id = ?
-        ORDER BY pay.payment_date ASC
-    `).all(poId);
-
-    // Audit Logs
-    const auditLogs = db.prepare(`
-        SELECT * FROM audit_logs 
-        WHERE entity_id IN (?, ?, ?) 
-           OR details LIKE ? 
-           OR details LIKE ?
-        ORDER BY timestamp DESC LIMIT 50
-    `).all(poId, po.po_number, rawTerm, `%${po.po_number}%`, `%${rawTerm}%`);
-
-    return res.json({
-        success: true,
-        data: {
-            searchedTerm: rawTerm,
-            po,
-            items,
-            jobOrders,
-            batches,
-            deliveries,
-            deliveryItems,
-            invoices,
-            payments,
-            auditLogs
-        }
-    });
-});
-
-/**
  * GET /api/orders/:id
  * Retrieve PO details, line items, linked Job Orders, DRs, and Invoices
  */
@@ -309,13 +129,12 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
     });
 });
 
-
 /**
  * POST /api/orders
  * Create a new Purchase Order
  */
 router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
-    let { client_id, expected_delivery_date, tolerance_percent, billing_policy, notes, items, tax_percent, is_draft, status } = req.body;
+    let { client_id, expected_delivery_date, tolerance_percent, billing_policy, notes, items, tax_percent } = req.body;
 
     if (req.user.role === 'CLIENT') {
         client_id = req.clientId;
@@ -370,10 +189,7 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
             if (req.user.role === 'CLIENT') {
                 unitPrice = expectedClientPrice;
             } else {
-                unitPrice = (item.unit_price !== undefined && item.unit_price !== null && !isNaN(parseFloat(item.unit_price))) ? parseFloat(item.unit_price) : expectedClientPrice;
-            }
-            if (isNaN(unitPrice) || unitPrice < 0) {
-                unitPrice = expectedClientPrice || product.default_price || 0.0;
+                unitPrice = item.unit_price !== undefined && item.unit_price !== null ? parseFloat(item.unit_price) : expectedClientPrice;
             }
 
             const lineSubtotal = targetQty * unitPrice;
@@ -398,15 +214,8 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
         const taxAmount = (subtotal * taxRate) / 100;
         const grandTotal = subtotal + taxAmount;
 
-        // Auto-approve if created by Admin/SuperAdmin, otherwise PENDING_APPROVAL; or DRAFT if is_draft is true
-        let initialStatus;
-        if (is_draft === true || is_draft === 'true' || is_draft === 1) {
-            initialStatus = 'DRAFT';
-        } else if (req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN') {
-            initialStatus = 'APPROVED';
-        } else {
-            initialStatus = 'PENDING_APPROVAL';
-        }
+        // Auto-approve if created by Admin/SuperAdmin, otherwise PENDING_APPROVAL
+        const initialStatus = (req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN') ? 'APPROVED' : 'PENDING_APPROVAL';
 
         db.prepare(`
             INSERT INTO purchase_orders
@@ -453,7 +262,7 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
             userId: req.user.id,
             userName: req.user.name,
             userRole: req.user.role,
-            action: initialStatus === 'DRAFT' ? 'DRAFT_PO' : 'CREATE_PO',
+            action: 'CREATE_PO',
             entityType: 'PURCHASE_ORDER',
             entityId: poNumber,
             details: {
@@ -462,8 +271,7 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
                 clientId: client_id,
                 grandTotal,
                 tolerance,
-                policy,
-                status: initialStatus
+                policy
             }
         });
 
@@ -472,101 +280,14 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
 
     try {
         const result = createOrderTx();
-        
-        // Only generate Job Orders / Sales Orders if not a DRAFT
-        if (result.status !== 'DRAFT') {
-            autoGenerateJobOrdersForPO(result.poId, req.user.id);
-        }
-
         const createdPO = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(result.poId);
         const orderItems = db.prepare('SELECT * FROM purchase_order_items WHERE po_id = ?').all(result.poId);
-        const jobOrders = db.prepare('SELECT * FROM job_orders WHERE po_id = ?').all(result.poId);
         const totalTargetQty = orderItems.reduce((acc, it) => acc + (it.target_quantity || 0), 0);
-        return res.status(201).json({
-            success: true,
-            message: result.status === 'DRAFT' ? 'Purchase Order saved as Draft.' : 'Purchase Order created successfully!',
-            data: { ...createdPO, items: orderItems, jobOrders, total_target_quantity: totalTargetQty }
-        });
+        return res.status(201).json({ success: true, data: { ...createdPO, items: orderItems, total_target_quantity: totalTargetQty } });
     } catch (err) {
         return res.status(400).json({ success: false, error: err.message });
     }
 });
-
-/**
- * Helper: Automatically generate Sales Orders for each product in a Purchase Order
- */
-function autoGenerateJobOrdersForPO(poId, userId) {
-    const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(poId);
-    if (!po) return [];
-
-    const items = db.prepare('SELECT * FROM purchase_order_items WHERE po_id = ?').all(poId);
-    const existingJOs = db.prepare('SELECT product_id, id FROM job_orders WHERE po_id = ?').all(poId);
-    const existingProdMap = new Map(existingJOs.map(j => [j.product_id, j.id]));
-
-    const insertJOStmt = db.prepare(`
-        INSERT INTO job_orders
-        (id, jo_number, po_id, product_id, target_quantity, scheduled_start_date, assigned_team, status, notes, created_by)
-        VALUES (?, ?, ?, ?, ?, date('now'), 'Formulation & Bottling Team Alpha', 'IN_PRODUCTION', ?, ?)
-    `);
-
-    const createdJOs = [];
-    const basePONumber = po.po_number || '';
-    const poSuffix = basePONumber.replace(/^(PO-?)/i, ''); // e.g. "2026-0001"
-    let itemIndex = 0;
-
-    for (const it of items) {
-        if (!existingProdMap.has(it.product_id)) {
-            const joId = uuidv4();
-            
-            // JO / SO starts with the exact same number as the PO (e.g. SO-2026-0001)
-            let joNumber;
-            if (items.length === 1) {
-                joNumber = `SO-${poSuffix}`;
-            } else {
-                joNumber = `SO-${poSuffix}-${itemIndex + 1}`;
-            }
-
-            // Check if joNumber already exists (safety fallback)
-            const existingNum = db.prepare('SELECT id FROM job_orders WHERE jo_number = ?').get(joNumber);
-            if (existingNum) {
-                joNumber = getNextDocumentNumber('SO');
-            }
-
-            insertJOStmt.run(
-                joId,
-                joNumber,
-                poId,
-                it.product_id,
-                it.target_quantity,
-                po.notes || null,
-                userId || po.created_by
-            );
-            createdJOs.push({ joId, joNumber });
-
-            logAudit({
-                userId: userId || po.created_by,
-                userName: 'System Auto-Dispatcher',
-                userRole: 'ADMIN',
-                action: 'AUTO_CREATE_SO',
-                entityType: 'SALES_ORDER',
-                entityId: joNumber,
-                details: { joId, soNumber: joNumber, poId, productId: it.product_id, targetQuantity: it.target_quantity }
-            });
-        } else {
-            // Update target quantity if SO already exists
-            db.prepare('UPDATE job_orders SET target_quantity = ? WHERE id = ?').run(
-                it.target_quantity,
-                existingProdMap.get(it.product_id)
-            );
-        }
-        itemIndex++;
-    }
-
-    // Advance PO status to IN_PRODUCTION
-    db.prepare("UPDATE purchase_orders SET status = 'IN_PRODUCTION', updated_at = datetime('now') WHERE id = ? AND status IN ('PENDING_APPROVAL', 'APPROVED')").run(poId);
-
-    return createdJOs;
-}
 
 /**
  * POST /api/orders/:id/approve
@@ -590,9 +311,6 @@ router.post('/:id/approve', authenticateToken, requireRoles('ADMIN'), (req, res)
         WHERE id = ?
     `).run(req.user.id, id);
 
-    // Auto-generate Sales Orders on approval
-    autoGenerateJobOrdersForPO(id, req.user.id);
-
     logAudit({
         userId: req.user.id,
         userName: req.user.name,
@@ -604,271 +322,7 @@ router.post('/:id/approve', authenticateToken, requireRoles('ADMIN'), (req, res)
     });
 
     const updated = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
-    return res.json({ success: true, message: 'Purchase Order approved and Sales Order(s) generated for production!', data: updated });
-});
-
-/**
- * POST /api/orders/:id/proceed
- * Finalize/Proceed a DRAFT Purchase Order -> Dispatches Sales Order(s)
- */
-router.post('/:id/proceed', authenticateToken, enforceClientIsolation, (req, res) => {
-    const { id } = req.params;
-
-    const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
-    if (!po) {
-        return res.status(404).json({ success: false, error: 'Purchase Order not found.' });
-    }
-
-    if (req.user.role === 'CLIENT' && po.client_id !== req.clientId) {
-        return res.status(403).json({ success: false, error: 'Access denied.', code: 'FORBIDDEN' });
-    }
-
-    if (po.status !== 'DRAFT' && po.status !== 'PENDING_APPROVAL') {
-        return res.status(400).json({ success: false, error: `Cannot proceed order with status "${po.status}".` });
-    }
-
-    const newStatus = (req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN') ? 'APPROVED' : 'PENDING_APPROVAL';
-
-    db.prepare(`
-        UPDATE purchase_orders
-        SET status = ?,
-            approved_by = ?,
-            approved_at = ?,
-            updated_at = datetime('now')
-        WHERE id = ?
-    `).run(
-        newStatus,
-        newStatus === 'APPROVED' ? req.user.id : null,
-        newStatus === 'APPROVED' ? new Date().toISOString() : null,
-        id
-    );
-
-    // Auto-generate Sales Orders if approved
-    let generatedSOs = [];
-    if (newStatus === 'APPROVED') {
-        generatedSOs = autoGenerateJobOrdersForPO(id, req.user.id);
-    }
-
-    logAudit({
-        userId: req.user.id,
-        userName: req.user.name,
-        userRole: req.user.role,
-        action: 'PROCEED_PO',
-        entityType: 'PURCHASE_ORDER',
-        entityId: po.po_number,
-        details: { poId: id, previousStatus: po.status, newStatus, generatedSOs }
-    });
-
-    const updated = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
-    return res.json({
-        success: true,
-        message: `Purchase Order ${po.po_number} finalized and Sales Order(s) dispatched to production!`,
-        data: updated
-    });
-});
-
-/**
- * PUT /api/orders/:id
- * Edit/Update an existing Purchase Order
- */
-router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
-    const { id } = req.params;
-    let { client_id, expected_delivery_date, tolerance_percent, billing_policy, notes, items, tax_percent, is_draft, proceed } = req.body;
-
-    const existingPO = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
-    if (!existingPO) {
-        return res.status(404).json({ success: false, error: 'Purchase Order not found.' });
-    }
-
-    if (req.user.role === 'CLIENT' && existingPO.client_id !== req.clientId) {
-        return res.status(403).json({ success: false, error: 'Access denied.', code: 'FORBIDDEN' });
-    }
-
-    if (existingPO.status === 'DELIVERED' || existingPO.status === 'CLOSED' || existingPO.status === 'CANCELLED') {
-        return res.status(400).json({ success: false, error: `Cannot edit Purchase Order with status "${existingPO.status}".` });
-    }
-
-    if (req.user.role === 'CLIENT') {
-        client_id = req.clientId;
-    } else if (!client_id) {
-        client_id = existingPO.client_id;
-    }
-
-    if (!items || !Array.isArray(items) || items.length === 0) {
-        return res.status(400).json({ success: false, error: 'At least one order item is required.' });
-    }
-
-    const client = db.prepare('SELECT * FROM clients WHERE id = ?').get(client_id);
-    if (!client) {
-        return res.status(404).json({ success: false, error: 'Client not found.' });
-    }
-
-    const tolerance = tolerance_percent !== undefined ? parseFloat(tolerance_percent) : existingPO.tolerance_percent;
-    const policy = billing_policy || existingPO.billing_policy;
-    const taxRate = tax_percent !== undefined ? parseFloat(tax_percent) : existingPO.tax_percent;
-
-    // Determine target status
-    let nextStatus = existingPO.status;
-    let willApprove = false;
-    if (existingPO.status === 'DRAFT') {
-        if (proceed === true || proceed === 'true' || is_draft === false || is_draft === 'false') {
-            if (req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN') {
-                nextStatus = 'APPROVED';
-                willApprove = true;
-            } else {
-                nextStatus = 'PENDING_APPROVAL';
-            }
-        } else {
-            nextStatus = 'DRAFT';
-        }
-    }
-
-    const updateOrderTx = db.transaction(() => {
-        let subtotal = 0.0;
-        const processedItems = [];
-
-        for (const item of items) {
-            const product = db.prepare('SELECT * FROM products WHERE id = ?').get(item.product_id);
-            if (!product) {
-                throw new Error(`Invalid product ID: ${item.product_id}`);
-            }
-
-            const targetQty = parseInt(item.target_quantity);
-            if (isNaN(targetQty) || targetQty <= 0) {
-                throw new Error(`Target quantity for "${product.name}" must be greater than 0.`);
-            }
-
-            const assignment = db.prepare('SELECT custom_price, custom_name, is_active FROM client_product_prices WHERE client_id = ? AND product_id = ?').get(client_id, item.product_id);
-            const expectedClientPrice = (assignment && assignment.custom_price !== null && assignment.custom_price !== undefined) ? assignment.custom_price : product.default_price;
-
-            let unitPrice;
-            if (req.user.role === 'CLIENT') {
-                unitPrice = expectedClientPrice;
-            } else {
-                unitPrice = (item.unit_price !== undefined && item.unit_price !== null && !isNaN(parseFloat(item.unit_price))) ? parseFloat(item.unit_price) : expectedClientPrice;
-            }
-            if (isNaN(unitPrice) || unitPrice < 0) {
-                unitPrice = expectedClientPrice || product.default_price || 0.0;
-            }
-
-            const lineSubtotal = targetQty * unitPrice;
-            subtotal += lineSubtotal;
-
-            const minQty = Math.floor(targetQty * (1 - tolerance / 100));
-            const maxQty = Math.ceil(targetQty * (1 + tolerance / 100));
-
-            processedItems.push({
-                id: item.id || uuidv4(),
-                poId: id,
-                productId: product.id,
-                targetQuantity: targetQty,
-                minAllowedQuantity: minQty,
-                maxAllowedQuantity: maxQty,
-                unitPrice,
-                subtotal: lineSubtotal
-            });
-        }
-
-        const taxAmount = (subtotal * taxRate) / 100;
-        const grandTotal = subtotal + taxAmount;
-
-        // Update purchase_orders record
-        db.prepare(`
-            UPDATE purchase_orders
-            SET client_id = ?,
-                expected_delivery_date = ?,
-                tolerance_percent = ?,
-                billing_policy = ?,
-                status = ?,
-                notes = ?,
-                subtotal = ?,
-                tax_percent = ?,
-                tax_amount = ?,
-                grand_total = ?,
-                approved_by = CASE WHEN ? = 1 THEN ? ELSE approved_by END,
-                approved_at = CASE WHEN ? = 1 THEN datetime('now') ELSE approved_at END,
-                updated_at = datetime('now')
-            WHERE id = ?
-        `).run(
-            client_id,
-            expected_delivery_date || existingPO.expected_delivery_date,
-            tolerance,
-            policy,
-            nextStatus,
-            notes !== undefined ? notes : existingPO.notes,
-            subtotal,
-            taxRate,
-            taxAmount,
-            grandTotal,
-            willApprove ? 1 : 0,
-            req.user.id,
-            willApprove ? 1 : 0,
-            id
-        );
-
-        // Delete old items and insert updated items
-        db.prepare('DELETE FROM purchase_order_items WHERE po_id = ?').run(id);
-
-        const insertItemStmt = db.prepare(`
-            INSERT INTO purchase_order_items
-            (id, po_id, product_id, target_quantity, min_allowed_quantity, max_allowed_quantity, unit_price, subtotal)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-
-        for (const it of processedItems) {
-            insertItemStmt.run(
-                it.id,
-                it.poId,
-                it.productId,
-                it.targetQuantity,
-                it.minAllowedQuantity,
-                it.maxAllowedQuantity,
-                it.unitPrice,
-                it.subtotal
-            );
-        }
-
-        logAudit({
-            userId: req.user.id,
-            userName: req.user.name,
-            userRole: req.user.role,
-            action: (nextStatus === 'APPROVED' && existingPO.status === 'DRAFT') ? 'PROCEED_PO' : 'UPDATE_PO',
-            entityType: 'PURCHASE_ORDER',
-            entityId: existingPO.po_number,
-            details: {
-                poId: id,
-                poNumber: existingPO.po_number,
-                clientId: client_id,
-                grandTotal,
-                itemCount: processedItems.length,
-                status: nextStatus
-            }
-        });
-
-        return { id, poNumber: existingPO.po_number, grandTotal, status: nextStatus };
-    });
-
-    try {
-        const result = updateOrderTx();
-        
-        // Sync/Generate Job Orders for this updated PO if not a DRAFT
-        if (result.status !== 'DRAFT') {
-            autoGenerateJobOrdersForPO(result.id, req.user.id);
-        }
-
-        const updatedPO = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(result.id);
-        const orderItems = db.prepare('SELECT * FROM purchase_order_items WHERE po_id = ?').all(result.id);
-        const jobOrders = db.prepare('SELECT * FROM job_orders WHERE po_id = ?').all(result.id);
-        return res.json({
-            success: true,
-            message: result.status === 'DRAFT' 
-                ? `Purchase Order ${result.poNumber} saved as Draft.` 
-                : `Purchase Order ${result.poNumber} updated and dispatched to production!`,
-            data: { ...updatedPO, items: orderItems, jobOrders }
-        });
-    } catch (err) {
-        return res.status(400).json({ success: false, error: err.message });
-    }
+    return res.json({ success: true, message: 'Purchase Order approved successfully.', data: updated });
 });
 
 module.exports = router;
