@@ -115,6 +115,31 @@ if (useMysql) {
         console.error('Client provision error:', err.message);
     }
 
+    // Auto-provision Operational Staff Accounts if missing
+    try {
+        const staffPassHash = '$2b$10$kl1WcRCmVd96aR4ozG/Qk.pkgDmHagy7Kz2ec2rVi9e2xjn338bh.'; // bcrypt for Staff123!
+        const defaultStaff = [
+            { id: 'b0000000-0000-0000-0000-000000000001', name: 'Production Supervisor', email: 'production@nkbmanufacturing.com', role: 'PRODUCTION' },
+            { id: 'c0000000-0000-0000-0000-000000000001', name: 'Logistics & Warehouse Officer', email: 'warehouse@nkbmanufacturing.com', role: 'WAREHOUSE' },
+            { id: 'd0000000-0000-0000-0000-000000000001', name: 'Senior Accountant', email: 'accounting@nkbmanufacturing.com', role: 'ACCOUNTING' }
+        ];
+
+        for (const staff of defaultStaff) {
+            const existing = db.prepare("SELECT id FROM users WHERE LOWER(email) = ? LIMIT 1").get(staff.email);
+            if (!existing) {
+                db.prepare(`
+                    INSERT INTO users (id, name, email, password_hash, role, is_active)
+                    VALUES (?, ?, ?, ?, ?, 1)
+                `).run(staff.id, staff.name, staff.email, staffPassHash, staff.role);
+                console.log(`👷 Auto-provisioned Staff: ${staff.name} (${staff.email})`);
+            } else {
+                db.prepare("UPDATE users SET password_hash = ?, is_active = 1 WHERE id = ?").run(staffPassHash, existing.id);
+            }
+        }
+    } catch (err) {
+        console.error('Staff auto-provision error:', err.message);
+    }
+
     // Auto-provision Product from phpMyAdmin screenshot: OXYGENATED SUNSCREEN (SKC-2026001)
     try {
         const prodId = '8b0747ec-ad8b-4b95-9c95-1c6c70844661';
