@@ -3,302 +3,1008 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sales Order - NKB Manufacturing Corp</title>
+    <title>Sales Order - NKB Manufacturing Corporation</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-    <link rel="stylesheet" href="/css/tailwind.min.css">
-    <link rel="stylesheet" href="/css/style.css">
     <style>
-        @page {
-            size: letter portrait;
-            margin: 8mm 10mm;
+        /* Base Reset */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
+
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            color: #000000;
+            background: #ffffff;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        /* -------------------------------------------------------------
+           PRINT STYLING (A4 Portrait Layout)
+           ------------------------------------------------------------- */
+        @page {
+            size: A4 portrait;
+            margin: 12mm 14mm;
+        }
+
         @media print {
             html, body {
-                width: 100% !important;
+                width: 210mm !important;
                 height: auto !important;
                 margin: 0 !important;
                 padding: 0 !important;
                 background: #ffffff !important;
-                font-size: 8.5pt !important;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
+                overflow: visible !important;
             }
-            .no-print { display: none !important; }
-            .sheet-container {
-                box-shadow: none !important;
-                border: 1.5px solid #000000 !important;
-                padding: 20px 24px !important;
-                margin: 0 auto !important;
+
+            .no-print {
+                display: none !important;
+            }
+
+            .pages-wrapper {
                 width: 100% !important;
-                max-width: 100% !important;
-                min-height: auto !important;
-                border-radius: 0 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+
+            /* Portrait Full-Page Mode (Default for SO) */
+            body.mode-portrait .page-container {
+                width: 182mm !important; /* 210mm - 2*14mm */
+                min-height: 273mm !important; /* 297mm - 2*12mm */
+                margin: 0 auto !important;
+                padding: 0 !important;
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: space-between !important;
+                box-shadow: none !important;
+                border: none !important;
+                page-break-after: always !important;
+                break-after: page !important;
                 page-break-inside: avoid !important;
+                break-inside: avoid !important;
+                overflow: hidden !important;
+                box-sizing: border-box !important;
             }
-            .header-logo { height: 46px !important; }
+
+            body.mode-portrait .page-container:last-child {
+                page-break-after: avoid !important;
+                break-after: avoid !important;
+            }
+
+            /* 2-Up Half-A4 Landscape Mode (When toggled to 2-up) */
+            body.mode-2up .page-container {
+                width: 194mm !important;
+                height: 287mm !important;
+                margin: 0 auto !important;
+                padding: 0 !important;
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: space-between !important;
+                box-shadow: none !important;
+                border: none !important;
+                page-break-after: always !important;
+                break-after: page !important;
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+                overflow: hidden !important;
+                box-sizing: border-box !important;
+            }
+
+            body.mode-2up .page-container:last-child {
+                page-break-after: avoid !important;
+                break-after: avoid !important;
+            }
+
+            body.mode-2up .slip-slip {
+                height: 137mm !important;
+                max-height: 137mm !important;
+                overflow: hidden !important;
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: space-between !important;
+                padding: 1mm 2mm !important;
+                box-sizing: border-box !important;
+            }
+
+            body.mode-2up .cut-divider {
+                height: 7mm !important;
+                margin: 0 !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+            }
         }
+
+        /* -------------------------------------------------------------
+           SCREEN PREVIEW STYLING
+           ------------------------------------------------------------- */
         @media screen {
-            .sheet-container {
-                max-width: 8.5in;
-                min-height: 11in;
-                box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1);
+            body {
+                background-color: #f1f5f9;
+                padding: 24px 12px 60px 12px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 24px;
+                min-height: 100vh;
+            }
+
+            .no-print-toolbar {
+                width: 210mm;
+                max-width: 100%;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                gap: 12px;
+                background: #ffffff;
+                padding: 12px 18px;
+                border-radius: 12px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+                border: 1px solid #e2e8f0;
+                position: sticky;
+                top: 12px;
+                z-index: 100;
+            }
+
+            .toolbar-btn {
+                padding: 8px 16px;
+                border-radius: 8px;
+                font-size: 13px;
+                font-weight: bold;
+                cursor: pointer;
+                border: 1px solid transparent;
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                transition: all 0.2s;
+                text-decoration: none;
+            }
+
+            .toolbar-btn-back {
+                background: #f8fafc;
+                color: #334155;
+                border-color: #cbd5e1;
+            }
+            .toolbar-btn-back:hover {
+                background: #e2e8f0;
+            }
+
+            .toolbar-btn-print {
+                background: #0f172a;
+                color: #ffffff;
+            }
+            .toolbar-btn-print:hover {
+                background: #1e293b;
+            }
+
+            .control-group {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                font-size: 12px;
+                font-weight: 600;
+                color: #475569;
+                background: #f8fafc;
+                padding: 4px 10px;
+                border-radius: 8px;
+                border: 1px solid #e2e8f0;
+            }
+
+            .control-group select {
+                font-weight: bold;
+                padding: 4px 8px;
+                border-radius: 6px;
+                border: 1px solid #cbd5e1;
+                background: #ffffff;
+                color: #0f172a;
+                cursor: pointer;
+            }
+
+            .pages-wrapper {
+                display: flex;
+                flex-direction: column;
+                gap: 24px;
+                align-items: center;
+            }
+
+            /* Screen Portrait Mode */
+            body.mode-portrait .page-container {
+                width: 210mm;
+                min-height: 297mm;
+                padding: 16mm 18mm;
+                background: #ffffff;
+                box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+                border: 1px solid #e2e8f0;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                box-sizing: border-box;
+                position: relative;
+            }
+
+            /* Screen 2-Up Mode */
+            body.mode-2up .page-container {
+                width: 210mm;
+                height: 297mm;
+                padding: 5mm 8mm;
+                background: #ffffff;
+                box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+                border: 1px solid #e2e8f0;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                box-sizing: border-box;
+                position: relative;
+            }
+
+            body.mode-2up .slip-slip {
+                height: 137mm;
+                max-height: 137mm;
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                padding: 1mm 2mm;
+                box-sizing: border-box;
             }
         }
-        .doc-blue-header { background-color: #3b71ca; color: #ffffff; }
-        .doc-grey-header { background-color: #d1d5db; color: #111827; }
-        .doc-table-header { background-color: #3b71ca; color: #ffffff; }
-        .doc-total-bar { background-color: #3b71ca; color: #ffffff; }
-        .doc-table td, .doc-table th {
-            border: 1px solid #cbd5e1;
+
+        /* -------------------------------------------------------------
+           PORTRAIT FULL-PAGE CONTENT DESIGN (Exact Match to User Image)
+           ------------------------------------------------------------- */
+        .so-portrait-content {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        /* Top Header */
+        .company-header {
+            text-align: center;
+            margin-bottom: 4px;
+        }
+
+        .company-name {
+            font-size: 14pt;
+            font-weight: bold;
+            letter-spacing: 0.3px;
+            line-height: 1.25;
+        }
+
+        .company-address {
+            font-size: 8.5pt;
+            color: #000000;
+            margin-top: 2px;
+            line-height: 1.25;
+        }
+
+        .company-tin {
+            font-size: 8.5pt;
+            color: #000000;
+            margin-top: 1px;
+            line-height: 1.25;
+        }
+
+        /* Document Title */
+        .doc-title-row {
+            text-align: center;
+            margin: 10px 0 16px 0;
+        }
+
+        .doc-title-text {
+            font-size: 12pt;
+            font-weight: bold;
+            text-decoration: underline;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        /* Customer & Order Metadata Row */
+        .meta-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            font-size: 9.5pt;
+            line-height: 1.45;
+            margin-bottom: 18px;
+        }
+
+        .meta-left {
+            max-width: 62%;
+        }
+
+        .meta-right {
+            text-align: right;
+            min-width: 35%;
+        }
+
+        .meta-line {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .meta-lbl {
+            font-weight: normal;
+        }
+
+        .meta-val {
+            font-weight: normal;
+        }
+
+        .doc-no {
+            font-weight: bold;
+            font-size: 10.5pt;
+            margin-bottom: 2px;
+        }
+
+        /* Line Items Table */
+        .table-wrapper {
+            flex: 1;
+            min-height: 80mm;
+            margin-bottom: 16px;
+        }
+
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 9.5pt;
+            table-layout: fixed;
+        }
+
+        .items-table thead th {
+            font-weight: bold;
+            text-align: left;
+            padding-bottom: 8px;
+            border-bottom: 0.5px solid transparent;
+        }
+
+        .items-table thead th.th-desc {
+            width: 64%;
+        }
+
+        .items-table thead th.th-qty {
+            width: 22%;
+            text-align: right;
+            padding-right: 20px;
+        }
+
+        .items-table thead th.th-uom {
+            width: 14%;
+            text-align: left;
+            padding-left: 8px;
+        }
+
+        .items-table tbody td {
+            padding: 4px 0;
+            vertical-align: top;
+            line-height: 1.35;
+        }
+
+        .items-table tbody td.td-desc {
+            padding-right: 12px;
+            word-break: break-word;
+        }
+
+        .items-table tbody td.td-qty {
+            text-align: right;
+            padding-right: 20px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .items-table tbody td.td-uom {
+            text-align: left;
+            padding-left: 8px;
+        }
+
+        /* Remarks */
+        .remarks-row {
+            font-size: 9.5pt;
+            margin-top: 10px;
+            margin-bottom: 24px;
+            line-height: 1.4;
+        }
+
+        .remarks-lbl {
+            font-weight: normal;
+        }
+
+        .remarks-text {
+            font-weight: normal;
+        }
+
+        /* Signatures Block */
+        .signatures-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            column-gap: 30mm;
+            margin-top: 8px;
+            margin-bottom: 12px;
+            font-size: 9pt;
+        }
+
+        .sig-column {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .sig-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sig-label {
+            font-weight: normal;
+            font-size: 9pt;
+            margin-bottom: 2px;
+        }
+
+        .sig-underline {
+            width: 100%;
+            height: 24px;
+            border-bottom: 1px solid #000000;
+        }
+
+        /* Cut Line Divider (used only in 2-up landscape mode) */
+        .cut-divider {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            font-size: 7pt;
+            color: #64748b;
+            user-select: none;
+        }
+
+        .cut-line-bar {
+            flex: 1;
+            border-bottom: 1px dashed #94a3b8;
+            height: 1px;
+        }
+
+        .cut-badge {
+            font-weight: bold;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
         }
     </style>
 </head>
-<body class="bg-slate-100 min-h-screen p-2 sm:p-6 text-slate-900 antialiased text-[11.5px] font-sans">
+<body class="mode-portrait">
 
-    <!-- Action Bar (Hidden on Print) -->
-    <div class="max-w-4xl mx-auto mb-4 flex justify-between items-center no-print">
-        <a href="javascript:window.history.back()" class="px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 transition">
-            ← Back to Portal
-        </a>
-        <div class="flex items-center gap-2">
-            <span class="text-[11px] text-slate-500 font-medium">Layout: <strong>Official Letter Size (8.5" × 11")</strong></span>
-            <button onclick="window.print()" class="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold shadow-md shadow-blue-600/30 transition flex items-center gap-1.5">
-                <span>🖨️ Print Sales Order</span>
+    <!-- On-Screen Control Bar -->
+    <div class="no-print-toolbar no-print">
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <a href="javascript:window.history.back()" class="toolbar-btn toolbar-btn-back">
+                ← Back
+            </a>
+            
+            <div class="control-group">
+                <span>Document Header:</span>
+                <select id="doc-title-select" onchange="onTitleChange()">
+                    <option value="SALES ORDER" selected>SALES ORDER (SO)</option>
+                    <option value="JOB ORDER">JOB ORDER (JO)</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <span>Layout:</span>
+                <select id="layout-select" onchange="onLayoutChange()">
+                    <option value="portrait" selected>Portrait (Full A4 Sheet)</option>
+                    <option value="2up">Half-A4 Landscape (2 Copies on A4)</option>
+                </select>
+            </div>
+
+            <a href="/print-jo.html" id="link-switch-jo" class="toolbar-btn" style="background: #eef2ff; color: #4338ca; border: 1px solid #c7d2fe; font-size: 12px; padding: 6px 12px;" title="Switch to Job Order (2 Copies Half-A4 Landscape)">
+                <span>✂ Open JO (2 Copies)</span>
+            </a>
+
+            <span id="page-summary-badge" style="font-size: 11px; color: #64748b; font-weight: 600;"></span>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <button onclick="window.print()" class="toolbar-btn toolbar-btn-print" id="btn-print-main">
+                <span>🖨️ Print (A4 Portrait)</span>
             </button>
         </div>
     </div>
 
-    <!-- Main Sheet matching Reference Image Structure -->
-    <div class="sheet-container mx-auto bg-white p-6 sm:p-10 border border-slate-900 text-slate-900 space-y-4" id="jo-printable-sheet">
-        
-        <!-- HEADER: Left Company Info | Right Document Title & Blue Bar Boxes -->
-        <div class="flex justify-between items-start">
-            <div class="flex items-start gap-3">
-                <img src="/images/nkb-logo.png" alt="NKB Logo" class="header-logo h-12 w-auto object-contain mt-0.5">
-                <div>
-                    <h1 class="text-xl font-bold text-blue-700 tracking-tight leading-tight">NKB Manufacturing Corp</h1>
-                    <div class="text-[10px] text-blue-900/80 leading-tight space-y-0.5 mt-0.5 font-medium">
-                        <p>Sampaguita Village 2, B4 L5, Twig St, Bacoor, 4102 Cavite</p>
-                        <p>Phone: +63 (2) 8888-0000</p>
-                        <p>Email: customerservice@nkbmanufacturing.com</p>
-                        <p class="text-blue-700 font-semibold">www.nkbmanufacturing.com</p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="w-64 text-right space-y-1.5">
-                <h2 class="text-2xl font-bold text-slate-500 tracking-wider text-right uppercase">SALES ORDER</h2>
-                
-                <!-- SO Number Box -->
-                <div class="rounded overflow-hidden border border-blue-600 text-center">
-                    <div class="doc-blue-header font-bold uppercase text-[9.5px] py-0.5 tracking-wider">SALES ORDER #</div>
-                    <div id="jo-number-display" class="bg-slate-100 font-bold font-mono text-slate-900 text-[11px] py-0.5">SO-XXXX</div>
-                </div>
-
-                <!-- Date Box -->
-                <div class="rounded overflow-hidden border border-blue-600 text-center">
-                    <div class="doc-blue-header font-bold uppercase text-[9.5px] py-0.5 tracking-wider">DATE</div>
-                    <div id="jo-date-display" class="bg-slate-100 font-bold text-slate-900 text-[10.5px] py-0.5">-</div>
-                </div>
+    <!-- Wrapper for 1 or More Client Sheets -->
+    <div class="pages-wrapper" id="pages-wrapper">
+        <div class="page-container" id="loading-placeholder">
+            <div style="display: flex; align-items: center; justify-content: center; height: 100%; font-size: 14px; color: #64748b;">
+                Loading Sales Order details...
             </div>
         </div>
-
-        <!-- 3-COLUMN METADATA BAR (Requested By | Customer ID / PO Ref | Department / Policy) -->
-        <div class="grid grid-cols-3 border border-slate-300 text-center text-[10px]">
-            <div class="border-r border-slate-300">
-                <div class="doc-grey-header font-bold uppercase py-0.5 text-[9px]">REQUESTED BY</div>
-                <div id="meta-jo-requested-by" class="py-1 font-semibold text-slate-800">Production Planning</div>
-            </div>
-            <div class="border-r border-slate-300">
-                <div class="doc-grey-header font-bold uppercase py-0.5 text-[9px]">PO REFERENCE #</div>
-                <div id="meta-jo-po-ref" class="py-1 font-semibold text-slate-800 font-mono">-</div>
-            </div>
-            <div>
-                <div class="doc-grey-header font-bold uppercase py-0.5 text-[9px]">BILLING POLICY</div>
-                <div id="meta-jo-policy" class="py-1 font-semibold text-slate-800">-</div>
-            </div>
-        </div>
-
-        <!-- 2-COLUMN BLOCK: BILL TO / CLIENT | ORDER DETAILS & SPECIFICATIONS -->
-        <div class="border border-blue-600 rounded overflow-hidden">
-            <div class="grid grid-cols-12 doc-blue-header font-bold uppercase text-[9.5px] py-0.5 px-2">
-                <div class="col-span-5">MANUFACTURING FOR (CLIENT)</div>
-                <div class="col-span-7 pl-2">ORDER DETAILS & BATCH SPECIFICATIONS</div>
-            </div>
-            <div class="grid grid-cols-12 text-[10px] p-2 bg-white gap-2 min-h-[60px]">
-                <div class="col-span-5 space-y-0.5 border-r border-slate-200 pr-2">
-                    <div id="jo-client-name" class="font-bold text-slate-900 text-[11px]">-</div>
-                    <div id="jo-client-contact" class="text-slate-700 font-medium">Attn: Authorized Representative</div>
-                    <div class="text-slate-500 font-mono text-[9.5px]">Assigned Team: <strong id="jo-assigned-team" class="text-slate-700 font-sans">-</strong></div>
-                    <div class="text-slate-500 text-[9.5px]">Production Target: <strong id="jo-scheduled-date" class="text-slate-700 font-mono">-</strong></div>
-                </div>
-                <div class="col-span-7 pl-1 space-y-0.5 text-slate-700">
-                    <div>Product Name: <strong id="jo-product-name" class="text-blue-900 font-bold">-</strong></div>
-                    <div>Product SKU & Formula: <strong id="jo-product-sku" class="text-slate-900 font-mono">-</strong> <span id="jo-formula-code" class="text-slate-500 font-mono text-[9px]"></span></div>
-                    <div>Sales Order Status: <span id="jo-status-badge"></span></div>
-                    <div class="text-[9.5px] italic text-slate-500 pt-0.5">Cleanroom batch compounding and manufacturing run.</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- LINE ITEMS TABLE (QTY | DESCRIPTION | SKU / CODE | UNIT | TOTAL) -->
-        <div class="border border-slate-300 overflow-hidden">
-            <table class="w-full text-left doc-table text-[10px] border-collapse">
-                <thead class="doc-table-header font-bold uppercase text-[9px]">
-                    <tr>
-                        <th class="py-1 px-2 w-16 text-center border border-slate-300">QTY</th>
-                        <th class="py-1 px-2 border border-slate-300">PRODUCT & FORMULATION DESCRIPTION</th>
-                        <th class="py-1 px-2 w-28 text-center border border-slate-300">SKU / CODE</th>
-                        <th class="py-1 px-2 w-28 text-center border border-slate-300">UNIT SPEC</th>
-                        <th class="py-1 px-2 w-32 text-right border border-slate-300">TARGET UNITS</th>
-                    </tr>
-                </thead>
-                <tbody id="jo-items-tbody" class="divide-y divide-slate-200 font-medium">
-                    <tr><td colspan="5" class="py-4 text-center text-slate-400">Loading job order details...</td></tr>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- BOTTOM BLOCK: OTHER COMMENTS (Left) | TOTALS BREAKDOWN (Right) -->
-        <div class="grid grid-cols-12 gap-4 text-[10.5px] items-start pt-1">
-            
-            <!-- Left Comments Box -->
-            <div class="col-span-6 space-y-1.5">
-                <div class="border border-slate-300 overflow-hidden rounded">
-                    <div class="doc-grey-header font-bold uppercase text-[9px] py-1 px-2.5">PRODUCTION NOTES & COMPLIANCE</div>
-                    <div class="p-2.5 space-y-1 text-slate-600 text-[10px] leading-relaxed">
-                        <p>1. Job Order is executed strictly in compliance with the linked Purchase Order.</p>
-                        <p>2. Production output is validated upon laboratory QC clearance and release.</p>
-                        <p>3. Production questions: <strong>customerservice@nkbmanufacturing.com</strong></p>
-                    </div>
-                </div>
-                <div class="text-[10px] text-slate-700 pt-0.5">
-                    Authorized Laboratory: <strong class="text-slate-900">NKB Manufacturing Cleanroom Plant</strong>
-                </div>
-            </div>
-
-            <!-- Right Yield Breakdown Table -->
-            <div class="col-span-6 border border-slate-300 overflow-hidden rounded text-[10.5px]">
-                <table class="w-full">
-                    <tbody class="divide-y divide-slate-200">
-                        <tr>
-                            <td class="py-1.5 px-3 text-slate-700 font-bold bg-slate-50 text-left whitespace-nowrap">TARGET BATCH QTY</td>
-                            <td class="py-1.5 px-3 font-bold font-mono text-slate-900 text-right whitespace-nowrap" id="jo-base-target-qty">0 pcs</td>
-                        </tr>
-                        <tr>
-                            <td class="py-1.5 px-3 text-slate-700 font-bold bg-slate-50 text-left whitespace-nowrap">QC INSPECTION</td>
-                            <td class="py-1.5 px-3 font-mono text-emerald-700 font-bold text-right whitespace-nowrap">PASSED / READY</td>
-                        </tr>
-                        <tr class="doc-total-bar font-bold text-[11px]">
-                            <td class="py-2 px-3 uppercase tracking-wider text-left text-white whitespace-nowrap">TOTAL TARGET UNITS</td>
-                            <td class="py-2 px-3 font-mono text-white text-right font-black whitespace-nowrap" id="jo-grand-total-qty">0 pcs</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- SIGNATURES & ACKNOWLEDGEMENT -->
-        <div class="pt-2 border-t border-dashed border-slate-400 text-center text-[9px] text-slate-600 space-y-3">
-            <p class="italic">I agree that all production formulations and batch quantities correspond directly to the approved Purchase Order.</p>
-            
-            <div class="grid grid-cols-2 gap-8 text-left pt-1">
-                <div>
-                    <div class="border-b border-slate-800 min-h-[22px] flex items-end">
-                        <span id="jo-chemist-name" class="font-bold text-slate-900 text-[10px]">Lead Formulator / Chemist</span>
-                    </div>
-                    <div class="text-[8.5px] text-slate-500 font-semibold uppercase mt-0.5">Signature / Production Supervisor</div>
-                </div>
-                <div>
-                    <div class="border-b border-slate-800 min-h-[22px] flex items-end">
-                        <span id="jo-sign-date" class="font-bold text-slate-900 text-[10px]"></span>
-                    </div>
-                    <div class="text-[8.5px] text-slate-500 font-semibold uppercase mt-0.5">Completed / Approved Date</div>
-                </div>
-            </div>
-
-            <div class="text-center font-bold text-blue-700 italic text-[10.5px] pt-1">
-                Thank You For Your Business!
-            </div>
-        </div>
-
     </div>
 
-    <script src="/js/app.js?v=2.0.4"></script>
+    <!-- Data Injection Script -->
     <script>
-        document.addEventListener('DOMContentLoaded', async () => {
-            await NKB.init();
-            const urlParams = new URLSearchParams(window.location.search);
-            const joId = urlParams.get('id');
+        let currentLoadedData = [];
+        let currentLayout = 'portrait'; // 'portrait' (Full A4) or '2up' (Half-A4 Landscape 2 Copies)
 
-            if (!joId) {
-                alert('No Sales Order ID provided.');
-                window.history.back();
+        function formatDateMMDDYYYY(val) {
+            if (!val) return '';
+            if (/^\d{2}\/\d{2}\/\d{4}$/.test(val)) return val;
+            const d = new Date(val);
+            if (isNaN(d.getTime())) return val;
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            const yyyy = d.getFullYear();
+            return `${mm}/${dd}/${yyyy}`;
+        }
+
+        function formatQty(val) {
+            if (val === null || val === undefined || isNaN(val)) return '0.00';
+            return Number(val).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function formatDocNumber(rawNo, titleMode) {
+            let formattedNo = rawNo || '1279';
+            if (titleMode === 'SALES ORDER') {
+                if (formattedNo.startsWith('JO-')) {
+                    formattedNo = formattedNo.replace(/^JO-/, 'SO-');
+                } else if (formattedNo.startsWith('PO-')) {
+                    formattedNo = formattedNo.replace(/^PO-/, 'SO-');
+                } else if (!formattedNo.startsWith('SO-')) {
+                    formattedNo = 'SO-' + formattedNo;
+                }
+            } else {
+                if (formattedNo.startsWith('SO-')) {
+                    formattedNo = formattedNo.replace(/^SO-/, 'JO-');
+                } else if (formattedNo.startsWith('PO-')) {
+                    formattedNo = formattedNo.replace(/^PO-/, 'JO-');
+                } else if (!formattedNo.startsWith('JO-')) {
+                    formattedNo = 'JO-' + formattedNo;
+                }
+            }
+            return formattedNo;
+        }
+
+        function onTitleChange() {
+            const select = document.getElementById('doc-title-select');
+            const chosen = select ? select.value : 'SALES ORDER';
+            
+            if (chosen === 'JOB ORDER') {
+                window.location.href = '/print-jo.html' + window.location.search;
                 return;
             }
 
-            try {
-                const res = await NKB.api(`/api/sales-orders/${joId}`);
-                if (!res.success || !res.data) {
-                    alert(res.error || 'Failed to load Sales Order.');
-                    return;
-                }
+            document.querySelectorAll('.title-display').forEach(el => {
+                el.textContent = chosen;
+            });
 
-                const jo = res.data;
+            document.querySelectorAll('.doc-no-display').forEach(el => {
+                const rawNo = el.getAttribute('data-raw-no') || el.textContent;
+                el.textContent = formatDocNumber(rawNo, chosen);
+            });
+        }
 
-                document.getElementById('jo-number-display').textContent = jo.jo_number || '-';
-                document.getElementById('jo-date-display').textContent = NKB.formatDate(jo.created_at);
-                document.getElementById('meta-jo-po-ref').textContent = jo.po_number || '-';
-                document.getElementById('meta-jo-policy').textContent = jo.billing_policy === 'ACTUAL_DELIVERY' ? 'Option A (Bill Actual)' : 'Option B (Fixed+Buffer)';
-                document.getElementById('jo-status-badge').innerHTML = NKB.renderStatusBadge(jo.status);
+        function onLayoutChange() {
+            const layoutSelect = document.getElementById('layout-select');
+            currentLayout = layoutSelect ? layoutSelect.value : 'portrait';
 
-                document.getElementById('jo-client-name').textContent = jo.company_name || 'Valued Client';
-                document.getElementById('jo-scheduled-date').textContent = jo.scheduled_date ? NKB.formatDate(jo.scheduled_date) : 'Scheduled Batch Run';
+            document.body.classList.remove('mode-portrait', 'mode-2up');
+            document.body.classList.add('mode-' + currentLayout);
 
-                document.getElementById('jo-product-name').textContent = jo.product_name || 'Cosmetic Formulation';
-                document.getElementById('jo-product-sku').textContent = `SKU: ${jo.sku || '-'}`;
-                if (jo.formula_code) document.getElementById('jo-formula-code').textContent = `• Formula: ${jo.formula_code}`;
-                document.getElementById('jo-assigned-team').textContent = jo.assigned_team || 'Cleanroom Team A';
+            renderPages(currentLoadedData);
+        }
 
-                const targetQty = jo.target_quantity || 0;
-                document.getElementById('jo-base-target-qty').textContent = `${NKB.formatNumber(targetQty)} pcs`;
-                document.getElementById('jo-grand-total-qty').textContent = `${NKB.formatNumber(targetQty)} pcs`;
+        function generatePortraitContent(client, docTitle) {
+            const customerName = client.company_name || client.client_name || 'JLS SKIN ESSENTIALS OPC';
+            const customerAddress = client.client_address || client.address || '-';
+            const docDate = formatDateMMDDYYYY(client.po_date || client.scheduled_start_date || client.created_at || new Date());
+            const dueDate = formatDateMMDDYYYY(client.expected_delivery_date || client.scheduled_end_date || client.po_date || client.created_at || new Date());
+            const remarks = client.notes || client.po_notes || '';
+            
+            const rawDocNo = client.jo_number || client.po_number || '1279';
+            const formattedDocNo = formatDocNumber(rawDocNo, docTitle);
 
-                const tbody = document.getElementById('jo-items-tbody');
-                
-                // Render exact product matching the PO
-                let rowsHtml = `
-                    <tr class="hover:bg-slate-50">
-                        <td class="py-1.5 px-2 text-center font-bold text-slate-800">${NKB.formatNumber(targetQty)}</td>
-                        <td class="py-1.5 px-2 font-semibold text-slate-900">
-                            ${jo.product_name || 'Cosmetic Formulation'} 
-                        </td>
-                        <td class="py-1.5 px-2 text-center font-mono text-slate-700 font-bold">${jo.sku || '-'}${jo.formula_code ? ' / ' + jo.formula_code : ''}</td>
-                        <td class="py-1.5 px-2 text-center font-mono text-slate-600">${jo.unit || 'KG / PCS'}</td>
-                        <td class="py-1.5 px-2 text-right font-bold font-mono text-slate-900">${NKB.formatNumber(targetQty)} pcs</td>
+            let items = client.items || [];
+            if (items.length === 0 && client.product_name) {
+                items = [{
+                    product_name: client.product_name,
+                    target_quantity: client.target_quantity,
+                    unit: client.unit || 'PC'
+                }];
+            }
+
+            const itemsRows = items.map(item => {
+                const desc = item.product_name || item.name || '-';
+                const qty = formatQty(item.target_quantity || item.quantity || 0);
+                const rawUom = (item.unit || 'PC').toUpperCase().trim();
+                const uom = (rawUom === 'PCS' || rawUom === 'PIECE' || rawUom === 'PIECES') ? 'PC' : rawUom;
+
+                return `
+                    <tr>
+                        <td class="td-desc">${escapeHtml(desc)}</td>
+                        <td class="td-qty">${qty}</td>
+                        <td class="td-uom">${escapeHtml(uom)}</td>
                     </tr>
                 `;
+            }).join('');
 
-                // Add empty filler rows to match template grid aesthetic
-                for (let i = 0; i < 4; i++) {
-                    rowsHtml += `
-                        <tr>
-                            <td class="py-1 px-2 text-center text-slate-300">&nbsp;</td>
-                            <td class="py-1 px-2">&nbsp;</td>
-                            <td class="py-1 px-2 text-center">&nbsp;</td>
-                            <td class="py-1 px-2 text-center">&nbsp;</td>
-                            <td class="py-1 px-2 text-right text-slate-300">-</td>
-                        </tr>
+            return `
+                <div class="so-portrait-content">
+                    <!-- Top Section -->
+                    <div>
+                        <div class="company-header">
+                            <div class="company-name">NKB Manufacturing Corporation</div>
+                            <div class="company-address">B4 L5 Twig St., Sampaguita Village, Mambog II, Bacoor City, 4102 Cavite, Philippines</div>
+                            <div class="company-tin">TIN: 686-950-421-00000</div>
+                        </div>
+
+                        <!-- Underlined Title -->
+                        <div class="doc-title-row">
+                            <span class="doc-title-text title-display">${escapeHtml(docTitle)}</span>
+                        </div>
+
+                        <!-- Customer & Metadata -->
+                        <div class="meta-row">
+                            <div class="meta-left">
+                                <div class="meta-line">Customer: <strong class="cust-name-display">${escapeHtml(customerName)}</strong></div>
+                                <div class="meta-line">Address: <span class="cust-addr-display">${escapeHtml(customerAddress)}</span></div>
+                            </div>
+                            <div class="meta-right">
+                                <div class="doc-no doc-no-display" data-raw-no="${escapeHtml(rawDocNo)}">${escapeHtml(formattedDocNo)}</div>
+                                <div class="meta-line">Date: <span class="doc-date-display">${escapeHtml(docDate)}</span></div>
+                                <div class="meta-line">Due Date: <span class="doc-duedate-display">${escapeHtml(dueDate)}</span></div>
+                            </div>
+                        </div>
+
+                        <!-- Table -->
+                        <div class="table-wrapper">
+                            <table class="items-table">
+                                <thead>
+                                    <tr>
+                                        <th class="th-desc">Description</th>
+                                        <th class="th-qty">Quantity</th>
+                                        <th class="th-uom">UOM</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="items-tbody">
+                                    ${itemsRows || '<tr><td colspan="3" style="text-align: center; color: #888;">No items listed</td></tr>'}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Bottom Section (Remarks & Signatures) -->
+                    <div>
+                        <div class="remarks-row">
+                            <span class="remarks-lbl">Remarks:</span> <span class="remarks-display">${escapeHtml(remarks)}</span>
+                        </div>
+
+                        <div class="signatures-container">
+                            <div class="sig-column">
+                                <div class="sig-item">
+                                    <div class="sig-label">Prepared by:</div>
+                                    <div class="sig-underline"></div>
+                                </div>
+                                <div class="sig-item">
+                                    <div class="sig-label">Checked by:</div>
+                                    <div class="sig-underline"></div>
+                                </div>
+                            </div>
+                            <div class="sig-column">
+                                <div class="sig-item">
+                                    <div class="sig-label">Processed by:</div>
+                                    <div class="sig-underline"></div>
+                                </div>
+                                <div class="sig-item">
+                                    <div class="sig-label">Released by:</div>
+                                    <div class="sig-underline"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function generateSlipContent2Up(client, docTitle) {
+            const customerName = client.company_name || client.client_name || 'JLS SKIN ESSENTIALS OPC';
+            const customerAddress = client.client_address || client.address || '-';
+            const docDate = formatDateMMDDYYYY(client.po_date || client.scheduled_start_date || client.created_at || new Date());
+            const dueDate = formatDateMMDDYYYY(client.expected_delivery_date || client.scheduled_end_date || client.po_date || client.created_at || new Date());
+            const remarks = client.notes || client.po_notes || '';
+            
+            const rawDocNo = client.jo_number || client.po_number || '1279';
+            const formattedDocNo = formatDocNumber(rawDocNo, docTitle);
+
+            let items = client.items || [];
+            if (items.length === 0 && client.product_name) {
+                items = [{
+                    product_name: client.product_name,
+                    target_quantity: client.target_quantity,
+                    unit: client.unit || 'PC'
+                }];
+            }
+
+            const isDense = items.length > 5;
+            const isUltraDense = items.length > 9;
+            let tableClass = 'items-table';
+            if (isUltraDense) {
+                tableClass += ' items-table-ultra-dense';
+            } else if (isDense) {
+                tableClass += ' items-table-dense';
+            }
+
+            const itemsRows = items.map(item => {
+                const desc = item.product_name || item.name || '-';
+                const qty = formatQty(item.target_quantity || item.quantity || 0);
+                const rawUom = (item.unit || 'PC').toUpperCase().trim();
+                const uom = (rawUom === 'PCS' || rawUom === 'PIECE' || rawUom === 'PIECES') ? 'PC' : rawUom;
+
+                return `
+                    <tr>
+                        <td class="td-desc">${escapeHtml(desc)}</td>
+                        <td class="td-qty">${qty}</td>
+                        <td class="td-uom">${escapeHtml(uom)}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            return `
+                <div class="so-portrait-content" style="font-size: 8.5pt;">
+                    <div>
+                        <div class="company-header" style="margin-bottom: 2px;">
+                            <div class="company-name" style="font-size: 13pt;">NKB Manufacturing Corporation</div>
+                            <div class="company-address" style="font-size: 8pt;">B4 L5 Twig St., Sampaguita Village, Mambog II, Bacoor City, 4102 Cavite, Philippines</div>
+                            <div class="company-tin" style="font-size: 8pt;">TIN: 686-950-421-00000</div>
+                        </div>
+
+                        <div class="doc-title-row" style="margin: 3px 0 5px 0;">
+                            <span class="doc-title-text title-display" style="font-size: 10.5pt;">${escapeHtml(docTitle)}</span>
+                        </div>
+
+                        <div class="meta-row" style="font-size: 8.5pt; margin-bottom: 5px;">
+                            <div class="meta-left">
+                                <div class="meta-line">Customer: <strong class="cust-name-display">${escapeHtml(customerName)}</strong></div>
+                                <div class="meta-line">Address: <span class="cust-addr-display">${escapeHtml(customerAddress)}</span></div>
+                            </div>
+                            <div class="meta-right">
+                                <div class="doc-no doc-no-display" data-raw-no="${escapeHtml(rawDocNo)}" style="font-size: 9pt;">${escapeHtml(formattedDocNo)}</div>
+                                <div class="meta-line">Date: <span class="doc-date-display">${escapeHtml(docDate)}</span></div>
+                                <div class="meta-line">Due Date: <span class="doc-duedate-display">${escapeHtml(dueDate)}</span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="table-wrapper" style="min-height: 38mm; margin-bottom: 3px;">
+                        <table class="${tableClass}" style="font-size: 8.5pt;">
+                            <thead>
+                                <tr>
+                                    <th class="th-desc">Description</th>
+                                    <th class="th-qty">Quantity</th>
+                                    <th class="th-uom">UOM</th>
+                                </tr>
+                            </thead>
+                            <tbody class="items-tbody">
+                                ${itemsRows || '<tr><td colspan="3" style="text-align: center; color: #888;">No items listed</td></tr>'}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div>
+                        <div class="remarks-row" style="font-size: 8.5pt; margin-bottom: 6px;">
+                            <span class="remarks-lbl">Remarks:</span> <span class="remarks-display">${escapeHtml(remarks)}</span>
+                        </div>
+
+                        <div class="signatures-container" style="column-gap: 20mm; font-size: 8pt; margin-top: 2px;">
+                            <div class="sig-column" style="gap: 5px;">
+                                <div class="sig-item">
+                                    <div class="sig-label">Prepared by:</div>
+                                    <div class="sig-underline" style="height: 14px;"></div>
+                                </div>
+                                <div class="sig-item">
+                                    <div class="sig-label">Checked by:</div>
+                                    <div class="sig-underline" style="height: 14px;"></div>
+                                </div>
+                            </div>
+                            <div class="sig-column" style="gap: 5px;">
+                                <div class="sig-item">
+                                    <div class="sig-label">Processed by:</div>
+                                    <div class="sig-underline" style="height: 14px;"></div>
+                                </div>
+                                <div class="sig-item">
+                                    <div class="sig-label">Released by:</div>
+                                    <div class="sig-underline" style="height: 14px;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderPages(pagesData) {
+            currentLoadedData = pagesData;
+            const container = document.getElementById('pages-wrapper');
+            if (!container) return;
+
+            const select = document.getElementById('doc-title-select');
+            const chosenTitle = select ? select.value : 'SALES ORDER';
+
+            let html = '';
+            if (currentLayout === 'portrait') {
+                pagesData.forEach((clientData, idx) => {
+                    html += `
+                        <div class="page-container" id="page-client-${idx}">
+                            ${generatePortraitContent(clientData, chosenTitle)}
+                        </div>
                     `;
+                });
+            } else {
+                pagesData.forEach((clientData, idx) => {
+                    html += `
+                        <div class="page-container" id="page-client-${idx}">
+                            <div class="slip-slip" id="slip-${idx}-1">
+                                ${generateSlipContent2Up(clientData, chosenTitle)}
+                            </div>
+                            <div class="cut-divider">
+                                <div class="cut-line-bar"></div>
+                                <div class="cut-badge">✂ CUT HERE (HALF OF A4 LANDSCAPE) ✂</div>
+                                <div class="cut-line-bar"></div>
+                            </div>
+                            <div class="slip-slip" id="slip-${idx}-2">
+                                ${generateSlipContent2Up(clientData, chosenTitle)}
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+
+            container.innerHTML = html;
+
+            // Update badge and print button
+            const badge = document.getElementById('page-summary-badge');
+            const printBtn = document.getElementById('btn-print-main');
+
+            const layoutLabel = currentLayout === 'portrait' ? 'A4 Portrait' : '2-Up Landscape';
+
+            if (pagesData.length > 1) {
+                if (badge) badge.textContent = `(${pagesData.length} Clients • ${pagesData.length} Pages)`;
+                if (printBtn) printBtn.innerHTML = `<span>🖨️ Print All Clients (${pagesData.length} Pages, ${layoutLabel})</span>`;
+            } else if (pagesData.length === 1) {
+                const itemCount = (pagesData[0].items || []).length;
+                if (badge) badge.textContent = `(${pagesData[0].company_name || 'Client'} • ${itemCount} Product${itemCount !== 1 ? 's' : ''})`;
+                if (printBtn) printBtn.innerHTML = `<span>🖨️ Print (${layoutLabel})</span>`;
+            }
+
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('auto') === '1') {
+                setTimeout(() => { window.print(); }, 500);
+            }
+        }
+
+        async function loadData() {
+            const switchLink = document.getElementById('link-switch-jo');
+            if (switchLink) {
+                switchLink.href = '/print-jo.html' + window.location.search;
+            }
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const clientId = urlParams.get('client_id');
+            const id = urlParams.get('id');
+            const poId = urlParams.get('po_id') || urlParams.get('poId');
+            const isAll = urlParams.get('all') === '1' || urlParams.get('all') === 'true';
+
+            // Check if explicit layout param was passed
+            const layoutParam = urlParams.get('layout');
+            if (layoutParam === '2up' || layoutParam === 'landscape') {
+                currentLayout = '2up';
+                const layoutSelect = document.getElementById('layout-select');
+                if (layoutSelect) layoutSelect.value = '2up';
+                document.body.classList.remove('mode-portrait');
+                document.body.classList.add('mode-2up');
+            }
+
+            // Check if explicit title param was passed
+            const titleParam = urlParams.get('title') || urlParams.get('doc');
+            if (titleParam && titleParam.toUpperCase().includes('JOB')) {
+                const titleSelect = document.getElementById('doc-title-select');
+                if (titleSelect) titleSelect.value = 'JOB ORDER';
+            }
+
+            const token = localStorage.getItem('nkb_token');
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            let endpoint = '';
+            if (isAll) {
+                endpoint = '/api/job-orders/print/all';
+            } else if (clientId) {
+                endpoint = `/api/job-orders/client/${encodeURIComponent(clientId)}`;
+            } else if (id) {
+                endpoint = `/api/job-orders/${encodeURIComponent(id)}`;
+            } else if (poId) {
+                endpoint = `/api/job-orders/po/${encodeURIComponent(poId)}`;
+            } else {
+                endpoint = '/api/job-orders/print/all';
+            }
+
+            try {
+                const res = await fetch(endpoint, { headers });
+                const json = await res.json();
+
+                if (!json.success || !json.data) {
+                    if (poId || id) {
+                        const fallbackRes = await fetch(`/api/orders/${poId || id}`, { headers });
+                        const fallbackJson = await fallbackRes.json();
+                        if (fallbackJson.success && fallbackJson.data) {
+                            renderPages([fallbackJson.data]);
+                            return;
+                        }
+                    }
+                    throw new Error(json.error || 'Failed to load order data.');
                 }
 
-                tbody.innerHTML = rowsHtml;
-                document.getElementById('jo-sign-date').textContent = NKB.formatDate(jo.created_at);
+                if (Array.isArray(json.data)) {
+                    if (json.data.length === 0) {
+                        const allJOsRes = await fetch('/api/job-orders', { headers });
+                        const allJOsJson = await allJOsRes.json();
+                        if (allJOsJson.success && allJOsJson.data && allJOsJson.data.length > 0) {
+                            const firstId = allJOsJson.data[0].id;
+                            const singleRes = await fetch(`/api/job-orders/${firstId}`, { headers });
+                            const singleJson = await singleRes.json();
+                            if (singleJson.success && singleJson.data) {
+                                renderPages([singleJson.data]);
+                                return;
+                            }
+                        }
+                        renderFallbackSample();
+                        return;
+                    }
+                    renderPages(json.data);
+                } else {
+                    renderPages([json.data]);
+                }
 
             } catch (err) {
-                alert('Error loading Job Order details: ' + err.message);
+                console.error('Failed to load print data:', err);
+                renderFallbackSample();
             }
-        });
+        }
+
+        function renderFallbackSample() {
+            renderPages([{
+                jo_number: 'SO-1279',
+                company_name: 'JLS SKIN ESSENTIALS OPC',
+                client_address: '4614 Arellano Ave. Brgy. Palanan Makati City',
+                po_date: '2026-09-01',
+                expected_delivery_date: '2026-09-01',
+                notes: '',
+                items: [
+                    { product_name: 'JLS NO BRAND - KATY PERRY MEOW', target_quantity: 1440, unit: 'PC' },
+                    { product_name: 'JLS NO BRAND - INCANTO SHINE', target_quantity: 288, unit: 'PC' },
+                    { product_name: 'JLS - PURE SEDUCTION', target_quantity: 288, unit: 'PC' },
+                    { product_name: 'JLS - POLO RED', target_quantity: 144, unit: 'PC' }
+                ]
+            }]);
+        }
+
+        window.addEventListener('DOMContentLoaded', loadData);
     </script>
 </body>
 </html>

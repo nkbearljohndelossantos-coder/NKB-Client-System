@@ -434,8 +434,11 @@ async function loadOrders() {
                     <button onclick="openViewPOModal('${po.id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="View Full Order Info">
                         <span>👁️ View</span>
                     </button>
-                    <a href="/print-po.html?id=${po.id}" target="_blank" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Print Purchase Order">
-                        <span>🖨️ Print</span>
+                    <a href="/print-po.html?id=${po.id}" target="_blank" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Print Purchase Order">
+                        <span>🖨️ PO</span>
+                    </a>
+                    <a href="/print-so.html?po_id=${po.id}" target="_blank" class="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Print Sales Order (A4 Portrait)">
+                        <span>🖨️ SO</span>
                     </a>
                     ${po.jo_count === 0 && po.status !== 'CANCELLED' ? `
                         <button onclick="openEditPOModal('${po.id}')" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Edit Purchase Order (before entering JO)">
@@ -545,9 +548,14 @@ function renderJobOrdersTable(jobOrders) {
                                 <span class="text-[11px] text-indigo-700 font-semibold ml-2">(${group.items.length} Product${group.items.length > 1 ? 's' : ''} in Production • Total: ${NKB.formatNumber(totalQty)} pcs)</span>
                             </div>
                         </div>
-                        <a href="/print-jo.html?client_id=${group.clientId}" target="_blank" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-bold transition inline-flex items-center gap-1.5 shadow-sm" title="Print Consolidated Job Order for ${group.companyName} (All Products)">
-                            <span>🖨️ Print Client JO (${group.items.length} Products)</span>
-                        </a>
+                        <div class="flex items-center gap-2">
+                            <a href="/print-so.html?client_id=${group.clientId}" target="_blank" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-xl text-xs font-bold transition inline-flex items-center gap-1.5 shadow-sm" title="Print Sales Order for ${group.companyName} (A4 Portrait)">
+                                <span>🖨️ Print SO (Portrait)</span>
+                            </a>
+                            <a href="/print-jo.html?client_id=${group.clientId}" target="_blank" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-bold transition inline-flex items-center gap-1.5 shadow-sm" title="Print Consolidated Job Order for ${group.companyName} (2 Copies Half-A4 Landscape)">
+                                <span>🖨️ Print JO (2 Copies)</span>
+                            </a>
+                        </div>
                     </div>
                 </td>
             </tr>
@@ -572,8 +580,11 @@ function renderJobOrdersTable(jobOrders) {
                     <button onclick="openViewPOModal('${jo.po_id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition" title="View Purchase Order Details">
                         👁️ View PO
                     </button>
-                    <a href="/print-jo.html?client_id=${jo.client_id}&id=${jo.id}" target="_blank" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Print Job Order for ${jo.company_name} (All Products)">
-                        🖨️ Print
+                    <a href="/print-so.html?client_id=${jo.client_id}&id=${jo.id}" target="_blank" class="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Print Sales Order for ${jo.company_name} (A4 Portrait)">
+                        🖨️ SO
+                    </a>
+                    <a href="/print-jo.html?client_id=${jo.client_id}&id=${jo.id}" target="_blank" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Print Job Order for ${jo.company_name} (Half-A4 Landscape 2 Copies)">
+                        🖨️ JO
                     </a>
                     <button onclick="openCreateBatchModal('${jo.id}', '${jo.jo_number}', ${jo.target_quantity}, '${jo.product_name}')" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition">
                         + Start Batch
@@ -609,10 +620,21 @@ function printJobOrdersForSelectedClient() {
     }
 }
 
+function printSalesOrdersForSelectedClient() {
+    const sel = document.getElementById('filter-jo-client');
+    const cid = sel ? sel.value : '';
+    if (cid) {
+        window.open(`/print-so.html?client_id=${cid}`, '_blank');
+    } else {
+        window.open('/print-so.html?all=1', '_blank');
+    }
+}
+
 window.loadJobOrders = loadJobOrders;
 window.renderJobOrdersTable = renderJobOrdersTable;
 window.filterJobOrdersByClient = filterJobOrdersByClient;
 window.printJobOrdersForSelectedClient = printJobOrdersForSelectedClient;
+window.printSalesOrdersForSelectedClient = printSalesOrdersForSelectedClient;
 
 // -------------------------------------------------------------
 // 4. PRODUCTION BATCHES & YIELD LOGGER

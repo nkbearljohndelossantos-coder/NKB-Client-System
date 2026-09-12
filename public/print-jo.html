@@ -465,10 +465,13 @@
             <div class="title-toggle">
                 <span>Document Header:</span>
                 <select id="doc-title-select" onchange="updateDocTitle()">
-                    <option value="SALES ORDER" selected>SALES ORDER (as in photo)</option>
-                    <option value="JOB ORDER">JOB ORDER</option>
+                    <option value="JOB ORDER" selected>JOB ORDER (JO)</option>
+                    <option value="SALES ORDER">SALES ORDER (SO - Portrait)</option>
                 </select>
             </div>
+            <a href="/print-so.html" id="link-switch-so" class="toolbar-btn" style="background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; font-size: 12px; padding: 6px 12px;" title="Switch to Sales Order (A4 Portrait Layout)">
+                <span>📄 Open SO (Portrait)</span>
+            </a>
             <span id="page-summary-badge" style="font-size: 11px; color: #64748b; font-weight: 600;"></span>
         </div>
 
@@ -541,8 +544,13 @@
 
         function updateDocTitle() {
             const select = document.getElementById('doc-title-select');
-            const chosen = select ? select.value : 'SALES ORDER';
+            const chosen = select ? select.value : 'JOB ORDER';
             
+            if (chosen === 'SALES ORDER') {
+                window.location.href = '/print-so.html' + window.location.search;
+                return;
+            }
+
             document.querySelectorAll('.title-display').forEach(el => {
                 el.textContent = chosen;
             });
@@ -728,6 +736,11 @@
         }
 
         async function loadData() {
+            const switchLink = document.getElementById('link-switch-so');
+            if (switchLink) {
+                switchLink.href = '/print-so.html' + window.location.search;
+            }
+
             const urlParams = new URLSearchParams(window.location.search);
             const clientId = urlParams.get('client_id');
             const id = urlParams.get('id');
