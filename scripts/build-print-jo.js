@@ -1,4 +1,7 @@
-<!DOCTYPE html>
+const fs = require('fs');
+const path = require('path');
+
+const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -611,13 +614,13 @@
 
         function formatDateMMDDYYYY(val) {
             if (!val) return '';
-            if (/^\d{2}\/\d{2}\/\d{4}$/.test(val)) return val;
+            if (/^\\d{2}\\/\\d{2}\\/\\d{4}$/.test(val)) return val;
             const d = new Date(val);
             if (isNaN(d.getTime())) return val;
             const mm = String(d.getMonth() + 1).padStart(2, '0');
             const dd = String(d.getDate()).padStart(2, '0');
             const yyyy = d.getFullYear();
-            return `${mm}/${dd}/${yyyy}`;
+            return \`\${mm}/\${dd}/\${yyyy}\`;
         }
 
         function formatQty(val) {
@@ -682,14 +685,14 @@
             const token = localStorage.getItem('nkb_token');
             const headers = { 'Content-Type': 'application/json' };
             if (token) {
-                headers['Authorization'] = `Bearer ${token}`;
+                headers['Authorization'] = \`Bearer \${token}\`;
             }
 
             let endpoint = '';
             if (id) {
-                endpoint = `/api/job-orders/${id}`;
+                endpoint = \`/api/job-orders/\${id}\`;
             } else if (poId) {
-                endpoint = `/api/job-orders/po/${poId}`;
+                endpoint = \`/api/job-orders/po/\${poId}\`;
             } else {
                 endpoint = '/api/job-orders';
             }
@@ -700,7 +703,7 @@
 
                 if (!json.success || !json.data) {
                     if (poId || id) {
-                        const fallbackRes = await fetch(`/api/orders/${poId || id}`, { headers });
+                        const fallbackRes = await fetch(\`/api/orders/\${poId || id}\`, { headers });
                         const fallbackJson = await fallbackRes.json();
                         if (fallbackJson.success && fallbackJson.data) {
                             renderPrintData(fallbackJson.data);
@@ -712,7 +715,7 @@
 
                 if (Array.isArray(json.data)) {
                     if (json.data.length > 0) {
-                        const firstRes = await fetch(`/api/job-orders/${json.data[0].id}`, { headers });
+                        const firstRes = await fetch(\`/api/job-orders/\${json.data[0].id}\`, { headers });
                         const firstJson = await firstRes.json();
                         renderPrintData(firstJson.data || json.data[0]);
                     } else {
@@ -758,17 +761,17 @@
                 const rawUom = (item.unit || 'PC').toUpperCase().trim();
                 const uom = (rawUom === 'PCS' || rawUom === 'PIECE' || rawUom === 'PIECES') ? 'PC' : rawUom;
 
-                return `
+                return \`
                     <tr>
-                        <td class="td-desc">${escapeHtml(desc)}</td>
-                        <td class="td-qty">${qty}</td>
-                        <td class="td-uom">${escapeHtml(uom)}</td>
+                        <td class="td-desc">\${escapeHtml(desc)}</td>
+                        <td class="td-qty">\${qty}</td>
+                        <td class="td-uom">\${escapeHtml(uom)}</td>
                     </tr>
-                `;
+                \`;
             }).join('');
 
             document.querySelectorAll('.items-tbody').forEach(el => {
-                el.innerHTML = itemsHtml || `<tr><td colspan="3" style="text-align: center; color: #888;">No items listed</td></tr>`;
+                el.innerHTML = itemsHtml || \`<tr><td colspan="3" style="text-align: center; color: #888;">No items listed</td></tr>\`;
             });
 
             const remarks = data.notes || data.po_notes || '';
@@ -802,4 +805,8 @@
         window.addEventListener('DOMContentLoaded', loadData);
     </script>
 </body>
-</html>
+</html>`;
+
+const outPath = path.join(__dirname, '..', 'public', 'print-jo.html');
+fs.writeFileSync(outPath, html, 'utf8');
+console.log('Successfully written to:', outPath);

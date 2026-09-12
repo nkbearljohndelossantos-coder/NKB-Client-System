@@ -391,8 +391,11 @@ async function openViewPOModal(poId) {
                         </div>
                     </div>
                     <div class="flex items-center gap-2">
+                        <a href="/print-jo.html?po_id=${po.id}" target="_blank" class="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm" title="Print Job Order / Sales Order (2 copies on A4)">
+                            <span>🖨️ Print SO/JO</span>
+                        </a>
                         <a href="/print-po.html?id=${po.id}" target="_blank" class="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm">
-                            <span>🖨️ Print Order</span>
+                            <span>🖨️ Print PO</span>
                         </a>
                         <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-xl px-2">&times;</button>
                     </div>
@@ -506,7 +509,7 @@ async function openViewPOModal(poId) {
                                     <span class="font-bold text-slate-700 block mb-1">Job Orders (${jobOrders.length}):</span>
                                     ${jobOrders.length > 0 ? `
                                         <ul class="space-y-1">
-                                            ${jobOrders.map(j => `<li class="font-mono bg-white p-2 rounded-lg border border-slate-200"><strong>${j.jo_number}</strong><br><span class="text-[10px] text-slate-500">${NKB.formatNumber(j.target_quantity)} pcs • ${j.status}</span></li>`).join('')}
+                                            ${jobOrders.map(j => `<li class="font-mono bg-white p-2 rounded-lg border border-slate-200 flex justify-between items-center"><div><strong>${j.jo_number}</strong><br><span class="text-[10px] text-slate-500">${NKB.formatNumber(j.target_quantity)} pcs • ${j.status}</span></div><a href="/print-jo.html?id=${j.id}" target="_blank" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-bold transition inline-flex items-center gap-1" title="Print this Job Order">🖨️ Print</a></li>`).join('')}
                                         </ul>
                                     ` : '<span class="text-slate-400">None yet</span>'}
                                 </div>

@@ -343,6 +343,9 @@ async function loadJobOrders() {
                     <button onclick="openViewPOModal('${jo.po_id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition" title="View Purchase Order Details">
                         👁️ View PO
                     </button>
+                    <a href="/print-jo.html?id=${jo.id}" target="_blank" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Print Job Order / Sales Order">
+                        🖨️ Print
+                    </a>
                     <button onclick="openCreateBatchModal('${jo.id}', '${jo.jo_number}', ${jo.target_quantity}, '${jo.product_name}')" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition">
                         + Start Batch
                     </button>

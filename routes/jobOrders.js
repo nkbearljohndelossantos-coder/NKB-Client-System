@@ -46,12 +46,72 @@ router.get('/', authenticateToken, (req, res) => {
 });
 
 /**
+ * GET /api/job-orders/po/:poId
+ * Fetch print data directly by PO ID
+ */
+router.get('/po/:poId', authenticateToken, (req, res) => {
+    const po = db.prepare(`
+        SELECT po.*, c.company_name, c.address as client_address, c.phone as client_phone, c.email as client_email, c.tin as client_tin,
+               u.name as creator_name
+        FROM purchase_orders po
+        JOIN clients c ON po.client_id = c.id
+        LEFT JOIN users u ON po.created_by = u.id
+        WHERE po.id = ?
+    `).get(req.params.poId);
+
+    if (!po) {
+        return res.status(404).json({ success: false, error: 'Purchase Order not found.' });
+    }
+
+    if (req.user.role === 'CLIENT' && po.client_id !== req.user.client_id) {
+        return res.status(403).json({ success: false, error: 'Access denied.', code: 'FORBIDDEN' });
+    }
+
+    const firstJO = db.prepare(`
+        SELECT * FROM job_orders WHERE po_id = ? ORDER BY created_at ASC LIMIT 1
+    `).get(req.params.poId);
+
+    const items = db.prepare(`
+        SELECT poi.*, 
+               COALESCE(cpp.custom_name, p.name) as product_name, 
+               COALESCE(cpp.custom_sku, p.sku) as sku, 
+               p.unit
+        FROM purchase_order_items poi
+        JOIN products p ON poi.product_id = p.id
+        LEFT JOIN client_product_prices cpp ON cpp.product_id = p.id AND cpp.client_id = ?
+        WHERE poi.po_id = ?
+    `).all(po.client_id, po.id);
+
+    return res.json({
+        success: true,
+        data: {
+            id: firstJO ? firstJO.id : po.id,
+            jo_number: firstJO ? firstJO.jo_number : po.po_number.replace('PO-', 'JO-'),
+            po_id: po.id,
+            po_number: po.po_number,
+            po_date: po.po_date,
+            expected_delivery_date: po.expected_delivery_date,
+            po_notes: po.notes,
+            notes: firstJO ? firstJO.notes : po.notes,
+            company_name: po.company_name,
+            client_address: po.client_address,
+            client_phone: po.client_phone,
+            client_email: po.client_email,
+            client_tin: po.client_tin,
+            items: items.length > 0 ? items : []
+        }
+    });
+});
+
+/**
  * GET /api/job-orders/:id
  */
 router.get('/:id', authenticateToken, (req, res) => {
     const jo = db.prepare(`
-        SELECT jo.*, po.po_number, po.tolerance_percent, po.billing_policy, po.client_id,
-               c.company_name, p.name as product_name, p.sku, p.formula_code, p.unit,
+        SELECT jo.*, po.po_number, po.po_date, po.expected_delivery_date, po.notes as po_notes,
+               po.tolerance_percent, po.billing_policy, po.client_id,
+               c.company_name, c.address as client_address, c.phone as client_phone, c.email as client_email, c.tin as client_tin,
+               p.name as product_name, p.sku, p.formula_code, p.unit,
                u.name as creator_name
         FROM job_orders jo
         JOIN purchase_orders po ON jo.po_id = po.id
@@ -69,6 +129,17 @@ router.get('/:id', authenticateToken, (req, res) => {
         return res.status(403).json({ success: false, error: 'Access denied.', code: 'FORBIDDEN' });
     }
 
+    const items = db.prepare(`
+        SELECT poi.*, 
+               COALESCE(cpp.custom_name, p.name) as product_name, 
+               COALESCE(cpp.custom_sku, p.sku) as sku, 
+               p.unit
+        FROM purchase_order_items poi
+        JOIN products p ON poi.product_id = p.id
+        LEFT JOIN client_product_prices cpp ON cpp.product_id = p.id AND cpp.client_id = ?
+        WHERE poi.po_id = ?
+    `).all(jo.client_id, jo.po_id);
+
     const batches = db.prepare(`
         SELECT * FROM production_batches WHERE jo_id = ? ORDER BY created_at DESC
     `).all(req.params.id);
@@ -77,6 +148,12 @@ router.get('/:id', authenticateToken, (req, res) => {
         success: true,
         data: {
             ...jo,
+            items: items.length > 0 ? items : [{
+                product_name: jo.product_name,
+                sku: jo.sku,
+                target_quantity: jo.target_quantity,
+                unit: jo.unit || 'PC'
+            }],
             batches
         }
     });
