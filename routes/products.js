@@ -20,7 +20,17 @@ router.get('/', authenticateToken, (req, res) => {
     const params = [];
 
     if (targetClientId) {
-        if (req.query.assignedOnly === 'true' || req.user.role === 'CLIENT') {
+        // Auto-provision client catalog if not yet mapped
+        const checkAssigned = db.prepare('SELECT COUNT(*) as cnt FROM client_product_prices WHERE client_id = ? AND is_active = 1').get(targetClientId);
+        if (!checkAssigned || checkAssigned.cnt === 0) {
+            try {
+                const { seedClientCatalogs } = require('../database/seed-client-catalogs');
+                seedClientCatalogs();
+            } catch (e) {}
+        }
+
+        // By default (or for CLIENT role, or assignedOnly=true), return ONLY this client's products
+        if (req.query.assignedOnly === 'true' || req.user.role === 'CLIENT' || req.query.allMasterCatalog !== 'true') {
             query = `
                 SELECT p.id,
                        COALESCE(cpp.custom_sku, p.sku) as sku,

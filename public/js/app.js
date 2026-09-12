@@ -230,15 +230,130 @@ async function openViewPOModal(poId) {
                     <div class="font-bold text-slate-900">${item.product_name}</div>
                     <div class="text-[10px] text-slate-400 font-mono">SKU: ${item.sku}</div>
                 </td>
-                <td class="py-3 px-3 text-center"><span class="badge bg-slate-100 text-slate-700">${item.category || '-'}</span></td>
+                <td class="py-3 px-3 text-center"><span class="badge bg-slate-100 text-slate-700 font-mono text-[10px]">${item.formula_code || 'FORM-2026-V1'}</span></td>
+                <td class="py-3 px-3 text-center text-slate-600">${item.shelf_life_months || 24} mos</td>
                 <td class="py-3 px-3 text-center font-bold text-slate-900 font-mono">${NKB.formatNumber(item.target_quantity)} ${item.unit || 'pcs'}</td>
                 <td class="py-3 px-3 text-center text-slate-500 font-mono text-[11px]">${NKB.formatNumber(item.min_allowed_quantity)} – ${NKB.formatNumber(item.max_allowed_quantity)}</td>
-                <td class="py-3 px-3 text-right font-bold text-indigo-900 font-mono">${NKB.formatCurrency(item.unit_price)}</td>
+                <td class="py-3 px-3 text-right font-bold text-indigo-900 font-mono">₱${Number(item.unit_price).toFixed(2)}</td>
                 <td class="py-3 px-3 text-right font-extrabold text-slate-900 font-mono">${NKB.formatCurrency(item.subtotal)}</td>
                 <td class="py-3 px-3 text-center font-semibold font-mono ${delivered >= item.target_quantity ? 'text-emerald-700' : (delivered > 0 ? 'text-indigo-700' : 'text-slate-400')}">
                     ${NKB.formatNumber(delivered)} / ${NKB.formatNumber(item.target_quantity)}
                 </td>
             </tr>
+        `;
+    }).join('');
+
+    const productCardsHtml = items.map((item, idx) => {
+        const delivered = item.actual_delivered_total || item.delivered_quantity || 0;
+        const lineSubtotal = item.subtotal || ((item.target_quantity || 0) * (item.unit_price || 0));
+        const pctDelivered = item.target_quantity > 0 ? Math.min(100, Math.round((delivered / item.target_quantity) * 100)) : 0;
+
+        return `
+            <div class="bg-white border-2 border-slate-200 hover:border-indigo-300 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5 transition">
+                <!-- Top Header: Product Name, SKU, Category, Fixed Price, Subtotal -->
+                <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-2 border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-2.5">
+                        <span class="w-7 h-7 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 flex items-center justify-center font-black text-xs flex-shrink-0">
+                            #${idx + 1}
+                        </span>
+                        <div>
+                            <h4 class="font-extrabold text-slate-900 text-sm leading-tight">${item.product_name}</h4>
+                            <div class="flex items-center gap-2 mt-0.5">
+                                <span class="font-mono text-xs text-indigo-600 font-bold">SKU: ${item.sku}</span>
+                                <span class="text-slate-300">•</span>
+                                <span class="badge bg-slate-100 text-slate-700 text-[10px]">${item.category || 'Cosmetics'}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+                        <span class="px-2.5 py-1 bg-slate-100 border border-slate-200 rounded-lg text-xs font-mono font-black text-slate-900 flex items-center gap-1.5">
+                            <span>₱${Number(item.unit_price).toFixed(2)}</span>
+                            <span class="text-[9px] uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">Fixed Contract Price</span>
+                        </span>
+                        <span class="px-2.5 py-1 bg-indigo-50 border border-indigo-200 rounded-lg text-xs font-mono font-black text-indigo-900">
+                            Subtotal: ${NKB.formatCurrency(lineSubtotal)}
+                        </span>
+                    </div>
+                </div>
+
+                <!-- 4 Specifications Badges -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+                    <div class="p-2.5 bg-slate-50 rounded-xl border border-slate-200/70 space-y-0.5">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Formulation Code</span>
+                        <div class="font-mono font-black text-slate-800 flex items-center gap-1.5">
+                            <span>🧪</span><span>${item.formula_code || 'FORM-2026-V1'}</span>
+                        </div>
+                    </div>
+                    <div class="p-2.5 bg-slate-50 rounded-xl border border-slate-200/70 space-y-0.5">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Shelf Life</span>
+                        <div class="font-bold text-slate-800 flex items-center gap-1.5">
+                            <span>📅</span><span>${item.shelf_life_months || 24} Months</span>
+                        </div>
+                    </div>
+                    <div class="p-2.5 bg-slate-50 rounded-xl border border-slate-200/70 space-y-0.5">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Target Quantity</span>
+                        <div class="font-mono font-black text-slate-900 flex items-center gap-1.5">
+                            <span>📦</span><span>${NKB.formatNumber(item.target_quantity)} ${item.unit || 'pcs'}</span>
+                        </div>
+                    </div>
+                    <div class="p-2.5 bg-indigo-50/60 rounded-xl border border-indigo-100 space-y-0.5">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-500 block">Tolerance Bounds (±${po.tolerance_percent}%)</span>
+                        <div class="font-mono font-extrabold text-indigo-950 text-[11px]">
+                            ${NKB.formatNumber(item.min_allowed_quantity)} – ${NKB.formatNumber(item.max_allowed_quantity)} pcs
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cleanroom Production & Lineage Details -->
+                <div class="p-3 bg-slate-50/80 rounded-xl border border-slate-200 text-xs space-y-2">
+                    <div class="flex flex-wrap justify-between items-center gap-1 text-[11px]">
+                        <span class="font-extrabold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                            <span>🏭</span><span>Cleanroom Production & Staff Assignment</span>
+                        </span>
+                        <div class="flex items-center gap-1.5">
+                            ${item.jo_number ? `<span class="badge bg-indigo-100 text-indigo-800 font-mono font-bold">${item.jo_number} (${item.jo_status || 'SCHEDULED'})</span>` : '<span class="badge bg-slate-100 text-slate-500 font-medium">Pending JO</span>'}
+                            ${item.batch_number ? `<span class="badge bg-purple-100 text-purple-800 font-mono font-bold">${item.batch_number}</span>` : ''}
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-0.5 text-[11px]">
+                        <div class="bg-white p-2 rounded-lg border border-slate-200">
+                            <span class="text-[9px] text-slate-400 uppercase font-bold block">Compounding Operator</span>
+                            <div class="font-bold text-slate-800 mt-0.5 flex items-center gap-1 truncate" title="${item.compounding_operator || 'To be assigned in Cleanroom'}">
+                                <span>👨‍🔬</span><span>${item.compounding_operator || 'Cleanroom Staff'}</span>
+                            </div>
+                            ${item.line_assignment ? `<div class="text-[10px] text-slate-500 mt-0.5">Line: ${item.line_assignment}</div>` : ''}
+                        </div>
+                        <div class="bg-white p-2 rounded-lg border border-slate-200">
+                            <span class="text-[9px] text-slate-400 uppercase font-bold block">Bottling & Packaging Lead</span>
+                            <div class="font-bold text-slate-800 mt-0.5 flex items-center gap-1 truncate" title="${item.bottling_lead || 'To be assigned in Packaging'}">
+                                <span>🧴</span><span>${item.bottling_lead || 'Bottling Team'}</span>
+                            </div>
+                            ${item.assigned_team ? `<div class="text-[10px] text-slate-500 mt-0.5">Team: ${item.assigned_team}</div>` : ''}
+                        </div>
+                        <div class="bg-white p-2 rounded-lg border border-slate-200">
+                            <span class="text-[9px] text-slate-400 uppercase font-bold block">QC & Release Inspector</span>
+                            <div class="font-bold text-slate-800 mt-0.5 flex items-center gap-1 truncate" title="${item.qc_inspector || 'To be inspected by Quality Control'}">
+                                <span>🔬</span><span>${item.qc_inspector || 'Quality Control Staff'}</span>
+                            </div>
+                            ${item.actual_yield ? `<div class="text-[10px] font-mono text-indigo-700 font-bold mt-0.5">Yield: ${NKB.formatNumber(item.actual_yield)} pcs (${item.variance_percent > 0 ? '+' : ''}${item.variance_percent}%)</div>` : ''}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Fulfillment Bar -->
+                <div class="space-y-1 pt-0.5">
+                    <div class="flex justify-between items-center text-[11px]">
+                        <span class="text-slate-500 font-semibold">Delivery Fulfillment:</span>
+                        <span class="font-mono font-bold ${delivered >= item.target_quantity ? 'text-emerald-700' : 'text-slate-700'}">
+                            ${NKB.formatNumber(delivered)} / ${NKB.formatNumber(item.target_quantity)} ${item.unit || 'pcs'} (${pctDelivered}%)
+                        </span>
+                    </div>
+                    <div class="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                        <div class="bg-indigo-600 h-1.5 rounded-full transition-all duration-500" style="width: ${pctDelivered}%"></div>
+                    </div>
+                </div>
+            </div>
         `;
     }).join('');
 
@@ -302,27 +417,44 @@ async function openViewPOModal(poId) {
                         </div>
                     ` : ''}
 
-                    <!-- Products Table -->
-                    <div class="space-y-2">
-                        <div class="flex justify-between items-center">
-                            <h4 class="font-bold text-slate-900 text-sm">Ordered Products (${items.length})</h4>
-                            <span class="text-slate-500">Delivered: <strong class="text-indigo-900 font-bold font-mono">${NKB.formatNumber(totalDelivered)}</strong> of <strong class="font-mono">${NKB.formatNumber(totalTarget)} pcs</strong> (${totalTarget > 0 ? Math.round((totalDelivered / totalTarget) * 100) : 0}%)</span>
+                    <!-- Separated Products Breakdown & Revealed Information -->
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center border-b border-slate-100 pb-2">
+                            <div>
+                                <h4 class="font-black text-slate-900 text-sm uppercase tracking-wider flex items-center gap-2">
+                                    <span>📦</span><span>Individual Product Specifications & Lineage (${items.length})</span>
+                                </h4>
+                                <p class="text-[11px] text-slate-500">Every ordered cosmetic product with technical formulation, fixed price, and cleanroom assignments</p>
+                            </div>
+                            <span class="text-slate-500 text-xs">Delivered: <strong class="text-indigo-900 font-bold font-mono">${NKB.formatNumber(totalDelivered)}</strong> of <strong class="font-mono">${NKB.formatNumber(totalTarget)} pcs</strong> (${totalTarget > 0 ? Math.round((totalDelivered / totalTarget) * 100) : 0}%)</span>
                         </div>
-                        <div class="border border-slate-200 rounded-2xl overflow-x-auto">
+
+                        <!-- Individual Separated Product Cards with Revealed Information -->
+                        <div class="space-y-3.5">
+                            ${productCardsHtml}
+                        </div>
+
+                        <!-- Consolidated Overview Summary Table -->
+                        <div class="border border-slate-200 rounded-2xl overflow-x-auto bg-white shadow-sm mt-4">
+                            <div class="px-4 py-2.5 bg-slate-50 border-b border-slate-200 font-bold text-slate-700 text-xs uppercase tracking-wider flex items-center justify-between">
+                                <span>📋 Consolidated Line Item Overview</span>
+                                <span class="text-[11px] font-mono text-slate-500 font-normal">±${po.tolerance_percent}% Manufacturing Tolerance</span>
+                            </div>
                             <table class="w-full text-left">
                                 <thead class="bg-slate-100 text-slate-700 font-bold uppercase text-[10px]">
                                     <tr>
                                         <th class="py-2.5 px-3 text-center w-10">#</th>
                                         <th class="py-2.5 px-3">Product Name & SKU</th>
-                                        <th class="py-2.5 px-3 text-center">Category</th>
+                                        <th class="py-2.5 px-3 text-center">Formula Code</th>
+                                        <th class="py-2.5 px-3 text-center">Shelf Life</th>
                                         <th class="py-2.5 px-3 text-center">Target Qty</th>
                                         <th class="py-2.5 px-3 text-center">Tolerance Range</th>
-                                        <th class="py-2.5 px-3 text-right">Unit Price</th>
+                                        <th class="py-2.5 px-3 text-right">Fixed Price</th>
                                         <th class="py-2.5 px-3 text-right">Line Total</th>
                                         <th class="py-2.5 px-3 text-center">Delivered</th>
                                     </tr>
                                 </thead>
-                                <tbody class="divide-y divide-slate-100 font-medium">
+                                <tbody class="divide-y divide-slate-100 font-medium text-xs">
                                     ${itemsRows}
                                 </tbody>
                             </table>

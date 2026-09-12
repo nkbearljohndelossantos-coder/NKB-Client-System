@@ -49,6 +49,17 @@ router.get('/', authenticateToken, enforceClientIsolation, (req, res) => {
     query += ' ORDER BY po.created_at DESC';
     const orders = db.prepare(query).all(...params);
 
+    // Attach ordered products separately to each PO
+    for (const po of orders) {
+        po.items = db.prepare(`
+            SELECT poi.*, p.name as product_name, p.sku, p.unit, p.category, p.formula_code, p.shelf_life_months
+            FROM purchase_order_items poi
+            JOIN products p ON poi.product_id = p.id
+            WHERE poi.po_id = ?
+            ORDER BY poi.created_at ASC
+        `).all(po.id);
+    }
+
     return res.json({ success: true, data: orders });
 });
 
@@ -78,9 +89,15 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
         return res.status(403).json({ success: false, error: 'Access denied.', code: 'FORBIDDEN' });
     }
 
-    // Line items
+    // Line items with detailed product specifications and manufacturing lineage
     const items = db.prepare(`
-        SELECT poi.*, p.name as product_name, p.sku, p.unit, p.category,
+        SELECT poi.*, 
+               COALESCE(cpp.custom_name, p.name) as product_name, 
+               COALESCE(cpp.custom_sku, p.sku) as sku, 
+               p.unit, 
+               p.category, 
+               COALESCE(cpp.custom_formula_code, p.formula_code) as formula_code, 
+               p.shelf_life_months,
                (SELECT SUM(di.delivered_quantity) 
                 FROM delivery_items di 
                 JOIN delivery_receipts d ON di.dr_id = d.id 
@@ -88,11 +105,24 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
                (SELECT SUM(di.accepted_quantity) 
                 FROM delivery_items di 
                 JOIN delivery_receipts d ON di.dr_id = d.id 
-                WHERE d.po_id = poi.po_id AND di.product_id = poi.product_id AND d.status IN ('ACCEPTED', 'INVOICED')) as actual_accepted_total
+                WHERE d.po_id = poi.po_id AND di.product_id = poi.product_id AND d.status IN ('ACCEPTED', 'INVOICED')) as actual_accepted_total,
+               (SELECT jo.jo_number FROM job_orders jo WHERE jo.po_id = poi.po_id AND jo.product_id = poi.product_id ORDER BY jo.created_at DESC LIMIT 1) as jo_number,
+               (SELECT jo.status FROM job_orders jo WHERE jo.po_id = poi.po_id AND jo.product_id = poi.product_id ORDER BY jo.created_at DESC LIMIT 1) as jo_status,
+               (SELECT jo.assigned_team FROM job_orders jo WHERE jo.po_id = poi.po_id AND jo.product_id = poi.product_id ORDER BY jo.created_at DESC LIMIT 1) as assigned_team,
+               (SELECT pb.batch_number FROM production_batches pb JOIN job_orders jo ON pb.jo_id = jo.id WHERE jo.po_id = poi.po_id AND pb.product_id = poi.product_id ORDER BY pb.created_at DESC LIMIT 1) as batch_number,
+               (SELECT pb.status FROM production_batches pb JOIN job_orders jo ON pb.jo_id = jo.id WHERE jo.po_id = poi.po_id AND pb.product_id = poi.product_id ORDER BY pb.created_at DESC LIMIT 1) as batch_status,
+               (SELECT pb.actual_yield FROM production_batches pb JOIN job_orders jo ON pb.jo_id = jo.id WHERE jo.po_id = poi.po_id AND pb.product_id = poi.product_id ORDER BY pb.created_at DESC LIMIT 1) as actual_yield,
+               (SELECT pb.variance_percent FROM production_batches pb JOIN job_orders jo ON pb.jo_id = jo.id WHERE jo.po_id = poi.po_id AND pb.product_id = poi.product_id ORDER BY pb.created_at DESC LIMIT 1) as variance_percent,
+               (SELECT pb.compounding_operator FROM production_batches pb JOIN job_orders jo ON pb.jo_id = jo.id WHERE jo.po_id = poi.po_id AND pb.product_id = poi.product_id ORDER BY pb.created_at DESC LIMIT 1) as compounding_operator,
+               (SELECT pb.bottling_lead FROM production_batches pb JOIN job_orders jo ON pb.jo_id = jo.id WHERE jo.po_id = poi.po_id AND pb.product_id = poi.product_id ORDER BY pb.created_at DESC LIMIT 1) as bottling_lead,
+               (SELECT pb.qc_inspector FROM production_batches pb JOIN job_orders jo ON pb.jo_id = jo.id WHERE jo.po_id = poi.po_id AND pb.product_id = poi.product_id ORDER BY pb.created_at DESC LIMIT 1) as qc_inspector,
+               (SELECT pb.line_assignment FROM production_batches pb JOIN job_orders jo ON pb.jo_id = jo.id WHERE jo.po_id = poi.po_id AND pb.product_id = poi.product_id ORDER BY pb.created_at DESC LIMIT 1) as line_assignment,
+               (SELECT pb.qc_notes FROM production_batches pb JOIN job_orders jo ON pb.jo_id = jo.id WHERE jo.po_id = poi.po_id AND pb.product_id = poi.product_id ORDER BY pb.created_at DESC LIMIT 1) as qc_notes
         FROM purchase_order_items poi
         JOIN products p ON poi.product_id = p.id
+        LEFT JOIN client_product_prices cpp ON cpp.product_id = p.id AND cpp.client_id = ?
         WHERE poi.po_id = ?
-    `).all(id);
+    `).all(po.client_id, id);
 
     // Job Orders
     const jobOrders = db.prepare(`
@@ -187,13 +217,8 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
 
             const expectedClientPrice = (assignment && assignment.custom_price !== null && assignment.custom_price !== undefined) ? assignment.custom_price : product.default_price;
 
-            let unitPrice;
-            if (req.user.role === 'CLIENT') {
-                unitPrice = expectedClientPrice;
-            } else {
-                unitPrice = item.unit_price !== undefined && item.unit_price !== null ? parseFloat(item.unit_price) : expectedClientPrice;
-            }
-            unitPrice = Math.round((Number(unitPrice) || 0) * 100) / 100;
+            // In PO, the unit price is strictly fixed to the contracted rate
+            const unitPrice = Math.round((Number(expectedClientPrice) || 0) * 100) / 100;
 
             const lineSubtotal = Math.round(targetQty * unitPrice * 100) / 100;
             subtotal += lineSubtotal;

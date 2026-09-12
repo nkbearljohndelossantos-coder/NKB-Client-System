@@ -241,18 +241,39 @@ async function loadOrders() {
     const tbody = document.getElementById('table-orders-body');
 
     if (res.success && res.data && res.data.length > 0) {
-        tbody.innerHTML = res.data.map(po => `
+        tbody.innerHTML = res.data.map(po => {
+            const itemsList = (po.items && po.items.length > 0)
+                ? po.items.map(it => `
+                    <div class="flex items-center justify-between text-[11px] bg-slate-50 hover:bg-indigo-50/50 p-1.5 rounded-lg border border-slate-200 transition">
+                        <div class="truncate max-w-[150px]">
+                            <span class="font-bold text-slate-900 block truncate" title="${it.product_name}">${it.product_name}</span>
+                            <span class="text-[10px] text-slate-400 font-mono">${it.sku}</span>
+                        </div>
+                        <div class="text-right font-mono ml-2 flex-shrink-0">
+                            <span class="font-bold text-slate-800 block">${NKB.formatNumber(it.target_quantity)} ${it.unit || 'pcs'}</span>
+                            <span class="text-[10px] text-indigo-700 font-semibold">@ ₱${Number(it.unit_price).toFixed(2)}</span>
+                        </div>
+                    </div>
+                `).join('')
+                : '<span class="text-slate-400 italic text-[11px]">No items recorded</span>';
+
+            return `
             <tr class="hover:bg-slate-50 transition">
-                <td class="py-3 px-4 font-bold text-indigo-600 cursor-pointer hover:underline" onclick="openViewPOModal('${po.id}')" title="Click to view full PO details">
+                <td class="py-3 px-4 font-bold text-indigo-600 cursor-pointer hover:underline whitespace-nowrap" onclick="openViewPOModal('${po.id}')" title="Click to view full PO details">
                     ${po.po_number}
                 </td>
-                <td class="py-3 px-4 text-slate-600">${NKB.formatDate(po.po_date)}</td>
+                <td class="py-3 px-4 text-slate-600 whitespace-nowrap">${NKB.formatDate(po.po_date)}</td>
                 <td class="py-3 px-4 font-bold text-slate-800">${po.company_name}</td>
-                <td class="py-3 px-4"><span class="badge bg-slate-100 text-slate-700">±${po.tolerance_percent}%</span></td>
-                <td class="py-3 px-4"><span class="badge ${po.billing_policy === 'ACTUAL_DELIVERY' ? 'bg-indigo-50 text-indigo-700' : 'bg-purple-50 text-purple-700'}">${po.billing_policy}</span></td>
-                <td class="py-3 px-4 font-bold text-slate-700">${NKB.formatNumber(po.total_target_quantity)} pcs</td>
-                <td class="py-3 px-4 font-extrabold text-slate-900">${NKB.formatCurrency(po.grand_total)}</td>
-                <td class="py-3 px-4">${NKB.renderStatusBadge(po.status)}</td>
+                <td class="py-3 px-4">
+                    <div class="space-y-1 w-60">
+                        ${itemsList}
+                    </div>
+                </td>
+                <td class="py-3 px-4 whitespace-nowrap"><span class="badge bg-slate-100 text-slate-700">±${po.tolerance_percent}%</span></td>
+                <td class="py-3 px-4 whitespace-nowrap"><span class="badge ${po.billing_policy === 'ACTUAL_DELIVERY' ? 'bg-indigo-50 text-indigo-700' : 'bg-purple-50 text-purple-700'}">${po.billing_policy}</span></td>
+                <td class="py-3 px-4 font-bold text-slate-700 whitespace-nowrap font-mono">${NKB.formatNumber(po.total_target_quantity)} pcs</td>
+                <td class="py-3 px-4 font-extrabold text-slate-900 whitespace-nowrap font-mono">${NKB.formatCurrency(po.grand_total)}</td>
+                <td class="py-3 px-4 whitespace-nowrap">${NKB.renderStatusBadge(po.status)}</td>
                 <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
                     <button onclick="openViewPOModal('${po.id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="View Full Order Info">
                         <span>👁️ View</span>
@@ -272,9 +293,10 @@ async function loadOrders() {
                     ` : ''}
                 </td>
             </tr>
-        `).join('');
+            `;
+        }).join('');
     } else {
-        tbody.innerHTML = `<tr><td colspan="9" class="py-6 text-center text-slate-400">No purchase orders found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="10" class="py-6 text-center text-slate-400">No purchase orders found.</td></tr>`;
     }
 }
 
@@ -1797,9 +1819,9 @@ async function openCreatePOModal() {
                                 <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase">
                                     <tr>
                                         <th class="py-2.5 px-3">Product</th>
-                                        <th class="py-2.5 px-3 w-28">Target Qty (pcs)</th>
-                                        <th class="py-2.5 px-3 w-32">Unit Price (₱)</th>
-                                        <th class="py-2.5 px-3 w-28">Subtotal (₱)</th>
+                                        <th class="py-2.5 px-3 w-32">Target Qty (pcs)</th>
+                                        <th class="py-2.5 px-3 w-36">Fixed Unit Price (₱)</th>
+                                        <th class="py-2.5 px-3 w-32">Subtotal (₱)</th>
                                         <th class="py-2.5 px-2 w-12 text-center">Action</th>
                                     </tr>
                                 </thead>
@@ -1840,12 +1862,16 @@ async function onAdminPOClientChanged() {
     if (!clientSelect) return;
     const clientId = clientSelect.value;
 
-    const res = await NKB.api(`/api/products?clientId=${clientId}`);
+    const res = await NKB.api(`/api/products?clientId=${clientId}&assignedOnly=true`);
     if (res.success && res.data) {
         adminPOCatalog = res.data;
+    } else {
+        adminPOCatalog = [];
     }
 
-    if (adminPOLineItems.length === 0 && adminPOCatalog.length > 0) {
+    // Reset lines to current client's products only
+    adminPOLineItems = [];
+    if (adminPOCatalog.length > 0) {
         addAdminPOLineItem();
     } else {
         renderAdminPOLineItems();
@@ -1884,16 +1910,9 @@ function updateAdminPOLineItem(index, field, value) {
         return;
     } else if (field === 'target_quantity') {
         adminPOLineItems[index].target_quantity = parseInt(value, 10) || 0;
-    } else if (field === 'unit_price') {
-        const parsed = parseFloat(value);
-        if (!isNaN(parsed)) {
-            adminPOLineItems[index].unit_price = parsed;
-        } else if (value === '' || value === null) {
-            adminPOLineItems[index].unit_price = 0;
-        }
     }
 
-    // Update line total and summary totals without re-rendering inputs (preserves typing and decimal points)
+    // Update line total and summary totals
     const lineSubtotal = (adminPOLineItems[index].target_quantity || 0) * (adminPOLineItems[index].unit_price || 0);
     const lineTotalEl = document.getElementById(`admin-po-line-total-${index}`);
     if (lineTotalEl) lineTotalEl.textContent = NKB.formatCurrency(lineSubtotal);
@@ -1916,6 +1935,17 @@ function updateAdminPOLineItem(index, field, value) {
 function renderAdminPOLineItems() {
     const tbody = document.getElementById('admin-po-lines-body');
     if (!tbody) return;
+
+    if (adminPOCatalog.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-amber-600 font-medium bg-amber-50/50 rounded-lg">⚠️ No products available in this client's catalog.</td></tr>`;
+        const elTotalItems = document.getElementById('admin-po-total-items');
+        if (elTotalItems) elTotalItems.textContent = '0';
+        const elTotalQty = document.getElementById('admin-po-total-qty');
+        if (elTotalQty) elTotalQty.textContent = '0 pcs';
+        const elGrandTotal = document.getElementById('admin-po-grand-total');
+        if (elGrandTotal) elGrandTotal.textContent = '₱0.00';
+        return;
+    }
 
     let totalQty = 0;
     let grandTotal = 0;
@@ -1940,19 +1970,15 @@ function renderAdminPOLineItems() {
                     <input type="number" min="1" step="1" 
                            value="${item.target_quantity}" 
                            oninput="updateAdminPOLineItem(${idx}, 'target_quantity', this.value)" 
-                           class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-900">
+                           class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500">
                 </td>
                 <td class="py-2.5 px-3">
-                    <div class="relative flex items-center">
-                        <span class="absolute left-2.5 text-slate-400 font-semibold text-xs pointer-events-none">₱</span>
-                        <input type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"
-                               value="${item.unit_price !== undefined && item.unit_price !== null ? Number(item.unit_price).toFixed(2) : '0.00'}" 
-                               oninput="updateAdminPOLineItem(${idx}, 'unit_price', this.value)" 
-                               onblur="if(this.value && !isNaN(this.value)) { this.value = parseFloat(this.value).toFixed(2); updateAdminPOLineItem(${idx}, 'unit_price', this.value); }"
-                               class="w-full pl-6 pr-2 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-indigo-900 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    <div class="px-2.5 py-1.5 bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold text-slate-900 font-mono flex items-center justify-between">
+                        <span>₱${Number(item.unit_price || 0).toFixed(2)}</span>
+                        <span class="text-[9px] uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">Fixed</span>
                     </div>
                 </td>
-                <td id="admin-po-line-total-${idx}" class="py-2.5 px-3 font-extrabold text-slate-900">
+                <td id="admin-po-line-total-${idx}" class="py-2.5 px-3 font-extrabold text-slate-900 font-mono">
                     ${NKB.formatCurrency(lineSubtotal)}
                 </td>
                 <td class="py-2.5 px-2 text-center">
@@ -2010,6 +2036,9 @@ async function submitCreatePO(e) {
         NKB.showToast(`Purchase Order ${res.data.po_number} created successfully!`, 'success');
         closeModal();
         loadOrders();
+        if (res.data && res.data.id) {
+            await openViewPOModal(res.data.id);
+        }
     } else {
         NKB.showToast(res.error || 'Failed to create PO.', 'error');
     }
