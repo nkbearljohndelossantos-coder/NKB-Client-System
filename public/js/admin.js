@@ -383,19 +383,32 @@ async function loadOrders() {
 
     if (res.success && res.data && res.data.length > 0) {
         tbody.innerHTML = res.data.map(po => {
+            const canStartJO = (po.status === 'APPROVED' || po.status === 'IN_PRODUCTION');
             const itemsList = (po.items && po.items.length > 0)
-                ? po.items.map(it => `
-                    <div class="flex items-center justify-between text-[11px] bg-slate-50 hover:bg-indigo-50/50 p-1.5 rounded-lg border border-slate-200 transition">
-                        <div class="truncate max-w-[150px]">
-                            <span class="font-bold text-slate-900 block truncate" title="${it.product_name}">${it.product_name}</span>
-                            <span class="text-[10px] text-slate-400 font-mono">${it.sku}</span>
+                ? po.items.map(it => {
+                    const prodId = it.product_id || it.id;
+                    const prodQty = it.target_quantity || 1000;
+                    return `
+                    <div class="flex flex-col gap-1 text-[11px] bg-slate-50 hover:bg-indigo-50/50 p-2 rounded-xl border border-slate-200 transition mb-1 last:mb-0">
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="truncate max-w-[140px]">
+                                <span class="font-bold text-slate-900 block truncate" title="${it.product_name}">${it.product_name}</span>
+                                <span class="text-[10px] text-slate-400 font-mono">${it.sku}</span>
+                            </div>
+                            <div class="text-right font-mono flex-shrink-0">
+                                <span class="font-bold text-slate-800 block">${NKB.formatNumber(it.target_quantity)} ${it.unit || 'pcs'}</span>
+                                <span class="text-[10px] text-indigo-700 font-semibold">@ ₱${Number(it.unit_price).toFixed(2)}</span>
+                            </div>
                         </div>
-                        <div class="text-right font-mono ml-2 flex-shrink-0">
-                            <span class="font-bold text-slate-800 block">${NKB.formatNumber(it.target_quantity)} ${it.unit || 'pcs'}</span>
-                            <span class="text-[10px] text-indigo-700 font-semibold">@ ₱${Number(it.unit_price).toFixed(2)}</span>
-                        </div>
+                        ${canStartJO ? `
+                            <div class="pt-1.5 border-t border-slate-200/70 flex justify-end">
+                                <button type="button" onclick="event.stopPropagation(); openCreateJOModal('${po.id}', '${po.po_number}', '${po.company_name.replace(/'/g, "\\'")}', '${prodId}', ${prodQty})" class="w-full py-1 px-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-lg text-[10.5px] font-bold transition flex items-center justify-center gap-1 shadow-sm" title="Start Job Order for ${it.product_name}">
+                                    <span>🏭 Start Job Order</span>
+                                </button>
+                            </div>
+                        ` : ''}
                     </div>
-                `).join('')
+                `}).join('')
                 : '<span class="text-slate-400 italic text-[11px]">No items recorded</span>';
 
             return `
@@ -408,7 +421,7 @@ async function loadOrders() {
                 </td>
                 <td class="py-3 px-4 font-bold text-slate-800">${po.company_name}</td>
                 <td class="py-3 px-4">
-                    <div class="space-y-1 w-60">
+                    <div class="space-y-1 w-64">
                         ${itemsList}
                     </div>
                 </td>
@@ -2223,14 +2236,23 @@ async function submitCreatePO(e) {
 // -------------------------------------------------------------
 // 2. CREATE JOB ORDER MODAL
 // -------------------------------------------------------------
-async function openCreateJOModal(poId, poNumber, clientName) {
-    const root = document.getElementById('modals-root');
+async function openCreateJOModal(poId, poNumber, clientName, preselectedProductId = null, preselectedQty = null) {
+    const root = document.getElementById('modals-root') || document.getElementById('client-modals-root');
     const [orderRes, employees] = await Promise.all([
         NKB.api(`/api/orders/${poId}`),
         ensureEmployeesLoaded()
     ]);
     const poItems = (orderRes.success && orderRes.data && orderRes.data.items) ? orderRes.data.items : [];
     const prodStaff = employees.filter(e => e.department === 'Production' || e.department === 'Compounding');
+
+    let selectedItem = poItems[0];
+    if (preselectedProductId) {
+        const found = poItems.find(it => String(it.product_id) === String(preselectedProductId) || String(it.id) === String(preselectedProductId));
+        if (found) selectedItem = found;
+    }
+    const initialQty = (preselectedQty !== null && preselectedQty !== undefined && !isNaN(Number(preselectedQty)))
+        ? Number(preselectedQty)
+        : (selectedItem ? selectedItem.target_quantity : 1000);
 
     root.innerHTML = `
         <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
@@ -2246,16 +2268,22 @@ async function openCreateJOModal(poId, poNumber, clientName) {
                     <div>
                         <label class="block text-slate-600 mb-1">Select Product from PO *</label>
                         <select id="jo-product-id" onchange="onJOProductChanged()" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-900">
-                            ${poItems.length > 0 ? poItems.map(item => `
-                                <option value="${item.product_id}" data-qty="${item.target_quantity}">
-                                    ${item.product_name} (${item.sku}) — Target: ${NKB.formatNumber(item.target_quantity)} pcs
-                                </option>
-                            `).join('') : cachedProducts.map(p => `<option value="${p.id}" data-qty="1000">${p.name} (${p.sku})</option>`).join('')}
+                            ${poItems.length > 0 ? poItems.map(item => {
+                                const isSelected = selectedItem && (String(item.product_id) === String(selectedItem.product_id) || String(item.id) === String(selectedItem.id));
+                                return `
+                                    <option value="${item.product_id}" data-qty="${item.target_quantity}" ${isSelected ? 'selected' : ''}>
+                                        ${item.product_name} (${item.sku}) — Target: ${NKB.formatNumber(item.target_quantity)} pcs
+                                    </option>
+                                `;
+                            }).join('') : cachedProducts.map(p => {
+                                const isSelected = preselectedProductId && (String(p.id) === String(preselectedProductId));
+                                return `<option value="${p.id}" data-qty="1000" ${isSelected ? 'selected' : ''}>${p.name} (${p.sku})</option>`;
+                            }).join('')}
                         </select>
                     </div>
                     <div>
                         <label class="block text-slate-600 mb-1">Target Production Qty (pcs) *</label>
-                        <input type="number" id="jo-target-qty" value="${poItems.length > 0 ? poItems[0].target_quantity : 1000}" min="1" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-900">
+                        <input type="number" id="jo-target-qty" value="${initialQty}" min="1" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-900">
                     </div>
                     <div>
                         <label class="block text-slate-600 mb-1">Assigned Production Supervisor / Team Lead *</label>
@@ -2305,11 +2333,19 @@ async function submitCreateJO(e, poId) {
     if (res.success) {
         NKB.showToast(`Job Order ${res.data.jo_number} created!`, 'success');
         closeModal();
-        switchTab('job-orders');
+        if (typeof switchTab === 'function') {
+            switchTab('job-orders');
+        } else {
+            location.reload();
+        }
     } else {
         NKB.showToast(res.error || 'Failed to create Job Order.', 'error');
     }
 }
+
+window.openCreateJOModal = openCreateJOModal;
+window.onJOProductChanged = onJOProductChanged;
+window.submitCreateJO = submitCreateJO;
 
 // -------------------------------------------------------------
 // 3. CREATE PRODUCTION BATCH MODAL

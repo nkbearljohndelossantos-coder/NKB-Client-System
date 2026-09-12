@@ -236,10 +236,14 @@ async function openViewPOModal(poId) {
     let totalDelivered = 0;
     let totalTarget = 0;
 
+    const isClient = NKB.user ? (NKB.user.role === 'CLIENT') : window.location.pathname.includes('client');
+    const canStartJO = !isClient && (po.status === 'APPROVED' || po.status === 'IN_PRODUCTION');
+
     const itemsRows = items.map((item, idx) => {
         totalTarget += item.target_quantity;
         const delivered = item.actual_delivered_total || item.delivered_quantity || 0;
         totalDelivered += delivered;
+        const prodId = item.product_id || item.id;
 
         return `
             <tr class="hover:bg-slate-50 transition">
@@ -257,6 +261,13 @@ async function openViewPOModal(poId) {
                 <td class="py-3 px-3 text-center font-semibold font-mono ${delivered >= item.target_quantity ? 'text-emerald-700' : (delivered > 0 ? 'text-indigo-700' : 'text-slate-400')}">
                     ${NKB.formatNumber(delivered)} / ${NKB.formatNumber(item.target_quantity)}
                 </td>
+                ${canStartJO ? `
+                    <td class="py-3 px-3 text-center whitespace-nowrap">
+                        <button onclick="if (typeof openCreateJOModal === 'function') { closeModal(); openCreateJOModal('${po.id}', '${po.po_number}', '${po.company_name.replace(/'/g, "\\'")}', '${prodId}', ${item.target_quantity}); } else { window.location.href = '/admin.html'; }" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-[11px] font-bold shadow-sm transition inline-flex items-center gap-1" title="Start Job Order for ${item.product_name}">
+                            <span>🏭 Start JO</span>
+                        </button>
+                    </td>
+                ` : ''}
             </tr>
         `;
     }).join('');
@@ -265,6 +276,7 @@ async function openViewPOModal(poId) {
         const delivered = item.actual_delivered_total || item.delivered_quantity || 0;
         const lineSubtotal = item.subtotal || ((item.target_quantity || 0) * (item.unit_price || 0));
         const pctDelivered = item.target_quantity > 0 ? Math.min(100, Math.round((delivered / item.target_quantity) * 100)) : 0;
+        const prodId = item.product_id || item.id;
 
         return `
             <div class="bg-white border-2 border-slate-200 hover:border-indigo-300 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5 transition">
@@ -291,6 +303,11 @@ async function openViewPOModal(poId) {
                         <span class="px-2.5 py-1 bg-indigo-50 border border-indigo-200 rounded-lg text-xs font-mono font-black text-indigo-900">
                             Subtotal: ${NKB.formatCurrency(lineSubtotal)}
                         </span>
+                        ${canStartJO ? `
+                            <button onclick="if (typeof openCreateJOModal === 'function') { closeModal(); openCreateJOModal('${po.id}', '${po.po_number}', '${po.company_name.replace(/'/g, "\\'")}', '${prodId}', ${item.target_quantity}); } else { window.location.href = '/admin.html'; }" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold shadow-sm transition flex items-center gap-1.5" title="Start Job Order for ${item.product_name}">
+                                <span>🏭 Start Job Order</span>
+                            </button>
+                        ` : ''}
                     </div>
                 </div>
 
@@ -331,6 +348,11 @@ async function openViewPOModal(poId) {
                         <div class="flex items-center gap-1.5">
                             ${item.jo_number ? `<span class="badge bg-indigo-100 text-indigo-800 font-mono font-bold">${item.jo_number} (${item.jo_status || 'SCHEDULED'})</span>` : '<span class="badge bg-slate-100 text-slate-500 font-medium">Pending JO</span>'}
                             ${item.batch_number ? `<span class="badge bg-purple-100 text-purple-800 font-mono font-bold">${item.batch_number}</span>` : ''}
+                            ${canStartJO ? `
+                                <button onclick="if (typeof openCreateJOModal === 'function') { closeModal(); openCreateJOModal('${po.id}', '${po.po_number}', '${po.company_name.replace(/'/g, "\\'")}', '${prodId}', ${item.target_quantity}); } else { window.location.href = '/admin.html'; }" class="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md text-[10px] font-bold shadow-sm transition flex items-center gap-1" title="Start Job Order for this product">
+                                    <span>🏭 Start JO</span>
+                                </button>
+                            ` : ''}
                         </div>
                     </div>
 
@@ -473,6 +495,7 @@ async function openViewPOModal(poId) {
                                         <th class="py-2.5 px-3 text-right">Fixed Price</th>
                                         <th class="py-2.5 px-3 text-right">Line Total</th>
                                         <th class="py-2.5 px-3 text-center">Delivered</th>
+                                        ${canStartJO ? `<th class="py-2.5 px-3 text-center">Action</th>` : ''}
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-slate-100 font-medium text-xs">
