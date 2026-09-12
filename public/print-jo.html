@@ -456,30 +456,26 @@
         /* Line Items Table */
         .table-wrapper {
             flex: 1;
-            min-height: 50mm;
-            margin-bottom: 4px;
+            min-height: 38mm;
+            margin-bottom: 3px;
         }
 
         .items-table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 7.8pt;
+            font-size: 9pt;
             table-layout: fixed;
-        }
-
-        .items-table-dense {
-            font-size: 7.2pt !important;
-        }
-
-        .items-table-ultra-dense {
-            font-size: 6.5pt !important;
         }
 
         .items-table thead th {
             font-weight: bold;
+            font-size: 9pt;
             text-align: left;
-            padding-bottom: 4px;
-            border-bottom: 0.5px solid transparent;
+            padding: 2.5px 0 3.5px 0;
+            border-bottom: 1.5px solid #000000;
+            color: #000000;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
         }
 
         .items-table thead th.th-desc {
@@ -489,56 +485,117 @@
         .items-table thead th.th-qty {
             width: 23%;
             text-align: right;
-            padding-right: 14px;
+            padding-right: 12px;
         }
 
         .items-table thead th.th-uom {
             width: 14%;
             text-align: left;
-            padding-left: 4px;
+            padding-left: 2px;
         }
 
         .items-table tbody td {
-            padding: 2px 0;
+            padding: 3.5px 0;
             vertical-align: top;
-            line-height: 1.25;
+            line-height: 1.3;
+            border-bottom: 0.5px solid #cbd5e1;
         }
 
-        .items-table-dense tbody td {
-            padding: 1px 0 !important;
-            line-height: 1.15 !important;
-        }
-
-        .items-table-ultra-dense thead th {
-            padding-bottom: 2px !important;
-        }
-
-        .items-table-ultra-dense tbody td {
-            padding: 0.5px 0 !important;
-            line-height: 1.1 !important;
+        .items-table tbody tr:last-child td {
+            border-bottom: 1px solid #64748b;
         }
 
         .items-table tbody td.td-desc {
-            padding-right: 6px;
+            padding-right: 8px;
             word-break: break-word;
+            color: #000000;
+        }
+
+        .product-name-txt {
+            font-weight: 700;
+            color: #000000;
+        }
+
+        .product-sku-txt {
+            font-size: 8pt;
+            color: #475569;
+            font-family: monospace;
+            margin-left: 3px;
+            font-weight: normal;
         }
 
         .items-table tbody td.td-qty {
             text-align: right;
-            padding-right: 14px;
+            padding-right: 12px;
             font-variant-numeric: tabular-nums;
+            font-weight: 700;
+            color: #000000;
         }
 
         .items-table tbody td.td-uom {
             text-align: left;
-            padding-left: 4px;
+            padding-left: 2px;
+            font-weight: 600;
+            color: #1e293b;
+        }
+
+        /* Density Tiers for Multi-product orders */
+        /* Tier 2: 5 - 8 items */
+        .items-table-tier-2 {
+            font-size: 8.4pt !important;
+        }
+        .items-table-tier-2 thead th {
+            font-size: 8.6pt !important;
+            padding-bottom: 2.5px !important;
+        }
+        .items-table-tier-2 tbody td {
+            padding: 2.4px 0 !important;
+            line-height: 1.22 !important;
+            border-bottom: 0.5px solid #e2e8f0 !important;
+        }
+        .items-table-tier-2 .product-sku-txt {
+            font-size: 7.5pt !important;
+        }
+
+        /* Tier 3: 9 - 13 items */
+        .items-table-tier-3 {
+            font-size: 7.8pt !important;
+        }
+        .items-table-tier-3 thead th {
+            font-size: 8.1pt !important;
+            padding-bottom: 2px !important;
+        }
+        .items-table-tier-3 tbody td {
+            padding: 1.6px 0 !important;
+            line-height: 1.16 !important;
+            border-bottom: 0.5px solid #e2e8f0 !important;
+        }
+        .items-table-tier-3 .product-sku-txt {
+            font-size: 7pt !important;
+        }
+
+        /* Tier 4: 14 - 17 items */
+        .items-table-tier-4 {
+            font-size: 7.2pt !important;
+        }
+        .items-table-tier-4 thead th {
+            font-size: 7.5pt !important;
+            padding-bottom: 1.5px !important;
+        }
+        .items-table-tier-4 tbody td {
+            padding: 1px 0 !important;
+            line-height: 1.1 !important;
+            border-bottom: 0.5px solid #f1f5f9 !important;
+        }
+        .items-table-tier-4 .product-sku-txt {
+            font-size: 6.8pt !important;
         }
 
         /* Remarks */
         .remarks-row {
             font-size: 7.5pt;
             margin-top: 3px;
-            margin-bottom: 6px;
+            margin-bottom: 5px;
             line-height: 1.3;
         }
 
@@ -580,6 +637,21 @@
             width: 100%;
             height: 14px;
             border-bottom: 1px solid #000000;
+        }
+
+        /* Compact Signatures & Remarks when items > 8 */
+        .sig-compact {
+            margin-top: 1px !important;
+        }
+        .sig-compact .sig-column {
+            gap: 3px !important;
+        }
+        .sig-compact .sig-underline {
+            height: 10px !important;
+        }
+        .remarks-compact {
+            margin-top: 1px !important;
+            margin-bottom: 2px !important;
         }
 
         /* Vertical Cut Line Divider (Splitting Landscape Sheet into 2 Portrait Slips) */
@@ -689,9 +761,12 @@
                 .replace(/"/g, '&quot;');
         }
 
-        function formatDocNumber(rawNo, titleMode) {
-            let formattedNo = rawNo || '1279';
+        function formatDocNumber(rawNo, titleMode, clientData) {
             if (titleMode === 'SALES ORDER') {
+                if (clientData && clientData.so_number) {
+                    return clientData.so_number;
+                }
+                let formattedNo = rawNo || 'SO-1279';
                 if (formattedNo.startsWith('JO-')) {
                     formattedNo = formattedNo.replace(/^JO-/, 'SO-');
                 } else if (formattedNo.startsWith('PO-')) {
@@ -699,7 +774,12 @@
                 } else if (!formattedNo.startsWith('SO-')) {
                     formattedNo = 'SO-' + formattedNo;
                 }
+                return formattedNo;
             } else {
+                if (clientData && clientData.jo_number) {
+                    return clientData.jo_number;
+                }
+                let formattedNo = rawNo || 'JO-1279';
                 if (formattedNo.startsWith('SO-')) {
                     formattedNo = formattedNo.replace(/^SO-/, 'JO-');
                 } else if (formattedNo.startsWith('PO-')) {
@@ -707,8 +787,8 @@
                 } else if (!formattedNo.startsWith('JO-')) {
                     formattedNo = 'JO-' + formattedNo;
                 }
+                return formattedNo;
             }
-            return formattedNo;
         }
 
         function updateDocTitle() {
@@ -720,48 +800,69 @@
             });
 
             document.querySelectorAll('.doc-no-display').forEach(el => {
+                const clientIdx = el.getAttribute('data-client-idx');
+                const clientData = (clientIdx !== null && currentLoadedData && currentLoadedData[Number(clientIdx)]) ? currentLoadedData[Number(clientIdx)] : null;
                 const rawNo = el.getAttribute('data-raw-no') || el.textContent;
-                el.textContent = formatDocNumber(rawNo, chosen);
+                el.textContent = formatDocNumber(rawNo, chosen, clientData);
             });
         }
 
-        function generateSlipContent(client, docTitle) {
+        function generateSlipContent(client, docTitle, pageItems = null, pageIndex = 1, totalPages = 1, clientIdx = 0) {
             const customerName = client.company_name || client.client_name || 'JLS SKIN ESSENTIALS OPC';
             const customerAddress = client.client_address || client.address || '-';
             const docDate = formatDateMMDDYYYY(client.po_date || client.scheduled_start_date || client.created_at || new Date());
             const dueDate = formatDateMMDDYYYY(client.expected_delivery_date || client.scheduled_end_date || client.po_date || client.created_at || new Date());
             const remarks = client.notes || client.po_notes || '';
             
-            const rawDocNo = client.jo_number || client.po_number || '1279';
-            const formattedDocNo = formatDocNumber(rawDocNo, docTitle);
+            const rawDocNo = (docTitle === 'SALES ORDER')
+                ? (client.so_number || (client.po_number ? client.po_number.replace('PO-', 'SO-') : (client.jo_number ? client.jo_number.replace('JO-', 'SO-') : 'SO-1279')))
+                : (client.jo_number || (client.po_number ? client.po_number.replace('PO-', 'JO-') : 'JO-1279'));
+            const formattedDocNo = formatDocNumber(rawDocNo, docTitle, client);
 
-            let items = client.items || [];
-            if (items.length === 0 && client.product_name) {
-                items = [{
+            let allItems = client.items || [];
+            if (allItems.length === 0 && client.product_name) {
+                allItems = [{
                     product_name: client.product_name,
+                    sku: client.sku,
                     target_quantity: client.target_quantity,
                     unit: client.unit || 'PC'
                 }];
             }
 
-            const isDense = items.length > 5;
-            const isUltraDense = items.length > 9;
+            const items = pageItems || allItems;
+            const itemCount = items.length;
+
             let tableClass = 'items-table';
-            if (isUltraDense) {
-                tableClass += ' items-table-ultra-dense';
-            } else if (isDense) {
-                tableClass += ' items-table-dense';
+            let sigClass = '';
+            let remClass = '';
+
+            if (itemCount <= 4) {
+                tableClass += ' items-table-tier-1';
+            } else if (itemCount <= 8) {
+                tableClass += ' items-table-tier-2';
+            } else if (itemCount <= 13) {
+                tableClass += ' items-table-tier-3';
+                sigClass = 'sig-compact';
+                remClass = 'remarks-compact';
+            } else {
+                tableClass += ' items-table-tier-4';
+                sigClass = 'sig-compact';
+                remClass = 'remarks-compact';
             }
 
             const itemsRows = items.map(item => {
-                const desc = item.product_name || item.name || '-';
+                const name = item.product_name || item.name || '-';
+                const sku = item.sku ? `SKU: ${item.sku}` : '';
                 const qty = formatQty(item.target_quantity || item.quantity || 0);
                 const rawUom = (item.unit || 'PC').toUpperCase().trim();
                 const uom = (rawUom === 'PCS' || rawUom === 'PIECE' || rawUom === 'PIECES') ? 'PC' : rawUom;
 
                 return `
                     <tr>
-                        <td class="td-desc">${escapeHtml(desc)}</td>
+                        <td class="td-desc">
+                            <span class="product-name-txt">${escapeHtml(name)}</span>
+                            ${sku ? `<span class="product-sku-txt">(${escapeHtml(sku)})</span>` : ''}
+                        </td>
                         <td class="td-qty">${qty}</td>
                         <td class="td-uom">${escapeHtml(uom)}</td>
                     </tr>
@@ -781,6 +882,7 @@
                         <!-- Underlined Document Title -->
                         <div class="doc-title-row">
                             <span class="doc-title-text title-display">${escapeHtml(docTitle)}</span>
+                            ${totalPages > 1 ? `<span style="font-size: 8.5pt; font-weight: bold; margin-left: 6px; text-decoration: none; display: inline-block;">(Page ${pageIndex} of ${totalPages})</span>` : ''}
                         </div>
 
                         <!-- Customer & Metadata -->
@@ -790,7 +892,7 @@
                                 <div class="meta-line">Address: <span class="cust-addr-display">${escapeHtml(customerAddress)}</span></div>
                             </div>
                             <div class="meta-right">
-                                <div class="doc-no doc-no-display" data-raw-no="${escapeHtml(rawDocNo)}">${escapeHtml(formattedDocNo)}</div>
+                                <div class="doc-no doc-no-display" data-client-idx="${clientIdx}" data-raw-no="${escapeHtml(rawDocNo)}">${escapeHtml(formattedDocNo)}</div>
                                 <div class="meta-line">Date: <span class="doc-date-display">${escapeHtml(docDate)}</span></div>
                                 <div class="meta-line">Due Date: <span class="doc-duedate-display">${escapeHtml(dueDate)}</span></div>
                             </div>
@@ -815,11 +917,11 @@
 
                     <!-- Footer (Remarks & Signatures) -->
                     <div>
-                        <div class="remarks-row">
+                        <div class="remarks-row ${remClass}">
                             <span class="remarks-lbl">Remarks:</span> <span class="remarks-display">${escapeHtml(remarks)}</span>
                         </div>
 
-                        <div class="signatures-container">
+                        <div class="signatures-container ${sigClass}">
                             <div class="sig-column">
                                 <div class="sig-item">
                                     <div class="sig-label">Prepared by:</div>
@@ -895,33 +997,50 @@
             const chosenTitle = select ? select.value : 'SALES ORDER';
 
             let html = '';
+            let totalSheetsCount = 0;
+
             pagesData.forEach((clientData, idx) => {
-                html += `
-                    <div class="page-container" id="page-client-${idx}">
-                        <!-- COPY 1: LEFT SIDE (Portrait Slip) -->
-                        <div class="portrait-slip" id="slip-${idx}-1">
-                            <div class="slip-screen-tag no-print">
-                                <span class="slip-screen-tag-pill">📄 COPY 1 • PRODUCTION (ORIGINAL)</span>
-                            </div>
-                            ${generateSlipContent(clientData, chosenTitle)}
-                        </div>
+                const allItems = clientData.items || [];
+                // If more than 16 items, cleanly paginate in chunks of 13 so items remain large, crisp and fit perfectly
+                const CHUNK_SIZE = 13;
+                const totalPages = allItems.length > 16 ? Math.ceil(allItems.length / CHUNK_SIZE) : 1;
 
-                        <!-- VERTICAL CUT GUIDE DIVIDER -->
-                        <div class="cut-divider">
-                            <div class="cut-line-bar-vertical"></div>
-                            <div class="cut-badge-vertical">✂ CUT HERE (2 PORTRAIT COPIES) ✂</div>
-                            <div class="cut-line-bar-vertical"></div>
-                        </div>
+                for (let p = 0; p < totalPages; p++) {
+                    totalSheetsCount++;
+                    const pageIndex = p + 1;
+                    const pageItems = totalPages > 1 
+                        ? allItems.slice(p * CHUNK_SIZE, (p + 1) * CHUNK_SIZE)
+                        : allItems;
 
-                        <!-- COPY 2: RIGHT SIDE (Portrait Slip Duplicate) -->
-                        <div class="portrait-slip" id="slip-${idx}-2">
-                            <div class="slip-screen-tag no-print">
-                                <span class="slip-screen-tag-pill">📋 COPY 2 • ACCOUNTING / CLIENT (DUPLICATE)</span>
+                    const pageTag = totalPages > 1 ? ` • Page ${pageIndex}/${totalPages}` : '';
+
+                    html += `
+                        <div class="page-container" id="page-client-${idx}-p${pageIndex}">
+                            <!-- COPY 1: LEFT SIDE (Portrait Slip) -->
+                            <div class="portrait-slip" id="slip-${idx}-1-p${pageIndex}">
+                                <div class="slip-screen-tag no-print">
+                                    <span class="slip-screen-tag-pill">📄 COPY 1 • PRODUCTION (ORIGINAL)${pageTag}</span>
+                                </div>
+                                ${generateSlipContent(clientData, chosenTitle, pageItems, pageIndex, totalPages, idx)}
                             </div>
-                            ${generateSlipContent(clientData, chosenTitle)}
+
+                            <!-- VERTICAL CUT GUIDE DIVIDER -->
+                            <div class="cut-divider">
+                                <div class="cut-line-bar-vertical"></div>
+                                <div class="cut-badge-vertical">✂ CUT HERE (2 PORTRAIT COPIES) ✂</div>
+                                <div class="cut-line-bar-vertical"></div>
+                            </div>
+
+                            <!-- COPY 2: RIGHT SIDE (Portrait Slip Duplicate) -->
+                            <div class="portrait-slip" id="slip-${idx}-2-p${pageIndex}">
+                                <div class="slip-screen-tag no-print">
+                                    <span class="slip-screen-tag-pill">📋 COPY 2 • ACCOUNTING / CLIENT (DUPLICATE)${pageTag}</span>
+                                </div>
+                                ${generateSlipContent(clientData, chosenTitle, pageItems, pageIndex, totalPages, idx)}
+                            </div>
                         </div>
-                    </div>
-                `;
+                    `;
+                }
             });
 
             container.innerHTML = html;
@@ -930,12 +1049,14 @@
             const badge = document.getElementById('page-summary-badge');
             const printBtn = document.getElementById('btn-print-main');
 
-            if (pagesData.length > 1) {
-                if (badge) badge.textContent = `(${pagesData.length} Clients • ${pagesData.length} Landscape Sheets)`;
-                if (printBtn) printBtn.innerHTML = `<span>🖨️ Print All Clients (${pagesData.length} Sheets, ${pagesData.length * 2} Portrait Slips)</span>`;
+            if (pagesData.length > 1 || totalSheetsCount > 1) {
+                if (badge) badge.textContent = `(${pagesData.length} Client${pagesData.length > 1 ? 's' : ''} • ${totalSheetsCount} Landscape Sheet${totalSheetsCount > 1 ? 's' : ''})`;
+                if (printBtn) printBtn.innerHTML = `<span>🖨️ Print (${totalSheetsCount} Landscape Sheet${totalSheetsCount > 1 ? 's' : ''}, ${totalSheetsCount * 2} Portrait Slips)</span>`;
             } else if (pagesData.length === 1) {
                 const itemCount = (pagesData[0].items || []).length;
-                if (badge) badge.textContent = `(${pagesData[0].company_name || 'Client'} • ${itemCount} Product${itemCount !== 1 ? 's' : ''})`;
+                const clientName = pagesData[0].company_name || 'Client';
+                const soNo = pagesData[0].so_number || 'SO';
+                if (badge) badge.textContent = `(${clientName} • ${soNo} • ${itemCount} Product${itemCount !== 1 ? 's' : ''})`;
                 if (printBtn) printBtn.innerHTML = `<span>🖨️ Print 2 Portrait Copies (A4 Landscape)</span>`;
             }
 

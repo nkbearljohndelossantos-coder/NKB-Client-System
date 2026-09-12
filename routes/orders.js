@@ -246,14 +246,16 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
 
         // Auto-approve if created by Admin/SuperAdmin, otherwise PENDING_APPROVAL
         const initialStatus = (req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN') ? 'APPROVED' : 'PENDING_APPROVAL';
+        const soNumber = poNumber.replace('PO-', 'SO-');
 
         db.prepare(`
             INSERT INTO purchase_orders
-            (id, po_number, client_id, po_date, expected_delivery_date, tolerance_percent, billing_policy, status, notes, subtotal, tax_percent, tax_amount, grand_total, created_by, approved_by, approved_at)
-            VALUES (?, ?, ?, date('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (id, po_number, so_number, client_id, po_date, expected_delivery_date, tolerance_percent, billing_policy, status, notes, subtotal, tax_percent, tax_amount, grand_total, created_by, approved_by, approved_at)
+            VALUES (?, ?, ?, ?, date('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
             poId,
             poNumber,
+            soNumber,
             client_id,
             expected_delivery_date || null,
             tolerance,

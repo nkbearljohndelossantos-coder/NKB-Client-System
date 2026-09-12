@@ -533,6 +533,9 @@ function renderJobOrdersTable(jobOrders) {
     let html = '';
     grouped.forEach(group => {
         const totalQty = group.items.reduce((sum, j) => sum + (j.target_quantity || 0), 0);
+        const primaryPo = group.items[0]?.po_number || '';
+        const clientSO = primaryPo ? primaryPo.replace('PO-', 'SO-') : 'SO-2026-000001';
+
         html += `
             <!-- Client Group Banner Row -->
             <tr class="bg-indigo-50/80 border-t-2 border-indigo-200">
@@ -542,10 +545,11 @@ function renderJobOrdersTable(jobOrders) {
                             <span class="text-base">🏢</span>
                             <div>
                                 <span class="font-extrabold text-sm text-slate-900">${group.companyName}</span>
+                                <span class="ml-2 px-2.5 py-0.5 bg-indigo-100/90 text-indigo-800 font-mono font-bold text-xs rounded-lg border border-indigo-200" title="Sales Order Number for this Client">SO: ${clientSO}</span>
                                 <span class="text-[11px] text-indigo-700 font-semibold ml-2">(${group.items.length} Product${group.items.length > 1 ? 's' : ''} in Production • Total: ${NKB.formatNumber(totalQty)} pcs)</span>
                             </div>
                         </div>
-                        <a href="/print-jo.html?client_id=${group.clientId}" target="_blank" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-bold transition inline-flex items-center gap-1.5 shadow-sm" title="Print Job Order / Sales Order for ${group.companyName} (2 Portrait Copies on A4 Landscape)">
+                        <a href="/print-jo.html?client_id=${group.clientId}&po_id=${group.items[0]?.po_id || ''}" target="_blank" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-bold transition inline-flex items-center gap-1.5 shadow-sm" title="Print Job Order / Sales Order for ${group.companyName} (${clientSO}) (2 Portrait Copies on A4 Landscape)">
                             <span>🖨️ Print Client JO (${group.items.length} Products)</span>
                         </a>
                     </div>
@@ -574,7 +578,7 @@ function renderJobOrdersTable(jobOrders) {
                     <button onclick="openViewPOModal('${jo.po_id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition" title="View Purchase Order Details">
                         👁️ View PO
                     </button>
-                    <a href="/print-jo.html?client_id=${jo.client_id}&id=${jo.id}" target="_blank" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Print Job Order (2 Portrait Copies on A4 Landscape)">
+                    <a href="/print-jo.html?client_id=${jo.client_id}&po_id=${jo.po_id}" target="_blank" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Print Client Job Order / Sales Order (${clientSO}) (2 Portrait Copies on A4 Landscape)">
                         🖨️ Print
                     </a>
                     <button onclick="openCreateBatchModal('${jo.id}', '${jo.jo_number}', ${jo.target_quantity}, '${jo.product_name}')" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition">

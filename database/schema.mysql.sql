@@ -97,6 +97,7 @@ CREATE TABLE IF NOT EXISTS client_product_prices (
 CREATE TABLE IF NOT EXISTS purchase_orders (
     id VARCHAR(36) NOT NULL PRIMARY KEY,
     po_number VARCHAR(50) NOT NULL UNIQUE,
+    so_number VARCHAR(50) NULL,
     client_id VARCHAR(36) NOT NULL,
     po_date DATE NOT NULL,
     expected_delivery_date DATE NULL,

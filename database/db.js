@@ -54,6 +54,12 @@ if (useMysql) {
                 db.exec(`ALTER TABLE production_batches ADD COLUMN ${col} TEXT;`);
             } catch (_) {}
         }
+        try {
+            db.exec("ALTER TABLE purchase_orders ADD COLUMN so_number TEXT;");
+        } catch (_) {}
+        try {
+            db.exec("UPDATE purchase_orders SET so_number = REPLACE(po_number, 'PO-', 'SO-') WHERE so_number IS NULL OR so_number = '';");
+        } catch (_) {}
     } catch (migErr) {
         console.warn('Migration note:', migErr.message);
     }

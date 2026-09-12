@@ -147,6 +147,14 @@ function getClientConsolidatedJOData(clientId, specificPoId = null, specificJoId
     const primaryPO = pos.length > 0 ? pos[0] : null;
     const uniquePONumbers = Array.from(new Set(pos.map(p => p.po_number).filter(Boolean)));
 
+    // Client-level SO number and JO number (strictly per client, never per individual product!)
+    const clientSO = (primaryPO && primaryPO.so_number)
+        ? primaryPO.so_number
+        : (primaryPO ? primaryPO.po_number.replace('PO-', 'SO-') : (jos.length > 0 ? jos[0].jo_number.replace('JO-', 'SO-') : `SO-2026-${String(client.id).slice(-6)}`));
+    const clientJO = (primaryPO && primaryPO.po_number)
+        ? primaryPO.po_number.replace('PO-', 'JO-')
+        : (jos.length > 0 ? jos[0].jo_number : `JO-2026-${String(client.id).slice(-6)}`);
+
     return {
         id: targetJO ? targetJO.id : (primaryPO ? primaryPO.id : client.id),
         client_id: client.id,
@@ -155,11 +163,12 @@ function getClientConsolidatedJOData(clientId, specificPoId = null, specificJoId
         client_phone: client.phone || '',
         client_email: client.email || '',
         client_tin: client.tin || '',
-        jo_number: targetJO ? targetJO.jo_number : (primaryPO ? primaryPO.po_number.replace('PO-', 'JO-') : 'JO-0000'),
+        so_number: clientSO,
+        jo_number: clientJO,
         po_number: uniquePONumbers.length > 0 ? uniquePONumbers.join(', ') : (primaryPO ? primaryPO.po_number : ''),
-        po_date: targetJO ? targetJO.scheduled_start_date : (primaryPO ? primaryPO.po_date : new Date().toISOString().split('T')[0]),
+        po_date: (primaryPO && primaryPO.po_date) ? primaryPO.po_date : (targetJO ? targetJO.scheduled_start_date : new Date().toISOString().split('T')[0]),
         expected_delivery_date: primaryPO ? primaryPO.expected_delivery_date : null,
-        notes: (targetJO && targetJO.notes) || (primaryPO && primaryPO.notes) || '',
+        notes: (primaryPO && primaryPO.notes) || (targetJO && targetJO.notes) || '',
         items: items
     };
 }
@@ -265,6 +274,8 @@ router.get('/:id', authenticateToken, (req, res) => {
         success: true,
         data: {
             ...jo,
+            so_number: clientData ? clientData.so_number : (jo.po_number ? jo.po_number.replace('PO-', 'SO-') : 'SO-2026-000001'),
+            jo_number: clientData ? clientData.jo_number : (jo.po_number ? jo.po_number.replace('PO-', 'JO-') : jo.jo_number),
             company_name: clientData ? clientData.company_name : jo.company_name,
             client_address: clientData ? clientData.client_address : jo.client_address,
             client_phone: clientData ? clientData.client_phone : jo.client_phone,
