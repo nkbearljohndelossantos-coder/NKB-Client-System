@@ -301,26 +301,37 @@
                         <p class="text-sm text-slate-500">Production line schedules linked to approved client purchase orders.</p>
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
-                        <div class="flex items-center gap-1.5 bg-white border border-slate-300 rounded-xl px-3 py-1.5 shadow-sm text-xs">
-                            <span class="text-slate-500 font-bold">Client:</span>
-                            <select id="filter-jo-client" onchange="filterJobOrdersByClient()" class="bg-transparent font-bold text-slate-800 border-none outline-none cursor-pointer">
-                                <option value="">All Clients</option>
-                            </select>
-                        <button onclick="printJobOrdersForSelectedClient()" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 transition inline-flex items-center gap-1.5" title="Print Job Orders (2 Portrait Copies on A4 Landscape)">
+                        <button onclick="printJobOrdersForSelectedClient()" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 transition inline-flex items-center gap-2" title="Print Job Orders (2 Portrait Copies on A4 Landscape)">
                             <span>🖨️ Print JO (All Products)</span>
                         </button>
                     </div>
                 </div>
 
-                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+                    <div class="flex flex-col sm:flex-row gap-3 items-center justify-between">
+                        <div class="flex flex-1 flex-col sm:flex-row gap-3 items-center w-full">
+                            <input type="text" id="filter-jo-search" oninput="filterJobOrders()" placeholder="Search JO#, PO#, Product, SKU, Client..." class="w-full sm:w-72 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <select id="filter-jo-client" onchange="filterJobOrders()" class="w-full sm:w-60 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 font-semibold text-slate-700">
+                                <option value="">All Clients</option>
+                            </select>
+                            <select id="filter-jo-status" onchange="filterJobOrders()" class="w-full sm:w-44 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 font-semibold text-slate-700">
+                                <option value="">All Statuses</option>
+                                <option value="PENDING">Pending</option>
+                                <option value="SCHEDULED">Scheduled</option>
+                                <option value="IN_PROGRESS">In Progress</option>
+                                <option value="COMPLETED">Completed</option>
+                                <option value="CANCELLED">Cancelled</option>
+                            </select>
+                        </div>
+                    </div>
+
                     <div class="overflow-x-auto">
                         <table class="w-full text-left text-xs">
                             <thead class="bg-slate-50 border-y border-slate-200 text-slate-600 font-bold uppercase tracking-wider">
                                 <tr>
                                     <th class="py-3 px-4">JO Number</th>
                                     <th class="py-3 px-4">PO Ref</th>
-                                    <th class="py-3 px-4">Client</th>
-                                    <th class="py-3 px-4">Product</th>
+                                    <th class="py-3 px-4">Product & SKU</th>
                                     <th class="py-3 px-4">Target Qty</th>
                                     <th class="py-3 px-4">Assigned Team</th>
                                     <th class="py-3 px-4">Status</th>
@@ -328,7 +339,7 @@
                                 </tr>
                             </thead>
                             <tbody id="table-jos-body" class="divide-y divide-slate-100 font-medium">
-                                <tr><td colspan="8" class="py-6 text-center text-slate-400">Loading job orders...</td></tr>
+                                <tr><td colspan="7" class="py-6 text-center text-slate-400">Loading job orders...</td></tr>
                             </tbody>
                         </table>
                     </div>

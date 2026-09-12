@@ -500,10 +500,10 @@ async function loadJobOrders() {
                 ).join('');
         }
 
-        renderJobOrdersTable(res.data);
+        filterJobOrders();
     } else {
         cachedJobOrders = [];
-        tbody.innerHTML = `<tr><td colspan="8" class="py-6 text-center text-slate-400">No job orders found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-slate-400">No job orders found.</td></tr>`;
     }
 }
 
@@ -512,7 +512,7 @@ function renderJobOrdersTable(jobOrders) {
     if (!tbody) return;
 
     if (!jobOrders || jobOrders.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" class="py-6 text-center text-slate-400">No job orders found matching filter.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-slate-400">No job orders found matching filter.</td></tr>`;
         return;
     }
 
@@ -536,7 +536,7 @@ function renderJobOrdersTable(jobOrders) {
         html += `
             <!-- Client Group Banner Row -->
             <tr class="bg-indigo-50/80 border-t-2 border-indigo-200">
-                <td colspan="8" class="py-2.5 px-4">
+                <td colspan="7" class="py-2.5 px-4">
                     <div class="flex flex-wrap items-center justify-between gap-2">
                         <div class="flex items-center gap-2.5">
                             <span class="text-base">🏢</span>
@@ -553,7 +553,7 @@ function renderJobOrdersTable(jobOrders) {
             </tr>
         `;
 
-        // Product Job Order rows under this client
+        // Product Job Order rows under this client (7 clean columns)
         group.items.forEach(jo => {
             html += `
             <tr class="hover:bg-slate-50 transition border-b border-slate-100 last:border-b-2">
@@ -563,10 +563,12 @@ function renderJobOrdersTable(jobOrders) {
                         ${jo.po_number}
                     </button>
                 </td>
-                <td class="py-3 px-4 font-bold text-slate-800">${jo.company_name}</td>
-                <td class="py-3 px-4 font-semibold text-slate-800">${jo.product_name} <span class="text-xs text-slate-400 font-mono">(${jo.sku})</span></td>
+                <td class="py-3 px-4">
+                    <span class="font-semibold text-slate-800">${jo.product_name}</span>
+                    ${jo.sku ? `<br><span class="text-[11px] text-slate-400 font-mono">SKU: ${jo.sku}</span>` : ''}
+                </td>
                 <td class="py-3 px-4 font-bold text-slate-700 font-mono">${NKB.formatNumber(jo.target_quantity)} pcs</td>
-                <td class="py-3 px-4 text-slate-600 font-medium">${jo.assigned_team}</td>
+                <td class="py-3 px-4 text-slate-600 font-medium">${jo.assigned_team || 'Team Alpha'}</td>
                 <td class="py-3 px-4">${NKB.renderStatusBadge(jo.status)}</td>
                 <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
                     <button onclick="openViewPOModal('${jo.po_id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition" title="View Purchase Order Details">
@@ -587,16 +589,41 @@ function renderJobOrdersTable(jobOrders) {
     tbody.innerHTML = html;
 }
 
-function filterJobOrdersByClient() {
-    const sel = document.getElementById('filter-jo-client');
-    if (!sel) return;
-    const cid = sel.value;
-    if (!cid) {
-        renderJobOrdersTable(cachedJobOrders);
-    } else {
-        const filtered = cachedJobOrders.filter(j => j.client_id === cid);
-        renderJobOrdersTable(filtered);
+function filterJobOrders() {
+    const searchVal = (document.getElementById('filter-jo-search')?.value || '').toLowerCase().trim();
+    const clientVal = document.getElementById('filter-jo-client')?.value || '';
+    const statusVal = document.getElementById('filter-jo-status')?.value || '';
+
+    let filtered = cachedJobOrders;
+
+    if (clientVal) {
+        filtered = filtered.filter(j => j.client_id === clientVal);
     }
+    if (statusVal) {
+        filtered = filtered.filter(j => (j.status || '').toUpperCase() === statusVal.toUpperCase());
+    }
+    if (searchVal) {
+        filtered = filtered.filter(j => {
+            const joNum = (j.jo_number || '').toLowerCase();
+            const poNum = (j.po_number || '').toLowerCase();
+            const prodName = (j.product_name || '').toLowerCase();
+            const sku = (j.sku || '').toLowerCase();
+            const clientName = (j.company_name || '').toLowerCase();
+            const team = (j.assigned_team || '').toLowerCase();
+            return joNum.includes(searchVal) ||
+                   poNum.includes(searchVal) ||
+                   prodName.includes(searchVal) ||
+                   sku.includes(searchVal) ||
+                   clientName.includes(searchVal) ||
+                   team.includes(searchVal);
+        });
+    }
+
+    renderJobOrdersTable(filtered);
+}
+
+function filterJobOrdersByClient() {
+    filterJobOrders();
 }
 
 function printJobOrdersForSelectedClient() {
@@ -611,6 +638,7 @@ function printJobOrdersForSelectedClient() {
 
 window.loadJobOrders = loadJobOrders;
 window.renderJobOrdersTable = renderJobOrdersTable;
+window.filterJobOrders = filterJobOrders;
 window.filterJobOrdersByClient = filterJobOrdersByClient;
 window.printJobOrdersForSelectedClient = printJobOrdersForSelectedClient;
 
