@@ -283,6 +283,11 @@ async function loadOrders() {
                     <a href="/print-po.html?id=${po.id}" target="_blank" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Print Purchase Order">
                         <span>🖨️ Print</span>
                     </a>
+                    ${po.jo_count === 0 && po.status !== 'CANCELLED' ? `
+                        <button onclick="openEditPOModal('${po.id}')" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Edit Purchase Order (before entering JO)">
+                            <span>✏️ Edit</span>
+                        </button>
+                    ` : ''}
                     ${po.status === 'PENDING_APPROVAL' ? `
                         <button onclick="approvePO('${po.id}', '${po.po_number}')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition">
                             Approve

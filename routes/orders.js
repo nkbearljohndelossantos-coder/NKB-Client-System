@@ -320,6 +320,191 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
 });
 
 /**
+ * PUT /api/orders/:id
+ * Edit Purchase Order before entering Job Order (JO)
+ */
+router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
+    const { id } = req.params;
+    let { po_date, expected_delivery_date, tolerance_percent, billing_policy, notes, items, tax_percent } = req.body;
+
+    const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
+    if (!po) {
+        return res.status(404).json({ success: false, error: 'Purchase Order not found.' });
+    }
+
+    if (req.user.role === 'CLIENT') {
+        if (po.client_id !== req.clientId) {
+            return res.status(403).json({ success: false, error: 'Access denied.', code: 'FORBIDDEN' });
+        }
+        if (po.status !== 'PENDING_APPROVAL' && po.status !== 'DRAFT') {
+            return res.status(400).json({ success: false, error: 'Clients can only edit pending orders.' });
+        }
+    }
+
+    // Crucial rule: Check if a Job Order (JO) has already been created for this PO
+    const joCheck = db.prepare('SELECT COUNT(*) as count FROM job_orders WHERE po_id = ?').get(id);
+    if (joCheck && joCheck.count > 0) {
+        return res.status(400).json({
+            success: false,
+            error: 'Cannot edit Purchase Order: A Job Order (JO) has already been created for this order.'
+        });
+    }
+
+    if (po.status === 'IN_PRODUCTION' || po.status === 'COMPLETED' || po.status === 'CANCELLED') {
+        return res.status(400).json({
+            success: false,
+            error: `Cannot edit Purchase Order with status "${po.status}".`
+        });
+    }
+
+    const tolerance = (tolerance_percent !== undefined && tolerance_percent !== null && !isNaN(parseFloat(tolerance_percent)))
+        ? parseFloat(tolerance_percent)
+        : (po.tolerance_percent !== null ? po.tolerance_percent : 10.0);
+    const policy = billing_policy || po.billing_policy || 'ACTUAL_DELIVERY';
+    const taxRate = (tax_percent !== undefined && tax_percent !== null && !isNaN(parseFloat(tax_percent)))
+        ? parseFloat(tax_percent)
+        : (po.tax_percent !== null ? po.tax_percent : 0.0);
+
+    const updateOrderTx = db.transaction(() => {
+        let subtotal = 0.0;
+        const processedItems = [];
+
+        if (items && Array.isArray(items) && items.length > 0) {
+            for (const item of items) {
+                const product = db.prepare('SELECT * FROM products WHERE id = ?').get(item.product_id);
+                if (!product) {
+                    throw new Error(`Invalid product ID: ${item.product_id}`);
+                }
+
+                const targetQty = parseInt(item.target_quantity);
+                if (isNaN(targetQty) || targetQty <= 0) {
+                    throw new Error('Target quantity must be greater than 0.');
+                }
+
+                // Resolve client-specific assignment and price
+                const assignment = db.prepare('SELECT custom_price, custom_name, is_active FROM client_product_prices WHERE client_id = ? AND product_id = ?').get(po.client_id, item.product_id);
+                if (req.user.role === 'CLIENT' && (!assignment || assignment.is_active !== 1)) {
+                    throw new Error(`Product "${product.name}" (${product.sku}) is not assigned to your client account.`);
+                }
+
+                const expectedClientPrice = (assignment && assignment.custom_price !== null && assignment.custom_price !== undefined) ? assignment.custom_price : product.default_price;
+                const unitPrice = Math.round((Number(expectedClientPrice) || 0) * 100) / 100;
+                const lineSubtotal = Math.round(targetQty * unitPrice * 100) / 100;
+                subtotal += lineSubtotal;
+
+                const minQty = Math.floor(targetQty * (1 - tolerance / 100));
+                const maxQty = Math.ceil(targetQty * (1 + tolerance / 100));
+
+                processedItems.push({
+                    id: uuidv4(),
+                    poId: id,
+                    productId: product.id,
+                    targetQuantity: targetQty,
+                    minAllowedQuantity: minQty,
+                    maxAllowedQuantity: maxQty,
+                    unitPrice,
+                    subtotal: lineSubtotal
+                });
+            }
+        } else {
+            // Keep existing items if items not supplied
+            const existingItems = db.prepare('SELECT * FROM purchase_order_items WHERE po_id = ?').all(id);
+            for (const it of existingItems) {
+                subtotal += it.subtotal;
+                processedItems.push(it);
+            }
+        }
+
+        const taxAmount = Math.round(((subtotal * taxRate) / 100) * 100) / 100;
+        const grandTotal = Math.round((subtotal + taxAmount) * 100) / 100;
+
+        // If items were updated, delete old items and insert processed items
+        if (items && Array.isArray(items) && items.length > 0) {
+            db.prepare('DELETE FROM purchase_order_items WHERE po_id = ?').run(id);
+
+            const insertItemStmt = db.prepare(`
+                INSERT INTO purchase_order_items
+                (id, po_id, product_id, target_quantity, min_allowed_quantity, max_allowed_quantity, unit_price, subtotal)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `);
+
+            for (const it of processedItems) {
+                insertItemStmt.run(
+                    it.id,
+                    it.poId,
+                    it.productId,
+                    it.targetQuantity,
+                    it.minAllowedQuantity,
+                    it.maxAllowedQuantity,
+                    it.unitPrice,
+                    it.subtotal
+                );
+            }
+        }
+
+        db.prepare(`
+            UPDATE purchase_orders
+            SET po_date = ?,
+                expected_delivery_date = ?,
+                tolerance_percent = ?,
+                billing_policy = ?,
+                notes = ?,
+                subtotal = ?,
+                tax_percent = ?,
+                tax_amount = ?,
+                grand_total = ?,
+                updated_at = datetime('now')
+            WHERE id = ?
+        `).run(
+            po_date !== undefined && po_date ? po_date : po.po_date,
+            expected_delivery_date !== undefined ? (expected_delivery_date || null) : po.expected_delivery_date,
+            tolerance,
+            policy,
+            notes !== undefined ? (notes || null) : po.notes,
+            subtotal,
+            taxRate,
+            taxAmount,
+            grandTotal,
+            id
+        );
+
+        logAudit({
+            userId: req.user.id,
+            userName: req.user.name,
+            userRole: req.user.role,
+            action: 'UPDATE_PO',
+            entityType: 'PURCHASE_ORDER',
+            entityId: po.po_number,
+            details: {
+                poId: id,
+                poNumber: po.po_number,
+                clientId: po.client_id,
+                grandTotal,
+                tolerance,
+                policy,
+                itemCount: processedItems.length
+            }
+        });
+
+        return { poId: id, poNumber: po.po_number, grandTotal };
+    });
+
+    try {
+        const result = updateOrderTx();
+        const updatedPO = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
+        const orderItems = db.prepare('SELECT * FROM purchase_order_items WHERE po_id = ?').all(id);
+        const totalTargetQty = orderItems.reduce((acc, it) => acc + (it.target_quantity || 0), 0);
+        return res.json({
+            success: true,
+            message: `Purchase Order ${po.po_number} updated successfully.`,
+            data: { ...updatedPO, items: orderItems, total_target_quantity: totalTargetQty }
+        });
+    } catch (err) {
+        return res.status(400).json({ success: false, error: err.message });
+    }
+});
+
+/**
  * POST /api/orders/:id/approve
  * Admin approves pending PO
  */

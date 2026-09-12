@@ -533,7 +533,12 @@ async function openViewPOModal(poId) {
 
                 <!-- Footer Actions -->
                 <div class="flex justify-between items-center pt-3 border-t border-slate-100 flex-shrink-0">
-                    <div>
+                    <div class="flex items-center gap-2">
+                        ${(jobOrders.length === 0 && (!po.status || po.status === 'PENDING_APPROVAL' || po.status === 'APPROVED' || po.status === 'DRAFT')) ? `
+                            <button onclick="closeModal(); openEditPOModal('${po.id}');" class="px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-300 rounded-xl font-bold text-xs shadow-sm transition inline-flex items-center gap-1.5" title="Edit PO before entering JO">
+                                <span>✏️ Edit PO</span>
+                            </button>
+                        ` : ''}
                         ${(NKB.user && (NKB.user.role === 'ADMIN' || NKB.user.role === 'SUPER_ADMIN') && po.status === 'PENDING_APPROVAL') ? `
                             <button onclick="approvePO('${po.id}', '${po.po_number}'); closeModal();" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs shadow-sm transition">
                                 Approve Order
@@ -564,7 +569,353 @@ function closeModal() {
     if (root) root.innerHTML = '';
 }
 
+// -------------------------------------------------------------
+// EDIT PURCHASE ORDER (BEFORE ENTERING JO)
+// -------------------------------------------------------------
+let editPOLineItems = [];
+let editPOCatalog = [];
+let editingPOId = null;
+
+async function openEditPOModal(poId) {
+    const root = document.getElementById('modals-root') || document.getElementById('client-modals-root');
+    if (!root) return;
+
+    root.innerHTML = `
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
+            <div class="bg-white rounded-2xl p-6 shadow-2xl flex items-center gap-3 text-slate-700 font-bold text-sm">
+                <span class="animate-spin text-xl">⏳</span>
+                <span>Loading Purchase Order details for editing...</span>
+            </div>
+        </div>
+    `;
+
+    const res = await NKB.api(`/api/orders/${poId}`);
+    if (!res.success || !res.data) {
+        NKB.showToast(res.error || 'Failed to load order details.', 'error');
+        closeModal();
+        return;
+    }
+
+    const po = res.data;
+
+    // Verify before entering JO
+    if (po.jobOrders && po.jobOrders.length > 0) {
+        NKB.showToast('Cannot edit Purchase Order: A Job Order (JO) has already been created for this order.', 'error');
+        closeModal();
+        return;
+    }
+
+    editingPOId = poId;
+
+    // Fetch client product catalog
+    const catRes = await NKB.api(`/api/products?clientId=${po.client_id}&assignedOnly=true`);
+    editPOCatalog = (catRes.success && catRes.data) ? catRes.data.slice() : [];
+
+    // Ensure all products currently on the PO exist in editPOCatalog
+    if (po.items && po.items.length > 0) {
+        po.items.forEach(it => {
+            if (!editPOCatalog.some(p => p.id === it.product_id)) {
+                editPOCatalog.push({
+                    id: it.product_id,
+                    name: it.product_name,
+                    sku: it.sku,
+                    effective_sku: it.sku,
+                    default_price: it.unit_price,
+                    has_custom_price: true,
+                    unit: it.unit || 'pcs'
+                });
+            }
+        });
+    }
+
+    editPOLineItems = (po.items || []).map(it => ({
+        product_id: it.product_id,
+        target_quantity: it.target_quantity,
+        unit_price: Number(it.unit_price || 0)
+    }));
+
+    if (editPOLineItems.length === 0 && editPOCatalog.length > 0) {
+        editPOLineItems.push({
+            product_id: editPOCatalog[0].id,
+            target_quantity: 1000,
+            unit_price: Number(editPOCatalog[0].default_price || 0)
+        });
+    }
+
+    const poDateFormatted = po.po_date ? (po.po_date.includes('T') ? po.po_date.split('T')[0] : po.po_date) : '';
+    const deliveryDateFormatted = po.expected_delivery_date ? (po.expected_delivery_date.includes('T') ? po.expected_delivery_date.split('T')[0] : po.expected_delivery_date) : '';
+
+    root.innerHTML = `
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
+            <div class="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-3 flex-shrink-0">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-lg font-bold text-slate-900">Edit Purchase Order</h3>
+                            <span class="px-2.5 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 font-mono font-bold text-xs">${po.po_number}</span>
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">Pre-JO State</span>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-0.5">Modify line items, quantities, and delivery date before entering Job Order</p>
+                    </div>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
+                </div>
+                
+                <form id="form-edit-po" onsubmit="submitEditPO(event)" class="space-y-4 text-xs font-semibold flex-1 overflow-y-auto pr-1">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                            <label class="block text-slate-600 mb-1">Client / Buyer</label>
+                            <div class="px-3 py-2 border rounded-xl bg-slate-100 text-slate-800 font-bold">
+                                ${po.company_name}
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 mb-1">Order Date</label>
+                            <input type="date" id="edit-po-date" value="${poDateFormatted}" class="w-full px-3 py-2 border rounded-xl bg-white font-medium text-slate-900">
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 mb-1">Target Delivery Date</label>
+                            <input type="date" id="edit-po-delivery-date" value="${deliveryDateFormatted}" class="w-full px-3 py-2 border rounded-xl bg-white font-medium text-slate-900">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-slate-600 mb-1">Agreed Tolerance</label>
+                            <div class="px-3 py-2 border rounded-xl bg-slate-100 text-slate-800 font-bold">
+                                ±${po.tolerance_percent}%
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 mb-1">Billing Policy</label>
+                            <select id="edit-po-billing-policy" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold">
+                                <option value="ACTUAL_DELIVERY" ${po.billing_policy === 'ACTUAL_DELIVERY' ? 'selected' : ''}>Option A: Bill Actual Delivered</option>
+                                <option value="FIXED_PO_BUFFER" ${po.billing_policy === 'FIXED_PO_BUFFER' ? 'selected' : ''}>Option B: Fixed PO + Buffer Stock</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Line Items Section -->
+                    <div class="space-y-2 pt-2 border-t border-slate-100">
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs font-bold uppercase tracking-wider text-slate-700">Order Products (Line Items)</span>
+                            <button type="button" onclick="addEditPOLineItem()" class="px-3 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition flex items-center gap-1">
+                                <span>➕</span><span>Add Product Line</span>
+                            </button>
+                        </div>
+
+                        <div class="overflow-x-auto border border-slate-200 rounded-xl">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase">
+                                    <tr>
+                                        <th class="py-2.5 px-3">Product</th>
+                                        <th class="py-2.5 px-3 w-32">Target Qty (pcs)</th>
+                                        <th class="py-2.5 px-3 w-36">Fixed Unit Price (₱)</th>
+                                        <th class="py-2.5 px-3 w-32">Subtotal (₱)</th>
+                                        <th class="py-2.5 px-2 w-12 text-center">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="edit-po-lines-body" class="divide-y divide-slate-100 font-medium">
+                                    <!-- Dynamic Rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Summary & Totals -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                        <div>
+                            <label class="block text-slate-600 mb-1">Packaging / Batch Notes</label>
+                            <textarea id="edit-po-notes" rows="2" placeholder="Formulation variants, packaging specifics..." class="w-full px-3 py-2 border rounded-xl bg-white">${po.notes || ''}</textarea>
+                        </div>
+                        <div class="space-y-1.5 text-right flex flex-col justify-center">
+                            <div class="text-slate-500">Total Items: <strong id="edit-po-total-items" class="text-slate-900">0</strong></div>
+                            <div class="text-slate-500">Total Target Quantity: <strong id="edit-po-total-qty" class="text-slate-900">0 pcs</strong></div>
+                            <div class="text-base font-extrabold text-indigo-900 pt-1 border-t border-slate-200">Grand Total: <span id="edit-po-grand-total">₱0.00</span></div>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end gap-2 pt-2 border-t border-slate-100 flex-shrink-0">
+                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold">Cancel</button>
+                        <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-md shadow-indigo-600/30">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+
+    renderEditPOLineItems();
+}
+
+function renderEditPOLineItems() {
+    const tbody = document.getElementById('edit-po-lines-body');
+    if (!tbody) return;
+
+    if (editPOCatalog.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-amber-600 font-medium bg-amber-50/50 rounded-lg">⚠️ No products available in this client's catalog.</td></tr>`;
+        const elTotalItems = document.getElementById('edit-po-total-items');
+        if (elTotalItems) elTotalItems.textContent = '0';
+        const elTotalQty = document.getElementById('edit-po-total-qty');
+        if (elTotalQty) elTotalQty.textContent = '0 pcs';
+        const elGrandTotal = document.getElementById('edit-po-grand-total');
+        if (elGrandTotal) elGrandTotal.textContent = '₱0.00';
+        return;
+    }
+
+    let totalQty = 0;
+    let grandTotal = 0;
+
+    tbody.innerHTML = editPOLineItems.map((item, idx) => {
+        const lineSubtotal = (item.target_quantity || 0) * (item.unit_price || 0);
+        totalQty += item.target_quantity || 0;
+        grandTotal += lineSubtotal;
+
+        return `
+            <tr class="hover:bg-slate-50 transition">
+                <td class="py-2.5 px-3">
+                    <select onchange="updateEditPOLineItem(${idx}, 'product_id', this.value)" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white font-medium">
+                        ${editPOCatalog.map(p => `
+                            <option value="${p.id}" ${p.id === item.product_id ? 'selected' : ''}>
+                                ${p.name} (${p.effective_sku || p.sku}) - ₱${Number(p.default_price).toFixed(2)}${p.has_custom_price ? ' [Contract Rate]' : ''}
+                            </option>
+                        `).join('')}
+                    </select>
+                </td>
+                <td class="py-2.5 px-3">
+                    <input type="number" min="1" step="1" 
+                           value="${item.target_quantity}" 
+                           oninput="updateEditPOLineItem(${idx}, 'target_quantity', this.value)" 
+                           class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500">
+                </td>
+                <td class="py-2.5 px-3">
+                    <div class="px-2.5 py-1.5 bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold text-slate-900 font-mono flex items-center justify-between">
+                        <span>₱${Number(item.unit_price || 0).toFixed(2)}</span>
+                        <span class="text-[9px] uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">Fixed</span>
+                    </div>
+                </td>
+                <td id="edit-po-line-total-${idx}" class="py-2.5 px-3 font-extrabold text-slate-900 font-mono">
+                    ${NKB.formatCurrency(lineSubtotal)}
+                </td>
+                <td class="py-2.5 px-2 text-center">
+                    <button type="button" onclick="removeEditPOLineItem(${idx})" class="p-1.5 hover:bg-rose-50 text-rose-600 rounded-lg transition" title="Remove line">
+                        ✖
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    const elTotalItems = document.getElementById('edit-po-total-items');
+    if (elTotalItems) elTotalItems.textContent = editPOLineItems.length;
+    const elTotalQty = document.getElementById('edit-po-total-qty');
+    if (elTotalQty) elTotalQty.textContent = `${NKB.formatNumber(totalQty)} pcs`;
+    const elGrandTotal = document.getElementById('edit-po-grand-total');
+    if (elGrandTotal) elGrandTotal.textContent = NKB.formatCurrency(grandTotal);
+}
+
+function addEditPOLineItem() {
+    if (editPOCatalog.length === 0) return;
+    const defaultProd = editPOCatalog[0];
+    editPOLineItems.push({
+        product_id: defaultProd.id,
+        target_quantity: 1000,
+        unit_price: Number(defaultProd.default_price || 0)
+    });
+    renderEditPOLineItems();
+}
+
+function removeEditPOLineItem(index) {
+    editPOLineItems.splice(index, 1);
+    if (editPOLineItems.length === 0 && editPOCatalog.length > 0) {
+        addEditPOLineItem();
+    } else {
+        renderEditPOLineItems();
+    }
+}
+
+function updateEditPOLineItem(index, field, value) {
+    if (!editPOLineItems[index]) return;
+    if (field === 'product_id') {
+        const prod = editPOCatalog.find(p => p.id === value);
+        editPOLineItems[index].product_id = value;
+        if (prod) {
+            editPOLineItems[index].unit_price = Number(prod.default_price || 0);
+        }
+        renderEditPOLineItems();
+        return;
+    } else if (field === 'target_quantity') {
+        editPOLineItems[index].target_quantity = parseInt(value, 10) || 0;
+    }
+
+    const lineSubtotal = (editPOLineItems[index].target_quantity || 0) * (editPOLineItems[index].unit_price || 0);
+    const lineTotalEl = document.getElementById(`edit-po-line-total-${index}`);
+    if (lineTotalEl) lineTotalEl.textContent = NKB.formatCurrency(lineSubtotal);
+
+    let totalQty = 0;
+    let grandTotal = 0;
+    editPOLineItems.forEach(item => {
+        totalQty += item.target_quantity || 0;
+        grandTotal += (item.target_quantity || 0) * (item.unit_price || 0);
+    });
+
+    const elTotalItems = document.getElementById('edit-po-total-items');
+    if (elTotalItems) elTotalItems.textContent = editPOLineItems.length;
+    const elTotalQty = document.getElementById('edit-po-total-qty');
+    if (elTotalQty) elTotalQty.textContent = `${NKB.formatNumber(totalQty)} pcs`;
+    const elGrandTotal = document.getElementById('edit-po-grand-total');
+    if (elGrandTotal) elGrandTotal.textContent = NKB.formatCurrency(grandTotal);
+}
+
+async function submitEditPO(e) {
+    e.preventDefault();
+    if (!editingPOId) return;
+
+    if (!editPOLineItems || editPOLineItems.length === 0) {
+        NKB.showToast('Please add at least one product line item to the order.', 'error');
+        return;
+    }
+
+    for (const item of editPOLineItems) {
+        if (!item.product_id || item.target_quantity <= 0) {
+            NKB.showToast('All product lines must have valid quantity > 0.', 'error');
+            return;
+        }
+    }
+
+    const poDate = document.getElementById('edit-po-date').value;
+    const deliveryDate = document.getElementById('edit-po-delivery-date').value;
+    const policy = document.getElementById('edit-po-billing-policy').value;
+    const notes = document.getElementById('edit-po-notes').value;
+
+    const res = await NKB.api(`/api/orders/${editingPOId}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+            po_date: poDate || undefined,
+            expected_delivery_date: deliveryDate || null,
+            billing_policy: policy,
+            notes,
+            items: editPOLineItems.map(item => ({
+                product_id: item.product_id,
+                target_quantity: item.target_quantity
+            }))
+        })
+    });
+
+    if (res.success) {
+        NKB.showToast(`Purchase Order ${res.data.po_number} updated successfully!`, 'success');
+        const savedId = editingPOId;
+        closeModal();
+        if (typeof loadOrders === 'function') {
+            loadOrders();
+        }
+        await openViewPOModal(savedId);
+    } else {
+        NKB.showToast(res.error || 'Failed to update PO.', 'error');
+    }
+}
+
 window.openViewPOModal = openViewPOModal;
+window.openEditPOModal = openEditPOModal;
 window.closeModal = closeModal;
 window.NKB = NKB;
+
 
