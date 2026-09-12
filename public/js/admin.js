@@ -8,6 +8,145 @@ let cachedClients = [];
 let cachedProducts = [];
 let cachedPayments = [];
 let cachedEmployees = [];
+let cachedCategories = [];
+
+async function ensureCategoriesLoaded() {
+    if (!cachedCategories || cachedCategories.length === 0) {
+        const res = await NKB.api('/api/products/categories');
+        if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
+            cachedCategories = res.data;
+        } else {
+            cachedCategories = [
+                { name: 'Body Care' },
+                { name: 'Face Care' },
+                { name: 'Sun Care' },
+                { name: 'Bath & Body' },
+                { name: 'Hair Care' },
+                { name: 'Cosmetics' },
+                { name: 'Skincare Treatment' },
+                { name: 'Cosmetics & Skincare' },
+                { name: 'Fragrance & Perfume' },
+                { name: 'Personal Care' }
+            ];
+        }
+    }
+    return cachedCategories;
+}
+
+function showAddCategoryInline(targetSelectId) {
+    const box = document.getElementById(`add-category-box-${targetSelectId}`);
+    if (box) {
+        box.classList.remove('hidden');
+        const input = document.getElementById(`new-category-input-${targetSelectId}`);
+        if (input) {
+            input.focus();
+        }
+    }
+}
+
+function hideAddCategoryInline(targetSelectId) {
+    const box = document.getElementById(`add-category-box-${targetSelectId}`);
+    if (box) {
+        box.classList.add('hidden');
+        const input = document.getElementById(`new-category-input-${targetSelectId}`);
+        if (input) input.value = '';
+    }
+}
+
+async function saveNewCategory(targetSelectId) {
+    const input = document.getElementById(`new-category-input-${targetSelectId}`);
+    if (!input || !input.value.trim()) {
+        NKB.showToast('Please enter a category name.', 'warning');
+        return;
+    }
+    const catName = input.value.trim();
+
+    try {
+        const res = await NKB.api('/api/products/categories', {
+            method: 'POST',
+            body: { name: catName }
+        });
+
+        if (res && res.success && res.data) {
+            const addedCat = res.data;
+            if (!cachedCategories.some(c => c.name.toLowerCase() === addedCat.name.toLowerCase())) {
+                cachedCategories.push(addedCat);
+                cachedCategories.sort((a, b) => a.name.localeCompare(b.name));
+            }
+
+            if (targetSelectId) {
+                const select = document.getElementById(targetSelectId);
+                if (select) {
+                    let exists = false;
+                    for (let opt of select.options) {
+                        if (opt.value.toLowerCase() === addedCat.name.toLowerCase()) {
+                            opt.selected = true;
+                            exists = true;
+                            break;
+                        }
+                    }
+                    if (!exists) {
+                        const newOpt = new Option(addedCat.name, addedCat.name, true, true);
+                        select.add(newOpt);
+                    }
+                }
+                hideAddCategoryInline(targetSelectId);
+            }
+
+            NKB.showToast(`Category "${addedCat.name}" added successfully!`, 'success');
+        } else {
+            NKB.showToast(res ? (res.error || res.message || 'Failed to add category.') : 'Failed to add category.', 'error');
+        }
+    } catch (err) {
+        NKB.showToast('Failed to add category.', 'error');
+    }
+}
+
+async function promptAddNewCategory(targetSelectId = null) {
+    if (targetSelectId && document.getElementById(`add-category-box-${targetSelectId}`)) {
+        showAddCategoryInline(targetSelectId);
+        return;
+    }
+
+    const catName = prompt('Enter new Product Category name (e.g. Perfume & Fragrance):');
+    if (!catName || !catName.trim()) return;
+
+    try {
+        const res = await NKB.api('/api/products/categories', {
+            method: 'POST',
+            body: { name: catName.trim() }
+        });
+
+        if (res && res.success && res.data) {
+            const addedCat = res.data;
+            if (!cachedCategories.some(c => c.name.toLowerCase() === addedCat.name.toLowerCase())) {
+                cachedCategories.push(addedCat);
+                cachedCategories.sort((a, b) => a.name.localeCompare(b.name));
+            }
+            if (targetSelectId) {
+                const select = document.getElementById(targetSelectId);
+                if (select) {
+                    let exists = false;
+                    for (let opt of select.options) {
+                        if (opt.value.toLowerCase() === addedCat.name.toLowerCase()) {
+                            opt.selected = true;
+                            exists = true;
+                            break;
+                        }
+                    }
+                    if (!exists) {
+                        select.add(new Option(addedCat.name, addedCat.name, true, true));
+                    }
+                }
+            }
+            NKB.showToast(`Category "${addedCat.name}" added successfully!`, 'success');
+        } else {
+            NKB.showToast(res ? (res.error || res.message || 'Failed to add category.') : 'Failed to add category.', 'error');
+        }
+    } catch (err) {
+        NKB.showToast('Failed to save category.', 'error');
+    }
+}
 
 async function ensureEmployeesLoaded() {
     if (!cachedEmployees || cachedEmployees.length === 0) {
@@ -90,12 +229,14 @@ function applyRoleBasedUI() {
 }
 
 async function loadInitialData() {
-    const [clientsRes, productsRes] = await Promise.all([
+    const [clientsRes, productsRes, categoriesRes] = await Promise.all([
         NKB.api('/api/clients'),
-        NKB.api('/api/products')
+        NKB.api('/api/products'),
+        NKB.api('/api/products/categories')
     ]);
     if (clientsRes.success) cachedClients = clientsRes.data;
     if (productsRes.success) cachedProducts = productsRes.data;
+    if (categoriesRes && categoriesRes.success) cachedCategories = categoriesRes.data;
 }
 
 // Tab Switching
@@ -1126,52 +1267,43 @@ function closeModal() {
 let currentClientMasterProducts = [];
 
 async function openClientPricingModal(clientId, companyName) {
+    await ensureCategoriesLoaded();
     const root = document.getElementById('modals-root');
     root.innerHTML = `
         <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
             <div class="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl space-y-4 max-h-[92vh] flex flex-col">
                 <div class="flex justify-between items-center border-b border-slate-100 pb-3 flex-shrink-0">
                     <div>
-                        <div class="flex items-center gap-2">
-                            <span class="text-xl">📦</span>
-                            <h3 class="text-lg font-black text-slate-900">Client Product Line & Pricing Management</h3>
-                        </div>
-                        <p class="text-xs text-slate-500">Client: <strong class="text-indigo-600 font-bold">${companyName}</strong></p>
+                        <h3 class="text-lg font-bold text-slate-900">Custom Catalog & Contract Pricing</h3>
+                        <p class="text-xs text-slate-500">Client: <strong class="text-indigo-600">${companyName}</strong></p>
                     </div>
                     <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-xl">&times;</button>
                 </div>
 
-                <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3 bg-indigo-50/70 rounded-xl border border-indigo-200 text-xs flex-shrink-0">
-                    <div class="text-indigo-950">
-                        💡 <strong>Client Catalog:</strong> Only products listed below are visible and purchasable by this client.
+                <!-- Action Bar -->
+                <div class="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200 flex-shrink-0">
+                    <div class="text-xs text-slate-600">
+                        Manage exclusive product prices and SKU mappings for <strong>${companyName}</strong>.
                     </div>
-                    <div class="flex gap-2 flex-shrink-0">
-                        <button type="button" onclick="toggleAssignMasterProductForm()" class="px-3 py-1.5 bg-white hover:bg-slate-50 text-indigo-700 border border-indigo-300 rounded-lg font-bold whitespace-nowrap shadow-sm flex items-center gap-1">
-                            <span>➕</span><span>Assign from Master Catalog</span>
-                        </button>
-                        <button type="button" onclick="openCreateProductModal('${clientId}')" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold whitespace-nowrap shadow-sm shadow-indigo-600/30 flex items-center gap-1" title="Add new cosmetic product directly for this client">
-                            <span>✨</span><span>Add Product for Client</span>
+                    <div class="flex items-center gap-2">
+                        <button onclick="toggleAddClientProductForm()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-xs shadow-sm transition flex items-center gap-1">
+                            <span>✨ Create New Product for this Client</span>
                         </button>
                     </div>
                 </div>
 
-                <!-- 1. Inline Form to Assign Existing Master Product -->
-                <div id="box-assign-master-product" class="hidden p-4 bg-indigo-50/50 border border-indigo-200 rounded-xl space-y-3 flex-shrink-0">
-                    <div class="flex justify-between items-center border-b border-indigo-100 pb-2">
-                        <h4 class="font-bold text-slate-900 text-xs flex items-center gap-1.5">
-                            <span>📦</span><span>Assign Existing Product from Master Catalog</span>
-                        </h4>
-                        <button type="button" onclick="toggleAssignMasterProductForm()" class="text-slate-400 hover:text-slate-600 text-xs">✕ Close</button>
-                    </div>
-                    <form onsubmit="submitAssignMasterProduct(event, '${clientId}')" class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-semibold">
-                        <div class="sm:col-span-3">
-                            <label class="block text-slate-700 mb-1">Select Master Product *</label>
-                            <select id="assign-master-select" onchange="onSelectMasterProductToAssign()" required class="w-full px-2.5 py-1.5 border border-indigo-300 rounded-lg bg-white font-bold text-slate-800">
-                                <option value="">-- Choose a product from catalog --</option>
+                <!-- 1. Form to Assign Master Product to Client with Custom Price -->
+                <div class="p-4 bg-indigo-50/50 border border-indigo-100 rounded-xl space-y-3 flex-shrink-0">
+                    <h4 class="font-bold text-slate-800 text-xs">Assign Product from Master Catalog to this Client</h4>
+                    <form onsubmit="submitAssignClientProduct(event, '${clientId}', '${companyName.replace(/'/g, "\\'")}')" class="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs font-semibold">
+                        <div class="sm:col-span-2">
+                            <label class="block text-slate-600 mb-1">Select Master Product *</label>
+                            <select id="assign-product-id" onchange="onAssignProductSelected()" required class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white font-bold text-slate-800">
+                                <option value="">-- Choose a Product --</option>
                             </select>
                         </div>
-                        <div>
-                            <label class="block text-slate-600 mb-1">Client Custom Brand Name</label>
+                        <div class="sm:col-span-2">
+                            <label class="block text-slate-600 mb-1">Client Custom Product Name (Optional)</label>
                             <input type="text" id="assign-custom-name" placeholder="e.g. ABC Whitening Lotion 250ml" class="w-full px-2.5 py-1.5 border rounded-lg bg-white">
                         </div>
                         <div>
@@ -1211,14 +1343,26 @@ async function openClientPricingModal(clientId, companyName) {
                         </div>
                         <div>
                             <label class="block text-slate-600 mb-1">Category</label>
-                            <select id="new-client-prod-category" class="w-full px-2.5 py-1.5 border rounded-lg bg-white font-bold text-slate-800">
-                                <option value="Face Care">Face Care</option>
-                                <option value="Body Care">Body Care</option>
-                                <option value="Sun Care">Sun Care</option>
-                                <option value="Bath & Body">Bath & Body</option>
-                                <option value="Hair Care">Hair Care</option>
-                                <option value="Cosmetics">Cosmetics</option>
-                            </select>
+                            <div class="flex gap-1">
+                                <select id="new-client-prod-category" class="w-full px-2.5 py-1.5 border rounded-lg bg-white font-bold text-slate-800">
+                                    ${(cachedCategories || []).map(c => `<option value="${c.name}">${c.name}</option>`).join('')}
+                                </select>
+                                <button type="button" onclick="showAddCategoryInline('new-client-prod-category')" title="Add New Category" class="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg font-bold text-xs transition flex items-center gap-0.5 flex-shrink-0">
+                                    <span>➕ Add</span>
+                                </button>
+                            </div>
+                            <div id="add-category-box-new-client-prod-category" class="hidden mt-1.5 p-2 bg-slate-100 border border-indigo-200 rounded-lg space-y-1.5">
+                                <div class="flex items-center justify-between text-[10px] font-bold text-indigo-900">
+                                    <span>🏷️ Add New Category</span>
+                                    <button type="button" onclick="hideAddCategoryInline('new-client-prod-category')" class="text-slate-400 hover:text-slate-600 font-bold">&times;</button>
+                                </div>
+                                <div class="flex gap-1">
+                                    <input type="text" id="new-category-input-new-client-prod-category" onkeydown="if(event.key==='Enter'){event.preventDefault();saveNewCategory('new-client-prod-category');}" placeholder="e.g. Perfume & Fragrance" class="w-full px-2 py-1 text-xs border border-slate-300 rounded bg-white focus:ring-2 focus:ring-indigo-500 font-semibold text-slate-800">
+                                    <button type="button" onclick="saveNewCategory('new-client-prod-category')" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-bold transition flex-shrink-0 shadow-sm">
+                                        Save
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                         <div>
                             <label class="block text-slate-600 mb-1">Formula Code</label>
@@ -1681,10 +1825,19 @@ async function submitEditClient(e, clientId) {
 }
 
 async function openEditProductModal(productId) {
-    await ensureClientsLoaded();
+    await Promise.all([ensureClientsLoaded(), ensureCategoriesLoaded()]);
     const res = await NKB.api(`/api/products/${productId}`);
     if (!res.success || !res.data) return;
     const prod = res.data;
+
+    if (prod.category && !cachedCategories.some(c => c.name.toLowerCase() === prod.category.toLowerCase())) {
+        cachedCategories.push({ name: prod.category });
+        cachedCategories.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    const editCategoryOptions = (cachedCategories || []).map(cat => {
+        return `<option value="${cat.name}" ${prod.category === cat.name ? 'selected' : ''}>${cat.name}</option>`;
+    }).join('');
 
     const root = document.getElementById('modals-root');
     root.innerHTML = `
@@ -1701,16 +1854,29 @@ async function openEditProductModal(productId) {
                             <input type="text" value="${prod.sku}" readonly class="w-full px-3 py-2 border rounded-xl bg-slate-100 font-mono font-bold text-slate-700">
                         </div>
                         <div>
-                            <label class="block text-slate-600 mb-1">Category</label>
-                            <select id="edit-prod-category" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-semibold">
-                                <option value="Body Care" ${prod.category === 'Body Care' ? 'selected' : ''}>Body Care</option>
-                                <option value="Sun Care" ${prod.category === 'Sun Care' ? 'selected' : ''}>Sun Care</option>
-                                <option value="Face Care" ${prod.category === 'Face Care' ? 'selected' : ''}>Face Care</option>
-                                <option value="Bath & Body" ${prod.category === 'Bath & Body' ? 'selected' : ''}>Bath & Body</option>
-                                <option value="Hair Care" ${prod.category === 'Hair Care' ? 'selected' : ''}>Hair Care</option>
-                                <option value="Cosmetics" ${prod.category === 'Cosmetics' ? 'selected' : ''}>Cosmetics</option>
-                                <option value="Skincare Treatment" ${prod.category === 'Skincare Treatment' ? 'selected' : ''}>Skincare Treatment</option>
-                            </select>
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="block text-slate-600 font-bold">Category</label>
+                            </div>
+                            <div class="flex gap-1.5">
+                                <select id="edit-prod-category" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-semibold text-slate-900">
+                                    ${editCategoryOptions}
+                                </select>
+                                <button type="button" onclick="showAddCategoryInline('edit-prod-category')" title="Add New Category" class="px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl font-bold text-xs transition flex items-center gap-1 flex-shrink-0">
+                                    <span>➕ Add</span>
+                                </button>
+                            </div>
+                            <div id="add-category-box-edit-prod-category" class="hidden mt-2 p-2.5 bg-slate-50 border border-indigo-200 rounded-xl space-y-2">
+                                <div class="flex items-center justify-between text-[11px] font-bold text-indigo-900">
+                                    <span>🏷️ Add New Category</span>
+                                    <button type="button" onclick="hideAddCategoryInline('edit-prod-category')" class="text-slate-400 hover:text-slate-600 font-bold">&times;</button>
+                                </div>
+                                <div class="flex gap-1.5">
+                                    <input type="text" id="new-category-input-edit-prod-category" onkeydown="if(event.key==='Enter'){event.preventDefault();saveNewCategory('edit-prod-category');}" placeholder="e.g. Perfume & Fragrance" class="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500 font-semibold text-slate-800">
+                                    <button type="button" onclick="saveNewCategory('edit-prod-category')" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition flex-shrink-0 shadow-sm">
+                                        Save
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div>
@@ -2939,10 +3105,14 @@ async function autoGenerateProductSKU(force = false) {
 }
 
 async function openCreateProductModal(preselectedClientId = null) {
-    await ensureClientsLoaded();
+    await Promise.all([ensureClientsLoaded(), ensureCategoriesLoaded()]);
     const clientOptions = (cachedClients || []).map(c => {
         const isSelected = preselectedClientId && c.id === preselectedClientId;
         return `<option value="${c.id}" ${isSelected ? 'selected' : ''}>${c.company_name || c.name}</option>`;
+    }).join('');
+
+    const categoryOptions = (cachedCategories || []).map(cat => {
+        return `<option value="${cat.name}">${cat.name}</option>`;
     }).join('');
 
     const root = document.getElementById('modals-root');
@@ -2989,16 +3159,29 @@ async function openCreateProductModal(preselectedClientId = null) {
                             </div>
                         </div>
                         <div>
-                            <label class="block text-slate-700 font-bold mb-1">Category *</label>
-                            <select id="prod-category" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 font-semibold focus:ring-2 focus:ring-indigo-500">
-                                <option value="Body Care">Body Care</option>
-                                <option value="Face Care">Face Care</option>
-                                <option value="Sun Care">Sun Care</option>
-                                <option value="Bath & Body">Bath & Body</option>
-                                <option value="Hair Care">Hair Care</option>
-                                <option value="Cosmetics">Cosmetics</option>
-                                <option value="Skincare Treatment">Skincare Treatment</option>
-                            </select>
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="block text-slate-700 font-bold">Category *</label>
+                            </div>
+                            <div class="flex gap-1.5">
+                                <select id="prod-category" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 font-semibold focus:ring-2 focus:ring-indigo-500">
+                                    ${categoryOptions}
+                                </select>
+                                <button type="button" onclick="showAddCategoryInline('prod-category')" title="Add New Category" class="px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl font-bold text-xs transition flex items-center gap-1 flex-shrink-0">
+                                    <span>➕ Add</span>
+                                </button>
+                            </div>
+                            <div id="add-category-box-prod-category" class="hidden mt-2 p-2.5 bg-slate-50 border border-indigo-200 rounded-xl space-y-2">
+                                <div class="flex items-center justify-between text-[11px] font-bold text-indigo-900">
+                                    <span>🏷️ Add New Category</span>
+                                    <button type="button" onclick="hideAddCategoryInline('prod-category')" class="text-slate-400 hover:text-slate-600 font-bold">&times;</button>
+                                </div>
+                                <div class="flex gap-1.5">
+                                    <input type="text" id="new-category-input-prod-category" onkeydown="if(event.key==='Enter'){event.preventDefault();saveNewCategory('prod-category');}" placeholder="e.g. Perfume & Fragrance" class="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500 font-semibold text-slate-800">
+                                    <button type="button" onclick="saveNewCategory('prod-category')" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition flex-shrink-0 shadow-sm">
+                                        Save
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="grid grid-cols-2 gap-3">

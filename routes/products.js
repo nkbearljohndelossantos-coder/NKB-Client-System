@@ -193,6 +193,54 @@ router.get('/', authenticateToken, (req, res) => {
 });
 
 /**
+ * GET /api/products/categories
+ * List all available product categories
+ */
+router.get('/categories', authenticateToken, (req, res) => {
+    try {
+        const categories = db.prepare('SELECT * FROM product_categories ORDER BY name ASC').all();
+        return res.json({ success: true, data: categories });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/products/categories
+ * Add a new product category
+ */
+router.post('/categories', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'SUPER_ADMIN'), (req, res) => {
+    const { name } = req.body;
+    if (!name || !name.trim()) {
+        return res.status(400).json({ success: false, error: 'Category name is required.' });
+    }
+    const cleanName = name.trim();
+    try {
+        const existing = db.prepare('SELECT * FROM product_categories WHERE LOWER(name) = LOWER(?)').get(cleanName);
+        if (existing) {
+            return res.json({ success: true, data: existing, message: 'Category already exists.' });
+        }
+        const id = uuidv4();
+        db.prepare('INSERT INTO product_categories (id, name) VALUES (?, ?)').run(id, cleanName);
+        const created = db.prepare('SELECT * FROM product_categories WHERE id = ?').get(id);
+
+        logAudit({
+            userId: req.user.id,
+            userName: req.user.name,
+            userRole: req.user.role,
+            action: 'CREATE_CATEGORY',
+            entityType: 'PRODUCT_CATEGORY',
+            entityId: cleanName,
+            details: { id, name: cleanName }
+        });
+
+        return res.status(201).json({ success: true, data: created });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
  * GET /api/products/:id
  */
 router.get('/:id', authenticateToken, (req, res) => {

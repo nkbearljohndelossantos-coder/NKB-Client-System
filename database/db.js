@@ -58,6 +58,43 @@ if (useMysql) {
         console.warn('Migration note:', migErr.message);
     }
 
+    // Auto-initialize and seed product_categories
+    try {
+        db.exec(`
+            CREATE TABLE IF NOT EXISTS product_categories (
+                id TEXT PRIMARY KEY,
+                name TEXT UNIQUE NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+        `);
+        const catCount = db.prepare('SELECT COUNT(*) as count FROM product_categories').get().count;
+        if (catCount === 0) {
+            const defaultCats = [
+                'Body Care',
+                'Face Care',
+                'Sun Care',
+                'Bath & Body',
+                'Hair Care',
+                'Cosmetics',
+                'Skincare Treatment',
+                'Cosmetics & Skincare',
+                'Fragrance & Perfume',
+                'Personal Care'
+            ];
+            let existingInProducts = [];
+            try {
+                existingInProducts = db.prepare('SELECT DISTINCT category FROM products WHERE category IS NOT NULL').all().map(r => (r.category || '').trim());
+            } catch (_) {}
+            const allToSeed = Array.from(new Set([...defaultCats, ...existingInProducts])).filter(Boolean);
+            const ins = db.prepare('INSERT OR IGNORE INTO product_categories (id, name) VALUES (?, ?)');
+            for (const c of allToSeed) {
+                ins.run(uuidv4(), c);
+            }
+        }
+    } catch (catErr) {
+        console.warn('Categories init note:', catErr.message);
+    }
+
     db.transaction = function (fn) {
         return function (...args) {
             db.exec('BEGIN TRANSACTION;');

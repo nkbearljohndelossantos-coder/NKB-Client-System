@@ -73,6 +73,13 @@ CREATE TABLE IF NOT EXISTS products (
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Product Categories Table
+CREATE TABLE IF NOT EXISTS product_categories (
+    id TEXT PRIMARY KEY,
+    name TEXT UNIQUE NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- Client-Specific Product Catalog & Custom Pricing Table
 CREATE TABLE IF NOT EXISTS client_product_prices (
     id TEXT PRIMARY KEY,
