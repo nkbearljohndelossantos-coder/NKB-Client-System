@@ -319,6 +319,14 @@
             font-size: 7.5pt !important;
         }
 
+        .items-table-ultra-dense {
+            font-size: 6.8pt !important;
+        }
+
+        .items-table-ultra-dense thead th {
+            padding-bottom: 2px !important;
+        }
+
         .items-table thead th {
             font-weight: bold;
             text-align: left;
@@ -565,7 +573,13 @@
             }
 
             const isDense = items.length > 5;
-            const tableClass = isDense ? 'items-table items-table-dense' : 'items-table';
+            const isUltraDense = items.length > 9;
+            let tableClass = 'items-table';
+            if (isUltraDense) {
+                tableClass += ' items-table-ultra-dense';
+            } else if (isDense) {
+                tableClass += ' items-table-dense';
+            }
 
             const itemsRows = items.map(item => {
                 const desc = item.product_name || item.name || '-';
