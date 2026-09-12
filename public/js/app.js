@@ -412,11 +412,11 @@ async function openViewPOModal(poId) {
                         </div>
                         <div class="space-y-1">
                             <span class="text-[10px] uppercase font-bold text-slate-400">Timeline & Personnel</span>
-                            <div>Order Date & Time: <strong class="text-slate-800">${po.created_at ? NKB.formatDateTime(po.created_at) : NKB.formatDate(po.po_date)}</strong></div>
+                            <div>Order Date: <strong class="text-slate-800">${NKB.formatDate(po.po_date || po.created_at)}</strong></div>
                             <div>Target Delivery: <strong class="text-slate-800">${po.expected_delivery_date ? NKB.formatDate(po.expected_delivery_date) : 'As Scheduled'}</strong></div>
                             <div>Created By: <strong class="text-slate-700">${po.creator_name || 'System'}</strong></div>
                             ${po.approver_name ? `<div>Approved By: <strong class="text-emerald-700">${po.approver_name}</strong></div>` : ''}
-                            ${po.approved_at ? `<div class="text-[11px] text-slate-500">Approved Date: ${NKB.formatDateTime(po.approved_at)}</div>` : ''}
+                            ${po.approved_at ? `<div class="text-[11px] text-slate-500">Approved Date: ${NKB.formatDate(po.approved_at)}</div>` : ''}
                         </div>
                         <div class="space-y-1">
                             <span class="text-[10px] uppercase font-bold text-slate-400">Contract & Tolerance Policy</span>

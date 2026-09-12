@@ -264,7 +264,6 @@ async function loadOrders() {
                 </td>
                 <td class="py-3 px-4 text-slate-600 whitespace-nowrap">
                     <div class="font-medium text-slate-800">${NKB.formatDate(po.po_date)}</div>
-                    ${po.created_at ? `<div class="text-[10px] text-slate-400 font-mono">${NKB.formatTime(po.created_at)}</div>` : ''}
                 </td>
                 <td class="py-3 px-4 font-bold text-slate-800">${po.company_name}</td>
                 <td class="py-3 px-4">

@@ -86,7 +86,6 @@ async function loadClientDashboard() {
                 <td class="py-3 px-4 font-bold text-indigo-600 cursor-pointer hover:underline" onclick="openViewPOModal('${po.id}')" title="Click to view full PO details">${po.po_number}</td>
                 <td class="py-3 px-4 text-slate-600">
                     <div class="font-medium text-slate-800">${NKB.formatDate(po.po_date)}</div>
-                    ${po.created_at ? `<div class="text-[10px] text-slate-400 font-mono">${NKB.formatTime(po.created_at)}</div>` : ''}
                 </td>
                 <td class="py-3 px-4"><span class="badge bg-slate-100 text-slate-700">±${po.tolerance_percent}%</span></td>
                 <td class="py-3 px-4"><span class="badge ${po.billing_policy === 'ACTUAL_DELIVERY' ? 'bg-indigo-50 text-indigo-700' : 'bg-purple-50 text-purple-700'}">${po.billing_policy}</span></td>
@@ -320,7 +319,6 @@ async function loadClientOrders() {
                 <td class="py-3 px-4 font-bold text-indigo-600 cursor-pointer hover:underline whitespace-nowrap" onclick="openViewPOModal('${po.id}')" title="Click to view full PO details">${po.po_number}</td>
                 <td class="py-3 px-4 text-slate-600 whitespace-nowrap">
                     <div class="font-medium text-slate-800">${NKB.formatDate(po.po_date)}</div>
-                    ${po.created_at ? `<div class="text-[10px] text-slate-400 font-mono">${NKB.formatTime(po.created_at)}</div>` : ''}
                 </td>
                 <td class="py-3 px-4">
                     <div class="space-y-1 w-60">
