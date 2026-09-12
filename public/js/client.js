@@ -95,7 +95,7 @@ async function loadClientDashboard() {
                     <button onclick="openViewPOModal('${po.id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="View Full Order Info">
                         <span>👁️ View</span>
                     </button>
-                    <a href="/print-po.html?id=${po.id}" target="_blank" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Print Purchase Order">
+                    <a href="/print-po.html?id=${po.id}" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Print Purchase Order">
                         <span>🖨️ Print</span>
                     </a>
                     ${(po.jo_count === 0 && (po.status === 'PENDING_APPROVAL' || po.status === 'DRAFT')) ? `
@@ -339,7 +339,7 @@ async function loadClientOrders() {
                     <button onclick="openViewPOModal('${po.id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="View Full Order Info">
                         <span>👁️ View</span>
                     </button>
-                    <a href="/print-po.html?id=${po.id}" target="_blank" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Print Purchase Order">
+                    <a href="/print-po.html?id=${po.id}" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Print Purchase Order">
                         <span>🖨️ Print</span>
                     </a>
                     ${(po.jo_count === 0 && (po.status === 'PENDING_APPROVAL' || po.status === 'DRAFT')) ? `
@@ -474,7 +474,7 @@ async function loadClientDeliveries() {
                     <button onclick="openViewPOModal('${dr.po_id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-block" title="View Purchase Order Details">
                         👁️ View PO
                     </button>
-                    <a href="/print-dr.html?id=${dr.id}" target="_blank" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-block">
+                    <a href="/print-dr.html?id=${dr.id}" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-block">
                         🖨️ View DR
                     </a>
                     ${dr.status === 'PENDING_CLIENT_ACCEPTANCE' ? `
@@ -747,7 +747,7 @@ async function loadClientInvoices() {
                             👁️ View PO
                         </button>
                     ` : ''}
-                    <a href="/print-invoice.html?id=${si.id}" target="_blank" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-block">
+                    <a href="/print-invoice.html?id=${si.id}" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-block">
                         🖨️ View SI
                     </a>
                 </td>

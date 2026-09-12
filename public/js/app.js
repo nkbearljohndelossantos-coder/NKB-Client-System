@@ -413,10 +413,10 @@ async function openViewPOModal(poId) {
                         </div>
                     </div>
                     <div class="flex items-center gap-2">
-                        <a href="/print-jo.html?po_id=${po.id}" target="_blank" class="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm" title="Print Job Order / Sales Order (2 Portrait Copies on A4 Landscape)">
+                        <a href="/print-jo.html?po_id=${po.id}" class="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm" title="Print Job Order / Sales Order (2 Portrait Copies on A4 Landscape)">
                             <span>🖨️ Print JO / SO</span>
                         </a>
-                        <a href="/print-po.html?id=${po.id}" target="_blank" class="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm" title="Print Purchase Order">
+                        <a href="/print-po.html?id=${po.id}" class="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm" title="Print Purchase Order">
                             <span>🖨️ Print PO</span>
                         </a>
                         <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-xl px-2">&times;</button>
@@ -532,7 +532,7 @@ async function openViewPOModal(poId) {
                                     <span class="font-bold text-slate-700 block mb-1">Job Orders (${jobOrders.length}):</span>
                                     ${jobOrders.length > 0 ? `
                                         <ul class="space-y-1">
-                                            ${jobOrders.map(j => `<li class="font-mono bg-white p-2 rounded-lg border border-slate-200 flex justify-between items-center"><div><strong>${j.jo_number}</strong><br><span class="text-[10px] text-slate-500">${NKB.formatNumber(j.target_quantity)} pcs • ${j.status}</span></div><a href="/print-jo.html?id=${j.id}" target="_blank" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-bold transition inline-flex items-center gap-1" title="Print this Job Order">🖨️ Print</a></li>`).join('')}
+                                            ${jobOrders.map(j => `<li class="font-mono bg-white p-2 rounded-lg border border-slate-200 flex justify-between items-center"><div><strong>${j.jo_number}</strong><br><span class="text-[10px] text-slate-500">${NKB.formatNumber(j.target_quantity)} pcs • ${j.status}</span></div><a href="/print-jo.html?id=${j.id}" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-bold transition inline-flex items-center gap-1" title="Print this Job Order">🖨️ Print</a></li>`).join('')}
                                         </ul>
                                     ` : '<span class="text-slate-400">None yet</span>'}
                                 </div>
@@ -577,7 +577,7 @@ async function openViewPOModal(poId) {
                         ` : ''}
                     </div>
                     <div class="flex items-center gap-2">
-                        <a href="/print-po.html?id=${po.id}" target="_blank" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-xs shadow-md shadow-indigo-600/30 transition flex items-center gap-1.5">
+                        <a href="/print-po.html?id=${po.id}" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-xs shadow-md shadow-indigo-600/30 transition flex items-center gap-1.5">
                             <span>🖨️ Print Purchase Order</span>
                         </a>
                         <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition">
