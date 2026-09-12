@@ -15,6 +15,8 @@ router.get('/', authenticateToken, (req, res) => {
     let query = `
         SELECT jo.*, po.po_number, po.client_id, c.company_name, p.name as product_name, p.sku, p.unit,
                (SELECT COUNT(*) FROM production_batches WHERE jo_id = jo.id) as batch_count,
+               (SELECT batch_number FROM production_batches WHERE jo_id = jo.id ORDER BY created_at DESC LIMIT 1) as latest_batch_number,
+               (SELECT status FROM production_batches WHERE jo_id = jo.id ORDER BY created_at DESC LIMIT 1) as latest_batch_status,
                (SELECT SUM(actual_yield) FROM production_batches WHERE jo_id = jo.id) as total_yield
         FROM job_orders jo
         JOIN purchase_orders po ON jo.po_id = po.id

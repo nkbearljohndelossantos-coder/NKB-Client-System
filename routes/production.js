@@ -111,6 +111,11 @@ router.get('/batches/:id', authenticateToken, (req, res) => {
  */
 router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), (req, res) => {
     const {
+        create_all,
+        po_id,
+        client_id,
+        jo_ids,
+        items,
         jo_id,
         target_quantity,
         formula_code,
@@ -122,6 +127,156 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
         line_assignment
     } = req.body;
 
+    // CASE 1: Batch creation for all products / multiple JOs in one execution
+    if (create_all || items || (jo_ids && Array.isArray(jo_ids) && jo_ids.length > 0) || (!jo_id && (po_id || client_id))) {
+        let candidateJOs = [];
+        if (items && Array.isArray(items) && items.length > 0) {
+            const ids = items.map(i => i.jo_id);
+            const placeholders = ids.map(() => '?').join(',');
+            candidateJOs = db.prepare(`
+                SELECT jo.*, p.shelf_life_months, p.formula_code as default_formula, p.name as product_name
+                FROM job_orders jo
+                JOIN products p ON jo.product_id = p.id
+                WHERE jo.id IN (${placeholders})
+            `).all(...ids);
+            const itemMap = new Map(items.map(i => [i.jo_id, i]));
+            candidateJOs.forEach(j => {
+                const spec = itemMap.get(j.id);
+                if (spec && spec.target_quantity) j.target_quantity = parseInt(spec.target_quantity);
+                if (spec && spec.formula_code) j.custom_formula_code = spec.formula_code;
+            });
+        } else if (jo_ids && Array.isArray(jo_ids) && jo_ids.length > 0) {
+            const placeholders = jo_ids.map(() => '?').join(',');
+            candidateJOs = db.prepare(`
+                SELECT jo.*, p.shelf_life_months, p.formula_code as default_formula, p.name as product_name
+                FROM job_orders jo
+                JOIN products p ON jo.product_id = p.id
+                WHERE jo.id IN (${placeholders})
+            `).all(...jo_ids);
+        } else if (po_id) {
+            candidateJOs = db.prepare(`
+                SELECT jo.*, p.shelf_life_months, p.formula_code as default_formula, p.name as product_name
+                FROM job_orders jo
+                JOIN products p ON jo.product_id = p.id
+                WHERE jo.po_id = ? AND jo.status != 'CANCELLED'
+            `).all(po_id);
+        } else if (client_id) {
+            candidateJOs = db.prepare(`
+                SELECT jo.*, p.shelf_life_months, p.formula_code as default_formula, p.name as product_name
+                FROM job_orders jo
+                JOIN purchase_orders po ON jo.po_id = po.id
+                JOIN products p ON jo.product_id = p.id
+                WHERE po.client_id = ? AND jo.status != 'CANCELLED'
+            `).all(client_id);
+        }
+
+        if (!candidateJOs || candidateJOs.length === 0) {
+            return res.status(400).json({ success: false, error: 'No active Job Orders found to create batches for.' });
+        }
+
+        // Filter out JOs that already have active batches unless explicit items were provided
+        let itemsToCreate = candidateJOs;
+        if (!items || items.length === 0) {
+            const existingBatches = db.prepare(`
+                SELECT jo_id FROM production_batches
+                WHERE jo_id IN (${candidateJOs.map(() => '?').join(',')}) AND status NOT IN ('REJECTED', 'COMPLETED')
+            `).all(...candidateJOs.map(j => j.id));
+            const existingJOIds = new Set(existingBatches.map(b => b.jo_id));
+            itemsToCreate = candidateJOs.filter(j => !existingJOIds.has(j.id));
+        }
+
+        if (itemsToCreate.length === 0) {
+            return res.json({
+                success: true,
+                count: 0,
+                already_existed: true,
+                message: 'All products in this order already have active production batches.',
+                data: []
+            });
+        }
+
+        const createdBatches = [];
+        const affectedPOIds = new Set();
+
+        const tx = db.transaction(() => {
+            for (const jo of itemsToCreate) {
+                const batchId = uuidv4();
+                const batchNumber = getNextDocumentNumber('BAT');
+
+                let expDate = expiry_date;
+                if (!expDate) {
+                    const prodDate = production_date ? new Date(production_date) : new Date();
+                    prodDate.setMonth(prodDate.getMonth() + (jo.shelf_life_months || 24));
+                    expDate = prodDate.toISOString().split('T')[0];
+                }
+
+                db.prepare(`
+                    INSERT INTO production_batches
+                    (id, batch_number, jo_id, product_id, formula_code, production_date, expiry_date, target_quantity, actual_yield, variance_quantity, variance_percent, status, compounding_operator, bottling_lead, qc_inspector, line_assignment, created_by)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0.0, 'MIXING', ?, ?, ?, ?, ?)
+                `).run(
+                    batchId,
+                    batchNumber,
+                    jo.id,
+                    jo.product_id,
+                    jo.custom_formula_code || jo.default_formula || formula_code || 'FORM-2026-V1',
+                    production_date || new Date().toISOString().split('T')[0],
+                    expDate,
+                    parseInt(jo.target_quantity),
+                    compounding_operator || null,
+                    bottling_lead || null,
+                    qc_inspector || null,
+                    line_assignment || 'Cleanroom Line 1 (Alpha)',
+                    req.user.id
+                );
+
+                db.prepare("UPDATE job_orders SET status = 'IN_PRODUCTION' WHERE id = ? AND status != 'COMPLETED'").run(jo.id);
+                if (jo.po_id) affectedPOIds.add(jo.po_id);
+
+                createdBatches.push({
+                    id: batchId,
+                    batch_number: batchNumber,
+                    jo_id: jo.id,
+                    jo_number: jo.jo_number,
+                    product_id: jo.product_id,
+                    product_name: jo.product_name,
+                    target_quantity: jo.target_quantity
+                });
+            }
+
+            for (const pId of affectedPOIds) {
+                db.prepare("UPDATE purchase_orders SET status = 'IN_PRODUCTION' WHERE id = ? AND status != 'COMPLETED'").run(pId);
+            }
+        });
+
+        tx();
+
+        logAudit({
+            userId: req.user.id,
+            userName: req.user.name,
+            userRole: req.user.role,
+            action: 'CREATE_BATCH_BATCH',
+            entityType: 'PRODUCTION_BATCH',
+            entityId: createdBatches.map(b => b.batch_number).join(', '),
+            details: {
+                batchCount: createdBatches.length,
+                batches: createdBatches,
+                compounding_operator,
+                bottling_lead,
+                qc_inspector,
+                line_assignment
+            }
+        });
+
+        return res.status(201).json({
+            success: true,
+            count: createdBatches.length,
+            message: `Successfully started ${createdBatches.length} production batches.`,
+            data: createdBatches
+        });
+    }
+
+    // CASE 2: Single batch creation
     if (!jo_id || !target_quantity) {
         return res.status(400).json({ success: false, error: 'Job Order ID and Target Quantity are required.' });
     }
@@ -167,6 +322,11 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
         line_assignment || 'Line 1 (Alpha)',
         req.user.id
     );
+
+    db.prepare("UPDATE job_orders SET status = 'IN_PRODUCTION' WHERE id = ? AND status != 'COMPLETED'").run(jo_id);
+    if (jo.po_id) {
+        db.prepare("UPDATE purchase_orders SET status = 'IN_PRODUCTION' WHERE id = ? AND status != 'COMPLETED'").run(jo.po_id);
+    }
 
     logAudit({
         userId: req.user.id,

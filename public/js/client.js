@@ -133,7 +133,14 @@ function renderProductCards() {
         return;
     }
 
-    container.innerHTML = clientProducts.map(p => `
+    const isStandardCatalog = clientProducts.every(p => !p.has_custom_price);
+
+    container.innerHTML = (isStandardCatalog ? `
+        <div class="col-span-full p-3.5 bg-indigo-50/80 border border-indigo-200 rounded-2xl text-xs text-indigo-950 flex items-center gap-2 mb-1 font-medium">
+            <span class="text-base">🏢</span>
+            <div><strong>NKB Manufacturing Catalog:</strong> Showing all available cosmetic products. Select items and quantities below to place your Purchase Order.</div>
+        </div>
+    ` : '') + clientProducts.map(p => `
         <div class="p-4 rounded-2xl border border-slate-200 hover:border-indigo-200 bg-white hover:bg-slate-50/50 shadow-sm transition flex flex-col justify-between space-y-3">
             <div>
                 <div class="flex justify-between items-start">

@@ -110,8 +110,9 @@ router.get('/', authenticateToken, (req, res) => {
             } catch (e) {}
         }
 
-        // By default (or for CLIENT role, or assignedOnly=true), return ONLY this client's products
-        if (req.query.assignedOnly === 'true' || req.user.role === 'CLIENT' || req.query.allMasterCatalog !== 'true') {
+        // If client has assigned products, return those assigned products
+        // If client doesn't have products yet (assignedCount === 0), show all company products!
+        if (checkAssigned && checkAssigned.cnt > 0 && (req.query.assignedOnly === 'true' || req.user.role === 'CLIENT' || req.query.allMasterCatalog !== 'true')) {
             query = `
                 SELECT p.id,
                        COALESCE(cpp.custom_sku, p.sku) as sku,
@@ -136,7 +137,7 @@ router.get('/', authenticateToken, (req, res) => {
             `;
             params.push(targetClientId);
         } else {
-            // For Client Portal or pricing modal overview: Return all products with custom price applied if assigned
+            // Client doesn't have products yet (or allMasterCatalog requested): Return all company products
             query = `
                 SELECT p.id,
                        COALESCE(cpp.custom_sku, p.sku) as sku,
@@ -157,7 +158,7 @@ router.get('/', authenticateToken, (req, res) => {
                        p.shelf_life_months, p.current_stock, p.is_active, p.created_at, p.updated_at
                 FROM products p
                 LEFT JOIN client_product_prices cpp ON cpp.product_id = p.id AND cpp.client_id = ?
-                WHERE 1=1
+                WHERE p.is_active = 1
             `;
             params.push(targetClientId);
         }

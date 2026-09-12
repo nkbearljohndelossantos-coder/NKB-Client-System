@@ -432,7 +432,8 @@ router.get('/:id/pricing', authenticateToken, enforceClientIsolation, (req, res)
             client,
             assigned_products: assignedProducts,
             master_products: masterProducts,
-            products: allProducts
+            products: allProducts,
+            has_custom_pricing: assignedProducts.length > 0
         }
     });
 });

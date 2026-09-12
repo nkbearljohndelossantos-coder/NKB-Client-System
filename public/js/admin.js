@@ -412,6 +412,7 @@ async function loadOrders() {
 
             const totalItemsCount = po.items ? po.items.length : 0;
             const allJOsStarted = totalItemsCount > 0 && (po.jo_count >= totalItemsCount);
+            const allBatchesStarted = totalItemsCount > 0 && po.items && po.items.every(it => it.batch_number);
 
             return `
             <tr class="hover:bg-slate-50 transition">
@@ -450,13 +451,17 @@ async function loadOrders() {
                         </button>
                     ` : ''}
                     ${(po.status === 'APPROVED' || po.status === 'IN_PRODUCTION') ? `
-                        ${allJOsStarted ? `
-                            <button onclick="openCreateJOModal('${po.id}', '${po.po_number}', '${po.company_name.replace(/'/g, "\\'")}')" class="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="All products have active Job Orders. Click to view/manage.">
-                                <span>✓ All JOs Active</span>
-                            </button>
-                        ` : `
+                        ${!allJOsStarted ? `
                             <button onclick="openCreateJOModal('${po.id}', '${po.po_number}', '${po.company_name.replace(/'/g, "\\'")}')" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-extrabold transition inline-flex items-center gap-1.5 shadow-sm" title="Start Job Orders for all products in this order for ${po.company_name}">
                                 <span>🏭 Start Job Order (All Products)</span>
+                            </button>
+                        ` : allBatchesStarted ? `
+                            <button onclick="openCreateAllBatchesModal('${po.client_id}', '${po.id}', '${po.company_name.replace(/'/g, "\\'")}')" class="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="All products have active production batches. Click to view/manage.">
+                                <span>✓ All Batches Active</span>
+                            </button>
+                        ` : `
+                            <button onclick="openCreateAllBatchesModal('${po.client_id}', '${po.id}', '${po.company_name.replace(/'/g, "\\'")}')" class="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-xl text-xs font-extrabold transition inline-flex items-center gap-1.5 shadow-md shadow-purple-600/20" title="Start Production Batches for all products in this order for ${po.company_name}">
+                                <span>⚗️ Start Batch (All Products)</span>
                             </button>
                         `}
                     ` : ''}
@@ -543,6 +548,8 @@ function renderJobOrdersTable(jobOrders) {
         const totalQty = group.items.reduce((sum, j) => sum + (j.target_quantity || 0), 0);
         const primaryPo = group.items[0]?.po_number || '';
         const clientSO = primaryPo ? primaryPo.replace('PO-', 'SO-') : 'SO-2026-000001';
+        const pendingBatchItems = group.items.filter(j => !j.batch_count || j.batch_count === 0);
+        const allBatchesStarted = group.items.length > 0 && pendingBatchItems.length === 0;
 
         html += `
             <!-- Client Group Banner Row -->
@@ -557,9 +564,20 @@ function renderJobOrdersTable(jobOrders) {
                                 <span class="text-[11px] text-indigo-700 font-semibold ml-2">(${group.items.length} Product${group.items.length > 1 ? 's' : ''} in Production • Total: ${NKB.formatNumber(totalQty)} pcs)</span>
                             </div>
                         </div>
-                        <a href="/print-jo.html?client_id=${group.clientId}&po_id=${group.items[0]?.po_id || ''}" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-bold transition inline-flex items-center gap-1.5 shadow-sm" title="Print Job Order / Sales Order for ${group.companyName} (${clientSO}) (2 Portrait Copies on A4 Landscape)">
-                            <span>🖨️ Print Client JO (${group.items.length} Products)</span>
-                        </a>
+                        <div class="flex items-center gap-2">
+                            <a href="/print-jo.html?client_id=${group.clientId}&po_id=${group.items[0]?.po_id || ''}" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-bold transition inline-flex items-center gap-1.5 shadow-sm" title="Print Job Order / Sales Order for ${group.companyName} (${clientSO}) (2 Portrait Copies on A4 Landscape)">
+                                <span>🖨️ Print Client JO (${group.items.length} Products)</span>
+                            </a>
+                            ${allBatchesStarted ? `
+                                <button onclick="openCreateAllBatchesModal('${group.clientId}', '${group.items[0]?.po_id || ''}', '${group.companyName.replace(/'/g, "\\'")}')" class="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl text-xs font-bold transition inline-flex items-center gap-1.5 shadow-sm" title="All products have active production batches. Click to view or start additional batch run.">
+                                    <span>✓ All Batches Active</span>
+                                </button>
+                            ` : `
+                                <button onclick="openCreateAllBatchesModal('${group.clientId}', '${group.items[0]?.po_id || ''}', '${group.companyName.replace(/'/g, "\\'")}')" class="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-xl text-xs font-extrabold transition inline-flex items-center gap-1.5 shadow-md shadow-purple-600/20" title="Start Production Batches for all products in this order for ${group.companyName}">
+                                    <span>⚗️ Start Batch (All Products)</span>
+                                </button>
+                            `}
+                        </div>
                     </div>
                 </td>
             </tr>
@@ -567,6 +585,7 @@ function renderJobOrdersTable(jobOrders) {
 
         // Product Job Order rows under this client (7 clean columns)
         group.items.forEach(jo => {
+            const hasBatch = jo.batch_count > 0;
             html += `
             <tr class="hover:bg-slate-50 transition border-b border-slate-100 last:border-b-2">
                 <td class="py-3 px-4 font-bold text-indigo-600 font-mono">${jo.jo_number}</td>
@@ -589,9 +608,15 @@ function renderJobOrdersTable(jobOrders) {
                     <a href="/print-jo.html?client_id=${jo.client_id}&po_id=${jo.po_id}" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Print Client Job Order / Sales Order (${clientSO}) (2 Portrait Copies on A4 Landscape)">
                         🖨️ Print
                     </a>
-                    <button onclick="openCreateBatchModal('${jo.id}', '${jo.jo_number}', ${jo.target_quantity}, '${jo.product_name}')" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition">
-                        + Start Batch
-                    </button>
+                    ${hasBatch ? `
+                        <span class="px-2.5 py-1 bg-purple-50 text-purple-700 border border-purple-200 rounded-lg text-xs font-bold font-mono inline-flex items-center gap-1" title="Batch ${jo.latest_batch_number || ''} Active (${jo.latest_batch_status || 'MIXING'})">
+                            <span>✓ ${jo.latest_batch_number || 'Batch Active'}</span>
+                        </span>
+                    ` : `
+                        <button onclick="openCreateBatchModal('${jo.id}', '${jo.jo_number}', ${jo.target_quantity}, '${jo.product_name.replace(/'/g, "\\'")}')" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition">
+                            + Start Batch
+                        </button>
+                    `}
                 </td>
             </tr>
             `;
@@ -1316,37 +1341,120 @@ async function loadClients() {
 
 async function loadProducts() {
     const res = await NKB.api('/api/products');
-    const tbody = document.getElementById('table-products-body');
-
     if (res.success && res.data && res.data.length > 0) {
         cachedProducts = res.data;
-        tbody.innerHTML = res.data.map(p => `
-            <tr class="hover:bg-slate-50 transition">
-                <td class="py-3 px-4 font-mono font-bold text-indigo-600">${p.sku}</td>
-                <td class="py-3 px-4 font-bold text-slate-900">${p.name}</td>
-                <td class="py-3 px-4"><span class="badge bg-slate-100 text-slate-700">${p.category}</span></td>
-                <td class="py-3 px-4">
-                    ${p.client_name 
-                        ? `<button onclick="switchTab('clients')" class="badge bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold border border-indigo-200 transition" title="View in B2B Clients Directory">🏢 ${p.client_name}</button>` 
-                        : `<span class="badge bg-slate-100 text-slate-500">Master / All Clients</span>`}
-                </td>
-                <td class="py-3 px-4 font-extrabold text-slate-900">${NKB.formatCurrency(p.default_price)}</td>
-                <td class="py-3 px-4"><span class="badge ${p.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}">${p.is_active ? 'ACTIVE' : 'INACTIVE'}</span></td>
-                <td class="py-3 px-4 text-right whitespace-nowrap">
-                    <div class="flex items-center justify-end gap-1.5">
-                        <button onclick="openEditProductModal('${p.id}')" class="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition" title="Edit Product">
-                            <span>✏️</span>
-                        </button>
-                        <button onclick="deleteProduct('${p.id}', '${p.name.replace(/'/g, "\\'")}')" class="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-lg text-xs font-bold transition" title="Delete Product">
-                            <span>🗑️</span>
-                        </button>
-                    </div>
-                </td>
-            </tr>
-        `).join('');
+        populateProductFilters();
+        renderProductsTable(cachedProducts);
     } else {
-        tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-slate-400">No products found.</td></tr>`;
+        const tbody = document.getElementById('table-products-body');
+        if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-slate-400">No products found.</td></tr>`;
     }
+}
+
+function populateProductFilters() {
+    const catSelect = document.getElementById('filter-product-category');
+    const clientSelect = document.getElementById('filter-product-client');
+    if (catSelect && cachedCategories) {
+        const curCat = catSelect.value;
+        catSelect.innerHTML = '<option value="">All Categories</option>' + 
+            cachedCategories.map(c => `<option value="${c.name}" ${curCat === c.name ? 'selected' : ''}>${c.name}</option>`).join('');
+    }
+    if (clientSelect && cachedClients) {
+        const curClient = clientSelect.value;
+        clientSelect.innerHTML = '<option value="">🏢 All Companies / Clients</option>' +
+            '<option value="__master__">🏢 Master / Standard Catalog</option>' +
+            cachedClients.map(c => `<option value="${c.id}" ${curClient === c.id ? 'selected' : ''}>${c.company_name}</option>`).join('');
+    }
+}
+
+function filterProductsTable() {
+    const searchVal = (document.getElementById('filter-product-search')?.value || '').toLowerCase().trim();
+    const catVal = document.getElementById('filter-product-category')?.value || '';
+    const clientVal = document.getElementById('filter-product-client')?.value || '';
+    const fallbackNotice = document.getElementById('product-company-fallback-notice');
+
+    let filtered = cachedProducts || [];
+
+    if (catVal) {
+        filtered = filtered.filter(p => p.category === catVal);
+    }
+
+    if (searchVal) {
+        filtered = filtered.filter(p => {
+            const name = (p.name || '').toLowerCase();
+            const sku = (p.sku || '').toLowerCase();
+            const formula = (p.formula_code || '').toLowerCase();
+            const client = (p.client_name || '').toLowerCase();
+            return name.includes(searchVal) || sku.includes(searchVal) || formula.includes(searchVal) || client.includes(searchVal);
+        });
+    }
+
+    if (clientVal) {
+        if (clientVal === '__master__') {
+            if (fallbackNotice) fallbackNotice.classList.add('hidden');
+            filtered = filtered.filter(p => !p.client_id && !p.client_name);
+        } else {
+            const clientObj = (cachedClients || []).find(c => c.id === clientVal);
+            const clientName = clientObj ? clientObj.company_name : 'Selected Client';
+            const specificProducts = filtered.filter(p => p.client_id === clientVal || (p.client_name && p.client_name === clientName));
+
+            if (specificProducts.length > 0) {
+                if (fallbackNotice) fallbackNotice.classList.add('hidden');
+                filtered = specificProducts;
+            } else {
+                // If a client doesn't have products yet, show all products per company!
+                if (fallbackNotice) {
+                    fallbackNotice.classList.remove('hidden');
+                    fallbackNotice.innerHTML = `
+                        <div class="flex items-center gap-2">
+                            <span class="text-base">🏢</span>
+                            <div><strong>${clientName}:</strong> This client does not have exclusive products yet. Showing all standard company products available for manufacturing.</div>
+                        </div>
+                    `;
+                }
+                // Keep all company products in the view
+            }
+        }
+    } else {
+        if (fallbackNotice) fallbackNotice.classList.add('hidden');
+    }
+
+    renderProductsTable(filtered);
+}
+
+function renderProductsTable(products) {
+    const tbody = document.getElementById('table-products-body');
+    if (!tbody) return;
+
+    if (!products || products.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-slate-400">No products match your filter criteria.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = products.map(p => `
+        <tr class="hover:bg-slate-50 transition">
+            <td class="py-3 px-4 font-mono font-bold text-indigo-600">${p.sku}</td>
+            <td class="py-3 px-4 font-bold text-slate-900">${p.name}</td>
+            <td class="py-3 px-4"><span class="badge bg-slate-100 text-slate-700">${p.category}</span></td>
+            <td class="py-3 px-4">
+                ${p.client_name 
+                    ? `<button onclick="switchTab('clients')" class="badge bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold border border-indigo-200 transition" title="View in B2B Clients Directory">🏢 ${p.client_name}</button>` 
+                    : `<span class="badge bg-slate-100 text-slate-500">Master / All Clients</span>`}
+            </td>
+            <td class="py-3 px-4 font-extrabold text-slate-900">${NKB.formatCurrency(p.default_price)}</td>
+            <td class="py-3 px-4"><span class="badge ${p.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}">${p.is_active ? 'ACTIVE' : 'INACTIVE'}</span></td>
+            <td class="py-3 px-4 text-right whitespace-nowrap">
+                <div class="flex items-center justify-end gap-1.5">
+                    <button onclick="openEditProductModal('${p.id}')" class="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition" title="Edit Product">
+                        <span>✏️</span>
+                    </button>
+                    <button onclick="deleteProduct('${p.id}', '${p.name.replace(/'/g, "\\'")}')" class="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-lg text-xs font-bold transition" title="Delete Product">
+                        <span>🗑️</span>
+                    </button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
 }
 
 // -------------------------------------------------------------
@@ -1740,17 +1848,60 @@ async function loadClientPricingData(clientId) {
                 </tr>
             `).join('');
         } else {
+            // If a client doesn't have products yet, show all products per company
+            if (countEl) countEl.innerHTML = `<span class="text-amber-600 font-bold">${currentClientMasterProducts.length} (Showing All Company Products)</span>`;
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="6" class="py-12 text-center bg-slate-50/50">
-                        <div class="text-4xl mb-2">📦</div>
-                        <div class="font-bold text-slate-700 text-sm">No Products Assigned Yet</div>
-                        <div class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                            This client currently has 0 products. Click <strong>"➕ Assign from Master Catalog"</strong> or <strong>"✨ New Exclusive Product"</strong> above to add products.
+                    <td colspan="6" class="p-3 bg-amber-50/90 border-b border-amber-200 text-amber-900 text-xs">
+                        <div class="flex items-center gap-2 font-medium">
+                            <span class="text-base">🏢</span>
+                            <div><strong>All Company Products:</strong> This client currently has no exclusive products mapped yet. Showing all ${currentClientMasterProducts.length} standard products from the company catalog. You can customize rates or SKUs below and click <strong>"Save Changes"</strong> to lock them in.</div>
                         </div>
                     </td>
                 </tr>
-            `;
+            ` + currentClientMasterProducts.map(p => `
+                <tr class="hover:bg-slate-50 transition" data-product-id="${p.id}" data-search="${(p.name + ' ' + p.sku).toLowerCase()}">
+                    <td class="py-2.5 px-3">
+                        <div class="font-bold text-slate-900">${p.name}</div>
+                        <div class="text-[10px] text-slate-400 font-mono">${p.sku} • Base: ₱${Number(p.default_price).toFixed(2)}</div>
+                    </td>
+                    <td class="py-2.5 px-3">
+                        <input type="text" 
+                               name="custom-name-${p.id}" 
+                               value="" 
+                               placeholder="${p.name}" 
+                               class="w-44 px-2 py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-indigo-500">
+                    </td>
+                    <td class="py-2.5 px-3">
+                        <input type="text" 
+                               name="sku-${p.id}" 
+                               value="" 
+                               placeholder="${p.sku}" 
+                               class="w-28 px-2 py-1.5 border border-slate-300 rounded-lg text-xs font-mono bg-white focus:ring-2 focus:ring-indigo-500">
+                    </td>
+                    <td class="py-2.5 px-3">
+                        <input type="text" 
+                               name="formula-${p.id}" 
+                               value="" 
+                               placeholder="${p.formula_code || '-'}" 
+                               class="w-28 px-2 py-1.5 border border-slate-300 rounded-lg text-xs font-mono bg-white focus:ring-2 focus:ring-indigo-500">
+                    </td>
+                    <td class="py-2.5 px-3">
+                        <div class="relative">
+                            <span class="absolute left-2.5 top-2 text-slate-400 font-bold">₱</span>
+                            <input type="number" step="0.01" min="0" inputmode="decimal"
+                                   name="price-${p.id}" 
+                                   value="${Number(p.default_price).toFixed(2)}" 
+                                   placeholder="${Number(p.default_price).toFixed(2)}" 
+                                   onblur="if(this.value && !isNaN(this.value)) this.value = parseFloat(this.value).toFixed(2)"
+                                   class="w-28 pl-6 pr-2 py-1.5 border border-slate-300 bg-white rounded-lg text-xs focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                    </td>
+                    <td class="py-2.5 px-3 text-center">
+                        <span class="text-[10px] text-slate-400 font-medium">Standard</span>
+                    </td>
+                </tr>
+            `).join('');
         }
     }
 }
@@ -2211,14 +2362,16 @@ async function onAdminPOClientChanged() {
     if (!clientSelect) return;
     const clientId = clientSelect.value;
 
-    const res = await NKB.api(`/api/products?clientId=${clientId}&assignedOnly=true`);
-    if (res.success && res.data) {
+    let res = await NKB.api(`/api/products?clientId=${clientId}&assignedOnly=true`);
+    if (res.success && res.data && res.data.length > 0) {
         adminPOCatalog = res.data;
     } else {
-        adminPOCatalog = [];
+        // Fallback: If client doesn't have custom products yet, show all company products!
+        const allRes = await NKB.api('/api/products?activeOnly=true');
+        adminPOCatalog = (allRes.success && allRes.data) ? allRes.data : [];
     }
 
-    // Reset lines to current client's products only
+    // Reset lines to current client's products
     adminPOLineItems = [];
     if (adminPOCatalog.length > 0) {
         addAdminPOLineItem();
@@ -2557,7 +2710,239 @@ window.submitCreateAllJO = submitCreateAllJO;
 window.submitCreateJO = submitCreateJO;
 
 // -------------------------------------------------------------
-// 3. CREATE PRODUCTION BATCH MODAL
+// 3. CREATE ALL PRODUCTION BATCHES MODAL (BATCH EXECUTION FOR ALL PRODUCTS)
+// -------------------------------------------------------------
+async function openCreateAllBatchesModal(clientId, poId, companyName) {
+    const root = document.getElementById('modals-root');
+    const employees = await ensureEmployeesLoaded();
+
+    const compoundingStaff = employees.filter(e => e.department === 'Compounding' || e.department === 'Production' || e.department === 'R&D');
+    const bottlingStaff = employees.filter(e => e.department === 'Production');
+    const qcStaff = employees.filter(e => e.department === 'QC' || e.department === 'Regulatory');
+
+    // Fetch Job Orders for this PO / Client
+    let clientJOs = [];
+    if (poId) {
+        const res = await NKB.api(`/api/job-orders?poId=${poId}`);
+        if (res.success && res.data) clientJOs = res.data;
+    } else if (clientId) {
+        const res = await NKB.api('/api/job-orders');
+        if (res.success && res.data) {
+            clientJOs = res.data.filter(j => j.client_id === clientId);
+        }
+    }
+    if (clientJOs.length === 0 && typeof cachedJobOrders !== 'undefined' && cachedJobOrders && cachedJobOrders.length > 0) {
+        clientJOs = cachedJobOrders.filter(j => (clientId && j.client_id === clientId) || (poId && j.po_id === poId));
+    }
+
+    if (clientJOs.length === 0) {
+        NKB.showToast('No active Job Orders found for this client order.', 'error');
+        return;
+    }
+
+    const clientCompName = companyName || clientJOs[0]?.company_name || 'Client Order';
+    const primaryPoNum = clientJOs[0]?.po_number || '';
+    const clientSO = primaryPoNum ? primaryPoNum.replace('PO-', 'SO-') : 'SO-2026-000001';
+    const totalTargetUnits = clientJOs.reduce((sum, j) => sum + (j.target_quantity || 0), 0);
+
+    const itemsRowsHtml = clientJOs.map((jo, idx) => {
+        const hasBatch = jo.batch_count > 0;
+        return `
+        <tr class="hover:bg-slate-50 transition border-b border-slate-100 last:border-b-0 batch-launch-item" data-jo-id="${jo.id}">
+            <td class="py-2.5 px-3 font-mono font-bold text-indigo-600">${jo.jo_number}</td>
+            <td class="py-2.5 px-3">
+                <div class="font-bold text-slate-800">${jo.product_name}</div>
+                ${jo.sku ? `<div class="text-[10px] text-slate-400 font-mono">SKU: ${jo.sku}</div>` : ''}
+            </td>
+            <td class="py-2.5 px-3">
+                <input type="text" value="${jo.formula_code || 'FORM-2026-V1'}" class="batch-item-formula w-28 px-2 py-1 text-xs border rounded-lg bg-slate-50 font-mono text-slate-700">
+            </td>
+            <td class="py-2.5 px-3 font-mono">
+                <input type="number" min="1" value="${jo.target_quantity}" required class="batch-item-qty w-24 px-2 py-1 text-xs border rounded-lg bg-white font-bold text-slate-900 text-right">
+            </td>
+            <td class="py-2.5 px-3 text-center whitespace-nowrap">
+                ${hasBatch ? `
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 font-mono" title="Batch active">
+                        ✓ ${jo.latest_batch_number || 'Batch Active'}
+                    </span>
+                ` : `
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
+                        Ready to Start
+                    </span>
+                `}
+            </td>
+        </tr>
+        `;
+    }).join('');
+
+    root.innerHTML = `
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50 overflow-y-auto">
+            <div class="bg-white rounded-3xl max-w-3xl w-full p-6 sm:p-8 shadow-2xl space-y-5 my-8 max-h-[92vh] flex flex-col">
+                <!-- Header -->
+                <div class="flex justify-between items-center border-b border-slate-100 pb-3 flex-shrink-0">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-2xl">⚗️</span>
+                            <h3 class="text-xl font-black text-slate-900">Start Production Batches (All Products)</h3>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-0.5">
+                            Client: <strong class="text-indigo-600">${clientCompName}</strong> • SO: <strong class="font-mono text-slate-800">${clientSO}</strong> • PO: <strong class="font-mono text-slate-800">${primaryPoNum}</strong>
+                        </p>
+                    </div>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-xl px-2">&times;</button>
+                </div>
+
+                <form onsubmit="submitCreateAllBatches(event, '${clientId || ''}', '${poId || ''}', '${clientCompName.replace(/'/g, "\\'")}')" class="space-y-4 text-xs font-semibold flex-1 overflow-y-auto pr-1">
+                    <!-- Cleanroom Personnel & Line Assignments (Shared Defaults) -->
+                    <div class="p-4 bg-purple-50/60 border border-purple-100 rounded-2xl space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-black uppercase tracking-wider text-purple-900 flex items-center gap-1.5">
+                                <span>👨‍🔬</span><span>Cleanroom Personnel & Line Assignments</span>
+                            </span>
+                            <span class="text-[11px] text-purple-700 font-medium">Applied to all product batches in this run</span>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-slate-600 mb-1">🥣 Compounding Chemist / Operator *</label>
+                                <select id="batch-all-compounding-operator" required class="w-full px-3 py-2 border rounded-xl bg-white font-medium text-slate-900">
+                                    ${compoundingStaff.map(e => `
+                                        <option value="${e.name}" ${e.department === 'Compounding' ? 'selected' : ''}>${e.name} (${e.department})</option>
+                                    `).join('')}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-slate-600 mb-1">🧴 Bottling & Packaging Lead *</label>
+                                <select id="batch-all-bottling-lead" required class="w-full px-3 py-2 border rounded-xl bg-white font-medium text-slate-900">
+                                    ${bottlingStaff.map((e, idx) => `
+                                        <option value="${e.name}" ${idx === 0 ? 'selected' : ''}>${e.name} [${e.employee_id}]</option>
+                                    `).join('')}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-slate-600 mb-1">🔬 Quality Control (QC) Inspector *</label>
+                                <select id="batch-all-qc-inspector" required class="w-full px-3 py-2 border rounded-xl bg-white font-medium text-slate-900">
+                                    ${qcStaff.map((e, idx) => `
+                                        <option value="${e.name}" ${idx === 0 ? 'selected' : ''}>${e.name} (${e.department})</option>
+                                    `).join('')}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-slate-600 mb-1">🏭 Cleanroom Line Assignment *</label>
+                                <select id="batch-all-line-assignment" class="w-full px-3 py-2 border rounded-xl bg-white font-medium text-slate-900">
+                                    <option value="Cleanroom Line 1 (Alpha)">Cleanroom Line 1 (Alpha)</option>
+                                    <option value="Cleanroom Line 2 (Beta)">Cleanroom Line 2 (Beta)</option>
+                                    <option value="High-Speed Bottling Line 3">High-Speed Bottling Line 3</option>
+                                    <option value="Compounding Kettle Area A">Compounding Kettle Area A</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Products Table -->
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center px-1">
+                            <span class="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                                <span>📦</span><span>Products & Compounding Targets (${clientJOs.length} Products • Total: ${NKB.formatNumber(totalTargetUnits)} pcs)</span>
+                            </span>
+                        </div>
+                        <div class="border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-100 text-slate-700 font-bold uppercase text-[10px]">
+                                    <tr>
+                                        <th class="py-2.5 px-3">JO Ref</th>
+                                        <th class="py-2.5 px-3">Product Name & SKU</th>
+                                        <th class="py-2.5 px-3">Formula Code</th>
+                                        <th class="py-2.5 px-3 text-right">Target Qty (pcs)</th>
+                                        <th class="py-2.5 px-3 text-center">Batch Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100 font-medium">
+                                    ${itemsRowsHtml}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Footer Actions -->
+                    <div class="flex justify-between items-center pt-3 border-t border-slate-100 flex-shrink-0">
+                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition">
+                            Cancel
+                        </button>
+                        <button type="submit" id="btn-submit-all-batches" class="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-xl font-bold text-xs shadow-lg shadow-purple-600/30 transition flex items-center gap-2">
+                            <span>🚀 Start All Batches (${clientJOs.length} Products)</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+}
+
+async function submitCreateAllBatches(e, clientId, poId, companyName) {
+    e.preventDefault();
+    const btn = document.getElementById('btn-submit-all-batches');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span>⏳ Starting Production Batches...</span>';
+    }
+
+    const compoundingOperator = document.getElementById('batch-all-compounding-operator')?.value || '';
+    const bottlingLead = document.getElementById('batch-all-bottling-lead')?.value || '';
+    const qcInspector = document.getElementById('batch-all-qc-inspector')?.value || '';
+    const lineAssignment = document.getElementById('batch-all-line-assignment')?.value || '';
+
+    const items = [];
+    document.querySelectorAll('.batch-launch-item').forEach(el => {
+        const joId = el.dataset.joId;
+        const qty = parseInt(el.querySelector('.batch-item-qty')?.value || '0');
+        const formula = el.querySelector('.batch-item-formula')?.value || '';
+        if (joId && qty > 0) {
+            items.push({ jo_id: joId, target_quantity: qty, formula_code: formula });
+        }
+    });
+
+    const res = await NKB.api('/api/production/batches', {
+        method: 'POST',
+        body: JSON.stringify({
+            create_all: true,
+            po_id: poId || undefined,
+            client_id: clientId || undefined,
+            compounding_operator: compoundingOperator,
+            bottling_lead: bottlingLead,
+            qc_inspector: qcInspector,
+            line_assignment: lineAssignment,
+            items: items
+        })
+    });
+
+    if (res.success) {
+        const count = res.count || items.length;
+        NKB.showToast(`🎉 Successfully started ${count} production batches for ${companyName}!`, 'success');
+        closeModal();
+        if (typeof loadJobOrders === 'function') loadJobOrders();
+        if (typeof loadOrders === 'function') loadOrders();
+        if (typeof loadBatches === 'function') loadBatches();
+        if (typeof switchTab === 'function') {
+            switchTab('production');
+        } else {
+            location.reload();
+        }
+    } else {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<span>🚀 Start All Batches</span>';
+        }
+        NKB.showToast(res.error || 'Failed to start batches.', 'error');
+    }
+}
+
+window.openCreateAllBatchesModal = openCreateAllBatchesModal;
+window.submitCreateAllBatches = submitCreateAllBatches;
+
+// -------------------------------------------------------------
+// 4. CREATE SINGLE PRODUCTION BATCH MODAL
 // -------------------------------------------------------------
 async function openCreateBatchModal(joId, joNumber, targetQty, productName) {
     const root = document.getElementById('modals-root');

@@ -53,8 +53,11 @@ router.get('/', authenticateToken, enforceClientIsolation, (req, res) => {
     for (const po of orders) {
         po.items = db.prepare(`
             SELECT poi.*, p.name as product_name, p.sku, p.unit, p.category, p.formula_code, p.shelf_life_months,
+                   (SELECT jo.id FROM job_orders jo WHERE jo.po_id = poi.po_id AND jo.product_id = poi.product_id ORDER BY jo.created_at DESC LIMIT 1) as jo_id,
                    (SELECT jo.jo_number FROM job_orders jo WHERE jo.po_id = poi.po_id AND jo.product_id = poi.product_id ORDER BY jo.created_at DESC LIMIT 1) as jo_number,
-                   (SELECT jo.status FROM job_orders jo WHERE jo.po_id = poi.po_id AND jo.product_id = poi.product_id ORDER BY jo.created_at DESC LIMIT 1) as jo_status
+                   (SELECT jo.status FROM job_orders jo WHERE jo.po_id = poi.po_id AND jo.product_id = poi.product_id ORDER BY jo.created_at DESC LIMIT 1) as jo_status,
+                   (SELECT pb.batch_number FROM production_batches pb JOIN job_orders jo ON pb.jo_id = jo.id WHERE jo.po_id = poi.po_id AND jo.product_id = poi.product_id ORDER BY pb.created_at DESC LIMIT 1) as batch_number,
+                   (SELECT pb.status FROM production_batches pb JOIN job_orders jo ON pb.jo_id = jo.id WHERE jo.po_id = poi.po_id AND jo.product_id = poi.product_id ORDER BY pb.created_at DESC LIMIT 1) as batch_status
             FROM purchase_order_items poi
             JOIN products p ON poi.product_id = p.id
             WHERE poi.po_id = ?
@@ -214,8 +217,9 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
 
             // Resolve client-specific assignment and price
             const assignment = db.prepare('SELECT custom_price, custom_name, is_active FROM client_product_prices WHERE client_id = ? AND product_id = ?').get(client_id, item.product_id);
+            const hasAssigned = db.prepare('SELECT COUNT(*) as cnt FROM client_product_prices WHERE client_id = ? AND is_active = 1').get(client_id)?.cnt > 0;
             
-            if (req.user.role === 'CLIENT' && (!assignment || assignment.is_active !== 1)) {
+            if (hasAssigned && req.user.role === 'CLIENT' && (!assignment || assignment.is_active !== 1)) {
                 throw new Error(`Product "${product.name}" (${product.sku}) is not assigned to your client account.`);
             }
 
@@ -387,7 +391,8 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
 
                 // Resolve client-specific assignment and price
                 const assignment = db.prepare('SELECT custom_price, custom_name, is_active FROM client_product_prices WHERE client_id = ? AND product_id = ?').get(po.client_id, item.product_id);
-                if (req.user.role === 'CLIENT' && (!assignment || assignment.is_active !== 1)) {
+                const hasAssigned = db.prepare('SELECT COUNT(*) as cnt FROM client_product_prices WHERE client_id = ? AND is_active = 1').get(po.client_id)?.cnt > 0;
+                if (hasAssigned && req.user.role === 'CLIENT' && (!assignment || assignment.is_active !== 1)) {
                     throw new Error(`Product "${product.name}" (${product.sku}) is not assigned to your client account.`);
                 }
 

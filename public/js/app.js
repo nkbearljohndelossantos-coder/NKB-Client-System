@@ -564,6 +564,11 @@ async function openViewPOModal(poId) {
                             <button onclick="closeModal(); openCreateJOModal('${po.id}', '${po.po_number}', '${po.company_name.replace(/'/g, "\\'")}');" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-xs shadow-md shadow-indigo-600/30 transition flex items-center gap-1.5">
                                 <span>🏭 Start Job Order (All Products)</span>
                             </button>
+                            ${(jobOrders && jobOrders.length > 0) ? `
+                                <button onclick="closeModal(); openCreateAllBatchesModal('${po.client_id}', '${po.id}', '${po.company_name.replace(/'/g, "\\'")}');" class="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-bold text-xs shadow-md shadow-purple-600/30 transition flex items-center gap-1.5">
+                                    <span>⚗️ Start Batch (All Products)</span>
+                                </button>
+                            ` : ''}
                         ` : ''}
                     </div>
                     <div class="flex items-center gap-2">
@@ -623,8 +628,11 @@ async function openEditPOModal(poId) {
 
     editingPOId = poId;
 
-    // Fetch client product catalog
-    const catRes = await NKB.api(`/api/products?clientId=${po.client_id}&assignedOnly=true`);
+    // Fetch client product catalog (fallback to all company products if client has no custom products)
+    let catRes = await NKB.api(`/api/products?clientId=${po.client_id}&assignedOnly=true`);
+    if (!catRes.success || !catRes.data || catRes.data.length === 0) {
+        catRes = await NKB.api('/api/products?activeOnly=true');
+    }
     editPOCatalog = (catRes.success && catRes.data) ? catRes.data.slice() : [];
 
     // Ensure all products currently on the PO exist in editPOCatalog
