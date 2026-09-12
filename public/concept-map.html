@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NKB Manufacturing - Operational Concept Map & System Architecture</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #1e3a8a;
+            --primary-light: #3b82f6;
+            --primary-subtle: #eff6ff;
+            --accent: #0d9488;
+            --accent-subtle: #f0fdfa;
+            --warning: #d97706;
+            --warning-subtle: #fffbeb;
+            --success: #16a34a;
+            --success-subtle: #f0fdf4;
+            --danger: #dc2626;
+            --slate-50: #f8fafc;
+            --slate-100: #f1f5f9;
+            --slate-200: #e2e8f0;
+            --slate-300: #cbd5e1;
+            --slate-400: #94a3b8;
+            --slate-500: #64748b;
+            --slate-600: #475569;
+            --slate-700: #334155;
+            --slate-800: #1e293b;
+            --slate-900: #0f172a;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #f8fafc;
+            color: var(--slate-800);
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Action Bar for On-Screen View */
+        .action-bar {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(10px);
+            color: #fff;
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .action-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 700;
+            font-size: 1.05rem;
+            letter-spacing: -0.01em;
+        }
+
+        .badge-pill {
+            background: rgba(59, 130, 246, 0.2);
+            color: #93c5fd;
+            border: 1px solid rgba(59, 130, 246, 0.4);
+            font-size: 0.75rem;
+            padding: 2px 10px;
+            border-radius: 9999px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.15s ease;
+            border: none;
+        }
+
+        .btn-primary {
+            background: #2563eb;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #1d4ed8;
+            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.4);
+        }
+
+        .btn-secondary {
+            background: rgba(255,255,255,0.1);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .btn-secondary:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        /* Container Layout */
+        .document-container {
+            max-width: 1400px;
+            margin: 24px auto;
+            padding: 0 24px;
+        }
+
+        /* Printable Sheet Simulation */
+        .concept-sheet {
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
+            padding: 40px;
+            margin-bottom: 32px;
+            border: 1px solid var(--slate-200);
+        }
+
+        /* Header Block */
+        .sheet-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 2px solid var(--slate-100);
+            padding-bottom: 24px;
+            margin-bottom: 32px;
+        }
+
+        .brand-block h1 {
+            font-size: 1.75rem;
+            font-weight: 800;
+            color: var(--slate-900);
+            letter-spacing: -0.02em;
+            margin-bottom: 4px;
+        }
+
+        .brand-block h2 {
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: var(--primary-light);
+            margin-bottom: 8px;
+        }
+
+        .brand-block p {
+            font-size: 0.875rem;
+            color: var(--slate-500);
+            max-width: 780px;
+        }
+
+        .meta-stamp {
+            text-align: right;
+            font-size: 0.8rem;
+            color: var(--slate-500);
+            background: var(--slate-50);
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1px solid var(--slate-200);
+        }
+
+        .meta-stamp strong {
+            color: var(--slate-800);
+        }
+
+        /* Section Headings */
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 28px 0 16px 0;
+            padding-bottom: 8px;
+            border-bottom: 2px solid var(--slate-100);
+        }
+
+        .section-header .step-badge {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+            font-weight: 700;
+        }
+
+        .section-header h3 {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--slate-900);
+        }
+
+        /* Flow Diagram Grid */
+        .flow-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+            position: relative;
+        }
+
+        .flow-node {
+            background: #ffffff;
+            border: 1px solid var(--slate-200);
+            border-radius: 10px;
+            padding: 18px;
+            position: relative;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: all 0.2s;
+        }
+
+        .flow-node.primary { border-top: 4px solid var(--primary-light); }
+        .flow-node.accent { border-top: 4px solid var(--accent); }
+        .flow-node.warning { border-top: 4px solid var(--warning); }
+        .flow-node.success { border-top: 4px solid var(--success); }
+
+        .node-badge {
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 2px 8px;
+            border-radius: 4px;
+            width: fit-content;
+            margin-bottom: 10px;
+        }
+
+        .node-badge.blue { background: var(--primary-subtle); color: var(--primary-light); }
+        .node-badge.teal { background: var(--accent-subtle); color: var(--accent); }
+        .node-badge.amber { background: var(--warning-subtle); color: var(--warning); }
+        .node-badge.green { background: var(--success-subtle); color: var(--success); }
+
+        .node-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--slate-900);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .node-desc {
+            font-size: 0.825rem;
+            color: var(--slate-600);
+            margin-bottom: 12px;
+            line-height: 1.45;
+        }
+
+        .node-meta {
+            background: var(--slate-50);
+            border-radius: 6px;
+            padding: 8px 10px;
+            font-size: 0.75rem;
+            border: 1px solid var(--slate-100);
+            margin-top: auto;
+        }
+
+        .meta-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 3px;
+        }
+        .meta-row:last-child { margin-bottom: 0; }
+        .meta-key { color: var(--slate-500); }
+        .meta-val { font-weight: 600; color: var(--slate-800); }
+
+        /* Universal Traceability Callout */
+        .feature-callout {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            color: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 28px 0;
+            display: grid;
+            grid-template-columns: 1.2fr 1fr;
+            gap: 24px;
+            align-items: center;
+        }
+
+        .feature-callout h4 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #60a5fa;
+        }
+
+        .feature-callout p {
+            font-size: 0.875rem;
+            color: #cbd5e1;
+            line-height: 1.6;
+            margin-bottom: 12px;
+        }
+
+        .view-po-preview {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 14px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            color: #94a3b8;
+        }
+
+        .view-po-preview .preview-header {
+            color: #38bdf8;
+            font-weight: 600;
+            border-bottom: 1px dashed #475569;
+            padding-bottom: 6px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* Matrix Tables */
+        .matrix-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.825rem;
+            margin: 16px 0;
+            border: 1px solid var(--slate-200);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .matrix-table th {
+            background: var(--slate-100);
+            color: var(--slate-700);
+            font-weight: 700;
+            text-align: left;
+            padding: 10px 14px;
+            border-bottom: 1px solid var(--slate-200);
+        }
+
+        .matrix-table td {
+            padding: 10px 14px;
+            border-bottom: 1px solid var(--slate-100);
+            color: var(--slate-700);
+        }
+
+        .matrix-table tr:nth-child(even) td {
+            background: var(--slate-50);
+        }
+
+        .role-pill {
+            display: inline-block;
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: var(--slate-200);
+            color: var(--slate-700);
+        }
+
+        /* Tolerance Rules Box */
+        .rules-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin: 16px 0;
+        }
+
+        .rule-card {
+            background: var(--slate-50);
+            border: 1px solid var(--slate-200);
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .rule-card h5 {
+            font-size: 0.9rem;
+            font-weight: 700;
+            margin-bottom: 6px;
+            color: var(--slate-900);
+        }
+
+        .rule-card p {
+            font-size: 0.8rem;
+            color: var(--slate-600);
+            line-height: 1.5;
+        }
+
+        /* Footer */
+        .sheet-footer {
+            margin-top: 32px;
+            padding-top: 20px;
+            border-top: 1px solid var(--slate-200);
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: var(--slate-400);
+        }
+
+        /* High-Res Media Print Rules */
+        @media print {
+            @page {
+                size: A4 landscape;
+                margin: 8mm;
+            }
+
+            body {
+                background: white !important;
+                color: #000 !important;
+                font-size: 11pt;
+            }
+
+            .action-bar {
+                display: none !important;
+            }
+
+            .document-container {
+                max-width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+
+            .concept-sheet {
+                box-shadow: none !important;
+                border: none !important;
+                padding: 0 !important;
+                page-break-after: always;
+            }
+
+            .concept-sheet:last-child {
+                page-break-after: auto;
+            }
+
+            .flow-grid {
+                grid-template-columns: repeat(4, 1fr) !important;
+                gap: 10px !important;
+            }
+
+            .flow-node {
+                box-shadow: none !important;
+                border: 1px solid #94a3b8 !important;
+                padding: 10px !important;
+                break-inside: avoid;
+            }
+
+            .feature-callout {
+                background: #f1f5f9 !important;
+                color: #0f172a !important;
+                border: 1px solid #cbd5e1 !important;
+                break-inside: avoid;
+            }
+
+            .feature-callout h4 {
+                color: #1e3a8a !important;
+            }
+
+            .feature-callout p {
+                color: #334155 !important;
+            }
+
+            .view-po-preview {
+                background: white !important;
+                color: #0f172a !important;
+                border: 1px solid #cbd5e1 !important;
+            }
+
+            .view-po-preview .preview-header {
+                color: #1e3a8a !important;
+            }
+
+            .matrix-table {
+                break-inside: avoid;
+            }
+
+            .rule-card {
+                break-inside: avoid;
+                border: 1px solid #cbd5e1 !important;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- On-Screen Action Bar -->
+    <div class="action-bar">
+        <div class="action-title">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                <line x1="8" y1="21" x2="16" y2="21"></line>
+                <line x1="12" y1="17" x2="12" y2="21"></line>
+            </svg>
+            NKB Manufacturing System Architecture & Concept Map
+            <span class="badge-pill">ISO 22716 / GMP Certified</span>
+        </div>
+        <div class="action-buttons">
+            <button class="btn btn-primary" onclick="window.print()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                    <rect x="6" y="14" width="12" height="8"></rect>
+                </svg>
+                Print / Save as PDF
+            </button>
+            <a href="/concept-map.pdf" class="btn btn-secondary" download="NKB_Manufacturing_Concept_Map.pdf">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                Download PDF
+            </a>
+            <a href="/admin.html" class="btn btn-secondary">
+                ← Back to Admin Portal
+            </a>
+        </div>
+    </div>
+
+    <div class="document-container">
+
+        <!-- SHEET 1: PROCESS ARCHITECTURE & UNIVERSAL TRACEABILITY -->
+        <div class="concept-sheet">
+            <div class="sheet-header">
+                <div class="brand-block">
+                    <h1>NKB PHARMACEUTICALS & COSMETICS MANUFACTURING</h1>
+                    <h2>B2B Order Lifecycle, Cleanroom Batching & Universal Traceability Concept Map</h2>
+                    <p>
+                        High-fidelity blueprint illustrating end-to-end order orchestration from client purchase order creation, 
+                        automated tolerance validation (±10%), cleanroom compounding & bottling with 106-member employee roster assignment, 
+                        overrun buffer logic, digital delivery acceptance, and sales invoice reconciliation.
+                    </p>
+                </div>
+                <div class="meta-stamp">
+                    <div><strong>Standard:</strong> ISO 22716 GMP Cosmetics</div>
+                    <div><strong>Target Tolerance:</strong> ±10.0% Allowable</div>
+                    <div><strong>System Version:</strong> v2.4 (Active Live)</div>
+                    <div><strong>Date Generated:</strong> September 12, 2026</div>
+                </div>
+            </div>
+
+            <!-- WORKFLOW NODES ROW 1: PO TO BATCH RUN -->
+            <div class="section-header">
+                <div class="step-badge">1</div>
+                <h3>Phase I: Order Ingestion, Production Allocation & Staff Assignment</h3>
+            </div>
+
+            <div class="flow-grid">
+                <!-- Node 1 -->
+                <div class="flow-node primary">
+                    <div class="node-badge blue">Step 01 • Client PO</div>
+                    <div class="node-title">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                        Purchase Order
+                    </div>
+                    <div class="node-desc">
+                        Client submits target quantities. Contract pricing rules (e.g. ₱180.00/pc) and ±10% tolerance bounds are locked.
+                    </div>
+                    <div class="node-meta">
+                        <div class="meta-row"><span class="meta-key">Doc ID:</span> <span class="meta-val">PO-2026-000001</span></div>
+                        <div class="meta-row"><span class="meta-key">Policy:</span> <span class="meta-val">Actual Delivery</span></div>
+                        <div class="meta-row"><span class="meta-key">Target:</span> <span class="meta-val">500 pcs [450-550]</span></div>
+                    </div>
+                </div>
+
+                <!-- Node 2 -->
+                <div class="flow-node primary">
+                    <div class="node-badge blue">Step 02 • Admin Job Order</div>
+                    <div class="node-title">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line></svg>
+                        Job Order (JO)
+                    </div>
+                    <div class="node-desc">
+                        Approved PO routes to plant scheduling. Formula specifications locked (`FORM-SGC-V1`) and cleanroom team assigned.
+                    </div>
+                    <div class="node-meta">
+                        <div class="meta-row"><span class="meta-key">Doc ID:</span> <span class="meta-val">JO-2026-000001</span></div>
+                        <div class="meta-row"><span class="meta-key">Team:</span> <span class="meta-val">Formulation Beta</span></div>
+                        <div class="meta-row"><span class="meta-key">Action:</span> <span class="meta-val">👁️ View PO Button</span></div>
+                    </div>
+                </div>
+
+                <!-- Node 3 -->
+                <div class="flow-node accent">
+                    <div class="node-badge teal">Step 03 • Staff & Line Assign</div>
+                    <div class="node-title">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0d9488" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                        Roster Allocation
+                    </div>
+                    <div class="node-desc">
+                        Cleanroom stations populated from 106-staff roster: Compounding Operator, Bottling Lead, QC Officer & Line designation.
+                    </div>
+                    <div class="node-meta">
+                        <div class="meta-row"><span class="meta-key">Compounder:</span> <span class="meta-val">Catindig, Renar A.</span></div>
+                        <div class="meta-row"><span class="meta-key">Bottling:</span> <span class="meta-val">Alonzo, Merry Jean</span></div>
+                        <div class="meta-row"><span class="meta-key">Line:</span> <span class="meta-val">Cleanroom Line 1</span></div>
+                    </div>
+                </div>
+
+                <!-- Node 4 -->
+                <div class="flow-node warning">
+                    <div class="node-badge amber">Step 04 • Yield & Overrun</div>
+                    <div class="node-title">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                        Batching & Yield
+                    </div>
+                    <div class="node-desc">
+                        Actual yield logged. System computes variance vs ±10% threshold. Automated overrun approval logic engages.
+                    </div>
+                    <div class="node-meta">
+                        <div class="meta-row"><span class="meta-key">Batch ID:</span> <span class="meta-val">BAT-2026-000001</span></div>
+                        <div class="meta-row"><span class="meta-key">Actual Yield:</span> <span class="meta-val">550 pcs (+10.0%)</span></div>
+                        <div class="meta-row"><span class="meta-key">Status:</span> <span class="meta-val">TOLERANCE_PASS</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- WORKFLOW NODES ROW 2: QC TO SETTLEMENT -->
+            <div class="section-header">
+                <div class="step-badge">2</div>
+                <h3>Phase II: Quality Clearance, Dispatch, Digital DR & Settlement</h3>
+            </div>
+
+            <div class="flow-grid">
+                <!-- Node 5 -->
+                <div class="flow-node success">
+                    <div class="node-badge green">Step 05 • Quality Control</div>
+                    <div class="node-title">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                        QC Inspection
+                    </div>
+                    <div class="node-desc">
+                        QC Officer performs viscosity, pH stability (5.6), SPF testing, and sterility tests. Batch clearance released for dispatch.
+                    </div>
+                    <div class="node-meta">
+                        <div class="meta-row"><span class="meta-key">Inspector:</span> <span class="meta-val">Fabio, Marilou</span></div>
+                        <div class="meta-row"><span class="meta-key">Result:</span> <span class="meta-val">Micro Cleared</span></div>
+                        <div class="meta-row"><span class="meta-key">Action:</span> <span class="meta-val">👁️ View PO Button</span></div>
+                    </div>
+                </div>
+
+                <!-- Node 6 -->
+                <div class="flow-node primary">
+                    <div class="node-badge blue">Step 06 • Delivery (DR)</div>
+                    <div class="node-title">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
+                        Warehouse Dispatch
+                    </div>
+                    <div class="node-desc">
+                        Delivery Receipt created. Packaged with lot numbers and expiry dates. Driver dispatched under vehicle logs.
+                    </div>
+                    <div class="node-meta">
+                        <div class="meta-row"><span class="meta-key">Doc ID:</span> <span class="meta-val">DR-2026-000001</span></div>
+                        <div class="meta-row"><span class="meta-key">Driver:</span> <span class="meta-val">Danilo Gomez (NKB-8899)</span></div>
+                        <div class="meta-row"><span class="meta-key">Delivered:</span> <span class="meta-val">550 pcs</span></div>
+                    </div>
+                </div>
+
+                <!-- Node 7 -->
+                <div class="flow-node accent">
+                    <div class="node-badge teal">Step 07 • Acceptance Sign-Off</div>
+                    <div class="node-title">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0d9488" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                        Digital Sign-off
+                    </div>
+                    <div class="node-desc">
+                        Client examines delivery, signs digital DR acceptance with IP and timestamp. Overrun quantities accepted into client stock.
+                    </div>
+                    <div class="node-meta">
+                        <div class="meta-row"><span class="meta-key">Signer:</span> <span class="meta-val">Maria Santos (SKEENCARE)</span></div>
+                        <div class="meta-row"><span class="meta-key">Accepted:</span> <span class="meta-val">550 pcs (100% Accept)</span></div>
+                        <div class="meta-row"><span class="meta-key">Audit:</span> <span class="meta-val">IP & Digital Stamp Logged</span></div>
+                    </div>
+                </div>
+
+                <!-- Node 8 -->
+                <div class="flow-node success">
+                    <div class="node-badge green">Step 08 • Invoicing & Ledger</div>
+                    <div class="node-title">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                        Invoice & Payment
+                    </div>
+                    <div class="node-desc">
+                        Sales Invoice generated for accepted count (550 pcs x ₱180 = ₱99,000). Payment recorded and reconciled.
+                    </div>
+                    <div class="node-meta">
+                        <div class="meta-row"><span class="meta-key">Invoice ID:</span> <span class="meta-val">SI-2026-000001</span></div>
+                        <div class="meta-row"><span class="meta-key">Total / Paid:</span> <span class="meta-val">₱99,000 / ₱50,000</span></div>
+                        <div class="meta-row"><span class="meta-key">Payment Ref:</span> <span class="meta-val">PAY-2026-000001 (BDO)</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- UNIVERSAL TRACEABILITY CALLOUT -->
+            <div class="feature-callout">
+                <div>
+                    <h4>
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                        Universal "View PO / View Order" Traceability Engine
+                    </h4>
+                    <p>
+                        In cosmetic manufacturing, complete auditability is legally mandated under FDA and GMP standards. 
+                        NKB Client V2 implements <strong>Universal Order Traceability</strong>: Every operational node—Job Orders, 
+                        Production Batches, Delivery Receipts, Client Buffer Stock, and Sales Invoices—features a persistent 
+                        <strong>"👁️ View PO"</strong> button.
+                    </p>
+                    <p>
+                        With 1 click, operators and auditors can inspect the root contract terms, agreed unit pricing (with decimal precision), 
+                        target vs allowable bounds, and complete production lineage. From this modal, a dedicated <strong>"🖨️ Print Order Info"</strong> 
+                        action generates instant, formatted physical and PDF order records.
+                    </p>
+                </div>
+                <div class="view-po-preview">
+                    <div class="preview-header">
+                        <span>TRACEABILITY LINEAGE MODAL</span>
+                        <span>LIVE AUDIT</span>
+                    </div>
+                    <div>&bull; Root PO: <strong>PO-2026-000001</strong> (SKEENCARE)</div>
+                    <div>&bull; Unit Price: <strong>₱180.00</strong> | Policy: <strong>ACTUAL_DELIVERY</strong></div>
+                    <div>&bull; Job Order: <strong>JO-2026-000001</strong> [Formulation Beta]</div>
+                    <div>&bull; Batch Run: <strong>BAT-2026-000001</strong> [550 pcs / +10.0%]</div>
+                    <div>&bull; Compounder: <strong>Catindig, Renar A.</strong></div>
+                    <div>&bull; Delivery DR: <strong>DR-2026-000001</strong> [Danilo Gomez / NKB-8899]</div>
+                    <div>&bull; Accepted By: <strong>Maria Santos</strong> [Digital Signature]</div>
+                    <div>&bull; Sales Invoice: <strong>SI-2026-000001</strong> [₱99,000.00 Total]</div>
+                </div>
+            </div>
+
+            <!-- TOLERANCE & OVERRUN LOGIC RULES -->
+            <div class="section-header">
+                <div class="step-badge">3</div>
+                <h3>Business Logic: Yield Tolerance & Buffer Stock Decision Rules</h3>
+            </div>
+
+            <div class="rules-grid">
+                <div class="rule-card">
+                    <h5>Rule 1: Standard Tolerance Window (±10.0%)</h5>
+                    <p>
+                        Formulation vessels naturally fluctuate based on evaporation and clean-out. Target quantities automatically generate an acceptable manufacturing envelope:
+                        <br><code>Min = Target × 0.90</code> | <code>Max = Target × 1.10</code>.
+                        Batches landing inside this envelope are cleared for standard dispatch without administrative bottleneck.
+                    </p>
+                </div>
+
+                <div class="rule-card">
+                    <h5>Rule 2: Actual Delivery vs Fixed Billing</h5>
+                    <p>
+                        <strong>Actual Delivery:</strong> Client accepts and pays for the exact produced quantity (e.g. 550 pcs @ ₱180 = ₱99,000).
+                        <br><strong>Fixed PO:</strong> Client pays only for the base target (500 pcs @ ₱180 = ₱90,000); surplus overrun (50 pcs) is securely diverted to the client's dedicated <strong>Client Buffer Stock</strong> vault.
+                    </p>
+                </div>
+
+                <div class="rule-card">
+                    <h5>Rule 3: Exception & Overrun Threshold (> +10%)</h5>
+                    <p>
+                        When yield exceeds +10%, the batch automatically transitions to <code>EXCEPTION_REQUIRES_APPROVAL</code>. 
+                        The system halts automated DR dispatch until an Admin and the Client provide cryptographic overrun sign-off or allocate the surplus to future buffer stock.
+                    </p>
+                </div>
+            </div>
+
+            <!-- ROLES & RESPONSIBILITIES MATRIX -->
+            <div class="section-header">
+                <div class="step-badge">4</div>
+                <h3>Cleanroom Roles & System Roster Integration (106 Members)</h3>
+            </div>
+
+            <table class="matrix-table">
+                <thead>
+                    <tr>
+                        <th style="width: 22%;">Role / Station</th>
+                        <th style="width: 20%;">Assigned Personnel</th>
+                        <th style="width: 28%;">Operational Responsibilities</th>
+                        <th style="width: 30%;">System Verification Artifact</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Compounding Operator</strong></td>
+                        <td><span class="role-pill">Catindig, Renar A.</span></td>
+                        <td>Bulk vessel weighing, heating, homogenization, and ingredient addition according to master batch records.</td>
+                        <td>Logs raw material usage, vessel IDs, and initial formulation yield.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Bottling & Packaging Lead</strong></td>
+                        <td><span class="role-pill">Alonzo, Merry Jean I.</span></td>
+                        <td>Fills primary containers (tubes/jars), performs seal torquing, batch coding, and master carton packaging.</td>
+                        <td>Logs final piece count yield (550 pcs) and packaging station checks.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Quality Control (QC) Inspector</strong></td>
+                        <td><span class="role-pill">Fabio, Marilou</span></td>
+                        <td>Physicochemical testing (pH, viscosity, specific gravity), microbial clearance, and SPF retention verification.</td>
+                        <td>Authorizes <code>QC_PASSED</code> status and issues Certificate of Analysis (CoA).</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Warehouse & Logistics</strong></td>
+                        <td><span class="role-pill">Danilo Gomez / wh_admin</span></td>
+                        <td>Pick & pack, palletizing, loading vehicle NKB-8899, DR generation, and client site delivery dispatch.</td>
+                        <td>Dispatches <code>DR-2026-000001</code> with driver and plate number.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Client Purchasing Officer</strong></td>
+                        <td><span class="role-pill">Maria Santos (SKEENCARE)</span></td>
+                        <td>Inspects physical shipment at client receiving dock, verifies seals, and executes digital acceptance.</td>
+                        <td>Submits digital signature and creates <code>dr_acceptances</code> record.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Finance & Accounting</strong></td>
+                        <td><span class="role-pill">Accounting Specialist</span></td>
+                        <td>Calculates line totals based on billing policy (Actual vs Fixed), generates SI, and records payments.</td>
+                        <td>Issues <code>SI-2026-000001</code> and reconciliation <code>PAY-2026-000001</code>.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="sheet-footer">
+                <div>NKB Pharmaceuticals & Cosmetics Manufacturing System • Internal Engineering Documentation</div>
+                <div>Document Classification: Confidential & Proprietary • Page 1 of 1</div>
+            </div>
+        </div>
+
+    </div>
+
+</body>
+</html>
