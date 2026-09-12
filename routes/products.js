@@ -83,7 +83,7 @@ router.get('/generate-sku', authenticateToken, (req, res) => {
     const existingRows = db.prepare('SELECT sku FROM products').all();
     const existingSkusSet = new Set(existingRows.map(r => r.sku.toUpperCase()));
     const sku = generateProductSKU(name || '', clientName, existingSkusSet);
-    return res.json({ success: true, sku });
+    return res.json({ success: true, data: { sku }, sku });
 });
 
 /**

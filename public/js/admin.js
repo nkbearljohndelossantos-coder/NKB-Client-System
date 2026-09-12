@@ -970,8 +970,11 @@ async function loadClients() {
                         <button onclick="openResetClientCredentialsModal('${c.id}', '${c.company_name.replace(/'/g, "\\'")}', '${c.email}')" class="px-2 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Manage Client Login & Reset Password">
                             <span>🔑</span><span>${c.user_id ? 'Reset Password' : 'Create Login'}</span>
                         </button>
-                        <button onclick="openClientPricingModal('${c.id}', '${c.company_name.replace(/'/g, "\\'")}')" class="px-2 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1">
+                        <button onclick="openClientPricingModal('${c.id}', '${c.company_name.replace(/'/g, "\\'")}')" class="px-2 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="View & Edit Client Pricing Catalog">
                             <span>📦</span><span>Catalog</span>
+                        </button>
+                        <button onclick="openCreateProductModal('${c.id}')" class="px-2 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Add Cosmetic Product for ${c.company_name.replace(/'/g, "\\'")}">
+                            <span>➕</span><span>Add Product</span>
                         </button>
                         <button onclick="openEditClientModal('${c.id}')" class="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition" title="Edit Client">
                             <span>✏️</span>
@@ -1001,7 +1004,7 @@ async function loadProducts() {
                 <td class="py-3 px-4"><span class="badge bg-slate-100 text-slate-700">${p.category}</span></td>
                 <td class="py-3 px-4">
                     ${p.client_name 
-                        ? `<span class="badge bg-indigo-50 text-indigo-700 font-bold border border-indigo-200">🏢 ${p.client_name}</span>` 
+                        ? `<button onclick="switchTab('clients')" class="badge bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold border border-indigo-200 transition" title="View in B2B Clients Directory">🏢 ${p.client_name}</button>` 
                         : `<span class="badge bg-slate-100 text-slate-500">Master / All Clients</span>`}
                 </td>
                 <td class="py-3 px-4 font-extrabold text-slate-900">${NKB.formatCurrency(p.default_price)}</td>
@@ -1138,8 +1141,8 @@ async function openClientPricingModal(clientId, companyName) {
                         <button type="button" onclick="toggleAssignMasterProductForm()" class="px-3 py-1.5 bg-white hover:bg-slate-50 text-indigo-700 border border-indigo-300 rounded-lg font-bold whitespace-nowrap shadow-sm flex items-center gap-1">
                             <span>➕</span><span>Assign from Master Catalog</span>
                         </button>
-                        <button type="button" onclick="toggleAddClientProductForm()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold whitespace-nowrap shadow-sm shadow-indigo-600/30 flex items-center gap-1">
-                            <span>✨</span><span>New Exclusive Product</span>
+                        <button type="button" onclick="openCreateProductModal('${clientId}')" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold whitespace-nowrap shadow-sm shadow-indigo-600/30 flex items-center gap-1" title="Add new cosmetic product directly for this client">
+                            <span>✨</span><span>Add Product for Client</span>
                         </button>
                     </div>
                 </div>
@@ -1670,6 +1673,7 @@ async function submitEditClient(e, clientId) {
 }
 
 async function openEditProductModal(productId) {
+    await ensureClientsLoaded();
     const res = await NKB.api(`/api/products/${productId}`);
     if (!res.success || !res.data) return;
     const prod = res.data;
@@ -1706,10 +1710,13 @@ async function openEditProductModal(productId) {
                         <input type="text" id="edit-prod-name" required value="${prod.name}" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold">
                     </div>
                     <div>
-                        <label class="block text-slate-600 mb-1">Client / Brand</label>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="block text-slate-600">Client / Brand (from Clients Directory)</label>
+                            <span class="text-[10px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full font-bold">🏢 Clients Directory</span>
+                        </div>
                         <select id="edit-prod-client-id" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-800">
                             <option value="">-- Master / All Clients --</option>
-                            ${(cachedClients || []).map(c => `<option value="${c.id}" ${c.id === prod.client_id ? 'selected' : ''}>${c.name}</option>`).join('')}
+                            ${(cachedClients || []).map(c => `<option value="${c.id}" ${c.id === prod.client_id ? 'selected' : ''}>${c.company_name || c.name}</option>`).join('')}
                         </select>
                     </div>
                     <div class="grid grid-cols-2 gap-3">
@@ -2907,8 +2914,9 @@ async function autoGenerateProductSKU(force = false) {
         try {
             const url = `/api/products/generate-sku?name=${encodeURIComponent(name || 'Product')}&clientId=${encodeURIComponent(clientId)}`;
             const res = await NKB.api(url);
-            if (res.success && res.data && res.data.sku) {
-                skuInput.value = res.data.sku;
+            const skuVal = res.data?.sku || res.sku;
+            if (res.success && skuVal) {
+                skuInput.value = skuVal;
             }
         } catch (err) {
             console.error('Failed to generate SKU:', err);
@@ -2922,7 +2930,13 @@ async function autoGenerateProductSKU(force = false) {
     }
 }
 
-function openCreateProductModal() {
+async function openCreateProductModal(preselectedClientId = null) {
+    await ensureClientsLoaded();
+    const clientOptions = (cachedClients || []).map(c => {
+        const isSelected = preselectedClientId && c.id === preselectedClientId;
+        return `<option value="${c.id}" ${isSelected ? 'selected' : ''}>${c.company_name || c.name}</option>`;
+    }).join('');
+
     const root = document.getElementById('modals-root');
     root.innerHTML = `
         <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
@@ -2932,19 +2946,22 @@ function openCreateProductModal() {
                         <span class="text-2xl">✨</span>
                         <div>
                             <h3 class="text-lg font-black text-slate-900">Add Cosmetic Product</h3>
-                            <p class="text-xs text-slate-500">Register new item in master catalog with auto-generated SKU</p>
+                            <p class="text-xs text-slate-500">Register new item connected to Clients Directory & Catalog</p>
                         </div>
                     </div>
                     <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-xl">&times;</button>
                 </div>
                 <form onsubmit="submitCreateProduct(event)" class="space-y-3.5 text-xs font-semibold">
                     <div>
-                        <label class="block text-slate-700 font-bold mb-1">Client / Brand Option</label>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="block text-slate-700 font-bold">Client / Brand (from Clients Directory)</label>
+                            <span class="text-[10px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full font-bold">🏢 Clients Directory</span>
+                        </div>
                         <select id="prod-client-id" onchange="autoGenerateProductSKU(true)" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 font-bold focus:ring-2 focus:ring-indigo-500">
                             <option value="">-- Master / All Clients --</option>
-                            ${(cachedClients || []).map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
+                            ${clientOptions}
                         </select>
-                        <p class="text-[10px] text-slate-400 mt-1">Assign to a specific client catalog or keep open for all clients.</p>
+                        <p class="text-[10px] text-slate-400 mt-1">Assigns this product to the client in the Clients Directory & prefixes SKU with client initials.</p>
                     </div>
                     <div>
                         <label class="block text-slate-700 font-bold mb-1">Product Commercial Name *</label>
