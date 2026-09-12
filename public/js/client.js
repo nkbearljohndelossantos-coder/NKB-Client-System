@@ -268,7 +268,6 @@ async function submitClientPO(e) {
     const res = await NKB.api('/api/orders', {
         method: 'POST',
         body: JSON.stringify({
-            tolerance_percent: 10.0,
             billing_policy: policy,
             notes,
             items: clientCartItems.map(item => ({

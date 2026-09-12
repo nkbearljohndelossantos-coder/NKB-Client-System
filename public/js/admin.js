@@ -1595,8 +1595,8 @@ async function openEditClientModal(clientId) {
                     </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-slate-600 mb-1">Phone</label>
-                            <input type="text" id="edit-client-phone" required value="${client.phone}" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
+                            <label class="block text-slate-600 mb-1">Contact Number (Optional)</label>
+                            <input type="text" id="edit-client-phone" value="${client.phone || ''}" placeholder="+63 917 000 0000" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
                         </div>
                         <div>
                             <label class="block text-slate-600 mb-1">TIN</label>
@@ -1604,8 +1604,8 @@ async function openEditClientModal(clientId) {
                         </div>
                     </div>
                     <div>
-                        <label class="block text-slate-600 mb-1">Business Address</label>
-                        <input type="text" id="edit-client-address" required value="${client.address}" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
+                        <label class="block text-slate-600 mb-1">Business Address (Optional)</label>
+                        <input type="text" id="edit-client-address" value="${client.address || ''}" placeholder="Building, Street, City, Metro Manila" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
                     </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
@@ -1616,13 +1616,9 @@ async function openEditClientModal(clientId) {
                             </select>
                         </div>
                         <div>
-                            <label class="block text-slate-600 mb-1">Default Tolerance %</label>
-                            <input type="number" step="0.1" id="edit-client-tolerance" value="${client.default_tolerance_percent}" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
+                            <label class="block text-slate-600 mb-1">Credit Limit (₱)</label>
+                            <input type="number" step="1000" id="edit-client-credit" value="${client.credit_limit || 500000}" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
                         </div>
-                    </div>
-                    <div>
-                        <label class="block text-slate-600 mb-1">Credit Limit (₱)</label>
-                        <input type="number" step="1000" id="edit-client-credit" value="${client.credit_limit || 500000}" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
                     </div>
                     <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
                         <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl">Cancel</button>
@@ -1643,7 +1639,8 @@ async function submitEditClient(e, clientId) {
     const tin = document.getElementById('edit-client-tin').value;
     const address = document.getElementById('edit-client-address').value;
     const default_billing_policy = document.getElementById('edit-client-policy').value;
-    const default_tolerance_percent = parseFloat(document.getElementById('edit-client-tolerance').value);
+    const toleranceEl = document.getElementById('edit-client-tolerance');
+    const default_tolerance_percent = toleranceEl ? parseFloat(toleranceEl.value) : undefined;
     const credit_limit = parseFloat(document.getElementById('edit-client-credit').value);
 
     const res = await NKB.api(`/api/clients/${clientId}`, {
@@ -1788,16 +1785,12 @@ async function openCreatePOModal() {
                     <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
                 </div>
                 <form id="form-create-po" onsubmit="submitCreatePO(event)" class="space-y-4 text-xs font-semibold flex-1 overflow-y-auto pr-1">
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                             <label class="block text-slate-600 mb-1">Select Client *</label>
                             <select id="po-client-id" onchange="onAdminPOClientChanged()" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-900">
-                                ${cachedClients.map(c => `<option value="${c.id}">${c.company_name} (±${c.default_tolerance_percent}%)</option>`).join('')}
+                                ${cachedClients.map(c => `<option value="${c.id}">${c.company_name}</option>`).join('')}
                             </select>
-                        </div>
-                        <div>
-                            <label class="block text-slate-600 mb-1">Tolerance %</label>
-                            <input type="number" step="0.1" id="po-tolerance" value="10.0" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold">
                         </div>
                         <div>
                             <label class="block text-slate-600 mb-1">Billing Policy</label>
@@ -2004,7 +1997,8 @@ function renderAdminPOLineItems() {
 async function submitCreatePO(e) {
     e.preventDefault();
     const clientId = document.getElementById('po-client-id').value;
-    const tolerance = parseFloat(document.getElementById('po-tolerance').value);
+    const toleranceEl = document.getElementById('po-tolerance');
+    const tolerance = toleranceEl ? parseFloat(toleranceEl.value) : undefined;
     const policy = document.getElementById('po-billing-policy').value;
     const notes = document.getElementById('po-notes').value;
 
@@ -2709,8 +2703,8 @@ function openCreateClientModal() {
                     </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-slate-600 mb-1">Phone *</label>
-                            <input type="text" id="client-phone" required placeholder="+63 917 000 0000" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
+                            <label class="block text-slate-600 mb-1">Contact Number (Optional)</label>
+                            <input type="text" id="client-phone" placeholder="+63 917 000 0000" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
                         </div>
                         <div>
                             <label class="block text-slate-600 mb-1">TIN (Optional)</label>
@@ -2718,21 +2712,15 @@ function openCreateClientModal() {
                         </div>
                     </div>
                     <div>
-                        <label class="block text-slate-600 mb-1">Business Address *</label>
-                        <input type="text" id="client-address" required placeholder="Building, Street, City, Metro Manila" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
+                        <label class="block text-slate-600 mb-1">Business Address (Optional)</label>
+                        <input type="text" id="client-address" placeholder="Building, Street, City, Metro Manila" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
                     </div>
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-slate-600 mb-1">Default Billing Policy</label>
-                            <select id="client-policy" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
-                                <option value="ACTUAL_DELIVERY">Option A: Bill Actual Delivered</option>
-                                <option value="FIXED_PO_BUFFER">Option B: Fixed PO + Buffer</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-slate-600 mb-1">Default Tolerance %</label>
-                            <input type="number" step="0.1" id="client-tolerance" value="10.0" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
-                        </div>
+                    <div>
+                        <label class="block text-slate-600 mb-1">Default Billing Policy</label>
+                        <select id="client-policy" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
+                            <option value="ACTUAL_DELIVERY">Option A: Bill Actual Delivered</option>
+                            <option value="FIXED_PO_BUFFER">Option B: Fixed PO + Buffer</option>
+                        </select>
                     </div>
 
                     <!-- Client Portal Login Account Generator -->
@@ -2770,7 +2758,6 @@ async function submitCreateClient(e) {
     const tin = document.getElementById('client-tin').value;
     const address = document.getElementById('client-address').value;
     const policy = document.getElementById('client-policy').value;
-    const tolerance = parseFloat(document.getElementById('client-tolerance').value);
     const createAccount = document.getElementById('client-create-account').checked;
     const defaultPassword = document.getElementById('client-default-pass').value;
 
@@ -2784,7 +2771,7 @@ async function submitCreateClient(e) {
             tin,
             address,
             default_billing_policy: policy,
-            default_tolerance_percent: tolerance,
+            default_tolerance_percent: 10.0,
             create_portal_account: createAccount,
             default_password: defaultPassword
         })

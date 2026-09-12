@@ -84,12 +84,14 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'ACCOUNTING', 'SUPER_A
         default_password = 'Client123!'
     } = req.body;
 
-    if (!company_name || !contact_person || !email || !phone || !address) {
-        return res.status(400).json({ success: false, error: 'Company name, contact person, email, phone, and address are required.' });
+    if (!company_name || !contact_person || !email) {
+        return res.status(400).json({ success: false, error: 'Company name, contact person, and email are required.' });
     }
 
     const clientId = uuidv4();
     const cleanEmail = email.trim().toLowerCase();
+    const cleanPhone = (phone && typeof phone === 'string') ? phone.trim() : '';
+    const cleanAddress = (address && typeof address === 'string') ? address.trim() : '';
 
     try {
         db.prepare(`
@@ -100,8 +102,8 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'ACCOUNTING', 'SUPER_A
             company_name.trim(),
             contact_person.trim(),
             cleanEmail,
-            phone.trim(),
-            address.trim(),
+            cleanPhone,
+            cleanAddress,
             tin ? tin.trim() : null,
             default_billing_policy || 'ACTUAL_DELIVERY',
             default_tolerance_percent !== undefined ? parseFloat(default_tolerance_percent) : 10.0,
@@ -125,7 +127,7 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'ACCOUNTING', 'SUPER_A
                     cleanEmail,
                     passwordHash,
                     clientId,
-                    phone.trim()
+                    cleanPhone || null
                 );
                 createdUser = {
                     id: userId,
@@ -278,8 +280,8 @@ router.put('/:id', authenticateToken, requireRoles('ADMIN', 'SUPER_ADMIN'), (req
             company_name ? company_name.trim() : null,
             contact_person ? contact_person.trim() : null,
             email ? email.trim().toLowerCase() : null,
-            phone ? phone.trim() : null,
-            address ? address.trim() : null,
+            phone !== undefined ? (phone ? phone.trim() : '') : null,
+            address !== undefined ? (address ? address.trim() : '') : null,
             tin !== undefined ? tin : null,
             default_billing_policy || null,
             default_tolerance_percent !== undefined ? parseFloat(default_tolerance_percent) : null,

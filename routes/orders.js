@@ -186,7 +186,9 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
         return res.status(404).json({ success: false, error: 'Client not found.' });
     }
 
-    const tolerance = tolerance_percent !== undefined ? parseFloat(tolerance_percent) : (client.default_tolerance_percent || 10.0);
+    const tolerance = (tolerance_percent !== undefined && tolerance_percent !== null && !isNaN(parseFloat(tolerance_percent))) 
+        ? parseFloat(tolerance_percent) 
+        : ((client && client.default_tolerance_percent) ? client.default_tolerance_percent : 10.0);
     const policy = billing_policy || client.default_billing_policy || 'ACTUAL_DELIVERY';
     const taxRate = tax_percent !== undefined ? parseFloat(tax_percent) : 0.0;
 
