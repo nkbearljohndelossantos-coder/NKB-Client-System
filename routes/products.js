@@ -6,6 +6,87 @@ const { authenticateToken, requireRoles } = require('../middleware/auth');
 const { logAudit } = require('../services/auditService');
 
 /**
+ * Generate Product SKU based on present coding rules:
+ * 2-5 uppercase letters from brand/product initials + 3-digit number (e.g. HCPI-199, BSPT-341, SOS-459)
+ */
+function generateProductSKU(productName, clientName, existingSkusSet = new Set()) {
+    const stopWords = new Set(['WITH', 'FOR', 'AND', '&', 'THE', 'IN', 'OF', 'AT', 'TO', 'A', 'AN', 'SPF50', 'SPF50+', 'PA++++', 'PA+++', 'PA++']);
+
+    const clientWords = (clientName || '')
+        .toUpperCase()
+        .replace(/[^A-Z0-9\s]/g, ' ')
+        .split(/\s+/)
+        .filter(w => w.length > 0 && !stopWords.has(w) && w !== 'INC' && w !== 'CORP' && w !== 'ENTERPRISE' && w !== 'LTD' && w !== 'CO' && w !== 'AESTHETICS' && w !== 'WELLNESS');
+
+    const productWords = (productName || '')
+        .toUpperCase()
+        .replace(/[^A-Z0-9\s]/g, ' ')
+        .split(/\s+/)
+        .filter(w => w.length > 0 && !stopWords.has(w));
+
+    if (productWords.length === 0) {
+        const rnd = Math.floor(100 + Math.random() * 900);
+        return `PRD-${rnd}`;
+    }
+
+    // Check if product name already contains the brand / first client word
+    const alreadyHasBrand = clientWords.length > 0 && productWords[0] === clientWords[0];
+
+    let letters = [];
+    if (!alreadyHasBrand && clientWords.length > 0) {
+        if (clientWords.length === 1) {
+            letters.push(clientWords[0].slice(0, 2));
+        } else {
+            letters.push(clientWords[0][0], clientWords[1][0]);
+        }
+        for (const w of productWords) {
+            if (letters.length >= 4) break;
+            letters.push(w[0]);
+        }
+    } else {
+        for (const w of productWords) {
+            if (letters.length >= 4) break;
+            letters.push(w[0]);
+        }
+    }
+
+    let baseCode = letters.join('').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (baseCode.length < 2) {
+        baseCode = (productName.replace(/[^A-Z0-9]/gi, '').slice(0, 3).toUpperCase()) || 'PRD';
+    }
+    if (baseCode.length > 5) {
+        baseCode = baseCode.slice(0, 5);
+    }
+
+    let candidate = '';
+    let attempts = 0;
+    while (attempts < 200) {
+        attempts++;
+        const num = Math.floor(100 + Math.random() * 900);
+        candidate = `${baseCode}-${num}`;
+        if (!existingSkusSet.has(candidate)) break;
+    }
+    return candidate;
+}
+
+/**
+ * GET /api/products/generate-sku
+ * Preview auto-generated SKU based on product name and client
+ */
+router.get('/generate-sku', authenticateToken, (req, res) => {
+    const { name, clientId } = req.query;
+    let clientName = '';
+    if (clientId) {
+        const client = db.prepare('SELECT company_name FROM clients WHERE id = ?').get(clientId);
+        if (client) clientName = client.company_name;
+    }
+    const existingRows = db.prepare('SELECT sku FROM products').all();
+    const existingSkusSet = new Set(existingRows.map(r => r.sku.toUpperCase()));
+    const sku = generateProductSKU(name || '', clientName, existingSkusSet);
+    return res.json({ success: true, sku });
+});
+
+/**
  * GET /api/products
  * Accessible by all authenticated users (Client & Admin)
  * When requested by a client (or with ?clientId=...), automatically applies client custom pricing
@@ -84,6 +165,8 @@ router.get('/', authenticateToken, (req, res) => {
         query = `
             SELECT p.*,
                    p.default_price as base_default_price,
+                   (SELECT c.company_name FROM client_product_prices cpp JOIN clients c ON cpp.client_id = c.id WHERE cpp.product_id = p.id AND cpp.is_active = 1 LIMIT 1) as client_name,
+                   (SELECT cpp.client_id FROM client_product_prices cpp WHERE cpp.product_id = p.id AND cpp.is_active = 1 LIMIT 1) as client_id,
                    0 as has_custom_price
             FROM products p
             WHERE 1=1
@@ -123,13 +206,23 @@ router.get('/:id', authenticateToken, (req, res) => {
                    p.default_price as base_default_price,
                    cpp.custom_price,
                    COALESCE(cpp.custom_sku, p.sku) as effective_sku,
+                   cpp.client_id,
+                   (SELECT company_name FROM clients WHERE id = cpp.client_id) as client_name,
                    CASE WHEN cpp.custom_price IS NOT NULL THEN 1 ELSE 0 END as has_custom_price
             FROM products p
             LEFT JOIN client_product_prices cpp ON cpp.product_id = p.id AND cpp.client_id = ?
             WHERE p.id = ?
         `).get(targetClientId, req.params.id);
     } else {
-        product = db.prepare('SELECT p.*, p.default_price as base_default_price, 0 as has_custom_price FROM products p WHERE p.id = ?').get(req.params.id);
+        product = db.prepare(`
+            SELECT p.*,
+                   p.default_price as base_default_price,
+                   (SELECT cpp.client_id FROM client_product_prices cpp WHERE cpp.product_id = p.id AND cpp.is_active = 1 LIMIT 1) as client_id,
+                   (SELECT c.company_name FROM client_product_prices cpp JOIN clients c ON cpp.client_id = c.id WHERE cpp.product_id = p.id AND cpp.is_active = 1 LIMIT 1) as client_name,
+                   0 as has_custom_price
+            FROM products p
+            WHERE p.id = ?
+        `).get(req.params.id);
     }
 
     if (!product) {
@@ -143,10 +236,10 @@ router.get('/:id', authenticateToken, (req, res) => {
  * Admin/Production only
  */
 router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'SUPER_ADMIN'), (req, res) => {
-    const { sku, name, category, description, unit, default_price, formula_code, shelf_life_months } = req.body;
+    let { sku, name, category, description, unit, default_price, formula_code, shelf_life_months, client_id } = req.body;
 
-    if (!sku || !name || default_price === undefined || default_price === null || default_price === '') {
-        return res.status(400).json({ success: false, error: 'SKU, Name, and Default Price are required.' });
+    if (!name || default_price === undefined || default_price === null || default_price === '') {
+        return res.status(400).json({ success: false, error: 'Product Name and Default Price are required.' });
     }
 
     const parsedPrice = Math.round(parseFloat(default_price) * 100) / 100;
@@ -154,31 +247,58 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'SUPER_A
         return res.status(400).json({ success: false, error: 'Default price must be a valid positive number.' });
     }
 
-    const parsedShelfLife = parseInt(shelf_life_months || 24, 10);
-    if (Number.isNaN(parsedShelfLife) || parsedShelfLife < 1) {
-        return res.status(400).json({ success: false, error: 'Shelf life must be at least 1 month.' });
+    let clientName = '';
+    if (client_id) {
+        const client = db.prepare('SELECT company_name FROM clients WHERE id = ?').get(client_id);
+        if (client) clientName = client.company_name;
     }
 
-    const id = uuidv4();
-    try {
-        const insertResult = db.prepare(`
-            INSERT INTO products (id, sku, name, category, description, unit, default_price, formula_code, shelf_life_months)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(
-            id,
-            sku.trim().toUpperCase(),
-            name.trim(),
-            category || 'Cosmetics',
-            description || '',
-            unit || 'pcs',
-            parsedPrice,
-            formula_code || null,
-            parsedShelfLife
-        );
+    // Auto-generate SKU if not provided or empty
+    if (!sku || !sku.trim()) {
+        const existingRows = db.prepare('SELECT sku FROM products').all();
+        const existingSkusSet = new Set(existingRows.map(r => r.sku.toUpperCase()));
+        sku = generateProductSKU(name, clientName, existingSkusSet);
+    } else {
+        sku = sku.trim().toUpperCase();
+    }
 
-        if (!insertResult.changes) {
-            throw new Error('Product insert did not affect any rows.');
-        }
+    const parsedShelfLife = shelf_life_months ? parseInt(shelf_life_months, 10) : 24;
+    const id = uuidv4();
+
+    try {
+        const insertTx = db.transaction(() => {
+            db.prepare(`
+                INSERT INTO products (id, sku, name, category, description, unit, default_price, formula_code, shelf_life_months)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+                id,
+                sku,
+                name.trim(),
+                category || 'Cosmetics',
+                description || '',
+                unit || 'pcs',
+                parsedPrice,
+                formula_code || null,
+                parsedShelfLife || 24
+            );
+
+            if (client_id) {
+                db.prepare(`
+                    INSERT INTO client_product_prices (id, client_id, product_id, custom_name, custom_price, custom_sku, custom_formula_code, is_active)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+                `).run(
+                    uuidv4(),
+                    client_id,
+                    id,
+                    name.trim(),
+                    parsedPrice,
+                    sku,
+                    formula_code || null
+                );
+            }
+        });
+
+        insertTx();
 
         logAudit({
             userId: req.user.id,
@@ -187,10 +307,16 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'SUPER_A
             action: 'CREATE_PRODUCT',
             entityType: 'PRODUCT',
             entityId: id,
-            details: { sku, name, default_price }
+            details: { sku, name, default_price, client_id }
         });
 
-        const newProduct = db.prepare('SELECT * FROM products WHERE id = ?').get(id);
+        const newProduct = db.prepare(`
+            SELECT p.*,
+                   (SELECT c.company_name FROM client_product_prices cpp JOIN clients c ON cpp.client_id = c.id WHERE cpp.product_id = p.id AND cpp.is_active = 1 LIMIT 1) as client_name,
+                   (SELECT cpp.client_id FROM client_product_prices cpp WHERE cpp.product_id = p.id AND cpp.is_active = 1 LIMIT 1) as client_id
+            FROM products p WHERE p.id = ?
+        `).get(id);
+
         return res.status(201).json({ success: true, data: newProduct });
     } catch (err) {
         const duplicateSku = err.code === 'ER_DUP_ENTRY'
@@ -209,8 +335,8 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'SUPER_A
 /**
  * PUT /api/products/:id
  */
-router.put('/:id', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), (req, res) => {
-    const { name, category, description, unit, default_price, formula_code, shelf_life_months, is_active } = req.body;
+router.put('/:id', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'SUPER_ADMIN'), (req, res) => {
+    const { name, category, description, unit, default_price, formula_code, shelf_life_months, is_active, client_id } = req.body;
     const { id } = req.params;
 
     const existing = db.prepare('SELECT * FROM products WHERE id = ?').get(id);
@@ -218,31 +344,69 @@ router.put('/:id', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), (req,
         return res.status(404).json({ success: false, error: 'Product not found.' });
     }
 
-    db.prepare(`
-        UPDATE products 
-        SET name = COALESCE(?, name),
-            category = COALESCE(?, category),
-            description = COALESCE(?, description),
-            unit = COALESCE(?, unit),
-            default_price = COALESCE(?, default_price),
-            formula_code = COALESCE(?, formula_code),
-            shelf_life_months = COALESCE(?, shelf_life_months),
-            is_active = COALESCE(?, is_active),
-            updated_at = datetime('now')
-        WHERE id = ?
-    `).run(
-        name !== undefined ? name.trim() : null,
-        category !== undefined ? category : null,
-        description !== undefined ? description : null,
-        unit !== undefined ? unit : null,
-        default_price !== undefined ? Math.round(parseFloat(default_price) * 100) / 100 : null,
-        formula_code !== undefined ? formula_code : null,
-        shelf_life_months !== undefined ? parseInt(shelf_life_months) : null,
-        is_active !== undefined ? parseInt(is_active) : null,
-        id
-    );
+    const updateTx = db.transaction(() => {
+        db.prepare(`
+            UPDATE products 
+            SET name = COALESCE(?, name),
+                category = COALESCE(?, category),
+                description = COALESCE(?, description),
+                unit = COALESCE(?, unit),
+                default_price = COALESCE(?, default_price),
+                formula_code = COALESCE(?, formula_code),
+                shelf_life_months = COALESCE(?, shelf_life_months),
+                is_active = COALESCE(?, is_active),
+                updated_at = datetime('now')
+            WHERE id = ?
+        `).run(
+            name !== undefined ? name.trim() : null,
+            category !== undefined ? category : null,
+            description !== undefined ? description : null,
+            unit !== undefined ? unit : null,
+            default_price !== undefined ? Math.round(parseFloat(default_price) * 100) / 100 : null,
+            formula_code !== undefined ? formula_code : null,
+            shelf_life_months !== undefined ? parseInt(shelf_life_months) : null,
+            is_active !== undefined ? parseInt(is_active) : null,
+            id
+        );
 
-    const updated = db.prepare('SELECT * FROM products WHERE id = ?').get(id);
+        if (client_id !== undefined) {
+            if (client_id) {
+                const existingAssoc = db.prepare('SELECT id FROM client_product_prices WHERE product_id = ?').get(id);
+                if (existingAssoc) {
+                    db.prepare('UPDATE client_product_prices SET client_id = ?, custom_name = ?, custom_price = ? WHERE product_id = ?').run(
+                        client_id,
+                        name ? name.trim() : existing.name,
+                        default_price !== undefined ? Math.round(parseFloat(default_price) * 100) / 100 : existing.default_price,
+                        id
+                    );
+                } else {
+                    db.prepare(`
+                        INSERT INTO client_product_prices (id, client_id, product_id, custom_name, custom_price, custom_sku, custom_formula_code, is_active)
+                        VALUES (?, ?, ?, ?, ?, ?, NULL, 1)
+                    `).run(
+                        uuidv4(),
+                        client_id,
+                        id,
+                        name ? name.trim() : existing.name,
+                        default_price !== undefined ? Math.round(parseFloat(default_price) * 100) / 100 : existing.default_price,
+                        existing.sku
+                    );
+                }
+            } else {
+                db.prepare('DELETE FROM client_product_prices WHERE product_id = ?').run(id);
+            }
+        }
+    });
+
+    updateTx();
+
+    const updated = db.prepare(`
+        SELECT p.*,
+               (SELECT c.company_name FROM client_product_prices cpp JOIN clients c ON cpp.client_id = c.id WHERE cpp.product_id = p.id AND cpp.is_active = 1 LIMIT 1) as client_name,
+               (SELECT cpp.client_id FROM client_product_prices cpp WHERE cpp.product_id = p.id AND cpp.is_active = 1 LIMIT 1) as client_id
+        FROM products p WHERE p.id = ?
+    `).get(id);
+
     return res.json({ success: true, data: updated });
 });
 
@@ -288,5 +452,7 @@ router.delete('/:id', authenticateToken, requireRoles('ADMIN', 'SUPER_ADMIN'), (
         message: `Product "${product.name}" (${product.sku}) has been deleted.`
     });
 });
+
+router.generateProductSKU = generateProductSKU;
 
 module.exports = router;

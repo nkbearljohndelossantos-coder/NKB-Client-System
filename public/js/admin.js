@@ -1000,10 +1000,12 @@ async function loadProducts() {
                 <td class="py-3 px-4 font-mono font-bold text-indigo-600">${p.sku}</td>
                 <td class="py-3 px-4 font-bold text-slate-900">${p.name}</td>
                 <td class="py-3 px-4"><span class="badge bg-slate-100 text-slate-700">${p.category}</span></td>
-                <td class="py-3 px-4 font-mono text-slate-600">${p.formula_code || '-'}</td>
+                <td class="py-3 px-4">
+                    ${p.client_name 
+                        ? `<span class="badge bg-indigo-50 text-indigo-700 font-bold border border-indigo-200">🏢 ${p.client_name}</span>` 
+                        : `<span class="badge bg-slate-100 text-slate-500">Master / All Clients</span>`}
+                </td>
                 <td class="py-3 px-4 font-extrabold text-slate-900">${NKB.formatCurrency(p.default_price)}</td>
-                <td class="py-3 px-4 text-slate-600">${p.shelf_life_months} mos</td>
-                <td class="py-3 px-4 font-bold text-emerald-700">${NKB.formatNumber(p.current_stock)} ${p.unit}</td>
                 <td class="py-3 px-4"><span class="badge ${p.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}">${p.is_active ? 'ACTIVE' : 'INACTIVE'}</span></td>
                 <td class="py-3 px-4 text-right whitespace-nowrap">
                     <div class="flex items-center justify-end gap-1.5">
@@ -1018,7 +1020,7 @@ async function loadProducts() {
             </tr>
         `).join('');
     } else {
-        tbody.innerHTML = `<tr><td colspan="9" class="py-6 text-center text-slate-400">No products found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-slate-400">No products found.</td></tr>`;
     }
 }
 
@@ -1685,41 +1687,40 @@ async function openEditProductModal(productId) {
                     <div class="grid grid-cols-2 gap-3">
                         <div>
                             <label class="block text-slate-600 mb-1">SKU</label>
-                            <input type="text" value="${prod.sku}" readonly class="w-full px-3 py-2 border rounded-xl bg-slate-100 font-mono">
+                            <input type="text" value="${prod.sku}" readonly class="w-full px-3 py-2 border rounded-xl bg-slate-100 font-mono font-bold text-slate-700">
                         </div>
                         <div>
                             <label class="block text-slate-600 mb-1">Category</label>
-                            <select id="edit-prod-category" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
+                            <select id="edit-prod-category" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-semibold">
                                 <option value="Body Care" ${prod.category === 'Body Care' ? 'selected' : ''}>Body Care</option>
                                 <option value="Sun Care" ${prod.category === 'Sun Care' ? 'selected' : ''}>Sun Care</option>
                                 <option value="Face Care" ${prod.category === 'Face Care' ? 'selected' : ''}>Face Care</option>
                                 <option value="Bath & Body" ${prod.category === 'Bath & Body' ? 'selected' : ''}>Bath & Body</option>
                                 <option value="Hair Care" ${prod.category === 'Hair Care' ? 'selected' : ''}>Hair Care</option>
+                                <option value="Cosmetics" ${prod.category === 'Cosmetics' ? 'selected' : ''}>Cosmetics</option>
+                                <option value="Skincare Treatment" ${prod.category === 'Skincare Treatment' ? 'selected' : ''}>Skincare Treatment</option>
                             </select>
                         </div>
                     </div>
                     <div>
-                        <label class="block text-slate-600 mb-1">Product Name</label>
-                        <input type="text" id="edit-prod-name" required value="${prod.name}" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
+                        <label class="block text-slate-600 mb-1">Product Name *</label>
+                        <input type="text" id="edit-prod-name" required value="${prod.name}" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold">
+                    </div>
+                    <div>
+                        <label class="block text-slate-600 mb-1">Client / Brand</label>
+                        <select id="edit-prod-client-id" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-800">
+                            <option value="">-- Master / All Clients --</option>
+                            ${(cachedClients || []).map(c => `<option value="${c.id}" ${c.id === prod.client_id ? 'selected' : ''}>${c.name}</option>`).join('')}
+                        </select>
                     </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-slate-600 mb-1">Default Unit Price (₱)</label>
-                            <input type="number" step="0.01" min="0" inputmode="decimal" id="edit-prod-price" required value="${Number(prod.default_price || 0).toFixed(2)}" onblur="if(this.value && !isNaN(this.value)) this.value = parseFloat(this.value).toFixed(2)" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
+                            <label class="block text-slate-600 mb-1">Default Unit Price (₱) *</label>
+                            <input type="number" step="0.01" min="0" inputmode="decimal" id="edit-prod-price" required value="${Number(prod.default_price || 0).toFixed(2)}" onblur="if(this.value && !isNaN(this.value)) this.value = parseFloat(this.value).toFixed(2)" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-extrabold text-indigo-900">
                         </div>
                         <div>
-                            <label class="block text-slate-600 mb-1">Formula Code</label>
-                            <input type="text" id="edit-prod-formula" value="${prod.formula_code || ''}" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-mono">
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-slate-600 mb-1">Unit</label>
-                            <input type="text" id="edit-prod-unit" value="${prod.unit}" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
-                        </div>
-                        <div>
-                            <label class="block text-slate-600 mb-1">Shelf Life (Months)</label>
-                            <input type="number" id="edit-prod-shelf-life" value="${prod.shelf_life_months}" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
+                            <label class="block text-slate-600 mb-1">Unit of Measure</label>
+                            <input type="text" id="edit-prod-unit" value="${prod.unit || 'pcs'}" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
                         </div>
                     </div>
                     <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
@@ -1736,20 +1737,18 @@ async function submitEditProduct(e, productId) {
     e.preventDefault();
     const category = document.getElementById('edit-prod-category').value;
     const name = document.getElementById('edit-prod-name').value;
+    const client_id = document.getElementById('edit-prod-client-id').value || null;
     const default_price = parseFloat(document.getElementById('edit-prod-price').value);
-    const formula_code = document.getElementById('edit-prod-formula').value;
-    const unit = document.getElementById('edit-prod-unit').value;
-    const shelf_life_months = parseInt(document.getElementById('edit-prod-shelf-life').value);
+    const unit = document.getElementById('edit-prod-unit').value || 'pcs';
 
     const res = await NKB.api(`/api/products/${productId}`, {
         method: 'PUT',
         body: JSON.stringify({
             category,
             name,
+            client_id,
             default_price,
-            formula_code,
-            unit,
-            shelf_life_months
+            unit
         })
     });
 
@@ -2889,7 +2888,41 @@ async function submitResetClientCredentials(e, clientId, companyName, email) {
     }
 }
 
-// 11. Create Product Modal
+// 11. Create Product Modal & Auto-SKU Generator
+let skuDebounceTimer = null;
+async function autoGenerateProductSKU(force = false) {
+    clearTimeout(skuDebounceTimer);
+    const run = async () => {
+        const nameInput = document.getElementById('prod-name');
+        const clientSelect = document.getElementById('prod-client-id');
+        const skuInput = document.getElementById('prod-sku');
+        if (!nameInput || !skuInput) return;
+
+        const name = nameInput.value.trim();
+        const clientId = clientSelect ? clientSelect.value : '';
+
+        if (!name && !force) {
+            return;
+        }
+
+        try {
+            const url = `/api/products/generate-sku?name=${encodeURIComponent(name || 'Product')}&clientId=${encodeURIComponent(clientId)}`;
+            const res = await NKB.api(url);
+            if (res.success && res.data && res.data.sku) {
+                skuInput.value = res.data.sku;
+            }
+        } catch (err) {
+            console.error('Failed to generate SKU:', err);
+        }
+    };
+
+    if (force) {
+        await run();
+    } else {
+        skuDebounceTimer = setTimeout(run, 300);
+    }
+}
+
 function openCreateProductModal() {
     const root = document.getElementById('modals-root');
     root.innerHTML = `
@@ -2900,20 +2933,40 @@ function openCreateProductModal() {
                         <span class="text-2xl">✨</span>
                         <div>
                             <h3 class="text-lg font-black text-slate-900">Add Cosmetic Product</h3>
-                            <p class="text-xs text-slate-500">Register new item in master formulation & pricing catalog</p>
+                            <p class="text-xs text-slate-500">Register new item in master catalog with auto-generated SKU</p>
                         </div>
                     </div>
                     <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-xl">&times;</button>
                 </div>
                 <form onsubmit="submitCreateProduct(event)" class="space-y-3.5 text-xs font-semibold">
+                    <div>
+                        <label class="block text-slate-700 font-bold mb-1">Client / Brand Option</label>
+                        <select id="prod-client-id" onchange="autoGenerateProductSKU(true)" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 font-bold focus:ring-2 focus:ring-indigo-500">
+                            <option value="">-- Master / All Clients --</option>
+                            ${(cachedClients || []).map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
+                        </select>
+                        <p class="text-[10px] text-slate-400 mt-1">Assign to a specific client catalog or keep open for all clients.</p>
+                    </div>
+                    <div>
+                        <label class="block text-slate-700 font-bold mb-1">Product Commercial Name *</label>
+                        <input type="text" id="prod-name" required oninput="autoGenerateProductSKU()" placeholder="e.g. Vitamin C Brightening Body Lotion 300ml" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 font-bold focus:ring-2 focus:ring-indigo-500">
+                    </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-slate-700 font-bold mb-1">SKU / Item Code *</label>
-                            <input type="text" id="prod-sku" required placeholder="e.g. VLC-300" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 font-mono uppercase focus:ring-2 focus:ring-indigo-500">
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="block text-slate-700 font-bold">SKU / Item Code *</label>
+                                <span class="text-[10px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full font-bold">Auto-Generated</span>
+                            </div>
+                            <div class="flex gap-1.5">
+                                <input type="text" id="prod-sku" required placeholder="e.g. VCB-101" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-slate-50 text-slate-900 font-mono font-black uppercase tracking-wider focus:ring-2 focus:ring-indigo-500">
+                                <button type="button" onclick="autoGenerateProductSKU(true)" title="Regenerate SKU" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition flex items-center justify-center">
+                                    🔄
+                                </button>
+                            </div>
                         </div>
                         <div>
                             <label class="block text-slate-700 font-bold mb-1">Category *</label>
-                            <select id="prod-category" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 font-bold focus:ring-2 focus:ring-indigo-500">
+                            <select id="prod-category" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 font-semibold focus:ring-2 focus:ring-indigo-500">
                                 <option value="Body Care">Body Care</option>
                                 <option value="Face Care">Face Care</option>
                                 <option value="Sun Care">Sun Care</option>
@@ -2924,28 +2977,14 @@ function openCreateProductModal() {
                             </select>
                         </div>
                     </div>
-                    <div>
-                        <label class="block text-slate-700 font-bold mb-1">Product Commercial Name *</label>
-                        <input type="text" id="prod-name" required placeholder="e.g. Vitamin C Brightening Body Lotion 300ml" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500">
-                    </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
                             <label class="block text-slate-700 font-bold mb-1">Default Unit Price (₱) *</label>
                             <input type="number" step="0.01" min="0" inputmode="decimal" id="prod-price" required placeholder="120.00" onblur="if(this.value && !isNaN(this.value)) this.value = parseFloat(this.value).toFixed(2)" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white font-extrabold text-indigo-900 text-sm focus:ring-2 focus:ring-indigo-500">
                         </div>
                         <div>
-                            <label class="block text-slate-700 font-bold mb-1">Formula Code</label>
-                            <input type="text" id="prod-formula" placeholder="FORM-VLC-V1" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 font-mono focus:ring-2 focus:ring-indigo-500">
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
                             <label class="block text-slate-700 font-bold mb-1">Unit of Measure</label>
                             <input type="text" id="prod-unit" value="pcs" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500">
-                        </div>
-                        <div>
-                            <label class="block text-slate-700 font-bold mb-1">Shelf Life (Months)</label>
-                            <input type="number" id="prod-shelf-life" value="24" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500">
                         </div>
                     </div>
                     <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
@@ -2960,13 +2999,12 @@ function openCreateProductModal() {
 
 async function submitCreateProduct(e) {
     e.preventDefault();
-    const sku = document.getElementById('prod-sku').value;
+    const sku = document.getElementById('prod-sku').value.trim();
     const category = document.getElementById('prod-category').value;
-    const name = document.getElementById('prod-name').value;
+    const name = document.getElementById('prod-name').value.trim();
+    const clientId = document.getElementById('prod-client-id')?.value || null;
     const price = parseFloat(document.getElementById('prod-price').value);
-    const formula = document.getElementById('prod-formula').value;
-    const unit = document.getElementById('prod-unit').value;
-    const shelfLife = parseInt(document.getElementById('prod-shelf-life').value);
+    const unit = document.getElementById('prod-unit').value || 'pcs';
 
     const res = await NKB.api('/api/products', {
         method: 'POST',
@@ -2974,15 +3012,14 @@ async function submitCreateProduct(e) {
             sku,
             category,
             name,
+            client_id: clientId,
             default_price: price,
-            formula_code: formula,
-            unit,
-            shelf_life_months: shelfLife
+            unit
         })
     });
 
     if (res.success) {
-        NKB.showToast(`Product "${name}" added!`, 'success');
+        NKB.showToast(`Product "${name}" added successfully!`, 'success');
         closeModal();
         await loadInitialData();
         loadProducts();
