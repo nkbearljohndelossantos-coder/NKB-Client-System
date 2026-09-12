@@ -475,29 +475,104 @@ async function approvePO(id, poNumber) {
 // -------------------------------------------------------------
 // 3. JOB ORDERS (JO)
 // -------------------------------------------------------------
+let cachedJobOrders = [];
+
 async function loadJobOrders() {
     const res = await NKB.api('/api/job-orders');
     const tbody = document.getElementById('table-jos-body');
+    const clientFilter = document.getElementById('filter-jo-client');
 
     if (res.success && res.data && res.data.length > 0) {
-        tbody.innerHTML = res.data.map(jo => `
-            <tr class="hover:bg-slate-50 transition">
-                <td class="py-3 px-4 font-bold text-indigo-600">${jo.jo_number}</td>
+        cachedJobOrders = res.data;
+
+        // Populate client filter dropdown
+        if (clientFilter) {
+            const clientsMap = new Map();
+            res.data.forEach(jo => {
+                if (jo.client_id && jo.company_name) {
+                    clientsMap.set(jo.client_id, jo.company_name);
+                }
+            });
+            const currentVal = clientFilter.value;
+            clientFilter.innerHTML = `<option value="">All Clients (${clientsMap.size})</option>` + 
+                Array.from(clientsMap.entries()).map(([cid, name]) => 
+                    `<option value="${cid}" ${cid === currentVal ? 'selected' : ''}>${name}</option>`
+                ).join('');
+        }
+
+        renderJobOrdersTable(res.data);
+    } else {
+        cachedJobOrders = [];
+        tbody.innerHTML = `<tr><td colspan="8" class="py-6 text-center text-slate-400">No job orders found.</td></tr>`;
+    }
+}
+
+function renderJobOrdersTable(jobOrders) {
+    const tbody = document.getElementById('table-jos-body');
+    if (!tbody) return;
+
+    if (!jobOrders || jobOrders.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" class="py-6 text-center text-slate-400">No job orders found matching filter.</td></tr>`;
+        return;
+    }
+
+    // Group job orders by Client
+    const grouped = new Map();
+    jobOrders.forEach(jo => {
+        const ckey = jo.client_id || jo.company_name || 'other';
+        if (!grouped.has(ckey)) {
+            grouped.set(ckey, {
+                clientId: jo.client_id,
+                companyName: jo.company_name,
+                items: []
+            });
+        }
+        grouped.get(ckey).items.push(jo);
+    });
+
+    let html = '';
+    grouped.forEach(group => {
+        const totalQty = group.items.reduce((sum, j) => sum + (j.target_quantity || 0), 0);
+        html += `
+            <!-- Client Group Banner Row -->
+            <tr class="bg-indigo-50/80 border-t-2 border-indigo-200">
+                <td colspan="8" class="py-2.5 px-4">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div class="flex items-center gap-2.5">
+                            <span class="text-base">🏢</span>
+                            <div>
+                                <span class="font-extrabold text-sm text-slate-900">${group.companyName}</span>
+                                <span class="text-[11px] text-indigo-700 font-semibold ml-2">(${group.items.length} Product${group.items.length > 1 ? 's' : ''} in Production • Total: ${NKB.formatNumber(totalQty)} pcs)</span>
+                            </div>
+                        </div>
+                        <a href="/print-jo.html?client_id=${group.clientId}" target="_blank" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-bold transition inline-flex items-center gap-1.5 shadow-sm" title="Print Consolidated Job Order for ${group.companyName} (All Products)">
+                            <span>🖨️ Print Client JO (${group.items.length} Products)</span>
+                        </a>
+                    </div>
+                </td>
+            </tr>
+        `;
+
+        // Product Job Order rows under this client
+        group.items.forEach(jo => {
+            html += `
+            <tr class="hover:bg-slate-50 transition border-b border-slate-100 last:border-b-2">
+                <td class="py-3 px-4 font-bold text-indigo-600 font-mono">${jo.jo_number}</td>
                 <td class="py-3 px-4">
                     <button onclick="openViewPOModal('${jo.po_id}')" class="font-bold text-indigo-600 hover:text-indigo-800 hover:underline" title="View Purchase Order Details">
                         ${jo.po_number}
                     </button>
                 </td>
                 <td class="py-3 px-4 font-bold text-slate-800">${jo.company_name}</td>
-                <td class="py-3 px-4 font-semibold text-slate-800">${jo.product_name} <span class="text-xs text-slate-400">(${jo.sku})</span></td>
-                <td class="py-3 px-4 font-bold text-slate-700">${NKB.formatNumber(jo.target_quantity)} pcs</td>
+                <td class="py-3 px-4 font-semibold text-slate-800">${jo.product_name} <span class="text-xs text-slate-400 font-mono">(${jo.sku})</span></td>
+                <td class="py-3 px-4 font-bold text-slate-700 font-mono">${NKB.formatNumber(jo.target_quantity)} pcs</td>
                 <td class="py-3 px-4 text-slate-600 font-medium">${jo.assigned_team}</td>
                 <td class="py-3 px-4">${NKB.renderStatusBadge(jo.status)}</td>
                 <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
                     <button onclick="openViewPOModal('${jo.po_id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition" title="View Purchase Order Details">
                         👁️ View PO
                     </button>
-                    <a href="/print-jo.html?id=${jo.id}" target="_blank" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Print Job Order / Sales Order">
+                    <a href="/print-jo.html?client_id=${jo.client_id}&id=${jo.id}" target="_blank" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Print Job Order for ${jo.company_name} (All Products)">
                         🖨️ Print
                     </a>
                     <button onclick="openCreateBatchModal('${jo.id}', '${jo.jo_number}', ${jo.target_quantity}, '${jo.product_name}')" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition">
@@ -505,11 +580,39 @@ async function loadJobOrders() {
                     </button>
                 </td>
             </tr>
-        `).join('');
+            `;
+        });
+    });
+
+    tbody.innerHTML = html;
+}
+
+function filterJobOrdersByClient() {
+    const sel = document.getElementById('filter-jo-client');
+    if (!sel) return;
+    const cid = sel.value;
+    if (!cid) {
+        renderJobOrdersTable(cachedJobOrders);
     } else {
-        tbody.innerHTML = `<tr><td colspan="8" class="py-6 text-center text-slate-400">No job orders found.</td></tr>`;
+        const filtered = cachedJobOrders.filter(j => j.client_id === cid);
+        renderJobOrdersTable(filtered);
     }
 }
+
+function printJobOrdersForSelectedClient() {
+    const sel = document.getElementById('filter-jo-client');
+    const cid = sel ? sel.value : '';
+    if (cid) {
+        window.open(`/print-jo.html?client_id=${cid}`, '_blank');
+    } else {
+        window.open('/print-jo.html?all=1', '_blank');
+    }
+}
+
+window.loadJobOrders = loadJobOrders;
+window.renderJobOrdersTable = renderJobOrdersTable;
+window.filterJobOrdersByClient = filterJobOrdersByClient;
+window.printJobOrdersForSelectedClient = printJobOrdersForSelectedClient;
 
 // -------------------------------------------------------------
 // 4. PRODUCTION BATCHES & YIELD LOGGER

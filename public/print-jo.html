@@ -22,7 +22,7 @@
         }
 
         /* -------------------------------------------------------------
-           PRINT STYLING (Strictly 1 A4 Page with 2 Stacked Landscape Slips)
+           PRINT STYLING (Strictly 1 A4 Page with 2 Stacked Landscape Slips per Client)
            ------------------------------------------------------------- */
         @page {
             size: A4 portrait;
@@ -31,16 +31,22 @@
 
         @media print {
             html, body {
-                width: 210mm;
-                height: 297mm;
+                width: 210mm !important;
+                height: auto !important;
                 margin: 0 !important;
                 padding: 0 !important;
                 background: #ffffff !important;
-                overflow: hidden !important;
+                overflow: visible !important;
             }
 
             .no-print {
                 display: none !important;
+            }
+
+            .pages-wrapper {
+                width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
             }
 
             .page-container {
@@ -53,9 +59,17 @@
                 justify-content: space-between !important;
                 box-shadow: none !important;
                 border: none !important;
+                page-break-after: always !important;
+                break-after: page !important;
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+                overflow: hidden !important;
+                box-sizing: border-box !important;
+            }
+
+            .page-container:last-child {
                 page-break-after: avoid !important;
                 break-after: avoid !important;
-                overflow: hidden !important;
             }
 
             .slip-slip {
@@ -88,13 +102,13 @@
                 display: flex;
                 flex-direction: column;
                 align-items: center;
+                gap: 24px;
                 min-height: 100vh;
             }
 
             .no-print-toolbar {
                 width: 210mm;
                 max-width: 100%;
-                margin-bottom: 16px;
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
@@ -104,6 +118,9 @@
                 border-radius: 12px;
                 box-shadow: 0 2px 10px rgba(0,0,0,0.06);
                 border: 1px solid #e2e8f0;
+                position: sticky;
+                top: 12px;
+                z-index: 100;
             }
 
             .toolbar-btn {
@@ -158,6 +175,13 @@
                 background: #ffffff;
                 color: #0f172a;
                 cursor: pointer;
+            }
+
+            .pages-wrapper {
+                display: flex;
+                flex-direction: column;
+                gap: 24px;
+                align-items: center;
             }
 
             .page-container {
@@ -291,6 +315,10 @@
             table-layout: fixed;
         }
 
+        .items-table-dense {
+            font-size: 7.5pt !important;
+        }
+
         .items-table thead th {
             font-weight: bold;
             text-align: left;
@@ -318,6 +346,11 @@
             padding: 2px 0;
             vertical-align: top;
             line-height: 1.25;
+        }
+
+        .items-table-dense tbody td {
+            padding: 1px 0 !important;
+            line-height: 1.15 !important;
         }
 
         .items-table tbody td.td-desc {
@@ -428,186 +461,28 @@
                     <option value="JOB ORDER">JOB ORDER</option>
                 </select>
             </div>
+            <span id="page-summary-badge" style="font-size: 11px; color: #64748b; font-weight: 600;"></span>
         </div>
 
         <div style="display: flex; align-items: center; gap: 8px;">
-            <button onclick="window.print()" class="toolbar-btn toolbar-btn-print">
+            <button onclick="window.print()" class="toolbar-btn toolbar-btn-print" id="btn-print-main">
                 <span>🖨️ Print 2 Copies (A4)</span>
             </button>
         </div>
     </div>
 
-    <!-- 1 Sheet = Exactly 1 A4 Page Containing 2 Half-Landscape Copies -->
-    <div class="page-container" id="printable-container">
-        
-        <!-- ================= COPY 1: TOP HALF (Landscape Half-A4) ================= -->
-        <div class="slip-slip" id="copy-1">
-            <div class="slip-content">
-                <!-- Header -->
-                <div>
-                    <div class="company-header">
-                        <div class="company-name">NKB Manufacturing Corporation</div>
-                        <div class="company-address">B4 L5 Twig St., Sampaguita Village, Mambog II, Bacoor City, 4102 Cavite, Philippines</div>
-                        <div class="company-tin">TIN: 686-950-421-00000</div>
-                    </div>
-
-                    <!-- Underlined Document Title -->
-                    <div class="doc-title-row">
-                        <span class="doc-title-text title-display">SALES ORDER</span>
-                    </div>
-
-                    <!-- Customer & Metadata -->
-                    <div class="meta-row">
-                        <div class="meta-left">
-                            <div class="meta-line">Customer: <strong class="cust-name-display">-</strong></div>
-                            <div class="meta-line">Address: <span class="cust-addr-display">-</span></div>
-                        </div>
-                        <div class="meta-right">
-                            <div class="doc-no doc-no-display">SO-0000</div>
-                            <div class="meta-line">Date: <span class="doc-date-display">-</span></div>
-                            <div class="meta-line">Due Date: <span class="doc-duedate-display">-</span></div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Products Table -->
-                <div class="table-wrapper">
-                    <table class="items-table">
-                        <thead>
-                            <tr>
-                                <th class="th-desc">Description</th>
-                                <th class="th-qty">Quantity</th>
-                                <th class="th-uom">UOM</th>
-                            </tr>
-                        </thead>
-                        <tbody class="items-tbody">
-                            <tr><td colspan="3" style="padding-top: 10px; color: #888;">Loading order items...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- Footer (Remarks & Signatures) -->
-                <div>
-                    <div class="remarks-row">
-                        <span class="remarks-lbl">Remarks:</span> <span class="remarks-display"></span>
-                    </div>
-
-                    <div class="signatures-container">
-                        <div class="sig-column">
-                            <div class="sig-item">
-                                <div class="sig-label">Prepared by:</div>
-                                <div class="sig-underline"></div>
-                            </div>
-                            <div class="sig-item">
-                                <div class="sig-label">Checked by:</div>
-                                <div class="sig-underline"></div>
-                            </div>
-                        </div>
-                        <div class="sig-column">
-                            <div class="sig-item">
-                                <div class="sig-label">Processed by:</div>
-                                <div class="sig-underline"></div>
-                            </div>
-                            <div class="sig-item">
-                                <div class="sig-label">Released by:</div>
-                                <div class="sig-underline"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+    <!-- Wrapper for 1 or More Client Sheets (Each Sheet is Exactly 1 A4 Page with 2 Stacked Landscape Slips) -->
+    <div class="pages-wrapper" id="pages-wrapper">
+        <div class="page-container" id="loading-placeholder">
+            <div style="display: flex; align-items: center; justify-content: center; height: 100%; font-size: 14px; color: #64748b;">
+                Loading Job Order details...
             </div>
         </div>
-
-        <!-- ================= CUT GUIDE DIVIDER ================= -->
-        <div class="cut-divider">
-            <div class="cut-line-bar"></div>
-            <div class="cut-badge">✂ CUT HERE (HALF OF A4 LANDSCAPE) ✂</div>
-            <div class="cut-line-bar"></div>
-        </div>
-
-        <!-- ================= COPY 2: BOTTOM HALF (Landscape Half-A4 Duplicate) ================= -->
-        <div class="slip-slip" id="copy-2">
-            <div class="slip-content">
-                <!-- Header -->
-                <div>
-                    <div class="company-header">
-                        <div class="company-name">NKB Manufacturing Corporation</div>
-                        <div class="company-address">B4 L5 Twig St., Sampaguita Village, Mambog II, Bacoor City, 4102 Cavite, Philippines</div>
-                        <div class="company-tin">TIN: 686-950-421-00000</div>
-                    </div>
-
-                    <!-- Underlined Document Title -->
-                    <div class="doc-title-row">
-                        <span class="doc-title-text title-display">SALES ORDER</span>
-                    </div>
-
-                    <!-- Customer & Metadata -->
-                    <div class="meta-row">
-                        <div class="meta-left">
-                            <div class="meta-line">Customer: <strong class="cust-name-display">-</strong></div>
-                            <div class="meta-line">Address: <span class="cust-addr-display">-</span></div>
-                        </div>
-                        <div class="meta-right">
-                            <div class="doc-no doc-no-display">SO-0000</div>
-                            <div class="meta-line">Date: <span class="doc-date-display">-</span></div>
-                            <div class="meta-line">Due Date: <span class="doc-duedate-display">-</span></div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Products Table -->
-                <div class="table-wrapper">
-                    <table class="items-table">
-                        <thead>
-                            <tr>
-                                <th class="th-desc">Description</th>
-                                <th class="th-qty">Quantity</th>
-                                <th class="th-uom">UOM</th>
-                            </tr>
-                        </thead>
-                        <tbody class="items-tbody">
-                            <tr><td colspan="3" style="padding-top: 10px; color: #888;">Loading order items...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- Footer (Remarks & Signatures) -->
-                <div>
-                    <div class="remarks-row">
-                        <span class="remarks-lbl">Remarks:</span> <span class="remarks-display"></span>
-                    </div>
-
-                    <div class="signatures-container">
-                        <div class="sig-column">
-                            <div class="sig-item">
-                                <div class="sig-label">Prepared by:</div>
-                                <div class="sig-underline"></div>
-                            </div>
-                            <div class="sig-item">
-                                <div class="sig-label">Checked by:</div>
-                                <div class="sig-underline"></div>
-                            </div>
-                        </div>
-                        <div class="sig-column">
-                            <div class="sig-item">
-                                <div class="sig-label">Processed by:</div>
-                                <div class="sig-underline"></div>
-                            </div>
-                            <div class="sig-item">
-                                <div class="sig-label">Released by:</div>
-                                <div class="sig-underline"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
     </div>
 
     <!-- Data Injection Script -->
     <script>
-        let currentData = null;
+        let currentLoadedData = [];
 
         function formatDateMMDDYYYY(val) {
             if (!val) return '';
@@ -634,23 +509,8 @@
                 .replace(/"/g, '&quot;');
         }
 
-        function updateDocTitle() {
-            const select = document.getElementById('doc-title-select');
-            const chosen = select ? select.value : 'SALES ORDER';
-            
-            document.querySelectorAll('.title-display').forEach(el => {
-                el.textContent = chosen;
-            });
-
-            if (currentData) {
-                applyDocNumber(chosen);
-            }
-        }
-
-        function applyDocNumber(titleMode) {
-            const rawNo = currentData.jo_number || currentData.po_number || '1279';
-            let formattedNo = rawNo;
-
+        function formatDocNumber(rawNo, titleMode) {
+            let formattedNo = rawNo || '1279';
             if (titleMode === 'SALES ORDER') {
                 if (formattedNo.startsWith('JO-')) {
                     formattedNo = formattedNo.replace(/^JO-/, 'SO-');
@@ -668,91 +528,46 @@
                     formattedNo = 'JO-' + formattedNo;
                 }
             }
+            return formattedNo;
+        }
+
+        function updateDocTitle() {
+            const select = document.getElementById('doc-title-select');
+            const chosen = select ? select.value : 'SALES ORDER';
+            
+            document.querySelectorAll('.title-display').forEach(el => {
+                el.textContent = chosen;
+            });
 
             document.querySelectorAll('.doc-no-display').forEach(el => {
-                el.textContent = formattedNo;
+                const rawNo = el.getAttribute('data-raw-no') || el.textContent;
+                el.textContent = formatDocNumber(rawNo, chosen);
             });
         }
 
-        async function loadData() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const id = urlParams.get('id');
-            const poId = urlParams.get('po_id') || urlParams.get('poId');
+        function generateSlipContent(client, docTitle) {
+            const customerName = client.company_name || client.client_name || 'JLS SKIN ESSENTIALS OPC';
+            const customerAddress = client.client_address || client.address || '-';
+            const docDate = formatDateMMDDYYYY(client.po_date || client.scheduled_start_date || client.created_at || new Date());
+            const dueDate = formatDateMMDDYYYY(client.expected_delivery_date || client.scheduled_end_date || client.po_date || client.created_at || new Date());
+            const remarks = client.notes || client.po_notes || '';
+            
+            const rawDocNo = client.jo_number || client.po_number || '1279';
+            const formattedDocNo = formatDocNumber(rawDocNo, docTitle);
 
-            const token = localStorage.getItem('nkb_token');
-            const headers = { 'Content-Type': 'application/json' };
-            if (token) {
-                headers['Authorization'] = `Bearer ${token}`;
-            }
-
-            let endpoint = '';
-            if (id) {
-                endpoint = `/api/job-orders/${id}`;
-            } else if (poId) {
-                endpoint = `/api/job-orders/po/${poId}`;
-            } else {
-                endpoint = '/api/job-orders';
-            }
-
-            try {
-                const res = await fetch(endpoint, { headers });
-                const json = await res.json();
-
-                if (!json.success || !json.data) {
-                    if (poId || id) {
-                        const fallbackRes = await fetch(`/api/orders/${poId || id}`, { headers });
-                        const fallbackJson = await fallbackRes.json();
-                        if (fallbackJson.success && fallbackJson.data) {
-                            renderPrintData(fallbackJson.data);
-                            return;
-                        }
-                    }
-                    throw new Error(json.error || 'Failed to load order data.');
-                }
-
-                if (Array.isArray(json.data)) {
-                    if (json.data.length > 0) {
-                        const firstRes = await fetch(`/api/job-orders/${json.data[0].id}`, { headers });
-                        const firstJson = await firstRes.json();
-                        renderPrintData(firstJson.data || json.data[0]);
-                    } else {
-                        throw new Error('No job order found.');
-                    }
-                } else {
-                    renderPrintData(json.data);
-                }
-
-            } catch (err) {
-                console.error('Failed to load print data:', err);
-                renderFallbackSample();
-            }
-        }
-
-        function renderPrintData(data) {
-            currentData = data;
-
-            updateDocTitle();
-
-            const customerName = data.company_name || data.client_name || 'JLS SKIN ESSENTIALS OPC';
-            const customerAddress = data.client_address || data.address || '-';
-            document.querySelectorAll('.cust-name-display').forEach(el => { el.textContent = customerName; });
-            document.querySelectorAll('.cust-addr-display').forEach(el => { el.textContent = customerAddress; });
-
-            const docDate = formatDateMMDDYYYY(data.po_date || data.scheduled_start_date || data.created_at || new Date());
-            const dueDate = formatDateMMDDYYYY(data.expected_delivery_date || data.scheduled_end_date || data.po_date || data.created_at || new Date());
-            document.querySelectorAll('.doc-date-display').forEach(el => { el.textContent = docDate; });
-            document.querySelectorAll('.doc-duedate-display').forEach(el => { el.textContent = dueDate; });
-
-            let items = data.items || [];
-            if (items.length === 0 && data.product_name) {
+            let items = client.items || [];
+            if (items.length === 0 && client.product_name) {
                 items = [{
-                    product_name: data.product_name,
-                    target_quantity: data.target_quantity,
-                    unit: data.unit || 'PC'
+                    product_name: client.product_name,
+                    target_quantity: client.target_quantity,
+                    unit: client.unit || 'PC'
                 }];
             }
 
-            const itemsHtml = items.map(item => {
+            const isDense = items.length > 5;
+            const tableClass = isDense ? 'items-table items-table-dense' : 'items-table';
+
+            const itemsRows = items.map(item => {
                 const desc = item.product_name || item.name || '-';
                 const qty = formatQty(item.target_quantity || item.quantity || 0);
                 const rawUom = (item.unit || 'PC').toUpperCase().trim();
@@ -767,14 +582,130 @@
                 `;
             }).join('');
 
-            document.querySelectorAll('.items-tbody').forEach(el => {
-                el.innerHTML = itemsHtml || `<tr><td colspan="3" style="text-align: center; color: #888;">No items listed</td></tr>`;
+            return `
+                <div class="slip-content">
+                    <!-- Header -->
+                    <div>
+                        <div class="company-header">
+                            <div class="company-name">NKB Manufacturing Corporation</div>
+                            <div class="company-address">B4 L5 Twig St., Sampaguita Village, Mambog II, Bacoor City, 4102 Cavite, Philippines</div>
+                            <div class="company-tin">TIN: 686-950-421-00000</div>
+                        </div>
+
+                        <!-- Underlined Document Title -->
+                        <div class="doc-title-row">
+                            <span class="doc-title-text title-display">${escapeHtml(docTitle)}</span>
+                        </div>
+
+                        <!-- Customer & Metadata -->
+                        <div class="meta-row">
+                            <div class="meta-left">
+                                <div class="meta-line">Customer: <strong class="cust-name-display">${escapeHtml(customerName)}</strong></div>
+                                <div class="meta-line">Address: <span class="cust-addr-display">${escapeHtml(customerAddress)}</span></div>
+                            </div>
+                            <div class="meta-right">
+                                <div class="doc-no doc-no-display" data-raw-no="${escapeHtml(rawDocNo)}">${escapeHtml(formattedDocNo)}</div>
+                                <div class="meta-line">Date: <span class="doc-date-display">${escapeHtml(docDate)}</span></div>
+                                <div class="meta-line">Due Date: <span class="doc-duedate-display">${escapeHtml(dueDate)}</span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Products Table (All Products for Client) -->
+                    <div class="table-wrapper">
+                        <table class="${tableClass}">
+                            <thead>
+                                <tr>
+                                    <th class="th-desc">Description</th>
+                                    <th class="th-qty">Quantity</th>
+                                    <th class="th-uom">UOM</th>
+                                </tr>
+                            </thead>
+                            <tbody class="items-tbody">
+                                ${itemsRows || '<tr><td colspan="3" style="text-align: center; color: #888;">No items listed</td></tr>'}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Footer (Remarks & Signatures) -->
+                    <div>
+                        <div class="remarks-row">
+                            <span class="remarks-lbl">Remarks:</span> <span class="remarks-display">${escapeHtml(remarks)}</span>
+                        </div>
+
+                        <div class="signatures-container">
+                            <div class="sig-column">
+                                <div class="sig-item">
+                                    <div class="sig-label">Prepared by:</div>
+                                    <div class="sig-underline"></div>
+                                </div>
+                                <div class="sig-item">
+                                    <div class="sig-label">Checked by:</div>
+                                    <div class="sig-underline"></div>
+                                </div>
+                            </div>
+                            <div class="sig-column">
+                                <div class="sig-item">
+                                    <div class="sig-label">Processed by:</div>
+                                    <div class="sig-underline"></div>
+                                </div>
+                                <div class="sig-item">
+                                    <div class="sig-label">Released by:</div>
+                                    <div class="sig-underline"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderPages(pagesData) {
+            currentLoadedData = pagesData;
+            const container = document.getElementById('pages-wrapper');
+            if (!container) return;
+
+            const select = document.getElementById('doc-title-select');
+            const chosenTitle = select ? select.value : 'SALES ORDER';
+
+            let html = '';
+            pagesData.forEach((clientData, idx) => {
+                html += `
+                    <div class="page-container" id="page-client-${idx}">
+                        <!-- COPY 1: TOP HALF (Landscape Half-A4) -->
+                        <div class="slip-slip" id="slip-${idx}-1">
+                            ${generateSlipContent(clientData, chosenTitle)}
+                        </div>
+
+                        <!-- CUT GUIDE DIVIDER -->
+                        <div class="cut-divider">
+                            <div class="cut-line-bar"></div>
+                            <div class="cut-badge">✂ CUT HERE (HALF OF A4 LANDSCAPE) ✂</div>
+                            <div class="cut-line-bar"></div>
+                        </div>
+
+                        <!-- COPY 2: BOTTOM HALF (Landscape Half-A4 Duplicate) -->
+                        <div class="slip-slip" id="slip-${idx}-2">
+                            ${generateSlipContent(clientData, chosenTitle)}
+                        </div>
+                    </div>
+                `;
             });
 
-            const remarks = data.notes || data.po_notes || '';
-            document.querySelectorAll('.remarks-display').forEach(el => {
-                el.textContent = remarks;
-            });
+            container.innerHTML = html;
+
+            // Update badge and print button
+            const badge = document.getElementById('page-summary-badge');
+            const printBtn = document.getElementById('btn-print-main');
+
+            if (pagesData.length > 1) {
+                if (badge) badge.textContent = `(${pagesData.length} Clients • ${pagesData.length} A4 Pages)`;
+                if (printBtn) printBtn.innerHTML = `<span>🖨️ Print All Clients (${pagesData.length} Pages, ${pagesData.length * 2} Slips)</span>`;
+            } else if (pagesData.length === 1) {
+                const itemCount = (pagesData[0].items || []).length;
+                if (badge) badge.textContent = `(${pagesData[0].company_name || 'Client'} • ${itemCount} Product${itemCount !== 1 ? 's' : ''})`;
+                if (printBtn) printBtn.innerHTML = `<span>🖨️ Print 2 Copies (A4)</span>`;
+            }
 
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('auto') === '1') {
@@ -782,8 +713,78 @@
             }
         }
 
+        async function loadData() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const clientId = urlParams.get('client_id');
+            const id = urlParams.get('id');
+            const poId = urlParams.get('po_id') || urlParams.get('poId');
+            const isAll = urlParams.get('all') === '1' || urlParams.get('all') === 'true';
+
+            const token = localStorage.getItem('nkb_token');
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            let endpoint = '';
+            if (isAll) {
+                endpoint = '/api/job-orders/print/all';
+            } else if (clientId) {
+                endpoint = `/api/job-orders/client/${encodeURIComponent(clientId)}`;
+            } else if (id) {
+                endpoint = `/api/job-orders/${encodeURIComponent(id)}`;
+            } else if (poId) {
+                endpoint = `/api/job-orders/po/${encodeURIComponent(poId)}`;
+            } else {
+                endpoint = '/api/job-orders/print/all';
+            }
+
+            try {
+                const res = await fetch(endpoint, { headers });
+                const json = await res.json();
+
+                if (!json.success || !json.data) {
+                    if (poId || id) {
+                        const fallbackRes = await fetch(`/api/orders/${poId || id}`, { headers });
+                        const fallbackJson = await fallbackRes.json();
+                        if (fallbackJson.success && fallbackJson.data) {
+                            renderPages([fallbackJson.data]);
+                            return;
+                        }
+                    }
+                    throw new Error(json.error || 'Failed to load order data.');
+                }
+
+                if (Array.isArray(json.data)) {
+                    if (json.data.length === 0) {
+                        // If empty, try single first JO
+                        const allJOsRes = await fetch('/api/job-orders', { headers });
+                        const allJOsJson = await allJOsRes.json();
+                        if (allJOsJson.success && allJOsJson.data && allJOsJson.data.length > 0) {
+                            const firstId = allJOsJson.data[0].id;
+                            const singleRes = await fetch(`/api/job-orders/${firstId}`, { headers });
+                            const singleJson = await singleRes.json();
+                            if (singleJson.success && singleJson.data) {
+                                renderPages([singleJson.data]);
+                                return;
+                            }
+                        }
+                        renderFallbackSample();
+                        return;
+                    }
+                    renderPages(json.data);
+                } else {
+                    renderPages([json.data]);
+                }
+
+            } catch (err) {
+                console.error('Failed to load print data:', err);
+                renderFallbackSample();
+            }
+        }
+
         function renderFallbackSample() {
-            renderPrintData({
+            renderPages([{
                 jo_number: 'SO-1279',
                 company_name: 'JLS SKIN ESSENTIALS OPC',
                 client_address: '4614 Arellano Ave. Brgy. Palanan Makati City',
@@ -796,7 +797,7 @@
                     { product_name: 'JLS - PURE SEDUCTION', target_quantity: 288, unit: 'PC' },
                     { product_name: 'JLS - POLO RED', target_quantity: 144, unit: 'PC' }
                 ]
-            });
+            }]);
         }
 
         window.addEventListener('DOMContentLoaded', loadData);

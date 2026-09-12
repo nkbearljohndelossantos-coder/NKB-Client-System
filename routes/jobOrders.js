@@ -13,7 +13,7 @@ router.get('/', authenticateToken, (req, res) => {
     const { poId, status } = req.query;
 
     let query = `
-        SELECT jo.*, po.po_number, c.company_name, p.name as product_name, p.sku, p.unit,
+        SELECT jo.*, po.po_number, po.client_id, c.company_name, p.name as product_name, p.sku, p.unit,
                (SELECT COUNT(*) FROM production_batches WHERE jo_id = jo.id) as batch_count,
                (SELECT SUM(actual_yield) FROM production_batches WHERE jo_id = jo.id) as total_yield
         FROM job_orders jo
@@ -46,18 +46,175 @@ router.get('/', authenticateToken, (req, res) => {
 });
 
 /**
+ * Helper: Consolidate all products ordered / in production for a client
+ */
+function getClientConsolidatedJOData(clientId, specificPoId = null, specificJoId = null) {
+    const client = db.prepare('SELECT * FROM clients WHERE id = ?').get(clientId);
+    if (!client) return null;
+
+    // 1. All job orders for this client
+    let joQuery = `
+        SELECT jo.*, po.po_number, po.po_date, po.expected_delivery_date, po.notes as po_notes,
+               p.name as product_name, p.sku, p.unit,
+               COALESCE(cpp.custom_name, p.name) as display_product_name,
+               COALESCE(cpp.custom_sku, p.sku) as display_sku
+        FROM job_orders jo
+        JOIN purchase_orders po ON jo.po_id = po.id
+        JOIN products p ON jo.product_id = p.id
+        LEFT JOIN client_product_prices cpp ON cpp.product_id = p.id AND cpp.client_id = po.client_id
+        WHERE po.client_id = ?
+    `;
+    const joParams = [clientId];
+    if (specificPoId) {
+        joQuery += ' AND jo.po_id = ?';
+        joParams.push(specificPoId);
+    }
+    joQuery += ' ORDER BY jo.created_at ASC';
+    const jos = db.prepare(joQuery).all(...joParams);
+
+    // 2. Active purchase orders for this client
+    let poQuery = `
+        SELECT * FROM purchase_orders 
+        WHERE client_id = ? AND status IN ('APPROVED', 'IN_PRODUCTION', 'COMPLETED')
+    `;
+    const poParams = [clientId];
+    if (specificPoId) {
+        poQuery += ' AND id = ?';
+        poParams.push(specificPoId);
+    }
+    poQuery += ' ORDER BY created_at DESC';
+    let pos = db.prepare(poQuery).all(...poParams);
+    if (pos.length === 0 && specificPoId) {
+        pos = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').all(specificPoId);
+    }
+
+    // 3. All ordered products across active POs for this client
+    let poItemQuery = `
+        SELECT poi.*, po.po_number, po.po_date, po.expected_delivery_date, po.notes as po_notes,
+               p.name as product_name, p.sku, p.unit,
+               COALESCE(cpp.custom_name, p.name) as display_product_name,
+               COALESCE(cpp.custom_sku, p.sku) as display_sku
+        FROM purchase_order_items poi
+        JOIN purchase_orders po ON poi.po_id = po.id
+        JOIN products p ON poi.product_id = p.id
+        LEFT JOIN client_product_prices cpp ON cpp.product_id = p.id AND cpp.client_id = po.client_id
+        WHERE po.client_id = ?
+    `;
+    const poItemParams = [clientId];
+    if (specificPoId) {
+        poItemQuery += ' AND po.id = ?';
+        poItemParams.push(specificPoId);
+    } else {
+        poItemQuery += " AND po.status IN ('APPROVED', 'IN_PRODUCTION', 'COMPLETED')";
+    }
+    poItemQuery += ' ORDER BY poi.created_at ASC';
+    const poItems = db.prepare(poItemQuery).all(...poItemParams);
+
+    // 4. Consolidate into unique items list: all products for this client
+    const itemsMap = new Map();
+
+    for (const item of poItems) {
+        itemsMap.set(item.product_id, {
+            product_id: item.product_id,
+            product_name: item.display_product_name || item.product_name,
+            sku: item.display_sku || item.sku,
+            target_quantity: item.target_quantity,
+            unit: item.unit || 'PC',
+            po_number: item.po_number
+        });
+    }
+
+    for (const jo of jos) {
+        if (itemsMap.has(jo.product_id)) {
+            const existing = itemsMap.get(jo.product_id);
+            existing.jo_number = jo.jo_number;
+            existing.target_quantity = jo.target_quantity || existing.target_quantity;
+        } else {
+            itemsMap.set(jo.product_id, {
+                product_id: jo.product_id,
+                product_name: jo.display_product_name || jo.product_name,
+                sku: jo.display_sku || jo.sku,
+                target_quantity: jo.target_quantity,
+                unit: jo.unit || 'PC',
+                jo_number: jo.jo_number,
+                po_number: jo.po_number
+            });
+        }
+    }
+
+    const items = Array.from(itemsMap.values());
+    const targetJO = specificJoId ? (jos.find(j => j.id === specificJoId) || jos[0]) : (jos.length > 0 ? jos[0] : null);
+    const primaryPO = pos.length > 0 ? pos[0] : null;
+    const uniquePONumbers = Array.from(new Set(pos.map(p => p.po_number).filter(Boolean)));
+
+    return {
+        id: targetJO ? targetJO.id : (primaryPO ? primaryPO.id : client.id),
+        client_id: client.id,
+        company_name: client.company_name,
+        client_address: client.address || '-',
+        client_phone: client.phone || '',
+        client_email: client.email || '',
+        client_tin: client.tin || '',
+        jo_number: targetJO ? targetJO.jo_number : (primaryPO ? primaryPO.po_number.replace('PO-', 'JO-') : 'JO-0000'),
+        po_number: uniquePONumbers.length > 0 ? uniquePONumbers.join(', ') : (primaryPO ? primaryPO.po_number : ''),
+        po_date: targetJO ? targetJO.scheduled_start_date : (primaryPO ? primaryPO.po_date : new Date().toISOString().split('T')[0]),
+        expected_delivery_date: primaryPO ? primaryPO.expected_delivery_date : null,
+        notes: (targetJO && targetJO.notes) || (primaryPO && primaryPO.notes) || '',
+        items: items
+    };
+}
+
+/**
+ * GET /api/job-orders/print/all
+ * Fetch print data for all clients with active job orders or approved POs
+ */
+router.get('/print/all', authenticateToken, (req, res) => {
+    let clients = [];
+    if (req.user.role === 'CLIENT') {
+        clients = db.prepare('SELECT id, company_name FROM clients WHERE id = ?').all(req.user.client_id);
+    } else {
+        clients = db.prepare(`
+            SELECT DISTINCT c.id, c.company_name 
+            FROM clients c
+            WHERE c.id IN (
+                SELECT po.client_id FROM job_orders jo JOIN purchase_orders po ON jo.po_id = po.id
+                UNION
+                SELECT client_id FROM purchase_orders WHERE status IN ('APPROVED', 'IN_PRODUCTION')
+            )
+            ORDER BY c.company_name ASC
+        `).all();
+    }
+
+    const results = clients
+        .map(c => getClientConsolidatedJOData(c.id))
+        .filter(d => d && d.items && d.items.length > 0);
+
+    return res.json({ success: true, data: results });
+});
+
+/**
+ * GET /api/job-orders/client/:clientId
+ * Fetch all products in job orders per client for printing
+ */
+router.get('/client/:clientId', authenticateToken, (req, res) => {
+    if (req.user.role === 'CLIENT' && req.params.clientId !== req.user.client_id) {
+        return res.status(403).json({ success: false, error: 'Access denied.', code: 'FORBIDDEN' });
+    }
+
+    const data = getClientConsolidatedJOData(req.params.clientId);
+    if (!data) {
+        return res.status(404).json({ success: false, error: 'Client not found.' });
+    }
+
+    return res.json({ success: true, data });
+});
+
+/**
  * GET /api/job-orders/po/:poId
- * Fetch print data directly by PO ID
+ * Fetch print data directly by PO ID (consolidates all products for that client's PO)
  */
 router.get('/po/:poId', authenticateToken, (req, res) => {
-    const po = db.prepare(`
-        SELECT po.*, c.company_name, c.address as client_address, c.phone as client_phone, c.email as client_email, c.tin as client_tin,
-               u.name as creator_name
-        FROM purchase_orders po
-        JOIN clients c ON po.client_id = c.id
-        LEFT JOIN users u ON po.created_by = u.id
-        WHERE po.id = ?
-    `).get(req.params.poId);
+    const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(req.params.poId);
 
     if (!po) {
         return res.status(404).json({ success: false, error: 'Purchase Order not found.' });
@@ -67,44 +224,13 @@ router.get('/po/:poId', authenticateToken, (req, res) => {
         return res.status(403).json({ success: false, error: 'Access denied.', code: 'FORBIDDEN' });
     }
 
-    const firstJO = db.prepare(`
-        SELECT * FROM job_orders WHERE po_id = ? ORDER BY created_at ASC LIMIT 1
-    `).get(req.params.poId);
-
-    const items = db.prepare(`
-        SELECT poi.*, 
-               COALESCE(cpp.custom_name, p.name) as product_name, 
-               COALESCE(cpp.custom_sku, p.sku) as sku, 
-               p.unit
-        FROM purchase_order_items poi
-        JOIN products p ON poi.product_id = p.id
-        LEFT JOIN client_product_prices cpp ON cpp.product_id = p.id AND cpp.client_id = ?
-        WHERE poi.po_id = ?
-    `).all(po.client_id, po.id);
-
-    return res.json({
-        success: true,
-        data: {
-            id: firstJO ? firstJO.id : po.id,
-            jo_number: firstJO ? firstJO.jo_number : po.po_number.replace('PO-', 'JO-'),
-            po_id: po.id,
-            po_number: po.po_number,
-            po_date: po.po_date,
-            expected_delivery_date: po.expected_delivery_date,
-            po_notes: po.notes,
-            notes: firstJO ? firstJO.notes : po.notes,
-            company_name: po.company_name,
-            client_address: po.client_address,
-            client_phone: po.client_phone,
-            client_email: po.client_email,
-            client_tin: po.client_tin,
-            items: items.length > 0 ? items : []
-        }
-    });
+    const data = getClientConsolidatedJOData(po.client_id, po.id);
+    return res.json({ success: true, data: data || po });
 });
 
 /**
  * GET /api/job-orders/:id
+ * Retrieve Job Order details with all products for that client
  */
 router.get('/:id', authenticateToken, (req, res) => {
     const jo = db.prepare(`
@@ -129,16 +255,7 @@ router.get('/:id', authenticateToken, (req, res) => {
         return res.status(403).json({ success: false, error: 'Access denied.', code: 'FORBIDDEN' });
     }
 
-    const items = db.prepare(`
-        SELECT poi.*, 
-               COALESCE(cpp.custom_name, p.name) as product_name, 
-               COALESCE(cpp.custom_sku, p.sku) as sku, 
-               p.unit
-        FROM purchase_order_items poi
-        JOIN products p ON poi.product_id = p.id
-        LEFT JOIN client_product_prices cpp ON cpp.product_id = p.id AND cpp.client_id = ?
-        WHERE poi.po_id = ?
-    `).all(jo.client_id, jo.po_id);
+    const clientData = getClientConsolidatedJOData(jo.client_id, jo.po_id, jo.id);
 
     const batches = db.prepare(`
         SELECT * FROM production_batches WHERE jo_id = ? ORDER BY created_at DESC
@@ -148,7 +265,13 @@ router.get('/:id', authenticateToken, (req, res) => {
         success: true,
         data: {
             ...jo,
-            items: items.length > 0 ? items : [{
+            company_name: clientData ? clientData.company_name : jo.company_name,
+            client_address: clientData ? clientData.client_address : jo.client_address,
+            client_phone: clientData ? clientData.client_phone : jo.client_phone,
+            client_email: clientData ? clientData.client_email : jo.client_email,
+            client_tin: clientData ? clientData.client_tin : jo.client_tin,
+            po_number: (clientData && clientData.po_number) ? clientData.po_number : jo.po_number,
+            items: (clientData && clientData.items && clientData.items.length > 0) ? clientData.items : [{
                 product_name: jo.product_name,
                 sku: jo.sku,
                 target_quantity: jo.target_quantity,

@@ -300,6 +300,17 @@
                         <h2 class="text-2xl font-black text-slate-900">Job Orders (JO)</h2>
                         <p class="text-sm text-slate-500">Production line schedules linked to approved client purchase orders.</p>
                     </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <div class="flex items-center gap-1.5 bg-white border border-slate-300 rounded-xl px-3 py-1.5 shadow-sm text-xs">
+                            <span class="text-slate-500 font-bold">Client:</span>
+                            <select id="filter-jo-client" onchange="filterJobOrdersByClient()" class="bg-transparent font-bold text-slate-800 border-none outline-none cursor-pointer">
+                                <option value="">All Clients</option>
+                            </select>
+                        </div>
+                        <button onclick="printJobOrdersForSelectedClient()" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 transition inline-flex items-center gap-1.5" title="Print Job Orders (All Products per Client)">
+                            <span>🖨️ Print JO (All Products)</span>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
