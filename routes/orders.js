@@ -52,7 +52,9 @@ router.get('/', authenticateToken, enforceClientIsolation, (req, res) => {
     // Attach ordered products separately to each PO
     for (const po of orders) {
         po.items = db.prepare(`
-            SELECT poi.*, p.name as product_name, p.sku, p.unit, p.category, p.formula_code, p.shelf_life_months
+            SELECT poi.*, p.name as product_name, p.sku, p.unit, p.category, p.formula_code, p.shelf_life_months,
+                   (SELECT jo.jo_number FROM job_orders jo WHERE jo.po_id = poi.po_id AND jo.product_id = poi.product_id ORDER BY jo.created_at DESC LIMIT 1) as jo_number,
+                   (SELECT jo.status FROM job_orders jo WHERE jo.po_id = poi.po_id AND jo.product_id = poi.product_id ORDER BY jo.created_at DESC LIMIT 1) as jo_status
             FROM purchase_order_items poi
             JOIN products p ON poi.product_id = p.id
             WHERE poi.po_id = ?

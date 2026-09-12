@@ -383,13 +383,11 @@ async function loadOrders() {
 
     if (res.success && res.data && res.data.length > 0) {
         tbody.innerHTML = res.data.map(po => {
-            const canStartJO = (po.status === 'APPROVED' || po.status === 'IN_PRODUCTION');
             const itemsList = (po.items && po.items.length > 0)
                 ? po.items.map(it => {
-                    const prodId = it.product_id || it.id;
-                    const prodQty = it.target_quantity || 1000;
+                    const hasJO = it.jo_number;
                     return `
-                    <div class="flex flex-col gap-1 text-[11px] bg-slate-50 hover:bg-indigo-50/50 p-2 rounded-xl border border-slate-200 transition mb-1 last:mb-0">
+                    <div class="flex flex-col gap-1 text-[11px] bg-slate-50 hover:bg-slate-100/70 p-2 rounded-xl border border-slate-200 transition mb-1 last:mb-0">
                         <div class="flex items-center justify-between gap-2">
                             <div class="truncate max-w-[140px]">
                                 <span class="font-bold text-slate-900 block truncate" title="${it.product_name}">${it.product_name}</span>
@@ -400,16 +398,20 @@ async function loadOrders() {
                                 <span class="text-[10px] text-indigo-700 font-semibold">@ ₱${Number(it.unit_price).toFixed(2)}</span>
                             </div>
                         </div>
-                        ${canStartJO ? `
-                            <div class="pt-1.5 border-t border-slate-200/70 flex justify-end">
-                                <button type="button" onclick="event.stopPropagation(); openCreateJOModal('${po.id}', '${po.po_number}', '${po.company_name.replace(/'/g, "\\'")}', '${prodId}', ${prodQty})" class="w-full py-1 px-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-lg text-[10.5px] font-bold transition flex items-center justify-center gap-1 shadow-sm" title="Start Job Order for ${it.product_name}">
-                                    <span>🏭 Start Job Order</span>
-                                </button>
-                            </div>
-                        ` : ''}
+                        <div class="pt-1 border-t border-slate-200/60 flex justify-between items-center text-[10px]">
+                            <span class="text-slate-400 font-medium">Status:</span>
+                            ${hasJO ? `
+                                <span class="px-1.5 py-0.2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded font-mono font-bold text-[9.5px]" title="Job Order created">✓ ${it.jo_number}</span>
+                            ` : `
+                                <span class="px-1.5 py-0.2 bg-slate-100 text-slate-500 rounded font-mono text-[9.5px]">Pending JO</span>
+                            `}
+                        </div>
                     </div>
                 `}).join('')
                 : '<span class="text-slate-400 italic text-[11px]">No items recorded</span>';
+
+            const totalItemsCount = po.items ? po.items.length : 0;
+            const allJOsStarted = totalItemsCount > 0 && (po.jo_count >= totalItemsCount);
 
             return `
             <tr class="hover:bg-slate-50 transition">
@@ -447,10 +449,16 @@ async function loadOrders() {
                             Approve
                         </button>
                     ` : ''}
-                    ${po.status === 'APPROVED' || po.status === 'IN_PRODUCTION' ? `
-                        <button onclick="openCreateJOModal('${po.id}', '${po.po_number}', '${po.company_name.replace(/'/g, "\\'")}')" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition">
-                            + Job Order
-                        </button>
+                    ${(po.status === 'APPROVED' || po.status === 'IN_PRODUCTION') ? `
+                        ${allJOsStarted ? `
+                            <button onclick="openCreateJOModal('${po.id}', '${po.po_number}', '${po.company_name.replace(/'/g, "\\'")}')" class="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="All products have active Job Orders. Click to view/manage.">
+                                <span>✓ All JOs Active</span>
+                            </button>
+                        ` : `
+                            <button onclick="openCreateJOModal('${po.id}', '${po.po_number}', '${po.company_name.replace(/'/g, "\\'")}')" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-extrabold transition inline-flex items-center gap-1.5 shadow-sm" title="Start Job Orders for all products in this order for ${po.company_name}">
+                                <span>🏭 Start Job Order (All Products)</span>
+                            </button>
+                        `}
                     ` : ''}
                 </td>
             </tr>
@@ -2398,58 +2406,100 @@ async function openCreateJOModal(poId, poNumber, clientName, preselectedProductI
     const poItems = (orderRes.success && orderRes.data && orderRes.data.items) ? orderRes.data.items : [];
     const prodStaff = employees.filter(e => e.department === 'Production' || e.department === 'Compounding');
 
-    let selectedItem = poItems[0];
-    if (preselectedProductId) {
-        const found = poItems.find(it => String(it.product_id) === String(preselectedProductId) || String(it.id) === String(preselectedProductId));
-        if (found) selectedItem = found;
-    }
-    const initialQty = (preselectedQty !== null && preselectedQty !== undefined && !isNaN(Number(preselectedQty)))
-        ? Number(preselectedQty)
-        : (selectedItem ? selectedItem.target_quantity : 1000);
+    const totalTargetQty = poItems.reduce((sum, it) => sum + (Number(it.target_quantity) || 0), 0);
+    const unstartedItems = poItems.filter(it => !it.jo_number);
+    const unstartedCount = unstartedItems.length;
 
     root.innerHTML = `
         <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
-            <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
-                <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+            <div class="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col border border-slate-200">
+                <!-- Header -->
+                <div class="flex justify-between items-start border-b border-slate-100 pb-3 flex-shrink-0">
                     <div>
-                        <h3 class="text-lg font-bold text-slate-900">Create Job Order</h3>
-                        <p class="text-xs text-slate-500">For PO: <strong class="text-indigo-600">${poNumber}</strong> (${clientName})</p>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xl">🏭</span>
+                            <h3 class="text-lg font-extrabold text-slate-900">Start Job Order (All Products)</h3>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-0.5">
+                            Client: <strong class="text-slate-900 font-bold">${clientName}</strong> • PO: <strong class="text-indigo-600 font-mono">${poNumber}</strong>
+                        </p>
                     </div>
-                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-xl px-2">&times;</button>
                 </div>
-                <form onsubmit="submitCreateJO(event, '${poId}')" class="space-y-4 text-xs font-semibold">
+
+                <!-- Form with All Products & Single Execution -->
+                <form onsubmit="submitCreateAllJO(event, '${poId}', '${clientName.replace(/'/g, "\\'")}')" class="space-y-4 text-xs font-semibold overflow-y-auto flex-1 pr-1">
+                    <!-- Products in Order -->
                     <div>
-                        <label class="block text-slate-600 mb-1">Select Product from PO *</label>
-                        <select id="jo-product-id" onchange="onJOProductChanged()" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-900">
-                            ${poItems.length > 0 ? poItems.map(item => {
-                                const isSelected = selectedItem && (String(item.product_id) === String(selectedItem.product_id) || String(item.id) === String(selectedItem.id));
+                        <div class="flex justify-between items-center mb-1.5">
+                            <span class="text-slate-700 font-bold uppercase tracking-wider text-[10.5px]">All Products for this Client (${poItems.length} Products):</span>
+                            <span class="text-slate-500 font-mono text-[11px]">Total: ${NKB.formatNumber(totalTargetQty)} pcs</span>
+                        </div>
+                        <div class="border border-slate-200 rounded-2xl overflow-hidden divide-y divide-slate-100 bg-slate-50 max-h-52 overflow-y-auto">
+                            ${poItems.length > 0 ? poItems.map((item, i) => {
+                                const hasJO = item.jo_number;
                                 return `
-                                    <option value="${item.product_id}" data-qty="${item.target_quantity}" ${isSelected ? 'selected' : ''}>
-                                        ${item.product_name} (${item.sku}) — Target: ${NKB.formatNumber(item.target_quantity)} pcs
-                                    </option>
+                                    <div class="p-2.5 flex items-center justify-between text-xs hover:bg-white transition">
+                                        <div class="flex items-center gap-2 min-w-0 pr-2">
+                                            <span class="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px] font-bold flex-shrink-0">${i + 1}</span>
+                                            <div class="truncate">
+                                                <span class="font-bold text-slate-900 block truncate" title="${item.product_name}">${item.product_name}</span>
+                                                <span class="text-[10px] text-slate-400 font-mono">${item.sku}</span>
+                                            </div>
+                                        </div>
+                                        <div class="text-right font-mono flex items-center gap-2 flex-shrink-0">
+                                            <span class="font-extrabold text-slate-800">${NKB.formatNumber(item.target_quantity)} pcs</span>
+                                            ${hasJO ? `
+                                                <span class="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded font-bold text-[10px]">✓ ${item.jo_number}</span>
+                                            ` : `
+                                                <span class="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded font-bold text-[10px]">Ready to Start</span>
+                                            `}
+                                        </div>
+                                    </div>
                                 `;
-                            }).join('') : cachedProducts.map(p => {
-                                const isSelected = preselectedProductId && (String(p.id) === String(preselectedProductId));
-                                return `<option value="${p.id}" data-qty="1000" ${isSelected ? 'selected' : ''}>${p.name} (${p.sku})</option>`;
-                            }).join('')}
-                        </select>
+                            }).join('') : `
+                                <div class="p-4 text-center text-slate-400">No products recorded in this purchase order.</div>
+                            `}
+                        </div>
                     </div>
+
+                    <!-- Team & Date Assignment -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                        <div>
+                            <label class="block text-slate-600 mb-1 font-bold">Assigned Production Team / Lead *</label>
+                            <select id="jo-team" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-900 text-xs">
+                                <option value="Formulation & Bottling Team Alpha">Formulation & Bottling Team Alpha (Standard)</option>
+                                ${prodStaff.map(e => `
+                                    <option value="${e.name} (${e.department})">${e.name} — ${e.department} [${e.employee_id}]</option>
+                                `).join('')}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 mb-1 font-bold">Scheduled Start Date *</label>
+                            <input type="date" id="jo-start-date" value="${new Date().toISOString().split('T')[0]}" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-900 text-xs">
+                        </div>
+                    </div>
+
                     <div>
-                        <label class="block text-slate-600 mb-1">Target Production Qty (pcs) *</label>
-                        <input type="number" id="jo-target-qty" value="${initialQty}" min="1" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-900">
+                        <label class="block text-slate-600 mb-1 font-bold">Production Instructions / Notes (Optional)</label>
+                        <input type="text" id="jo-notes" placeholder="e.g. Standard cleanroom compounding run, expedited bottling" class="w-full px-3 py-2 border rounded-xl bg-slate-50 text-slate-900 text-xs font-medium">
                     </div>
-                    <div>
-                        <label class="block text-slate-600 mb-1">Assigned Production Supervisor / Team Lead *</label>
-                        <select id="jo-team" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-900">
-                            <option value="Formulation & Bottling Team Alpha">Formulation & Bottling Team Alpha (Standard)</option>
-                            ${prodStaff.map(e => `
-                                <option value="${e.name} (${e.department})">${e.name} — ${e.department} [${e.employee_id}]</option>
-                            `).join('')}
-                        </select>
+
+                    <div class="p-3 bg-indigo-50/70 border border-indigo-200 rounded-2xl text-indigo-900 flex items-start gap-2.5">
+                        <span class="text-base">ℹ️</span>
+                        <p class="text-[11px] leading-relaxed">
+                            Clicking the button below will start production for <strong>all products</strong> in this client's order simultaneously. Sequential Job Orders will be assigned, the PO will be marked <strong>IN PRODUCTION</strong>, and you can view or print all products immediately.
+                        </p>
                     </div>
-                    <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold">Cancel</button>
-                        <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-md shadow-indigo-600/30">Create JO</button>
+
+                    <!-- Single Execution Button on Bottom Right -->
+                    <div class="flex justify-between items-center pt-3 border-t border-slate-100 flex-shrink-0">
+                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition">
+                            Cancel
+                        </button>
+                        <button type="submit" id="btn-submit-jo-all" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl font-black text-xs shadow-md shadow-indigo-600/30 transition flex items-center gap-2">
+                            <span>🚀 Start All Job Orders (${unstartedCount > 0 ? unstartedCount : poItems.length} Products)</span>
+                        </button>
                     </div>
                 </form>
             </div>
@@ -2457,34 +2507,32 @@ async function openCreateJOModal(poId, poNumber, clientName, preselectedProductI
     `;
 }
 
-function onJOProductChanged() {
-    const sel = document.getElementById('jo-product-id');
-    const targetQtyInput = document.getElementById('jo-target-qty');
-    if (sel && targetQtyInput) {
-        const opt = sel.options[sel.selectedIndex];
-        const qty = opt ? opt.getAttribute('data-qty') : 1000;
-        if (qty) targetQtyInput.value = qty;
-    }
-}
-
-async function submitCreateJO(e, poId) {
+async function submitCreateAllJO(e, poId, clientName) {
     e.preventDefault();
-    const productId = document.getElementById('jo-product-id').value;
-    const targetQty = parseInt(document.getElementById('jo-target-qty').value);
+    const btn = document.getElementById('btn-submit-jo-all');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span>⏳ Starting Production...</span>';
+    }
+
     const assignedTeam = document.getElementById('jo-team').value;
+    const startDate = document.getElementById('jo-start-date').value;
+    const notes = document.getElementById('jo-notes') ? document.getElementById('jo-notes').value : '';
 
     const res = await NKB.api('/api/job-orders', {
         method: 'POST',
         body: JSON.stringify({
             po_id: poId,
-            product_id: productId,
-            target_quantity: targetQty,
-            assigned_team: assignedTeam
+            create_all: true,
+            assigned_team: assignedTeam,
+            scheduled_start_date: startDate,
+            notes: notes
         })
     });
 
     if (res.success) {
-        NKB.showToast(`Job Order ${res.data.jo_number} created!`, 'success');
+        const count = res.count || (res.data ? res.data.length : 0);
+        NKB.showToast(`🎉 Successfully started Job Orders for all products (${count} created)!`, 'success');
         closeModal();
         if (typeof switchTab === 'function') {
             switchTab('job-orders');
@@ -2492,12 +2540,20 @@ async function submitCreateJO(e, poId) {
             location.reload();
         }
     } else {
-        NKB.showToast(res.error || 'Failed to create Job Order.', 'error');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<span>🚀 Start All Job Orders</span>';
+        }
+        NKB.showToast(res.error || 'Failed to start Job Orders.', 'error');
     }
 }
 
+async function submitCreateJO(e, poId) {
+    return submitCreateAllJO(e, poId, '');
+}
+
 window.openCreateJOModal = openCreateJOModal;
-window.onJOProductChanged = onJOProductChanged;
+window.submitCreateAllJO = submitCreateAllJO;
 window.submitCreateJO = submitCreateJO;
 
 // -------------------------------------------------------------

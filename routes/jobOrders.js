@@ -298,10 +298,10 @@ router.get('/:id', authenticateToken, (req, res) => {
  * Admin / Production creates Job Order from an approved PO
  */
 router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), (req, res) => {
-    const { po_id, product_id, target_quantity, scheduled_start_date, scheduled_end_date, assigned_team, notes } = req.body;
+    const { po_id, product_id, target_quantity, scheduled_start_date, scheduled_end_date, assigned_team, notes, create_all } = req.body;
 
-    if (!po_id || !product_id || !target_quantity) {
-        return res.status(400).json({ success: false, error: 'PO ID, Product ID, and Target Quantity are required.' });
+    if (!po_id) {
+        return res.status(400).json({ success: false, error: 'Purchase Order ID (po_id) is required.' });
     }
 
     const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(po_id);
@@ -311,6 +311,108 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), (req, r
 
     if (po.status === 'DRAFT' || po.status === 'CANCELLED') {
         return res.status(400).json({ success: false, error: `Cannot create Job Order for PO in status "${po.status}".` });
+    }
+
+    // CASE 1: Batch / Start All Products for this Client PO
+    if (create_all || !product_id) {
+        const poItems = db.prepare(`
+            SELECT poi.*, p.name as product_name, p.sku
+            FROM purchase_order_items poi
+            JOIN products p ON poi.product_id = p.id
+            WHERE poi.po_id = ?
+            ORDER BY poi.created_at ASC
+        `).all(po_id);
+
+        if (!poItems || poItems.length === 0) {
+            return res.status(400).json({ success: false, error: 'No products found in this Purchase Order.' });
+        }
+
+        // Check which items already have an active JO for this PO
+        const existingJOs = db.prepare("SELECT product_id, jo_number FROM job_orders WHERE po_id = ? AND status != 'CANCELLED'").all(po_id);
+        const existingProductIds = new Set(existingJOs.map(j => j.product_id));
+
+        const itemsToCreate = poItems.filter(item => !existingProductIds.has(item.product_id));
+
+        if (itemsToCreate.length === 0) {
+            return res.json({
+                success: true,
+                count: 0,
+                already_existed: true,
+                message: 'All products in this Purchase Order already have active Job Orders.',
+                data: existingJOs
+            });
+        }
+
+        const createdJOs = [];
+        const tx = db.transaction(() => {
+            for (const item of itemsToCreate) {
+                const joId = uuidv4();
+                const joNumber = getNextDocumentNumber('JO');
+
+                db.prepare(`
+                    INSERT INTO job_orders
+                    (id, jo_number, po_id, product_id, target_quantity, scheduled_start_date, scheduled_end_date, assigned_team, status, notes, created_by)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'IN_PRODUCTION', ?, ?)
+                `).run(
+                    joId,
+                    joNumber,
+                    po_id,
+                    item.product_id,
+                    item.target_quantity,
+                    scheduled_start_date || new Date().toISOString().split('T')[0],
+                    scheduled_end_date || null,
+                    assigned_team || 'Formulation & Bottling Team Alpha',
+                    notes || null,
+                    req.user.id
+                );
+
+                createdJOs.push({
+                    id: joId,
+                    jo_number: joNumber,
+                    product_id: item.product_id,
+                    product_name: item.product_name,
+                    sku: item.sku,
+                    target_quantity: item.target_quantity
+                });
+            }
+
+            // Update PO status to IN_PRODUCTION if not already
+            db.prepare(`
+                UPDATE purchase_orders
+                SET status = 'IN_PRODUCTION', updated_at = datetime('now')
+                WHERE id = ? AND status = 'APPROVED'
+            `).run(po_id);
+
+            logAudit({
+                userId: req.user.id,
+                userName: req.user.name,
+                userRole: req.user.role,
+                action: 'CREATE_JO_BATCH',
+                entityType: 'JOB_ORDER',
+                entityId: po.po_number,
+                details: {
+                    poId: po_id,
+                    poNumber: po.po_number,
+                    createdCount: createdJOs.length,
+                    totalItems: poItems.length,
+                    createdJOs: createdJOs.map(j => j.jo_number)
+                }
+            });
+        });
+
+        tx();
+
+        return res.status(201).json({
+            success: true,
+            count: createdJOs.length,
+            data: createdJOs,
+            message: `Successfully created Job Orders for all ${createdJOs.length} product(s)!`
+        });
+    }
+
+    // CASE 2: Single Product Job Order Creation
+    if (!target_quantity) {
+        return res.status(400).json({ success: false, error: 'Target Quantity is required.' });
     }
 
     const joId = uuidv4();
