@@ -112,17 +112,35 @@ const NKB = {
     // Date Formatter
     formatDate: function(dateStr) {
         if (!dateStr) return '-';
-        const d = new Date(dateStr);
+        if (typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+            const parts = dateStr.split('-');
+            const d = new Date(parts[0], parts[1] - 1, parts[2]);
+            return d.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
+        }
+        const cleanStr = typeof dateStr === 'string' && !dateStr.includes('T') ? dateStr.replace(' ', 'T') : dateStr;
+        const d = new Date(cleanStr);
         if (isNaN(d.getTime())) return dateStr;
         return d.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
     },
 
-    // Format Date and Time
-    formatDateTime: function(dateStr) {
+    // Format Time (e.g. 05:17:00 PM)
+    formatTime: function(dateStr) {
+        if (!dateStr) return '';
+        const cleanStr = typeof dateStr === 'string' && !dateStr.includes('T') ? dateStr.replace(' ', 'T') : dateStr;
+        const d = new Date(cleanStr);
+        if (isNaN(d.getTime())) return '';
+        return d.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+    },
+
+    // Format Date and Time (e.g. Sep 11, 2026, 05:17:00 PM)
+    formatDateTime: function(dateStr, includeSeconds = true) {
         if (!dateStr) return '-';
-        const d = new Date(dateStr);
+        const cleanStr = typeof dateStr === 'string' && !dateStr.includes('T') ? dateStr.replace(' ', 'T') : dateStr;
+        const d = new Date(cleanStr);
         if (isNaN(d.getTime())) return dateStr;
-        return d.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const opts = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true };
+        if (includeSeconds) opts.second = '2-digit';
+        return d.toLocaleDateString('en-PH', opts);
     },
 
     // Status Badge Helper
@@ -394,7 +412,7 @@ async function openViewPOModal(poId) {
                         </div>
                         <div class="space-y-1">
                             <span class="text-[10px] uppercase font-bold text-slate-400">Timeline & Personnel</span>
-                            <div>Order Date: <strong class="text-slate-800">${NKB.formatDate(po.po_date)}</strong></div>
+                            <div>Order Date & Time: <strong class="text-slate-800">${po.created_at ? NKB.formatDateTime(po.created_at) : NKB.formatDate(po.po_date)}</strong></div>
                             <div>Target Delivery: <strong class="text-slate-800">${po.expected_delivery_date ? NKB.formatDate(po.expected_delivery_date) : 'As Scheduled'}</strong></div>
                             <div>Created By: <strong class="text-slate-700">${po.creator_name || 'System'}</strong></div>
                             ${po.approver_name ? `<div>Approved By: <strong class="text-emerald-700">${po.approver_name}</strong></div>` : ''}

@@ -46,7 +46,7 @@
                     PURCHASE ORDER
                 </span>
                 <div id="po-number-display" class="text-xl font-black text-slate-900 font-mono">PO-XXXX-XXXXXX</div>
-                <div class="text-xs text-slate-500">Order Date: <strong id="po-date-display" class="text-slate-800">-</strong></div>
+                <div class="text-xs text-slate-500">Order Date & Time: <strong id="po-date-display" class="text-slate-800">-</strong></div>
                 <div class="text-xs text-slate-500">Target Delivery: <strong id="po-delivery-display" class="text-slate-800">-</strong></div>
                 <div id="po-status-badge" class="pt-1"></div>
             </div>
@@ -176,7 +176,7 @@
             if (res.success && res.data) {
                 const po = res.data;
                 document.getElementById('po-number-display').textContent = po.po_number;
-                document.getElementById('po-date-display').textContent = NKB.formatDate(po.po_date);
+                document.getElementById('po-date-display').textContent = po.created_at ? NKB.formatDateTime(po.created_at) : NKB.formatDate(po.po_date);
                 document.getElementById('po-delivery-display').textContent = po.expected_delivery_date ? NKB.formatDate(po.expected_delivery_date) : 'As Scheduled';
                 document.getElementById('po-status-badge').innerHTML = NKB.renderStatusBadge(po.status);
 
