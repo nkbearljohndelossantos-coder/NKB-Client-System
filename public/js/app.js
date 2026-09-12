@@ -413,11 +413,8 @@ async function openViewPOModal(poId) {
                         </div>
                     </div>
                     <div class="flex items-center gap-2">
-                        <a href="/print-so.html?po_id=${po.id}" target="_blank" class="px-3.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm" title="Print Sales Order (A4 Portrait)">
-                            <span>🖨️ Print SO</span>
-                        </a>
-                        <a href="/print-jo.html?po_id=${po.id}" target="_blank" class="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm" title="Print Job Order (2 copies Half-A4 Landscape)">
-                            <span>🖨️ Print JO</span>
+                        <a href="/print-jo.html?po_id=${po.id}" target="_blank" class="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm" title="Print Job Order / Sales Order (2 Portrait Copies on A4 Landscape)">
+                            <span>🖨️ Print JO / SO</span>
                         </a>
                         <a href="/print-po.html?id=${po.id}" target="_blank" class="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm" title="Print Purchase Order">
                             <span>🖨️ Print PO</span>

@@ -22,16 +22,16 @@
         }
 
         /* -------------------------------------------------------------
-           PRINT STYLING (Strictly 1 A4 Page with 2 Stacked Landscape Slips per Client)
+           PRINT STYLING (Strictly 1 A4 Landscape Sheet = 2 Side-by-Side Portrait Copies)
            ------------------------------------------------------------- */
         @page {
-            size: A4 portrait;
-            margin: 5mm 8mm;
+            size: A4 landscape;
+            margin: 6mm 8mm;
         }
 
         @media print {
             html, body {
-                width: 210mm !important;
+                width: 297mm !important;
                 height: auto !important;
                 margin: 0 !important;
                 padding: 0 !important;
@@ -50,13 +50,14 @@
             }
 
             .page-container {
-                width: 194mm !important; /* 210mm - 2*8mm margin */
-                height: 287mm !important; /* 297mm - 2*5mm margin */
+                width: 281mm !important; /* 297mm - 2*8mm margin */
+                height: 198mm !important; /* 210mm - 2*6mm margin */
                 margin: 0 auto !important;
                 padding: 0 !important;
                 display: flex !important;
-                flex-direction: column !important;
+                flex-direction: row !important; /* SIDE BY SIDE PORTRAIT COPIES */
                 justify-content: space-between !important;
+                align-items: stretch !important;
                 box-shadow: none !important;
                 border: none !important;
                 page-break-after: always !important;
@@ -72,21 +73,25 @@
                 break-after: avoid !important;
             }
 
-            .slip-slip {
-                height: 137mm !important;
-                max-height: 137mm !important;
+            .portrait-slip {
+                width: 136mm !important; /* (281mm - 9mm cut divider) / 2 */
+                max-width: 136mm !important;
+                height: 198mm !important;
+                max-height: 198mm !important;
                 overflow: hidden !important;
                 display: flex !important;
                 flex-direction: column !important;
                 justify-content: space-between !important;
-                padding: 1mm 2mm !important;
+                padding: 1.5mm 2.5mm !important;
                 box-sizing: border-box !important;
             }
 
             .cut-divider {
-                height: 7mm !important;
+                width: 9mm !important;
+                height: 198mm !important;
                 margin: 0 !important;
                 display: flex !important;
+                flex-direction: column !important;
                 align-items: center !important;
                 justify-content: center !important;
             }
@@ -107,7 +112,7 @@
             }
 
             .no-print-toolbar {
-                width: 210mm;
+                width: 297mm;
                 max-width: 100%;
                 display: flex;
                 justify-content: space-between;
@@ -185,33 +190,36 @@
             }
 
             .page-container {
-                width: 210mm;
-                height: 297mm;
-                padding: 5mm 8mm;
+                width: 297mm;
+                height: 210mm;
+                padding: 6mm 8mm;
                 background: #ffffff;
                 box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
                 border: 1px solid #e2e8f0;
                 display: flex;
-                flex-direction: column;
+                flex-direction: row; /* SIDE BY SIDE PORTRAIT COPIES */
                 justify-content: space-between;
+                align-items: stretch;
                 box-sizing: border-box;
                 position: relative;
             }
 
-            .slip-slip {
-                height: 137mm;
-                max-height: 137mm;
+            .portrait-slip {
+                width: 136mm;
+                max-width: 136mm;
+                height: 198mm;
+                max-height: 198mm;
                 overflow: hidden;
                 display: flex;
                 flex-direction: column;
                 justify-content: space-between;
-                padding: 1mm 2mm;
+                padding: 1.5mm 2.5mm;
                 box-sizing: border-box;
             }
         }
 
         /* -------------------------------------------------------------
-           SLIP CONTENT DESIGN (Matching User Image Layout Exactly)
+           PORTRAIT SLIP CONTENT DESIGN (Matching Reference Layout)
            ------------------------------------------------------------- */
         .slip-content {
             width: 100%;
@@ -228,21 +236,21 @@
         }
 
         .company-name {
-            font-size: 13pt;
+            font-size: 11.5pt;
             font-weight: bold;
             letter-spacing: 0.2px;
             line-height: 1.2;
         }
 
         .company-address {
-            font-size: 8pt;
+            font-size: 7pt;
             color: #000000;
             margin-top: 1px;
             line-height: 1.2;
         }
 
         .company-tin {
-            font-size: 8pt;
+            font-size: 7pt;
             color: #000000;
             margin-top: 1px;
             line-height: 1.2;
@@ -255,7 +263,7 @@
         }
 
         .doc-title-text {
-            font-size: 10.5pt;
+            font-size: 10pt;
             font-weight: bold;
             text-decoration: underline;
             letter-spacing: 0.5px;
@@ -267,18 +275,18 @@
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            font-size: 8.5pt;
+            font-size: 7.8pt;
             line-height: 1.35;
             margin-bottom: 5px;
         }
 
         .meta-left {
-            max-width: 65%;
+            max-width: 63%;
         }
 
         .meta-right {
             text-align: right;
-            min-width: 32%;
+            min-width: 35%;
         }
 
         .meta-line {
@@ -297,34 +305,30 @@
 
         .doc-no {
             font-weight: bold;
-            font-size: 9pt;
+            font-size: 8.8pt;
             margin-bottom: 1px;
         }
 
         /* Line Items Table */
         .table-wrapper {
             flex: 1;
-            min-height: 38mm;
-            margin-bottom: 3px;
+            min-height: 50mm;
+            margin-bottom: 4px;
         }
 
         .items-table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 8.5pt;
+            font-size: 7.8pt;
             table-layout: fixed;
         }
 
         .items-table-dense {
-            font-size: 7.5pt !important;
+            font-size: 7.2pt !important;
         }
 
         .items-table-ultra-dense {
-            font-size: 6.8pt !important;
-        }
-
-        .items-table-ultra-dense thead th {
-            padding-bottom: 2px !important;
+            font-size: 6.5pt !important;
         }
 
         .items-table thead th {
@@ -335,19 +339,19 @@
         }
 
         .items-table thead th.th-desc {
-            width: 66%;
+            width: 63%;
         }
 
         .items-table thead th.th-qty {
-            width: 20%;
+            width: 23%;
             text-align: right;
-            padding-right: 18px;
+            padding-right: 14px;
         }
 
         .items-table thead th.th-uom {
             width: 14%;
             text-align: left;
-            padding-left: 6px;
+            padding-left: 4px;
         }
 
         .items-table tbody td {
@@ -361,26 +365,35 @@
             line-height: 1.15 !important;
         }
 
+        .items-table-ultra-dense thead th {
+            padding-bottom: 2px !important;
+        }
+
+        .items-table-ultra-dense tbody td {
+            padding: 0.5px 0 !important;
+            line-height: 1.1 !important;
+        }
+
         .items-table tbody td.td-desc {
-            padding-right: 8px;
+            padding-right: 6px;
             word-break: break-word;
         }
 
         .items-table tbody td.td-qty {
             text-align: right;
-            padding-right: 18px;
+            padding-right: 14px;
             font-variant-numeric: tabular-nums;
         }
 
         .items-table tbody td.td-uom {
             text-align: left;
-            padding-left: 6px;
+            padding-left: 4px;
         }
 
         /* Remarks */
         .remarks-row {
-            font-size: 8.5pt;
-            margin-top: 2px;
+            font-size: 7.5pt;
+            margin-top: 3px;
             margin-bottom: 6px;
             line-height: 1.3;
         }
@@ -397,9 +410,9 @@
         .signatures-container {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            column-gap: 20mm;
+            column-gap: 15mm;
             margin-top: 2px;
-            font-size: 8pt;
+            font-size: 7.5pt;
         }
 
         .sig-column {
@@ -415,7 +428,7 @@
 
         .sig-label {
             font-weight: normal;
-            font-size: 8pt;
+            font-size: 7.5pt;
             margin-bottom: 1px;
         }
 
@@ -425,32 +438,39 @@
             border-bottom: 1px solid #000000;
         }
 
-        /* Cut Line Divider */
+        /* Vertical Cut Line Divider (Splitting Landscape Sheet into 2 Portrait Slips) */
         .cut-divider {
-            width: 100%;
+            width: 9mm;
+            height: 100%;
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 12px;
-            font-size: 7pt;
+            gap: 8px;
+            font-size: 6.5pt;
             color: #64748b;
             user-select: none;
+            padding: 2mm 0;
+            box-sizing: border-box;
         }
 
-        .cut-line-bar {
+        .cut-line-bar-vertical {
             flex: 1;
-            border-bottom: 1px dashed #94a3b8;
-            height: 1px;
+            border-left: 1px dashed #94a3b8;
+            width: 1px;
         }
 
-        .cut-badge {
+        .cut-badge-vertical {
             font-weight: bold;
             letter-spacing: 0.5px;
             text-transform: uppercase;
             white-space: nowrap;
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            transform: rotate(180deg);
             display: inline-flex;
             align-items: center;
-            gap: 6px;
+            justify-content: center;
         }
     </style>
 </head>
@@ -465,27 +485,24 @@
             <div class="title-toggle">
                 <span>Document Header:</span>
                 <select id="doc-title-select" onchange="updateDocTitle()">
-                    <option value="JOB ORDER" selected>JOB ORDER (JO)</option>
-                    <option value="SALES ORDER">SALES ORDER (SO - Portrait)</option>
+                    <option value="SALES ORDER" selected>SALES ORDER (as in photo)</option>
+                    <option value="JOB ORDER">JOB ORDER</option>
                 </select>
             </div>
-            <a href="/print-so.html" id="link-switch-so" class="toolbar-btn" style="background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; font-size: 12px; padding: 6px 12px;" title="Switch to Sales Order (A4 Portrait Layout)">
-                <span>📄 Open SO (Portrait)</span>
-            </a>
             <span id="page-summary-badge" style="font-size: 11px; color: #64748b; font-weight: 600;"></span>
         </div>
 
         <div style="display: flex; align-items: center; gap: 8px;">
             <button onclick="window.print()" class="toolbar-btn toolbar-btn-print" id="btn-print-main">
-                <span>🖨️ Print 2 Copies (A4)</span>
+                <span>🖨️ Print 2 Portrait Copies (A4 Landscape)</span>
             </button>
         </div>
     </div>
 
-    <!-- Wrapper for 1 or More Client Sheets (Each Sheet is Exactly 1 A4 Page with 2 Stacked Landscape Slips) -->
+    <!-- Wrapper for 1 or More Client Sheets (Each Sheet is Exactly 1 A4 Landscape with 2 Side-by-Side Portrait Copies) -->
     <div class="pages-wrapper" id="pages-wrapper">
         <div class="page-container" id="loading-placeholder">
-            <div style="display: flex; align-items: center; justify-content: center; height: 100%; font-size: 14px; color: #64748b;">
+            <div style="display: flex; align-items: center; justify-content: center; height: 100%; width: 100%; font-size: 14px; color: #64748b;">
                 Loading Job Order details...
             </div>
         </div>
@@ -544,13 +561,8 @@
 
         function updateDocTitle() {
             const select = document.getElementById('doc-title-select');
-            const chosen = select ? select.value : 'JOB ORDER';
+            const chosen = select ? select.value : 'SALES ORDER';
             
-            if (chosen === 'SALES ORDER') {
-                window.location.href = '/print-so.html' + window.location.search;
-                return;
-            }
-
             document.querySelectorAll('.title-display').forEach(el => {
                 el.textContent = chosen;
             });
@@ -694,20 +706,20 @@
             pagesData.forEach((clientData, idx) => {
                 html += `
                     <div class="page-container" id="page-client-${idx}">
-                        <!-- COPY 1: TOP HALF (Landscape Half-A4) -->
-                        <div class="slip-slip" id="slip-${idx}-1">
+                        <!-- COPY 1: LEFT SIDE (Portrait Slip) -->
+                        <div class="portrait-slip" id="slip-${idx}-1">
                             ${generateSlipContent(clientData, chosenTitle)}
                         </div>
 
-                        <!-- CUT GUIDE DIVIDER -->
+                        <!-- VERTICAL CUT GUIDE DIVIDER -->
                         <div class="cut-divider">
-                            <div class="cut-line-bar"></div>
-                            <div class="cut-badge">✂ CUT HERE (HALF OF A4 LANDSCAPE) ✂</div>
-                            <div class="cut-line-bar"></div>
+                            <div class="cut-line-bar-vertical"></div>
+                            <div class="cut-badge-vertical">✂ CUT HERE (2 PORTRAIT COPIES) ✂</div>
+                            <div class="cut-line-bar-vertical"></div>
                         </div>
 
-                        <!-- COPY 2: BOTTOM HALF (Landscape Half-A4 Duplicate) -->
-                        <div class="slip-slip" id="slip-${idx}-2">
+                        <!-- COPY 2: RIGHT SIDE (Portrait Slip Duplicate) -->
+                        <div class="portrait-slip" id="slip-${idx}-2">
                             ${generateSlipContent(clientData, chosenTitle)}
                         </div>
                     </div>
@@ -721,12 +733,12 @@
             const printBtn = document.getElementById('btn-print-main');
 
             if (pagesData.length > 1) {
-                if (badge) badge.textContent = `(${pagesData.length} Clients • ${pagesData.length} A4 Pages)`;
-                if (printBtn) printBtn.innerHTML = `<span>🖨️ Print All Clients (${pagesData.length} Pages, ${pagesData.length * 2} Slips)</span>`;
+                if (badge) badge.textContent = `(${pagesData.length} Clients • ${pagesData.length} Landscape Sheets)`;
+                if (printBtn) printBtn.innerHTML = `<span>🖨️ Print All Clients (${pagesData.length} Sheets, ${pagesData.length * 2} Portrait Slips)</span>`;
             } else if (pagesData.length === 1) {
                 const itemCount = (pagesData[0].items || []).length;
                 if (badge) badge.textContent = `(${pagesData[0].company_name || 'Client'} • ${itemCount} Product${itemCount !== 1 ? 's' : ''})`;
-                if (printBtn) printBtn.innerHTML = `<span>🖨️ Print 2 Copies (A4)</span>`;
+                if (printBtn) printBtn.innerHTML = `<span>🖨️ Print 2 Portrait Copies (A4 Landscape)</span>`;
             }
 
             const urlParams = new URLSearchParams(window.location.search);
@@ -736,11 +748,6 @@
         }
 
         async function loadData() {
-            const switchLink = document.getElementById('link-switch-so');
-            if (switchLink) {
-                switchLink.href = '/print-so.html' + window.location.search;
-            }
-
             const urlParams = new URLSearchParams(window.location.search);
             const clientId = urlParams.get('client_id');
             const id = urlParams.get('id');
@@ -784,7 +791,6 @@
 
                 if (Array.isArray(json.data)) {
                     if (json.data.length === 0) {
-                        // If empty, try single first JO
                         const allJOsRes = await fetch('/api/job-orders', { headers });
                         const allJOsJson = await allJOsRes.json();
                         if (allJOsJson.success && allJOsJson.data && allJOsJson.data.length > 0) {
