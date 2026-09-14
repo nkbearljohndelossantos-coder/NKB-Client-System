@@ -14,7 +14,7 @@ router.get('/', authenticateToken, enforceClientIsolation, (req, res) => {
     const { status, clientId, search } = req.query;
 
     let query = `
-        SELECT po.*, c.company_name, c.contact_person, c.email as client_email,
+        SELECT po.*, c.company_name, c.contact_person, c.email as client_email, c.is_vyuceutical_ops,
                (SELECT COUNT(*) FROM purchase_order_items WHERE po_id = po.id) as items_count,
                (SELECT SUM(target_quantity) FROM purchase_order_items WHERE po_id = po.id) as total_target_quantity,
                (SELECT COUNT(*) FROM job_orders WHERE po_id = po.id) as jo_count,
@@ -52,7 +52,7 @@ router.get('/', authenticateToken, enforceClientIsolation, (req, res) => {
     // Attach ordered products separately to each PO
     for (const po of orders) {
         po.items = db.prepare(`
-            SELECT poi.*, p.name as product_name, p.sku, p.unit, p.category, p.formula_code, p.shelf_life_months,
+            SELECT poi.*, COALESCE(poi.item_name, p.name) as product_name, p.sku, p.unit, p.category, p.formula_code, p.shelf_life_months,
                    (SELECT jo.id FROM job_orders jo WHERE jo.po_id = poi.po_id AND jo.product_id = poi.product_id ORDER BY jo.created_at DESC LIMIT 1) as jo_id,
                    (SELECT jo.jo_number FROM job_orders jo WHERE jo.po_id = poi.po_id AND jo.product_id = poi.product_id ORDER BY jo.created_at DESC LIMIT 1) as jo_number,
                    (SELECT jo.status FROM job_orders jo WHERE jo.po_id = poi.po_id AND jo.product_id = poi.product_id ORDER BY jo.created_at DESC LIMIT 1) as jo_status,
@@ -80,7 +80,7 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
     const { id } = req.params;
 
     const po = db.prepare(`
-        SELECT po.*, c.company_name, c.contact_person, c.email as client_email, c.phone as client_phone, c.address as client_address, c.tin as client_tin,
+        SELECT po.*, c.company_name, c.contact_person, c.email as client_email, c.phone as client_phone, c.address as client_address, c.tin as client_tin, c.is_vyuceutical_ops,
                u.name as creator_name,
                u2.name as approver_name
         FROM purchase_orders po
@@ -101,7 +101,7 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
     // Line items with detailed product specifications and manufacturing lineage
     const items = db.prepare(`
         SELECT poi.*, 
-               COALESCE(cpp.custom_name, p.name) as product_name, 
+               COALESCE(poi.item_name, cpp.custom_name, p.name) as product_name, 
                COALESCE(cpp.custom_sku, p.sku) as sku, 
                p.unit, 
                p.category, 
@@ -245,6 +245,7 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
                 id: uuidv4(),
                 poId,
                 productId: product.id,
+                itemName: item.item_name ? item.item_name.trim() : null,
                 targetQuantity: targetQty,
                 minAllowedQuantity: minQty,
                 maxAllowedQuantity: maxQty,
@@ -285,8 +286,8 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
 
         const insertItemStmt = db.prepare(`
             INSERT INTO purchase_order_items
-            (id, po_id, product_id, target_quantity, min_allowed_quantity, max_allowed_quantity, unit_price, subtotal)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (id, po_id, product_id, item_name, target_quantity, min_allowed_quantity, max_allowed_quantity, unit_price, subtotal)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
         for (const it of processedItems) {
@@ -294,6 +295,7 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
                 it.id,
                 it.poId,
                 it.productId,
+                it.itemName,
                 it.targetQuantity,
                 it.minAllowedQuantity,
                 it.maxAllowedQuantity,
@@ -414,6 +416,7 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
                     id: uuidv4(),
                     poId: id,
                     productId: product.id,
+                    itemName: item.item_name ? item.item_name.trim() : null,
                     targetQuantity: targetQty,
                     minAllowedQuantity: minQty,
                     maxAllowedQuantity: maxQty,
@@ -439,8 +442,8 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
 
             const insertItemStmt = db.prepare(`
                 INSERT INTO purchase_order_items
-                (id, po_id, product_id, target_quantity, min_allowed_quantity, max_allowed_quantity, unit_price, subtotal)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                (id, po_id, product_id, item_name, target_quantity, min_allowed_quantity, max_allowed_quantity, unit_price, subtotal)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             `);
 
             for (const it of processedItems) {
@@ -448,10 +451,11 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
                     it.id,
                     it.poId,
                     it.productId,
-                    it.targetQuantity,
-                    it.minAllowedQuantity,
-                    it.maxAllowedQuantity,
-                    it.unitPrice,
+                    it.itemName || it.item_name || null,
+                    it.targetQuantity || it.target_quantity,
+                    it.minAllowedQuantity || it.min_allowed_quantity,
+                    it.maxAllowedQuantity || it.max_allowed_quantity,
+                    it.unitPrice || it.unit_price,
                     it.subtotal
                 );
             }

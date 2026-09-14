@@ -15,7 +15,7 @@ router.get('/', authenticateToken, enforceClientIsolation, (req, res) => {
 
     let query = `
         SELECT dr.*, po.po_number, po.billing_policy, po.tolerance_percent,
-               c.company_name, c.contact_person, c.phone as client_phone, c.address as client_address,
+               c.company_name, c.contact_person, c.phone as client_phone, c.address as client_address, c.is_vyuceutical_ops,
                (SELECT COUNT(*) FROM delivery_items WHERE dr_id = dr.id) as items_count,
                (SELECT SUM(delivered_quantity) FROM delivery_items WHERE dr_id = dr.id) as total_delivered,
                (SELECT SUM(accepted_quantity) FROM delivery_items WHERE dr_id = dr.id) as total_accepted,
@@ -64,7 +64,7 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
 
     const dr = db.prepare(`
         SELECT dr.*, po.po_number, po.po_date, po.billing_policy, po.tolerance_percent,
-               c.company_name, c.contact_person, c.email as client_email, c.phone as client_phone, c.address as client_address, c.tin as client_tin,
+               c.company_name, c.contact_person, c.email as client_email, c.phone as client_phone, c.address as client_address, c.tin as client_tin, c.is_vyuceutical_ops,
                u.name as creator_name,
                si.id as invoice_id, si.invoice_number, si.total_amount as invoice_amount, si.status as invoice_status
         FROM delivery_receipts dr
@@ -84,7 +84,7 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
     }
 
     const items = db.prepare(`
-        SELECT di.*, p.name as product_name, p.sku, p.unit, p.description as product_description,
+        SELECT di.*, COALESCE(poi.item_name, p.name) as product_name, p.sku, p.unit, p.description as product_description,
                b.batch_number, b.production_date, b.expiry_date,
                poi.target_quantity as po_target_quantity
         FROM delivery_items di
@@ -122,9 +122,9 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
 
 /**
  * POST /api/deliveries
- * Admin / Warehouse creates a new Delivery Receipt
+ * Admin / Warehouse / Production creates a new Delivery Receipt
  */
-router.post('/', authenticateToken, requireRoles('ADMIN', 'WAREHOUSE'), (req, res) => {
+router.post('/', authenticateToken, requireRoles('ADMIN', 'WAREHOUSE', 'PRODUCTION'), (req, res) => {
     const { po_id, jo_id, delivery_date, driver_name, vehicle_plate, notes, items } = req.body;
 
     if (!po_id || !items || !Array.isArray(items) || items.length === 0) {

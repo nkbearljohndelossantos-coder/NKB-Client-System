@@ -427,9 +427,9 @@ async function openViewPOModal(poId) {
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-200">
                         <div class="space-y-1">
                             <span class="text-[10px] uppercase font-bold text-slate-400">Buyer / Client</span>
-                            <div class="font-extrabold text-sm text-slate-900">${po.company_name}</div>
-                            <div class="text-slate-600 font-medium">${po.contact_person ? 'Attn: ' + po.contact_person : ''}</div>
-                            <div class="text-slate-500 text-[11px] leading-relaxed">${po.client_address || ''}</div>
+                            <div class="font-extrabold text-sm text-slate-900">${(po.is_vyuceutical_ops === 1 || (po.company_name && po.company_name.toLowerCase().includes('vyuceutical'))) ? (po.contact_person || po.company_name) : po.company_name}</div>
+                            ${(po.is_vyuceutical_ops === 1 || (po.company_name && po.company_name.toLowerCase().includes('vyuceutical'))) ? `<div class="text-[11px] text-purple-700 font-bold">Vyuceutical OPS (${po.company_name})</div>` : (po.contact_person ? `<div class="text-slate-600 font-medium">Attn: ${po.contact_person}</div>` : '')}
+                            <div class="text-slate-500 text-[11px] leading-relaxed">${(po.client_address || '').trim() || 'Phils.'}</div>
                             <div class="text-slate-500 text-[11px]">${po.client_email || ''} ${po.client_phone ? '• ' + po.client_phone : ''}</div>
                             ${po.client_tin ? `<div class="text-[11px] font-mono text-slate-500">TIN: ${po.client_tin}</div>` : ''}
                         </div>
@@ -568,7 +568,7 @@ async function openViewPOModal(poId) {
                                 Approve Order
                             </button>
                         ` : ''}
-                        ${(NKB.user && (NKB.user.role === 'ADMIN' || NKB.user.role === 'SUPER_ADMIN') && (po.status === 'APPROVED' || po.status === 'IN_PRODUCTION' || po.status === 'PARTIALLY_DELIVERED')) ? `
+                        ${(NKB.user && (NKB.user.role === 'ADMIN' || NKB.user.role === 'SUPER_ADMIN' || NKB.user.role === 'PRODUCTION') && (po.status === 'APPROVED' || po.status === 'IN_PRODUCTION' || po.status === 'PARTIALLY_DELIVERED')) ? `
                             ${!allJOsStarted ? `
                                 <button onclick="closeModal(); openCreateJOModal('${po.id}', '${po.po_number}', '${po.company_name.replace(/'/g, "\\'")}');" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-xs shadow-md shadow-indigo-600/30 transition flex items-center gap-1.5" title="Start Job Orders for all products in this order">
                                     <span>🏭 Start Job Order (All Products)</span>
@@ -610,6 +610,59 @@ function closeModal() {
 // -------------------------------------------------------------
 // EDIT PURCHASE ORDER (BEFORE ENTERING JO)
 // -------------------------------------------------------------
+const KNOWN_PO_BRANDS = [
+    'HER CHOICE PH',
+    'HER CHOICE',
+    'BELLA SKIN',
+    'K BELLA SKIN',
+    'SKEENCARE',
+    'NATASHA',
+    'HANAPAM',
+    'GELIS PHARMA',
+    'JGLOWW',
+    'BRIGHTEST SKIN',
+    'BRIGHTEST',
+    'ROYCE B',
+    'ELIXIA',
+    'ADORN',
+    'CUTIS ANO NE',
+    'TARATITAT',
+    'MAGNIFIQUE WHITE',
+    'DREAM GIRL',
+    'SABELA SKIN',
+    'KKSKIN.PH',
+    'KYLE SKIN',
+    'RG LOVE',
+    'CZAR',
+    'MI.SKIN',
+    'EIGHT',
+    'BEAUTAIN',
+    'BIOESSENCE',
+    'INTIMATE WHITE',
+    'JLS NO BRAND'
+].sort((a, b) => b.length - a.length);
+
+function cleanPOBrandFromName(name, chosenBrand = null) {
+    if (!name) return '';
+    let cleaned = name.trim();
+    if (chosenBrand && chosenBrand !== 'ALL') {
+        const esc = chosenBrand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        cleaned = cleaned.replace(new RegExp('^' + esc + '\\s*[-:–—]?\\s*', 'i'), '');
+        cleaned = cleaned.replace(new RegExp('\\(' + esc + '\\s*[-:–—]?\\s*', 'gi'), '(');
+    } else {
+        for (const b of KNOWN_PO_BRANDS) {
+            const esc = b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const reg = new RegExp('^' + esc + '\\s*[-:–—]?\\s*', 'i');
+            if (reg.test(cleaned)) {
+                cleaned = cleaned.replace(reg, '');
+                cleaned = cleaned.replace(new RegExp('\\(' + esc + '\\s*[-:–—]?\\s*', 'gi'), '(');
+                break;
+            }
+        }
+    }
+    return cleaned.trim() || name;
+}
+
 let editPOLineItems = [];
 let editPOCatalog = [];
 let editingPOId = null;
@@ -666,6 +719,18 @@ async function openEditPOModal(poId) {
                     unit: it.unit || 'pcs'
                 });
             }
+        });
+    }
+
+    const isVyuceutical = po.is_vyuceutical_ops === 1 || (po.company_name && po.company_name.toLowerCase().includes('vyuceutical'));
+    if (isVyuceutical) {
+        editPOCatalog = editPOCatalog.map(p => {
+            const clean = cleanPOBrandFromName(p.name);
+            return {
+                ...p,
+                clean_name: clean,
+                display_name: clean
+            };
         });
     }
 
@@ -816,7 +881,7 @@ function renderEditPOLineItems() {
                     <select onchange="updateEditPOLineItem(${idx}, 'product_id', this.value)" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white font-medium">
                         ${editPOCatalog.map(p => `
                             <option value="${p.id}" ${p.id === item.product_id ? 'selected' : ''}>
-                                ${p.name} (${p.effective_sku || p.sku}) - ₱${Number(p.default_price).toFixed(2)}${p.has_custom_price ? ' [Contract Rate]' : ''}
+                                ${p.display_name || p.clean_name || p.name} (${p.effective_sku || p.sku}) - ₱${Number(p.default_price).toFixed(2)}${p.has_custom_price ? ' [Contract Rate]' : ''}
                             </option>
                         `).join('')}
                     </select>
@@ -934,10 +999,14 @@ async function submitEditPO(e) {
             expected_delivery_date: deliveryDate || null,
             billing_policy: policy,
             notes,
-            items: editPOLineItems.map(item => ({
-                product_id: item.product_id,
-                target_quantity: item.target_quantity
-            }))
+            items: editPOLineItems.map(item => {
+                const prod = editPOCatalog.find(p => p.id === item.product_id);
+                return {
+                    product_id: item.product_id,
+                    item_name: prod ? (prod.clean_name || prod.display_name || prod.name) : undefined,
+                    target_quantity: item.target_quantity
+                };
+            })
         })
     });
 

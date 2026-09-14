@@ -9,9 +9,43 @@ const useMysql = dbDriver === 'mysql';
 
 let db;
 
+function runMigrations(dbInstance, isMysql) {
+    try {
+        const textType = isMysql ? 'VARCHAR(255)' : 'TEXT';
+        const intType = isMysql ? 'TINYINT(1)' : 'INTEGER';
+        const batchCols = ['compounding_operator', 'bottling_lead', 'qc_inspector', 'line_assignment'];
+        for (const col of batchCols) {
+            try {
+                dbInstance.exec(`ALTER TABLE production_batches ADD COLUMN ${col} ${textType};`);
+            } catch (_) {}
+        }
+        try {
+            dbInstance.exec(`ALTER TABLE purchase_orders ADD COLUMN so_number ${textType};`);
+        } catch (_) {}
+        try {
+            dbInstance.exec("UPDATE purchase_orders SET so_number = REPLACE(po_number, 'PO-', 'SO-') WHERE so_number IS NULL OR so_number = '';");
+        } catch (_) {}
+        try {
+            dbInstance.exec(`ALTER TABLE clients ADD COLUMN is_vyuceutical_ops ${intType} DEFAULT 0;`);
+        } catch (_) {}
+        try {
+            dbInstance.exec("UPDATE clients SET is_vyuceutical_ops = 1 WHERE LOWER(company_name) LIKE '%vyuceutical%';");
+        } catch (_) {}
+        try {
+            dbInstance.exec("UPDATE clients SET address = 'Phils.' WHERE address IS NULL OR TRIM(address) = '' OR address = '-' OR LOWER(TRIM(address)) = 'n/a';");
+        } catch (_) {}
+        try {
+            dbInstance.exec(`ALTER TABLE purchase_order_items ADD COLUMN item_name ${textType};`);
+        } catch (_) {}
+    } catch (migErr) {
+        console.warn('Migration note:', migErr.message);
+    }
+}
+
 if (useMysql) {
     console.log(`🗄️  Connecting to MySQL Database: ${process.env.DB_NAME || 'u335953510_client_db'}`);
     db = require('./mysql-adapter')();
+    runMigrations(db, true);
 } else {
     console.log('⚡ High-Performance Embedded Engine: SQLite Active');
     const { DatabaseSync } = require('node:sqlite');
@@ -47,22 +81,7 @@ if (useMysql) {
     }
 
     // Auto-migrate schema upgrades for existing database
-    try {
-        const batchCols = ['compounding_operator', 'bottling_lead', 'qc_inspector', 'line_assignment'];
-        for (const col of batchCols) {
-            try {
-                db.exec(`ALTER TABLE production_batches ADD COLUMN ${col} TEXT;`);
-            } catch (_) {}
-        }
-        try {
-            db.exec("ALTER TABLE purchase_orders ADD COLUMN so_number TEXT;");
-        } catch (_) {}
-        try {
-            db.exec("UPDATE purchase_orders SET so_number = REPLACE(po_number, 'PO-', 'SO-') WHERE so_number IS NULL OR so_number = '';");
-        } catch (_) {}
-    } catch (migErr) {
-        console.warn('Migration note:', migErr.message);
-    }
+    runMigrations(db, false);
 
     // Auto-initialize and seed product_categories
     try {

@@ -80,6 +80,7 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'ACCOUNTING', 'SUPER_A
         default_billing_policy, 
         default_tolerance_percent, 
         credit_limit,
+        is_vyuceutical_ops,
         create_portal_account = true,
         default_password = 'Client123!'
     } = req.body;
@@ -91,12 +92,13 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'ACCOUNTING', 'SUPER_A
     const clientId = uuidv4();
     const cleanEmail = email.trim().toLowerCase();
     const cleanPhone = (phone && typeof phone === 'string') ? phone.trim() : '';
-    const cleanAddress = (address && typeof address === 'string') ? address.trim() : '';
+    const cleanAddress = (address && typeof address === 'string' && address.trim()) ? address.trim() : 'Phils.';
+    const isVyuceutical = (is_vyuceutical_ops === 1 || is_vyuceutical_ops === true || is_vyuceutical_ops === '1' || company_name.toLowerCase().includes('vyuceutical')) ? 1 : 0;
 
     try {
         db.prepare(`
-            INSERT INTO clients (id, company_name, contact_person, email, phone, address, tin, default_billing_policy, default_tolerance_percent, credit_limit)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO clients (id, company_name, contact_person, email, phone, address, tin, default_billing_policy, default_tolerance_percent, credit_limit, is_vyuceutical_ops)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
             clientId,
             company_name.trim(),
@@ -107,7 +109,8 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'ACCOUNTING', 'SUPER_A
             tin ? tin.trim() : null,
             default_billing_policy || 'ACTUAL_DELIVERY',
             default_tolerance_percent !== undefined ? parseFloat(default_tolerance_percent) : 10.0,
-            credit_limit !== undefined ? parseFloat(credit_limit) : 500000.0
+            credit_limit !== undefined ? parseFloat(credit_limit) : 500000.0,
+            isVyuceutical
         );
 
         let createdUser = null;
@@ -254,11 +257,23 @@ router.post('/:id/credentials/reset', authenticateToken, requireRoles('ADMIN', '
  */
 router.put('/:id', authenticateToken, requireRoles('ADMIN', 'SUPER_ADMIN'), (req, res) => {
     const { id } = req.params;
-    const { company_name, contact_person, email, phone, address, tin, default_billing_policy, default_tolerance_percent, credit_limit, is_active } = req.body;
+    const { company_name, contact_person, email, phone, address, tin, default_billing_policy, default_tolerance_percent, credit_limit, is_active, is_vyuceutical_ops } = req.body;
 
     const existing = db.prepare('SELECT * FROM clients WHERE id = ?').get(id);
     if (!existing) {
         return res.status(404).json({ success: false, error: 'Client not found.' });
+    }
+
+    let cleanAddress = null;
+    if (address !== undefined) {
+        cleanAddress = (address && typeof address === 'string' && address.trim()) ? address.trim() : 'Phils.';
+    }
+
+    let vyuceuticalVal = null;
+    if (is_vyuceutical_ops !== undefined) {
+        vyuceuticalVal = (is_vyuceutical_ops === 1 || is_vyuceutical_ops === true || is_vyuceutical_ops === '1') ? 1 : 0;
+    } else if (company_name && company_name.toLowerCase().includes('vyuceutical')) {
+        vyuceuticalVal = 1;
     }
 
     try {
@@ -274,6 +289,7 @@ router.put('/:id', authenticateToken, requireRoles('ADMIN', 'SUPER_ADMIN'), (req
                 default_tolerance_percent = COALESCE(?, default_tolerance_percent),
                 credit_limit = COALESCE(?, credit_limit),
                 is_active = COALESCE(?, is_active),
+                is_vyuceutical_ops = COALESCE(?, is_vyuceutical_ops),
                 updated_at = datetime('now')
             WHERE id = ?
         `).run(
@@ -281,12 +297,13 @@ router.put('/:id', authenticateToken, requireRoles('ADMIN', 'SUPER_ADMIN'), (req
             contact_person ? contact_person.trim() : null,
             email ? email.trim().toLowerCase() : null,
             phone !== undefined ? (phone ? phone.trim() : '') : null,
-            address !== undefined ? (address ? address.trim() : '') : null,
+            cleanAddress,
             tin !== undefined ? tin : null,
             default_billing_policy || null,
             default_tolerance_percent !== undefined ? parseFloat(default_tolerance_percent) : null,
             credit_limit !== undefined ? parseFloat(credit_limit) : null,
             is_active !== undefined ? (is_active ? 1 : 0) : null,
+            vyuceuticalVal,
             id
         );
 

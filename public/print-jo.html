@@ -808,8 +808,11 @@
         }
 
         function generateSlipContent(client, docTitle, pageItems = null, pageIndex = 1, totalPages = 1, clientIdx = 0) {
-            const customerName = client.company_name || client.client_name || 'JLS SKIN ESSENTIALS OPC';
-            const customerAddress = client.client_address || client.address || '-';
+            const isVyuceutical = client.is_vyuceutical_ops === 1 || (client.company_name && client.company_name.toLowerCase().includes('vyuceutical'));
+            const customerName = isVyuceutical 
+                ? (client.contact_person || client.company_name || 'Client Contact')
+                : (client.company_name || client.client_name || 'JLS SKIN ESSENTIALS OPC');
+            const customerAddress = (client.client_address || client.address || '').trim() || 'Phils.';
             const docDate = formatDateMMDDYYYY(client.po_date || client.scheduled_start_date || client.created_at || new Date());
             const dueDate = formatDateMMDDYYYY(client.expected_delivery_date || client.scheduled_end_date || client.po_date || client.created_at || new Date());
             const remarks = client.notes || client.po_notes || '';
@@ -863,7 +866,7 @@
                             <span class="product-name-txt">${escapeHtml(name)}</span>
                             ${sku ? `<span class="product-sku-txt">(${escapeHtml(sku)})</span>` : ''}
                         </td>
-                        <td class="td-qty">${qty}</td>
+                        <td class="td-qty">${escapeHtml(qty)}</td>
                         <td class="td-uom">${escapeHtml(uom)}</td>
                     </tr>
                 `;
@@ -874,9 +877,9 @@
                     <!-- Header -->
                     <div>
                         <div class="company-header">
-                            <div class="company-name">NKB Manufacturing Corporation</div>
-                            <div class="company-address">B4 L5 Twig St., Sampaguita Village, Mambog II, Bacoor City, 4102 Cavite, Philippines</div>
-                            <div class="company-tin">TIN: 686-950-421-00000</div>
+                            <div class="company-name">${isVyuceutical ? 'VYUCEUTICAL OPS' : 'NKB Manufacturing Corporation'}</div>
+                            <div class="company-address">Blk 4, Lot 5, Twig st., Sampaguita Village, Mambog II, Bacoor City, Cavite</div>
+                            <div class="company-tin">TIN: 686-950-421-00000 · Contact: (046) 885-0923</div>
                         </div>
 
                         <!-- Underlined Document Title -->

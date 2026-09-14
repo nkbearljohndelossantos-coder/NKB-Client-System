@@ -161,7 +161,7 @@ if (isTest) {
 } else {
     const server = app.listen(PORT, () => {
         console.log(`=======================================================`);
-        console.log(`🚀 NKB MANUFACTURING & TRADING SYSTEM IS RUNNING`);
+        console.log(`🚀 NKB MANUFACTURING CORPORATION SYSTEM IS RUNNING`);
         console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
         console.log(`🌐 Port: ${PORT}`);
         console.log(`🗄️  Database: ${process.env.DB_DRIVER || 'sqlite'}`);

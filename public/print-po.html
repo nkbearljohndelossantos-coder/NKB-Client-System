@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Purchase Order - NKB Manufacturing & Trading</title>
+    <title>Purchase Order - NKB MANUFACTURING CORPORATION</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <link rel="stylesheet" href="/css/tailwind.min.css">
     <link rel="stylesheet" href="/css/style.css">
@@ -79,11 +79,11 @@
         <!-- Header -->
         <div class="flex justify-between items-start border-b border-slate-300 pb-3">
             <div>
-                <h1 class="text-xl font-extrabold text-slate-900 tracking-tight">NKB MANUFACTURING & TRADING</h1>
+                <h1 id="po-company-name-hdr" class="text-xl font-extrabold text-slate-900 tracking-tight">NKB MANUFACTURING CORPORATION</h1>
                 <p class="text-[11px] text-slate-500 font-medium">Cosmetics & Personal Care Formulation Laboratory</p>
-                <p class="text-[10px] text-slate-500">TIN: 000-123-456-789-00000 · FDA Certified Facility</p>
-                <p class="text-[10px] text-slate-500">Lot 14, Sterling Industrial Park, Meycauayan, Bulacan, Philippines</p>
-                <p class="text-[10px] text-slate-500">Contact: +63 (2) 8888-0000 · Email: orders@nkbmanufacturing.com</p>
+                <p id="po-tin-hdr" class="text-[10px] text-slate-500">TIN: 686-950-421-00000 · FDA Certified Facility</p>
+                <p id="po-address-hdr" class="text-[10px] text-slate-500">Blk 4, Lot 5, Twig st., Sampaguita Village, Mambog II, Bacoor City, Cavite</p>
+                <p id="po-contact-hdr" class="text-[10px] text-slate-500">Contact: (046) 885-0923 · Email: orders@nkbmanufacturing.com</p>
             </div>
             <div class="text-right space-y-0.5">
                 <h2 class="text-lg font-bold tracking-wider text-slate-900 uppercase">PURCHASE ORDER</h2>
@@ -187,7 +187,7 @@
                 <div class="border-b border-slate-400 pb-1 mt-6 flex items-end justify-between">
                     <div>
                         <div id="nkb-signatory-name" class="font-bold text-slate-800">Plant Production Director</div>
-                        <div class="text-[10px] text-slate-500">NKB Manufacturing & Trading Corp</div>
+                        <div id="po-signatory-sub" class="text-[10px] text-slate-500">NKB Manufacturing Corporation</div>
                     </div>
                     <div id="po-approval-tag" class="text-slate-700 font-bold font-mono text-[10px]">APPROVED</div>
                 </div>
@@ -222,9 +222,21 @@
                 document.getElementById('po-delivery-display').textContent = po.expected_delivery_date ? NKB.formatDate(po.expected_delivery_date) : 'As Scheduled';
                 document.getElementById('po-status-badge').innerHTML = NKB.renderStatusBadge(po.status);
 
-                document.getElementById('po-client-name').textContent = po.company_name;
-                document.getElementById('po-client-contact').textContent = `Attn: ${po.contact_person || 'Purchasing'}`;
-                document.getElementById('po-client-address').textContent = po.client_address || '-';
+                const isVyuceutical = po.is_vyuceutical_ops === 1 || (po.company_name && po.company_name.toLowerCase().includes('vyuceutical'));
+
+                if (isVyuceutical) {
+                    document.getElementById('po-company-name-hdr').textContent = 'VYUCEUTICAL OPS';
+                    const sub = document.getElementById('po-signatory-sub');
+                    if (sub) sub.textContent = 'VYUCEUTICAL OPS';
+                    document.getElementById('po-client-name').textContent = po.contact_person || po.company_name;
+                    document.getElementById('po-client-contact').textContent = `Company: ${po.company_name}`;
+                } else {
+                    document.getElementById('po-company-name-hdr').textContent = 'NKB MANUFACTURING CORPORATION';
+                    document.getElementById('po-client-name').textContent = po.company_name;
+                    document.getElementById('po-client-contact').textContent = `Attn: ${po.contact_person || 'Purchasing'}`;
+                }
+
+                document.getElementById('po-client-address').textContent = (po.client_address || '').trim() || 'Phils.';
                 document.getElementById('po-client-phone').textContent = po.client_phone || '-';
                 document.getElementById('po-client-tin').textContent = `TIN: ${po.client_tin || 'Non-VAT'}`;
 

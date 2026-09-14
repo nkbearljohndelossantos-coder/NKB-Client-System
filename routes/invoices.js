@@ -12,7 +12,7 @@ router.get('/', authenticateToken, enforceClientIsolation, (req, res) => {
     const { status, clientId, search } = req.query;
 
     let query = `
-        SELECT si.*, c.company_name, c.contact_person, c.email as client_email,
+        SELECT si.*, c.company_name, c.contact_person, c.email as client_email, c.is_vyuceutical_ops,
                po.po_number, dr.dr_number,
                CAST((julianday('now') - julianday(si.due_date)) AS INTEGER) as days_overdue
         FROM sales_invoices si
@@ -73,7 +73,7 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
     const { id } = req.params;
 
     const invoice = db.prepare(`
-        SELECT si.*, c.company_name, c.contact_person, c.email as client_email, c.phone as client_phone, c.address as client_address, c.tin as client_tin,
+        SELECT si.*, c.company_name, c.contact_person, c.email as client_email, c.phone as client_phone, c.address as client_address, c.tin as client_tin, c.is_vyuceutical_ops,
                po.po_number, po.po_date, po.tolerance_percent,
                dr.dr_number, dr.delivery_date,
                u.name as creator_name
@@ -94,13 +94,15 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
     }
 
     const items = db.prepare(`
-        SELECT ii.*, p.name as product_name, p.sku, p.unit, p.description as product_description,
+        SELECT ii.*, 
+               COALESCE((SELECT poi.item_name FROM purchase_order_items poi WHERE poi.po_id = ? AND poi.product_id = ii.product_id LIMIT 1), p.name) as product_name, 
+               p.sku, p.unit, p.description as product_description,
                b.batch_number, b.production_date, b.expiry_date
         FROM invoice_items ii
         JOIN products p ON ii.product_id = p.id
         LEFT JOIN production_batches b ON ii.batch_id = b.id
         WHERE ii.invoice_id = ?
-    `).all(id);
+    `).all(invoice.po_id, id);
 
     const payments = db.prepare(`
         SELECT p.*, u.name as recorded_by_name

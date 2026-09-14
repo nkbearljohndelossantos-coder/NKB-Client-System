@@ -200,7 +200,7 @@ function applyRoleBasedUI() {
     };
 
     if (role === 'PRODUCTION') {
-        hideTab('deliveries');
+        // PRODUCTION role now manages deliveries alongside ADMIN and WAREHOUSE
         hideTab('invoices');
         hideTab('payments');
         hideTab('buffer');
@@ -970,7 +970,7 @@ function exportPaymentsToExcel() {
     // Verify SheetJS is available
     if (typeof XLSX !== 'undefined') {
         const rows = [
-            ['NKB MANUFACTURING & TRADING'],
+            ['NKB MANUFACTURING CORPORATION'],
             ['B2B PAYMENTS & ACCOUNTS RECEIVABLE (AR) COLLECTION REPORT'],
             [`Export Date: ${new Date().toLocaleString()}`, '', `Total Records: ${cachedPayments.length}`, '', `Total Amount Paid: PHP ${totalPaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
             [], // spacer row
@@ -1093,7 +1093,7 @@ function exportPaymentsToCSV() {
     };
 
     const csvRows = [];
-    csvRows.push(['NKB MANUFACTURING & TRADING - PAYMENTS & AR REPORT']);
+    csvRows.push(['NKB MANUFACTURING CORPORATION - PAYMENTS & AR REPORT']);
     csvRows.push([`Export Date: ${new Date().toLocaleString()}`, `Total Records: ${cachedPayments.length}`, `Total Paid: PHP ${totalPaid.toFixed(2)}`]);
     csvRows.push([]);
     csvRows.push(headers.map(escapeCsv).join(','));
@@ -1194,7 +1194,7 @@ function printPaymentsReport() {
         <body>
             <div class="header-container">
                 <div>
-                    <h1>NKB Manufacturing & Trading</h1>
+                    <h1>NKB MANUFACTURING CORPORATION</h1>
                     <p class="subtitle">Official B2B Payments & Accounts Receivable (AR) Collection Ledger</p>
                 </div>
                 <div style="text-align: right;">
@@ -1321,7 +1321,14 @@ async function loadClients() {
         cachedClients = res.data;
         tbody.innerHTML = res.data.map(c => `
             <tr class="hover:bg-slate-50 transition">
-                <td class="py-3 px-4 font-bold text-slate-900">${c.company_name}</td>
+                <td class="py-3 px-4 font-bold text-slate-900">
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        <span>${c.company_name}</span>
+                        ${(c.is_vyuceutical_ops === 1 || (c.company_name && c.company_name.toLowerCase().includes('vyuceutical'))) ? `
+                            <span class="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-purple-100 text-purple-800 border border-purple-200" title="Registered as VYUCEUTICAL OPS">Vyuceutical OPS</span>
+                        ` : ''}
+                    </div>
+                </td>
                 <td class="py-3 px-4 font-semibold text-slate-800">${c.contact_person}</td>
                 <td class="py-3 px-4 text-slate-600">${c.email} <br><span class="text-xs text-slate-400">${c.phone}</span></td>
                 <td class="py-3 px-4"><span class="badge ${c.default_billing_policy === 'ACTUAL_DELIVERY' ? 'bg-indigo-50 text-indigo-700' : 'bg-purple-50 text-purple-700'}">${c.default_billing_policy}</span></td>
@@ -2126,6 +2133,18 @@ async function openEditClientModal(clientId) {
                             <input type="number" step="1000" id="edit-client-credit" value="${client.credit_limit || 500000}" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
                         </div>
                     </div>
+
+                    <!-- Vyuceutical OPS Affiliation -->
+                    <div class="p-3 bg-purple-50/80 border border-purple-200 rounded-xl space-y-1">
+                        <label class="flex items-center gap-2 font-bold text-purple-900 cursor-pointer text-xs">
+                            <input type="checkbox" id="edit-client-is-vyuceutical" ${client.is_vyuceutical_ops ? 'checked' : ''} class="rounded border-purple-300 text-purple-600 focus:ring-purple-500">
+                            <span>Affiliated Under Vyuceutical OPS</span>
+                        </label>
+                        <p class="text-[10px] text-purple-700 leading-normal">
+                            When active, official documents will display manufacturer as <strong>VYUCEUTICAL OPS</strong> and client name as the <strong>contact person</strong>. When creating POs, brands will be selectable and brand prefixes will be removed from product names.
+                        </p>
+                    </div>
+
                     <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
                         <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl">Cancel</button>
                         <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold">Update Client</button>
@@ -2148,6 +2167,7 @@ async function submitEditClient(e, clientId) {
     const toleranceEl = document.getElementById('edit-client-tolerance');
     const default_tolerance_percent = toleranceEl ? parseFloat(toleranceEl.value) : undefined;
     const credit_limit = parseFloat(document.getElementById('edit-client-credit').value);
+    const is_vyuceutical_ops = document.getElementById('edit-client-is-vyuceutical').checked ? 1 : 0;
 
     const res = await NKB.api(`/api/clients/${clientId}`, {
         method: 'PUT',
@@ -2158,6 +2178,7 @@ async function submitEditClient(e, clientId) {
             phone,
             tin,
             address,
+            is_vyuceutical_ops,
             default_billing_policy,
             default_tolerance_percent,
             credit_limit
@@ -2295,12 +2316,78 @@ async function submitEditProduct(e, productId) {
 // -------------------------------------------------------------
 // 1. MULTI-ITEM PURCHASE ORDER MODAL
 // -------------------------------------------------------------
+const KNOWN_PO_BRANDS = [
+    'HER CHOICE PH',
+    'HER CHOICE',
+    'BELLA SKIN',
+    'K BELLA SKIN',
+    'SKEENCARE',
+    'NATASHA',
+    'HANAPAM',
+    'GELIS PHARMA',
+    'JGLOWW',
+    'BRIGHTEST SKIN',
+    'BRIGHTEST',
+    'ROYCE B',
+    'ELIXIA',
+    'ADORN',
+    'CUTIS ANO NE',
+    'TARATITAT',
+    'MAGNIFIQUE WHITE',
+    'DREAM GIRL',
+    'SABELA SKIN',
+    'KKSKIN.PH',
+    'KYLE SKIN',
+    'RG LOVE',
+    'CZAR',
+    'MI.SKIN',
+    'EIGHT',
+    'BEAUTAIN',
+    'BIOESSENCE',
+    'INTIMATE WHITE',
+    'JLS NO BRAND'
+].sort((a, b) => b.length - a.length);
+
+function detectPOBrand(name) {
+    if (!name) return null;
+    const upper = name.toUpperCase().trim();
+    for (const b of KNOWN_PO_BRANDS) {
+        if (upper.startsWith(b)) {
+            return b;
+        }
+    }
+    return null;
+}
+
+function cleanPOBrandFromName(name, chosenBrand = null) {
+    if (!name) return '';
+    let cleaned = name.trim();
+    if (chosenBrand && chosenBrand !== 'ALL') {
+        const esc = chosenBrand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        cleaned = cleaned.replace(new RegExp('^' + esc + '\\s*[-:–—]?\\s*', 'i'), '');
+        cleaned = cleaned.replace(new RegExp('\\(' + esc + '\\s*[-:–—]?\\s*', 'gi'), '(');
+    } else {
+        for (const b of KNOWN_PO_BRANDS) {
+            const esc = b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const reg = new RegExp('^' + esc + '\\s*[-:–—]?\\s*', 'i');
+            if (reg.test(cleaned)) {
+                cleaned = cleaned.replace(reg, '');
+                cleaned = cleaned.replace(new RegExp('\\(' + esc + '\\s*[-:–—]?\\s*', 'gi'), '(');
+                break;
+            }
+        }
+    }
+    return cleaned.trim() || name;
+}
+
 let adminPOLineItems = [];
 let adminPOCatalog = [];
+let adminPORawCatalog = [];
 
 async function openCreatePOModal() {
     const root = document.getElementById('modals-root');
     adminPOLineItems = [];
+    adminPORawCatalog = cachedProducts.slice();
     adminPOCatalog = cachedProducts.slice();
 
     root.innerHTML = `
@@ -2328,6 +2415,18 @@ async function openCreatePOModal() {
                                 <option value="FIXED_PO_BUFFER">Option B: Fixed PO + Buffer Stock</option>
                             </select>
                         </div>
+                    </div>
+
+                    <!-- Vyuceutical OPS Brand Selector -->
+                    <div id="po-brand-container" class="hidden p-3 bg-purple-50/70 border border-purple-200 rounded-xl space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <label class="block text-purple-950 font-bold text-xs">Choose Brand (Vyuceutical OPS) *</label>
+                            <span class="text-[10px] bg-purple-200 text-purple-900 font-bold px-2 py-0.5 rounded-full">Brand Filter</span>
+                        </div>
+                        <select id="po-brand-select" onchange="onAdminPOBrandChanged()" class="w-full px-3 py-2 border border-purple-300 rounded-xl bg-white font-bold text-slate-900 focus:ring-2 focus:ring-purple-500">
+                            <!-- Populated dynamically -->
+                        </select>
+                        <p class="text-[10px] text-purple-700">Brand names are automatically removed from product titles for Vyuceutical OPS orders.</p>
                     </div>
 
                     <!-- Line Items Section -->
@@ -2386,17 +2485,82 @@ async function onAdminPOClientChanged() {
     const clientSelect = document.getElementById('po-client-id');
     if (!clientSelect) return;
     const clientId = clientSelect.value;
+    const client = (cachedClients || []).find(c => c.id === clientId);
+    const isVyuceutical = client && (client.is_vyuceutical_ops === 1 || (client.company_name && client.company_name.toLowerCase().includes('vyuceutical')));
 
     let res = await NKB.api(`/api/products?clientId=${clientId}&assignedOnly=true`);
     if (res.success && res.data && res.data.length > 0) {
-        adminPOCatalog = res.data;
+        adminPORawCatalog = res.data;
     } else {
         // Fallback: If client doesn't have custom products yet, show all company products!
         const allRes = await NKB.api('/api/products?activeOnly=true');
-        adminPOCatalog = (allRes.success && allRes.data) ? allRes.data : [];
+        adminPORawCatalog = (allRes.success && allRes.data) ? allRes.data : [];
     }
 
-    // Reset lines to current client's products
+    const brandContainer = document.getElementById('po-brand-container');
+    const brandSelect = document.getElementById('po-brand-select');
+
+    if (isVyuceutical) {
+        if (brandContainer) brandContainer.classList.remove('hidden');
+
+        // Extract unique brands present in raw products
+        const brandSet = new Set();
+        adminPORawCatalog.forEach(p => {
+            const b = detectPOBrand(p.name);
+            if (b) brandSet.add(b);
+        });
+        const detectedList = Array.from(brandSet).sort();
+
+        if (brandSelect) {
+            brandSelect.innerHTML = `<option value="ALL">-- All Brands (${adminPORawCatalog.length} Products) --</option>` +
+                detectedList.map(b => `<option value="${b}">${b}</option>`).join('');
+        }
+        applyAdminPOBrandFilter(true);
+    } else {
+        if (brandContainer) brandContainer.classList.add('hidden');
+        applyAdminPOBrandFilter(false);
+    }
+}
+
+function onAdminPOBrandChanged() {
+    const clientSelect = document.getElementById('po-client-id');
+    const clientId = clientSelect ? clientSelect.value : null;
+    const client = (cachedClients || []).find(c => c.id === clientId);
+    const isVyuceutical = client && (client.is_vyuceutical_ops === 1 || (client.company_name && client.company_name.toLowerCase().includes('vyuceutical')));
+    applyAdminPOBrandFilter(Boolean(isVyuceutical));
+}
+
+function applyAdminPOBrandFilter(isVyuceutical) {
+    const brandSelect = document.getElementById('po-brand-select');
+    const chosenBrand = (isVyuceutical && brandSelect) ? brandSelect.value : 'ALL';
+
+    let filtered = adminPORawCatalog.slice();
+
+    if (isVyuceutical) {
+        if (chosenBrand && chosenBrand !== 'ALL') {
+            filtered = filtered.filter(p => {
+                const b = detectPOBrand(p.name);
+                return b === chosenBrand || p.name.toUpperCase().startsWith(chosenBrand.toUpperCase());
+            });
+        }
+        // Remove brand name from products
+        adminPOCatalog = filtered.map(p => {
+            const cleanName = cleanPOBrandFromName(p.name, chosenBrand);
+            return {
+                ...p,
+                clean_name: cleanName,
+                display_name: cleanName
+            };
+        });
+    } else {
+        adminPOCatalog = filtered.map(p => ({
+            ...p,
+            display_name: p.name,
+            clean_name: p.name
+        }));
+    }
+
+    // Reset line items with filtered catalog
     adminPOLineItems = [];
     if (adminPOCatalog.length > 0) {
         addAdminPOLineItem();
@@ -2488,7 +2652,7 @@ function renderAdminPOLineItems() {
                     <select onchange="updateAdminPOLineItem(${idx}, 'product_id', this.value)" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white font-medium">
                         ${adminPOCatalog.map(p => `
                             <option value="${p.id}" ${p.id === item.product_id ? 'selected' : ''}>
-                                ${p.name} (${p.effective_sku || p.sku}) - ₱${Number(p.default_price).toFixed(2)}${p.has_custom_price ? ' [Contract Rate]' : ''}
+                                ${p.display_name || p.clean_name || p.name} (${p.effective_sku || p.sku}) - ₱${Number(p.default_price).toFixed(2)}${p.has_custom_price ? ' [Contract Rate]' : ''}
                             </option>
                         `).join('')}
                     </select>
@@ -2552,11 +2716,15 @@ async function submitCreatePO(e) {
             tolerance_percent: tolerance,
             billing_policy: policy,
             notes,
-            items: adminPOLineItems.map(item => ({
-                product_id: item.product_id,
-                target_quantity: item.target_quantity,
-                unit_price: Math.round(Number(item.unit_price || 0) * 100) / 100
-            }))
+            items: adminPOLineItems.map(item => {
+                const prod = adminPOCatalog.find(p => p.id === item.product_id);
+                return {
+                    product_id: item.product_id,
+                    item_name: prod ? (prod.clean_name || prod.display_name || prod.name) : undefined,
+                    target_quantity: item.target_quantity,
+                    unit_price: Math.round(Number(item.unit_price || 0) * 100) / 100
+                };
+            })
         })
     });
 
@@ -3810,6 +3978,17 @@ function openCreateClientModal() {
                         </select>
                     </div>
 
+                    <!-- Vyuceutical OPS Affiliation -->
+                    <div class="p-3 bg-purple-50/80 border border-purple-200 rounded-xl space-y-1">
+                        <label class="flex items-center gap-2 font-bold text-purple-900 cursor-pointer text-xs">
+                            <input type="checkbox" id="client-is-vyuceutical" class="rounded border-purple-300 text-purple-600 focus:ring-purple-500">
+                            <span>Affiliated Under Vyuceutical OPS</span>
+                        </label>
+                        <p class="text-[10px] text-purple-700 leading-normal">
+                            When active, official documents will display manufacturer as <strong>VYUCEUTICAL OPS</strong> and the client name as the <strong>contact person</strong>. When creating POs, brands will be selectable and brand prefixes will be removed from product names.
+                        </p>
+                    </div>
+
                     <!-- Client Portal Login Account Generator -->
                     <div class="p-3 bg-amber-50/70 border border-amber-200 rounded-xl space-y-2">
                         <div class="flex items-center justify-between">
@@ -3845,6 +4024,7 @@ async function submitCreateClient(e) {
     const tin = document.getElementById('client-tin').value;
     const address = document.getElementById('client-address').value;
     const policy = document.getElementById('client-policy').value;
+    const isVyuceutical = document.getElementById('client-is-vyuceutical').checked ? 1 : 0;
     const createAccount = document.getElementById('client-create-account').checked;
     const defaultPassword = document.getElementById('client-default-pass').value;
 
@@ -3857,6 +4037,7 @@ async function submitCreateClient(e) {
             phone,
             tin,
             address,
+            is_vyuceutical_ops: isVyuceutical,
             default_billing_policy: policy,
             default_tolerance_percent: 10.0,
             create_portal_account: createAccount,

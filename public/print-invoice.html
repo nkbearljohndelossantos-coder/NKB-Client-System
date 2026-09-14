@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sales Invoice - NKB Manufacturing & Trading</title>
+    <title>Sales Invoice - NKB MANUFACTURING CORPORATION</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <link rel="stylesheet" href="/css/tailwind.min.css">
     <link rel="stylesheet" href="/css/style.css">
@@ -31,9 +31,6 @@
                 margin: 0 !important;
                 padding: 0 !important;
                 border: none !important;
-                box-shadow: none !important;
-                border-radius: 0 !important;
-                background: transparent !important;
             }
             .avoid-break { break-inside: avoid !important; page-break-inside: avoid !important; }
             tr { break-inside: avoid !important; page-break-inside: avoid !important; }
@@ -77,11 +74,11 @@
         <!-- Header -->
         <div class="flex justify-between items-start border-b border-slate-300 pb-3">
             <div>
-                <h1 class="text-xl font-extrabold text-slate-900 tracking-tight">NKB MANUFACTURING & TRADING</h1>
+                <h1 id="si-company-name-hdr" class="text-xl font-extrabold text-slate-900 tracking-tight">NKB MANUFACTURING CORPORATION</h1>
                 <p class="text-[11px] text-slate-500 font-medium">Cosmetics & Personal Care Formulation Laboratory</p>
-                <p class="text-[10px] text-slate-500">TIN: 000-123-456-789-00000 · VAT Registered</p>
-                <p class="text-[10px] text-slate-500">Lot 14, Sterling Industrial Park, Meycauayan, Bulacan, Philippines</p>
-                <p class="text-[10px] text-slate-500">Billing Dept: accounting@nkbmanufacturing.com · +63 (2) 8888-0000</p>
+                <p id="si-tin-hdr" class="text-[10px] text-slate-500">TIN: 686-950-421-00000 · VAT Registered</p>
+                <p id="si-address-hdr" class="text-[10px] text-slate-500">Blk 4, Lot 5, Twig st., Sampaguita Village, Mambog II, Bacoor City, Cavite</p>
+                <p id="si-contact-hdr" class="text-[10px] text-slate-500">Billing Dept: accounting@nkbmanufacturing.com · Contact: (046) 885-0923</p>
             </div>
             <div class="text-right space-y-0.5">
                 <h2 class="text-lg font-bold tracking-wider text-slate-900 uppercase">SALES INVOICE</h2>
@@ -135,7 +132,7 @@
                 <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Payment Instructions & Remittance:</span>
                 <div class="space-y-1 font-mono text-[11px] text-slate-700">
                     <div>Bank: <strong class="text-slate-900">BDO Unibank (Ortigas Branch)</strong></div>
-                    <div>Account Name: <strong class="text-slate-900">NKB Manufacturing & Trading Corp</strong></div>
+                    <div>Account Name: <strong id="si-bank-acct-name" class="text-slate-900">NKB Manufacturing Corporation</strong></div>
                     <div>Account Number: <strong class="text-slate-900">0012-3456-7890</strong></div>
                     <div class="pt-1 text-[10px] font-sans text-slate-500">Please email remittance proof to: accounting@nkbmanufacturing.com</div>
                 </div>
@@ -149,7 +146,7 @@
                 </div>
                 <div class="flex justify-between text-slate-600">
                     <span>Value Added Tax (0%):</span>
-                    <span class="font-semibold text-slate-900 font-mono">₱0.00</span>
+                    <span id="si-tax-amount" class="font-semibold text-slate-900 font-mono">₱0.00</span>
                 </div>
                 <div class="border-t border-slate-300 pt-1.5 flex justify-between text-xs font-bold text-slate-900">
                     <span>Total Amount Billed:</span>
@@ -172,7 +169,7 @@
                 <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Prepared & Certified By:</span>
                 <div class="border-b border-slate-400 pb-1 mt-6">
                     <div class="font-bold text-slate-800">Accounting & Billing Department</div>
-                    <div class="text-[10px] text-slate-500">NKB Manufacturing & Trading</div>
+                    <div id="si-cert-company" class="text-[10px] text-slate-500">NKB Manufacturing Corporation</div>
                 </div>
             </div>
 
@@ -209,9 +206,23 @@
                 document.getElementById('si-date-display').textContent = NKB.formatDate(si.invoice_date);
                 document.getElementById('si-due-display').textContent = NKB.formatDate(si.due_date);
 
-                document.getElementById('si-client-name').textContent = si.company_name;
-                document.getElementById('si-client-contact').textContent = `Attn: ${si.contact_person}`;
-                document.getElementById('si-client-address').textContent = si.client_address;
+                const isVyuceutical = si.is_vyuceutical_ops === 1 || (si.company_name && si.company_name.toLowerCase().includes('vyuceutical'));
+
+                if (isVyuceutical) {
+                    document.getElementById('si-company-name-hdr').textContent = 'VYUCEUTICAL OPS';
+                    const acct = document.getElementById('si-bank-acct-name');
+                    if (acct) acct.textContent = 'VYUCEUTICAL OPS';
+                    const sub = document.getElementById('si-cert-company');
+                    if (sub) sub.textContent = 'VYUCEUTICAL OPS';
+                    document.getElementById('si-client-name').textContent = si.contact_person || si.company_name;
+                    document.getElementById('si-client-contact').textContent = `Company: ${si.company_name}`;
+                } else {
+                    document.getElementById('si-company-name-hdr').textContent = 'NKB MANUFACTURING CORPORATION';
+                    document.getElementById('si-client-name').textContent = si.company_name;
+                    document.getElementById('si-client-contact').textContent = `Attn: ${si.contact_person}`;
+                }
+
+                document.getElementById('si-client-address').textContent = (si.client_address || '').trim() || 'Phils.';
                 document.getElementById('si-client-tin').textContent = `TIN: ${si.client_tin || 'Non-VAT'}`;
 
                 document.getElementById('si-dr-ref').textContent = si.dr_number;
