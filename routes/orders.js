@@ -137,7 +137,9 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
 
     // Job Orders
     const jobOrders = db.prepare(`
-        SELECT jo.*, p.name as product_name, p.sku,
+        SELECT jo.*, 
+               COALESCE((SELECT poi.item_name FROM purchase_order_items poi WHERE poi.po_id = jo.po_id AND poi.product_id = jo.product_id LIMIT 1), p.name) as product_name, 
+               p.sku,
                (SELECT actual_yield FROM production_batches WHERE jo_id = jo.id ORDER BY created_at DESC LIMIT 1) as latest_yield
         FROM job_orders jo
         JOIN products p ON jo.product_id = p.id
