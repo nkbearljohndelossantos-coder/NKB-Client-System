@@ -2316,68 +2316,48 @@ async function submitEditProduct(e, productId) {
 // -------------------------------------------------------------
 // 1. MULTI-ITEM PURCHASE ORDER MODAL
 // -------------------------------------------------------------
-const KNOWN_PO_BRANDS = [
-    'HER CHOICE PH',
-    'HER CHOICE',
-    'BELLA SKIN',
-    'K BELLA SKIN',
-    'SKEENCARE',
-    'NATASHA',
-    'HANAPAM',
-    'GELIS PHARMA',
-    'JGLOWW',
-    'BRIGHTEST SKIN',
-    'BRIGHTEST',
-    'ROYCE B',
-    'ELIXIA',
-    'ADORN',
-    'CUTIS ANO NE',
-    'TARATITAT',
-    'MAGNIFIQUE WHITE',
-    'DREAM GIRL',
-    'SABELA SKIN',
-    'KKSKIN.PH',
-    'KYLE SKIN',
-    'RG LOVE',
-    'CZAR',
-    'MI.SKIN',
-    'EIGHT',
-    'BEAUTAIN',
-    'BIOESSENCE',
-    'INTIMATE WHITE',
-    'JLS NO BRAND'
-].sort((a, b) => b.length - a.length);
-
-function detectPOBrand(name) {
-    if (!name) return null;
-    const upper = name.toUpperCase().trim();
-    for (const b of KNOWN_PO_BRANDS) {
-        if (upper.startsWith(b)) {
-            return b;
-        }
-    }
-    return null;
+// PO Brand detection and cleaning helpers are provided on window via app.js
+if (!window.KNOWN_PO_BRANDS) {
+    window.KNOWN_PO_BRANDS = [
+        'HER CHOICE PH', 'HER CHOICE', 'BELLA SKIN', 'K BELLA SKIN', 'SKEENCARE',
+        'NATASHA', 'HANAPAM', 'GELIS PHARMA', 'JGLOWW', 'BRIGHTEST SKIN',
+        'BRIGHTEST', 'ROYCE B', 'ELIXIA', 'ADORN', 'CUTIS ANO NE',
+        'TARATITAT', 'MAGNIFIQUE WHITE', 'DREAM GIRL', 'SABELA SKIN', 'KKSKIN.PH',
+        'KYLE SKIN', 'RG LOVE', 'CZAR', 'MI.SKIN', 'EIGHT',
+        'BEAUTAIN', 'BIOESSENCE', 'INTIMATE WHITE', 'JLS NO BRAND'
+    ].sort((a, b) => b.length - a.length);
 }
-
-function cleanPOBrandFromName(name, chosenBrand = null) {
-    if (!name) return '';
-    let cleaned = name.trim();
-    if (chosenBrand && chosenBrand !== 'ALL') {
-        const esc = chosenBrand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        cleaned = cleaned.replace(new RegExp('^' + esc + '\\s*[-:–—]?\\s*', 'i'), '');
-        cleaned = cleaned.replace(new RegExp('\\(' + esc + '\\s*[-:–—]?\\s*', 'gi'), '(');
-    } else {
-        for (const b of KNOWN_PO_BRANDS) {
-            const esc = b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const reg = new RegExp('^' + esc + '\\s*[-:–—]?\\s*', 'i');
-            if (reg.test(cleaned)) {
-                cleaned = cleaned.replace(reg, '');
-                cleaned = cleaned.replace(new RegExp('\\(' + esc + '\\s*[-:–—]?\\s*', 'gi'), '(');
-                break;
+if (!window.detectPOBrand) {
+    window.detectPOBrand = function(name) {
+        if (!name) return null;
+        const upper = name.toUpperCase().trim();
+        for (const b of window.KNOWN_PO_BRANDS) {
+            if (upper.startsWith(b)) return b;
+        }
+        return null;
+    };
+}
+if (!window.cleanPOBrandFromName) {
+    window.cleanPOBrandFromName = function(name, chosenBrand = null) {
+        if (!name) return '';
+        let cleaned = name.trim();
+        if (chosenBrand && chosenBrand !== 'ALL') {
+            const esc = chosenBrand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            cleaned = cleaned.replace(new RegExp('^' + esc + '\\s*[-:–—]?\\s*', 'i'), '');
+            cleaned = cleaned.replace(new RegExp('\\(' + esc + '\\s*[-:–—]?\\s*', 'gi'), '(');
+        } else {
+            for (const b of window.KNOWN_PO_BRANDS) {
+                const esc = b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const reg = new RegExp('^' + esc + '\\s*[-:–—]?\\s*', 'i');
+                if (reg.test(cleaned)) {
+                    cleaned = cleaned.replace(reg, '');
+                    cleaned = cleaned.replace(new RegExp('\\(' + esc + '\\s*[-:–—]?\\s*', 'gi'), '(');
+                    break;
+                }
             }
         }
-    }
-    return cleaned.trim() || name;
+        return cleaned.trim() || name;
+    };
 }
 
 let adminPOLineItems = [];

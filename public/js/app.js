@@ -610,7 +610,7 @@ function closeModal() {
 // -------------------------------------------------------------
 // EDIT PURCHASE ORDER (BEFORE ENTERING JO)
 // -------------------------------------------------------------
-const KNOWN_PO_BRANDS = [
+window.KNOWN_PO_BRANDS = [
     'HER CHOICE PH',
     'HER CHOICE',
     'BELLA SKIN',
@@ -642,7 +642,18 @@ const KNOWN_PO_BRANDS = [
     'JLS NO BRAND'
 ].sort((a, b) => b.length - a.length);
 
-function cleanPOBrandFromName(name, chosenBrand = null) {
+window.detectPOBrand = function(name) {
+    if (!name) return null;
+    const upper = name.toUpperCase().trim();
+    for (const b of window.KNOWN_PO_BRANDS) {
+        if (upper.startsWith(b)) {
+            return b;
+        }
+    }
+    return null;
+};
+
+window.cleanPOBrandFromName = function(name, chosenBrand = null) {
     if (!name) return '';
     let cleaned = name.trim();
     if (chosenBrand && chosenBrand !== 'ALL') {
@@ -650,7 +661,7 @@ function cleanPOBrandFromName(name, chosenBrand = null) {
         cleaned = cleaned.replace(new RegExp('^' + esc + '\\s*[-:–—]?\\s*', 'i'), '');
         cleaned = cleaned.replace(new RegExp('\\(' + esc + '\\s*[-:–—]?\\s*', 'gi'), '(');
     } else {
-        for (const b of KNOWN_PO_BRANDS) {
+        for (const b of window.KNOWN_PO_BRANDS) {
             const esc = b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const reg = new RegExp('^' + esc + '\\s*[-:–—]?\\s*', 'i');
             if (reg.test(cleaned)) {
@@ -661,7 +672,7 @@ function cleanPOBrandFromName(name, chosenBrand = null) {
         }
     }
     return cleaned.trim() || name;
-}
+};
 
 let editPOLineItems = [];
 let editPOCatalog = [];
