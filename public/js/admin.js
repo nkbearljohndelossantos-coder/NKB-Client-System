@@ -2415,16 +2415,59 @@ async function openCreatePOModal() {
                         </div>
                     </div>
 
-                    <!-- Vyuceutical OPS Brand Selector -->
-                    <div id="po-brand-container" class="hidden p-3 bg-purple-50/70 border border-purple-200 rounded-xl space-y-1.5">
-                        <div class="flex items-center justify-between">
-                            <label class="block text-purple-950 font-bold text-xs">Choose Brand (Vyuceutical OPS) *</label>
-                            <span class="text-[10px] bg-purple-200 text-purple-900 font-bold px-2 py-0.5 rounded-full">Brand Filter</span>
+                    <!-- Multi-Brand Search with Suggestions -->
+                    <div class="p-3 bg-gradient-to-r from-slate-50 to-indigo-50/50 border border-indigo-100 rounded-2xl space-y-2 relative" id="po-search-wrapper">
+                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-sm">🔍</span>
+                                <span class="text-xs font-bold text-slate-900">Search & Add Products</span>
+                                <span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-extrabold uppercase">Multi-Brand Order</span>
+                            </div>
+                            <div class="flex items-center gap-2 w-full sm:w-auto" id="po-brand-filter-container">
+                                <label for="po-brand-select" class="text-[11px] font-semibold text-slate-500 whitespace-nowrap">Filter Brand:</label>
+                                <select id="po-brand-select" onchange="onAdminPOBrandFilterChanged()" class="px-2.5 py-1 text-xs border border-slate-300 rounded-lg bg-white font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500">
+                                    <option value="ALL">-- All Brands --</option>
+                                </select>
+                            </div>
                         </div>
-                        <select id="po-brand-select" onchange="onAdminPOBrandChanged()" class="w-full px-3 py-2 border border-purple-300 rounded-xl bg-white font-bold text-slate-900 focus:ring-2 focus:ring-purple-500">
-                            <!-- Populated dynamically -->
-                        </select>
-                        <p class="text-[10px] text-purple-700">Brand names are automatically removed from product titles for Vyuceutical OPS orders.</p>
+
+                        <!-- Search input + Search button -->
+                        <div class="relative">
+                            <div class="flex items-stretch gap-2">
+                                <div class="relative flex-1">
+                                    <input type="text" 
+                                           id="po-product-search-input" 
+                                           oninput="handlePOSearchInput(this.value)" 
+                                           onkeydown="handlePOSearchKeydown(event)"
+                                           onfocus="showPOSuggestions()"
+                                           placeholder="Type product name, SKU, or brand (e.g. Amber Romance, Toner, Sunscreen, BSSA)..." 
+                                           autocomplete="off"
+                                           class="w-full pl-9 pr-8 py-2 text-xs border border-slate-300 rounded-xl bg-white font-medium text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm">
+                                    <span class="absolute left-3 top-2.5 text-slate-400 text-xs">🔍</span>
+                                    <button type="button" 
+                                            id="po-search-clear-btn" 
+                                            onclick="clearPOSearch()" 
+                                            class="hidden absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 text-xs px-1 font-bold">✕</button>
+                                </div>
+                                <button type="button" 
+                                        id="po-search-btn" 
+                                        onclick="triggerPOSearchBtn()" 
+                                        class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm shadow-indigo-600/20 active:scale-95">
+                                    <span>🔍</span>
+                                    <span>Search Product</span>
+                                </button>
+                            </div>
+
+                            <!-- Floating Suggestions Dropdown -->
+                            <div id="po-suggestions-container" 
+                                 class="hidden absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 max-h-72 overflow-y-auto divide-y divide-slate-100">
+                                <!-- Populated dynamically by renderPOSuggestions() -->
+                            </div>
+                        </div>
+                        <p id="po-search-note" class="text-[10px] text-slate-500 flex items-center gap-1">
+                            <span>💡</span>
+                            <span>Order products from different brands in the same PO. Click any suggestion to add it to the table below.</span>
+                        </p>
                     </div>
 
                     <!-- Line Items Section -->
@@ -2479,6 +2522,8 @@ async function openCreatePOModal() {
     await onAdminPOClientChanged();
 }
 
+let poHighlightedSuggestionIdx = -1;
+
 async function onAdminPOClientChanged() {
     const clientSelect = document.getElementById('po-client-id');
     if (!clientSelect) return;
@@ -2495,85 +2540,247 @@ async function onAdminPOClientChanged() {
         adminPORawCatalog = (allRes.success && allRes.data) ? allRes.data : [];
     }
 
-    const brandContainer = document.getElementById('po-brand-container');
+    // Process adminPOCatalog: Every product has brand and clean_name preserved for multi-brand orders
+    adminPOCatalog = adminPORawCatalog.map(p => {
+        const brand = detectPOBrand(p.name) || 'OTHER';
+        const cleanName = isVyuceutical ? cleanPOBrandFromName(p.name) : p.name;
+        return {
+            ...p,
+            brand,
+            clean_name: cleanName,
+            display_name: cleanName
+        };
+    });
+
+    // Populate brand filter options (allowing optional narrowing without clearing line items)
     const brandSelect = document.getElementById('po-brand-select');
-
-    if (isVyuceutical) {
-        if (brandContainer) {
-            brandContainer.classList.remove('hidden');
-            const brandLabel = brandContainer.querySelector('label');
-            if (brandLabel) {
-                brandLabel.textContent = `Choose Brand (Vyuceutical OPS - ${client.contact_person || client.company_name}) *`;
-            }
-        }
-
-        // Extract unique brands present in raw products
+    if (brandSelect) {
         const brandSet = new Set();
-        adminPORawCatalog.forEach(p => {
-            const b = detectPOBrand(p.name);
-            if (b) brandSet.add(b);
+        adminPOCatalog.forEach(p => {
+            if (p.brand) brandSet.add(p.brand);
         });
         const detectedList = Array.from(brandSet).sort();
-
-        if (brandSelect) {
-            brandSelect.innerHTML = `<option value="ALL">-- All Brands (${adminPORawCatalog.length} Products) --</option>` +
-                detectedList.map(b => `<option value="${b}">${b}</option>`).join('');
-        }
-        applyAdminPOBrandFilter(true);
-    } else {
-        if (brandContainer) brandContainer.classList.add('hidden');
-        applyAdminPOBrandFilter(false);
-    }
-}
-
-function onAdminPOBrandChanged() {
-    const clientSelect = document.getElementById('po-client-id');
-    const clientId = clientSelect ? clientSelect.value : null;
-    const client = (cachedClients || []).find(c => c.id === clientId);
-    const isVyuceutical = client && (client.is_vyuceutical_ops === 1 || (client.company_name && client.company_name.toLowerCase().includes('vyuceutical')));
-    applyAdminPOBrandFilter(Boolean(isVyuceutical));
-}
-
-function applyAdminPOBrandFilter(isVyuceutical) {
-    const brandSelect = document.getElementById('po-brand-select');
-    const chosenBrand = (isVyuceutical && brandSelect) ? brandSelect.value : 'ALL';
-
-    let filtered = adminPORawCatalog.slice();
-
-    if (isVyuceutical) {
-        if (chosenBrand && chosenBrand !== 'ALL') {
-            filtered = filtered.filter(p => {
-                const b = detectPOBrand(p.name);
-                if (chosenBrand === 'BELLA SKIN') {
-                    return b === 'BELLA SKIN' || p.name.toUpperCase().startsWith('BELLA SKIN') || p.name.toUpperCase().startsWith('SUS ') || p.name.toUpperCase().startsWith('SUS-');
-                }
-                return b === chosenBrand || p.name.toUpperCase().startsWith(chosenBrand.toUpperCase());
-            });
-        }
-        // Remove brand name from products
-        adminPOCatalog = filtered.map(p => {
-            const cleanName = cleanPOBrandFromName(p.name, chosenBrand);
-            return {
-                ...p,
-                clean_name: cleanName,
-                display_name: cleanName
-            };
-        });
-    } else {
-        adminPOCatalog = filtered.map(p => ({
-            ...p,
-            display_name: p.name,
-            clean_name: p.name
-        }));
+        brandSelect.innerHTML = `<option value="ALL">-- All Brands (${adminPOCatalog.length} Products) --</option>` +
+            detectedList.map(b => `<option value="${b}">${b}</option>`).join('');
     }
 
-    // Reset line items with filtered catalog
-    adminPOLineItems = [];
-    if (adminPOCatalog.length > 0) {
+    const noteEl = document.getElementById('po-search-note');
+    if (noteEl) {
+        if (isVyuceutical) {
+            noteEl.innerHTML = `<span>💡</span><span>Vyuceutical OPS (${client.contact_person || client.company_name}): Brand names & SUS prefixes are automatically removed. You can order items across different brands simultaneously.</span>`;
+        } else {
+            noteEl.innerHTML = `<span>💡</span><span>Order products across multiple different brands in the same PO. Click any suggestion or use Search Product to add items.</span>`;
+        }
+    }
+
+    // Initialize line items if empty
+    if (adminPOLineItems.length === 0 && adminPOCatalog.length > 0) {
         addAdminPOLineItem();
     } else {
         renderAdminPOLineItems();
     }
+}
+
+function onAdminPOBrandFilterChanged() {
+    // Non-destructive: Changing brand filter NEVER wipes existing line items!
+    const searchInput = document.getElementById('po-product-search-input');
+    renderPOSuggestions(searchInput ? searchInput.value : '');
+}
+
+function getFilteredPOSuggestions(query = '') {
+    const brandSelect = document.getElementById('po-brand-select');
+    const chosenBrand = brandSelect ? brandSelect.value : 'ALL';
+    let list = adminPOCatalog.slice();
+
+    if (chosenBrand && chosenBrand !== 'ALL') {
+        list = list.filter(p => {
+            if (chosenBrand === 'BELLA SKIN') {
+                return p.brand === 'BELLA SKIN' || p.name.toUpperCase().startsWith('BELLA SKIN') || p.name.toUpperCase().startsWith('SUS ') || p.name.toUpperCase().startsWith('SUS-');
+            }
+            return p.brand === chosenBrand || p.name.toUpperCase().startsWith(chosenBrand.toUpperCase());
+        });
+    }
+
+    const q = (query || '').trim().toLowerCase();
+    if (q) {
+        const terms = q.split(/\s+/).filter(Boolean);
+        list = list.filter(p => {
+            const haystack = `${p.name} ${p.display_name} ${p.clean_name || ''} ${p.sku} ${p.effective_sku || ''} ${p.brand || ''} ${p.category || ''}`.toLowerCase();
+            return terms.every(t => haystack.includes(t));
+        });
+    }
+
+    return list;
+}
+
+function showPOSuggestions() {
+    const searchInput = document.getElementById('po-product-search-input');
+    renderPOSuggestions(searchInput ? searchInput.value : '');
+}
+
+function handlePOSearchInput(val) {
+    const clearBtn = document.getElementById('po-search-clear-btn');
+    if (clearBtn) {
+        if (val && val.length > 0) clearBtn.classList.remove('hidden');
+        else clearBtn.classList.add('hidden');
+    }
+    poHighlightedSuggestionIdx = -1;
+    renderPOSuggestions(val);
+}
+
+function clearPOSearch() {
+    const searchInput = document.getElementById('po-product-search-input');
+    if (searchInput) {
+        searchInput.value = '';
+        searchInput.focus();
+    }
+    const clearBtn = document.getElementById('po-search-clear-btn');
+    if (clearBtn) clearBtn.classList.add('hidden');
+    renderPOSuggestions('');
+}
+
+function triggerPOSearchBtn() {
+    const container = document.getElementById('po-suggestions-container');
+    const searchInput = document.getElementById('po-product-search-input');
+    if (container && !container.classList.contains('hidden')) {
+        container.classList.add('hidden');
+    } else {
+        if (searchInput) searchInput.focus();
+        renderPOSuggestions(searchInput ? searchInput.value : '');
+    }
+}
+
+function renderPOSuggestions(query = '') {
+    const container = document.getElementById('po-suggestions-container');
+    if (!container) return;
+
+    const matches = getFilteredPOSuggestions(query);
+    container.classList.remove('hidden');
+
+    if (matches.length === 0) {
+        container.innerHTML = `
+            <div class="p-4 text-center text-xs text-slate-500 font-medium">
+                <span>⚠️ No products found matching your search. Try another keyword or select "All Brands".</span>
+            </div>
+        `;
+        return;
+    }
+
+    const displayList = matches.slice(0, 40);
+    container.innerHTML = `
+        <div class="p-2 bg-slate-50 text-[11px] font-bold text-slate-500 flex justify-between items-center border-b border-slate-100">
+            <span>Found ${matches.length} products (showing ${displayList.length})</span>
+            <span class="text-[10px] text-slate-400">Click to add to PO</span>
+        </div>
+        <div class="divide-y divide-slate-100">
+            ${displayList.map((p, idx) => {
+                const isCleaned = p.clean_name && p.clean_name !== p.name;
+                const isSelected = idx === poHighlightedSuggestionIdx;
+                return `
+                    <div id="po-suggestion-item-${idx}" 
+                         onclick="selectPOSuggestion('${p.id}')" 
+                         class="p-2.5 hover:bg-indigo-50/80 cursor-pointer flex items-center justify-between gap-3 transition ${isSelected ? 'bg-indigo-50 ring-1 ring-indigo-300' : ''}">
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold ${window.getBrandBadgeClass ? window.getBrandBadgeClass(p.brand) : 'bg-slate-100 text-slate-700'}">${p.brand || 'OTHER'}</span>
+                                <span class="font-bold text-xs text-slate-900 truncate">${p.display_name}</span>
+                                <span class="text-[10px] font-mono text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">${p.effective_sku || p.sku}</span>
+                            </div>
+                            ${isCleaned ? `<div class="text-[10px] text-slate-400 mt-0.5 truncate">Original: ${p.name}</div>` : ''}
+                        </div>
+                        <div class="flex items-center gap-2 flex-shrink-0">
+                            <span class="text-xs font-bold text-slate-800 font-mono">₱${Number(p.default_price || 0).toFixed(2)}</span>
+                            <button type="button" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white rounded-lg text-[11px] font-bold border border-indigo-200 hover:border-indigo-600 transition flex items-center gap-1 shadow-sm">
+                                <span>➕</span><span>Add</span>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    `;
+}
+
+function handlePOSearchKeydown(e) {
+    const container = document.getElementById('po-suggestions-container');
+    if (!container || container.classList.contains('hidden')) {
+        if (e.key === 'ArrowDown' || e.key === 'Enter') {
+            showPOSuggestions();
+            e.preventDefault();
+        }
+        return;
+    }
+
+    const matches = getFilteredPOSuggestions(e.target.value).slice(0, 40);
+    if (matches.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        poHighlightedSuggestionIdx = Math.min(poHighlightedSuggestionIdx + 1, matches.length - 1);
+        renderPOSuggestions(e.target.value);
+        const el = document.getElementById(`po-suggestion-item-${poHighlightedSuggestionIdx}`);
+        if (el) el.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        poHighlightedSuggestionIdx = Math.max(poHighlightedSuggestionIdx - 1, 0);
+        renderPOSuggestions(e.target.value);
+        const el = document.getElementById(`po-suggestion-item-${poHighlightedSuggestionIdx}`);
+        if (el) el.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (poHighlightedSuggestionIdx >= 0 && poHighlightedSuggestionIdx < matches.length) {
+            selectPOSuggestion(matches[poHighlightedSuggestionIdx].id);
+        } else if (matches.length > 0) {
+            selectPOSuggestion(matches[0].id);
+        }
+    } else if (e.key === 'Escape') {
+        container.classList.add('hidden');
+    }
+}
+
+function selectPOSuggestion(productId) {
+    const prod = adminPOCatalog.find(p => p.id === productId);
+    if (!prod) return;
+
+    // Check if already in line items
+    const existingIdx = adminPOLineItems.findIndex(it => it.product_id === productId);
+    if (existingIdx !== -1) {
+        renderAdminPOLineItems();
+        const rowInput = document.querySelector(`#admin-po-lines-body tr:nth-child(${existingIdx + 1}) input[type="number"]`);
+        if (rowInput) {
+            rowInput.focus();
+            rowInput.select();
+        }
+        NKB.showToast(`"${prod.display_name}" is already in order (Row #${existingIdx + 1}). Quantity highlighted.`, 'info');
+    } else {
+        // If single line item that hasn't been touched, replace it
+        if (adminPOLineItems.length === 1 && adminPOLineItems[0].target_quantity === 1000 && adminPOLineItems[0].product_id === adminPOCatalog[0]?.id && !adminPOLineItems[0]._userEdited) {
+            adminPOLineItems[0].product_id = prod.id;
+            adminPOLineItems[0].unit_price = Number(prod.default_price || 0);
+            adminPOLineItems[0]._userEdited = true;
+        } else {
+            adminPOLineItems.push({
+                product_id: prod.id,
+                target_quantity: 1000,
+                unit_price: Number(prod.default_price || 0),
+                _userEdited: true
+            });
+        }
+        renderAdminPOLineItems();
+        NKB.showToast(`Added ${prod.display_name} [${prod.brand}] to order!`, 'success');
+
+        const lastIdx = adminPOLineItems.length - 1;
+        setTimeout(() => {
+            const rowInput = document.querySelector(`#admin-po-lines-body tr:nth-child(${lastIdx + 1}) input[type="number"]`);
+            if (rowInput) {
+                rowInput.focus();
+                rowInput.select();
+            }
+        }, 50);
+    }
+
+    const container = document.getElementById('po-suggestions-container');
+    if (container) container.classList.add('hidden');
 }
 
 function addAdminPOLineItem() {
@@ -2598,6 +2805,7 @@ function removeAdminPOLineItem(index) {
 
 function updateAdminPOLineItem(index, field, value) {
     if (!adminPOLineItems[index]) return;
+    adminPOLineItems[index]._userEdited = true;
     if (field === 'product_id') {
         const prod = adminPOCatalog.find(p => p.id === value);
         adminPOLineItems[index].product_id = value;
@@ -2653,11 +2861,18 @@ function renderAdminPOLineItems() {
         totalQty += item.target_quantity || 0;
         grandTotal += lineSubtotal;
 
+        const currentProd = adminPOCatalog.find(p => p.id === item.product_id);
+        const brandBadge = currentProd ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${window.getBrandBadgeClass ? window.getBrandBadgeClass(currentProd.brand) : 'bg-slate-100 text-slate-700'} mr-1">${currentProd.brand || 'OTHER'}</span>` : '';
+
         return `
-            <tr class="hover:bg-slate-50 transition">
+            <tr class="hover:bg-slate-50 transition" id="admin-po-row-${idx}">
                 <td class="py-2.5 px-3">
-                    <select onchange="updateAdminPOLineItem(${idx}, 'product_id', this.value)" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white font-medium">
-                        ${adminPOCatalog.map(p => `
+                    <div class="flex items-center gap-1 mb-1">
+                        ${brandBadge}
+                        <span class="text-[10px] font-mono text-slate-500">${currentProd ? (currentProd.effective_sku || currentProd.sku) : ''}</span>
+                    </div>
+                    <select onchange="updateAdminPOLineItem(${idx}, 'product_id', this.value)" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white font-medium focus:ring-2 focus:ring-indigo-500">
+                        ${window.renderProductOptionsGroupedByBrand ? window.renderProductOptionsGroupedByBrand(adminPOCatalog, item.product_id) : adminPOCatalog.map(p => `
                             <option value="${p.id}" ${p.id === item.product_id ? 'selected' : ''}>
                                 ${p.display_name || p.clean_name || p.name} (${p.effective_sku || p.sku}) - ₱${Number(p.default_price).toFixed(2)}${p.has_custom_price ? ' [Contract Rate]' : ''}
                             </option>
@@ -4734,3 +4949,15 @@ async function promptResetUserPassword(userId, email) {
         NKB.showToast(res.message || res.error || 'Failed to reset password.', 'error');
     }
 }
+
+// Global click-away listener to dismiss PO product suggestions
+document.addEventListener('click', (e) => {
+    const container = document.getElementById('po-suggestions-container');
+    const input = document.getElementById('po-product-search-input');
+    const btn = document.getElementById('po-search-btn');
+    if (container && !container.classList.contains('hidden')) {
+        if (!container.contains(e.target) && e.target !== input && e.target !== btn && !btn?.contains(e.target)) {
+            container.classList.add('hidden');
+        }
+    }
+});

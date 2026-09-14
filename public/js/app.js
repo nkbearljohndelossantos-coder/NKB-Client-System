@@ -684,6 +684,42 @@ window.cleanPOBrandFromName = function(name, chosenBrand = null) {
     return cleaned.trim() || name;
 };
 
+window.getBrandBadgeClass = function(brand) {
+    if (!brand) return 'bg-slate-100 text-slate-700 border border-slate-200';
+    const b = brand.toUpperCase();
+    if (b.includes('BELLA')) return 'bg-purple-100 text-purple-800 border border-purple-200';
+    if (b.includes('HER CHOICE')) return 'bg-pink-100 text-pink-800 border border-pink-200';
+    if (b.includes('SKEENCARE')) return 'bg-emerald-100 text-emerald-800 border border-emerald-200';
+    if (b.includes('NATASHA')) return 'bg-rose-100 text-rose-800 border border-rose-200';
+    if (b.includes('HANAPAM')) return 'bg-amber-100 text-amber-800 border border-amber-200';
+    if (b.includes('GELIS')) return 'bg-cyan-100 text-cyan-800 border border-cyan-200';
+    if (b.includes('JGLOWW')) return 'bg-orange-100 text-orange-800 border border-orange-200';
+    if (b.includes('BRIGHTEST')) return 'bg-yellow-100 text-yellow-800 border border-yellow-200';
+    if (b.includes('ROYCE')) return 'bg-indigo-100 text-indigo-800 border border-indigo-200';
+    if (b.includes('ELIXIA')) return 'bg-teal-100 text-teal-800 border border-teal-200';
+    return 'bg-slate-100 text-slate-800 border border-slate-200';
+};
+
+window.renderProductOptionsGroupedByBrand = function(catalog, selectedId) {
+    if (!catalog || catalog.length === 0) return '';
+    const byBrand = {};
+    catalog.forEach(p => {
+        const b = p.brand || window.detectPOBrand(p.name) || 'OTHER';
+        if (!byBrand[b]) byBrand[b] = [];
+        byBrand[b].push(p);
+    });
+    const brands = Object.keys(byBrand).sort();
+    return brands.map(b => `
+        <optgroup label="🏷️ ${b} (${byBrand[b].length})">
+            ${byBrand[b].map(p => `
+                <option value="${p.id}" ${p.id === selectedId ? 'selected' : ''}>
+                    ${p.display_name || p.clean_name || p.name} (${p.effective_sku || p.sku}) - ₱${Number(p.default_price || 0).toFixed(2)}${p.has_custom_price ? ' [Contract Rate]' : ''}
+                </option>
+            `).join('')}
+        </optgroup>
+    `).join('');
+};
+
 let editPOLineItems = [];
 let editPOCatalog = [];
 let editingPOId = null;
@@ -744,16 +780,16 @@ async function openEditPOModal(poId) {
     }
 
     const isVyuceutical = po.is_vyuceutical_ops === 1 || (po.company_name && po.company_name.toLowerCase().includes('vyuceutical'));
-    if (isVyuceutical) {
-        editPOCatalog = editPOCatalog.map(p => {
-            const clean = cleanPOBrandFromName(p.name);
-            return {
-                ...p,
-                clean_name: clean,
-                display_name: clean
-            };
-        });
-    }
+    editPOCatalog = editPOCatalog.map(p => {
+        const brand = window.detectPOBrand ? window.detectPOBrand(p.name) : null;
+        const clean = isVyuceutical ? cleanPOBrandFromName(p.name) : p.name;
+        return {
+            ...p,
+            brand: brand || 'OTHER',
+            clean_name: clean,
+            display_name: clean
+        };
+    });
 
     editPOLineItems = (po.items || []).map(it => ({
         product_id: it.product_id,
@@ -821,6 +857,57 @@ async function openEditPOModal(poId) {
                         </div>
                     </div>
 
+                    <!-- Multi-Brand Search with Suggestions (Edit Mode) -->
+                    <div class="p-3 bg-gradient-to-r from-slate-50 to-indigo-50/50 border border-indigo-100 rounded-2xl space-y-2 relative" id="edit-po-search-wrapper">
+                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-sm">🔍</span>
+                                <span class="text-xs font-bold text-slate-900">Search & Add Products</span>
+                                <span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-extrabold uppercase">Multi-Brand</span>
+                            </div>
+                            <div class="flex items-center gap-2 w-full sm:w-auto" id="edit-po-brand-filter-container">
+                                <label for="edit-po-brand-select" class="text-[11px] font-semibold text-slate-500 whitespace-nowrap">Filter Brand:</label>
+                                <select id="edit-po-brand-select" onchange="onEditPOBrandFilterChanged()" class="px-2.5 py-1 text-xs border border-slate-300 rounded-lg bg-white font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500">
+                                    <option value="ALL">-- All Brands --</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Search input + Search button -->
+                        <div class="relative">
+                            <div class="flex items-stretch gap-2">
+                                <div class="relative flex-1">
+                                    <input type="text" 
+                                           id="edit-po-product-search-input" 
+                                           oninput="handleEditPOSearchInput(this.value)" 
+                                           onkeydown="handleEditPOSearchKeydown(event)"
+                                           onfocus="showEditPOSuggestions()"
+                                           placeholder="Type product name, SKU, or brand (e.g. Amber Romance, Toner, Sunscreen)..." 
+                                           autocomplete="off"
+                                           class="w-full pl-9 pr-8 py-2 text-xs border border-slate-300 rounded-xl bg-white font-medium text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm">
+                                    <span class="absolute left-3 top-2.5 text-slate-400 text-xs">🔍</span>
+                                    <button type="button" 
+                                            id="edit-po-search-clear-btn" 
+                                            onclick="clearEditPOSearch()" 
+                                            class="hidden absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 text-xs px-1 font-bold">✕</button>
+                                </div>
+                                <button type="button" 
+                                        id="edit-po-search-btn" 
+                                        onclick="triggerEditPOSearchBtn()" 
+                                        class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm shadow-indigo-600/20 active:scale-95">
+                                    <span>🔍</span>
+                                    <span>Search Product</span>
+                                </button>
+                            </div>
+
+                            <!-- Floating Suggestions Dropdown -->
+                            <div id="edit-po-suggestions-container" 
+                                 class="hidden absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 max-h-72 overflow-y-auto divide-y divide-slate-100">
+                                <!-- Populated dynamically by renderEditPOSuggestions() -->
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Line Items Section -->
                     <div class="space-y-2 pt-2 border-t border-slate-100">
                         <div class="flex justify-between items-center">
@@ -870,7 +957,213 @@ async function openEditPOModal(poId) {
         </div>
     `;
 
+    // Populate brand filter options
+    const brandSelect = document.getElementById('edit-po-brand-select');
+    if (brandSelect) {
+        const brandSet = new Set();
+        editPOCatalog.forEach(p => {
+            if (p.brand) brandSet.add(p.brand);
+        });
+        const detectedList = Array.from(brandSet).sort();
+        brandSelect.innerHTML = `<option value="ALL">-- All Brands (${editPOCatalog.length} Products) --</option>` +
+            detectedList.map(b => `<option value="${b}">${b}</option>`).join('');
+    }
+
     renderEditPOLineItems();
+}
+
+let editPOHighlightedSuggestionIdx = -1;
+
+function onEditPOBrandFilterChanged() {
+    const searchInput = document.getElementById('edit-po-product-search-input');
+    renderEditPOSuggestions(searchInput ? searchInput.value : '');
+}
+
+function getFilteredEditPOSuggestions(query = '') {
+    const brandSelect = document.getElementById('edit-po-brand-select');
+    const chosenBrand = brandSelect ? brandSelect.value : 'ALL';
+    let list = editPOCatalog.slice();
+
+    if (chosenBrand && chosenBrand !== 'ALL') {
+        list = list.filter(p => {
+            if (chosenBrand === 'BELLA SKIN') {
+                return p.brand === 'BELLA SKIN' || p.name.toUpperCase().startsWith('BELLA SKIN') || p.name.toUpperCase().startsWith('SUS ') || p.name.toUpperCase().startsWith('SUS-');
+            }
+            return p.brand === chosenBrand || p.name.toUpperCase().startsWith(chosenBrand.toUpperCase());
+        });
+    }
+
+    const q = (query || '').trim().toLowerCase();
+    if (q) {
+        const terms = q.split(/\s+/).filter(Boolean);
+        list = list.filter(p => {
+            const haystack = `${p.name} ${p.display_name} ${p.clean_name || ''} ${p.sku} ${p.effective_sku || ''} ${p.brand || ''} ${p.category || ''}`.toLowerCase();
+            return terms.every(t => haystack.includes(t));
+        });
+    }
+
+    return list;
+}
+
+function showEditPOSuggestions() {
+    const searchInput = document.getElementById('edit-po-product-search-input');
+    renderEditPOSuggestions(searchInput ? searchInput.value : '');
+}
+
+function handleEditPOSearchInput(val) {
+    const clearBtn = document.getElementById('edit-po-search-clear-btn');
+    if (clearBtn) {
+        if (val && val.length > 0) clearBtn.classList.remove('hidden');
+        else clearBtn.classList.add('hidden');
+    }
+    editPOHighlightedSuggestionIdx = -1;
+    renderEditPOSuggestions(val);
+}
+
+function clearEditPOSearch() {
+    const searchInput = document.getElementById('edit-po-product-search-input');
+    if (searchInput) {
+        searchInput.value = '';
+        searchInput.focus();
+    }
+    const clearBtn = document.getElementById('edit-po-search-clear-btn');
+    if (clearBtn) clearBtn.classList.add('hidden');
+    renderEditPOSuggestions('');
+}
+
+function triggerEditPOSearchBtn() {
+    const container = document.getElementById('edit-po-suggestions-container');
+    const searchInput = document.getElementById('edit-po-product-search-input');
+    if (container && !container.classList.contains('hidden')) {
+        container.classList.add('hidden');
+    } else {
+        if (searchInput) searchInput.focus();
+        renderEditPOSuggestions(searchInput ? searchInput.value : '');
+    }
+}
+
+function renderEditPOSuggestions(query = '') {
+    const container = document.getElementById('edit-po-suggestions-container');
+    if (!container) return;
+
+    const matches = getFilteredEditPOSuggestions(query);
+    container.classList.remove('hidden');
+
+    if (matches.length === 0) {
+        container.innerHTML = `
+            <div class="p-4 text-center text-xs text-slate-500 font-medium">
+                <span>⚠️ No products found matching your search. Try another keyword or select "All Brands".</span>
+            </div>
+        `;
+        return;
+    }
+
+    const displayList = matches.slice(0, 40);
+    container.innerHTML = `
+        <div class="p-2 bg-slate-50 text-[11px] font-bold text-slate-500 flex justify-between items-center border-b border-slate-100">
+            <span>Found ${matches.length} products (showing ${displayList.length})</span>
+            <span class="text-[10px] text-slate-400">Click to add to PO</span>
+        </div>
+        <div class="divide-y divide-slate-100">
+            ${displayList.map((p, idx) => {
+                const isCleaned = p.clean_name && p.clean_name !== p.name;
+                const isSelected = idx === editPOHighlightedSuggestionIdx;
+                return `
+                    <div id="edit-po-suggestion-item-${idx}" 
+                         onclick="selectEditPOSuggestion('${p.id}')" 
+                         class="p-2.5 hover:bg-indigo-50/80 cursor-pointer flex items-center justify-between gap-3 transition ${isSelected ? 'bg-indigo-50 ring-1 ring-indigo-300' : ''}">
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold ${window.getBrandBadgeClass ? window.getBrandBadgeClass(p.brand) : 'bg-slate-100 text-slate-700'}">${p.brand || 'OTHER'}</span>
+                                <span class="font-bold text-xs text-slate-900 truncate">${p.display_name}</span>
+                                <span class="text-[10px] font-mono text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">${p.effective_sku || p.sku}</span>
+                            </div>
+                            ${isCleaned ? `<div class="text-[10px] text-slate-400 mt-0.5 truncate">Original: ${p.name}</div>` : ''}
+                        </div>
+                        <div class="flex items-center gap-2 flex-shrink-0">
+                            <span class="text-xs font-bold text-slate-800 font-mono">₱${Number(p.default_price || 0).toFixed(2)}</span>
+                            <button type="button" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white rounded-lg text-[11px] font-bold border border-indigo-200 hover:border-indigo-600 transition flex items-center gap-1 shadow-sm">
+                                <span>➕</span><span>Add</span>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    `;
+}
+
+function handleEditPOSearchKeydown(e) {
+    const container = document.getElementById('edit-po-suggestions-container');
+    if (!container || container.classList.contains('hidden')) {
+        if (e.key === 'ArrowDown' || e.key === 'Enter') {
+            showEditPOSuggestions();
+            e.preventDefault();
+        }
+        return;
+    }
+
+    const matches = getFilteredEditPOSuggestions(e.target.value).slice(0, 40);
+    if (matches.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        editPOHighlightedSuggestionIdx = Math.min(editPOHighlightedSuggestionIdx + 1, matches.length - 1);
+        renderEditPOSuggestions(e.target.value);
+        const el = document.getElementById(`edit-po-suggestion-item-${editPOHighlightedSuggestionIdx}`);
+        if (el) el.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        editPOHighlightedSuggestionIdx = Math.max(editPOHighlightedSuggestionIdx - 1, 0);
+        renderEditPOSuggestions(e.target.value);
+        const el = document.getElementById(`edit-po-suggestion-item-${editPOHighlightedSuggestionIdx}`);
+        if (el) el.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (editPOHighlightedSuggestionIdx >= 0 && editPOHighlightedSuggestionIdx < matches.length) {
+            selectEditPOSuggestion(matches[editPOHighlightedSuggestionIdx].id);
+        } else if (matches.length > 0) {
+            selectEditPOSuggestion(matches[0].id);
+        }
+    } else if (e.key === 'Escape') {
+        container.classList.add('hidden');
+    }
+}
+
+function selectEditPOSuggestion(productId) {
+    const prod = editPOCatalog.find(p => p.id === productId);
+    if (!prod) return;
+
+    const existingIdx = editPOLineItems.findIndex(it => it.product_id === productId);
+    if (existingIdx !== -1) {
+        renderEditPOLineItems();
+        const rowInput = document.querySelector(`#edit-po-lines-body tr:nth-child(${existingIdx + 1}) input[type="number"]`);
+        if (rowInput) {
+            rowInput.focus();
+            rowInput.select();
+        }
+        NKB.showToast(`"${prod.display_name}" is already in order (Row #${existingIdx + 1}). Quantity focused.`, 'info');
+    } else {
+        editPOLineItems.push({
+            product_id: prod.id,
+            target_quantity: 1000,
+            unit_price: Number(prod.default_price || 0)
+        });
+        renderEditPOLineItems();
+        NKB.showToast(`Added ${prod.display_name} [${prod.brand}] to order!`, 'success');
+
+        const lastIdx = editPOLineItems.length - 1;
+        setTimeout(() => {
+            const rowInput = document.querySelector(`#edit-po-lines-body tr:nth-child(${lastIdx + 1}) input[type="number"]`);
+            if (rowInput) {
+                rowInput.focus();
+                rowInput.select();
+            }
+        }, 50);
+    }
+
+    const container = document.getElementById('edit-po-suggestions-container');
+    if (container) container.classList.add('hidden');
 }
 
 function renderEditPOLineItems() {
@@ -896,11 +1189,18 @@ function renderEditPOLineItems() {
         totalQty += item.target_quantity || 0;
         grandTotal += lineSubtotal;
 
+        const currentProd = editPOCatalog.find(p => p.id === item.product_id);
+        const brandBadge = currentProd ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${window.getBrandBadgeClass ? window.getBrandBadgeClass(currentProd.brand) : 'bg-slate-100 text-slate-700'} mr-1">${currentProd.brand || 'OTHER'}</span>` : '';
+
         return `
-            <tr class="hover:bg-slate-50 transition">
+            <tr class="hover:bg-slate-50 transition" id="edit-po-row-${idx}">
                 <td class="py-2.5 px-3">
-                    <select onchange="updateEditPOLineItem(${idx}, 'product_id', this.value)" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white font-medium">
-                        ${editPOCatalog.map(p => `
+                    <div class="flex items-center gap-1 mb-1">
+                        ${brandBadge}
+                        <span class="text-[10px] font-mono text-slate-500">${currentProd ? (currentProd.effective_sku || currentProd.sku) : ''}</span>
+                    </div>
+                    <select onchange="updateEditPOLineItem(${idx}, 'product_id', this.value)" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white font-medium focus:ring-2 focus:ring-indigo-500">
+                        ${window.renderProductOptionsGroupedByBrand ? window.renderProductOptionsGroupedByBrand(editPOCatalog, item.product_id) : editPOCatalog.map(p => `
                             <option value="${p.id}" ${p.id === item.product_id ? 'selected' : ''}>
                                 ${p.display_name || p.clean_name || p.name} (${p.effective_sku || p.sku}) - ₱${Number(p.default_price).toFixed(2)}${p.has_custom_price ? ' [Contract Rate]' : ''}
                             </option>
@@ -1043,6 +1343,18 @@ async function submitEditPO(e) {
         NKB.showToast(res.error || 'Failed to update PO.', 'error');
     }
 }
+
+// Global click-away listener to dismiss Edit PO product suggestions
+document.addEventListener('click', (e) => {
+    const container = document.getElementById('edit-po-suggestions-container');
+    const input = document.getElementById('edit-po-product-search-input');
+    const btn = document.getElementById('edit-po-search-btn');
+    if (container && !container.classList.contains('hidden')) {
+        if (!container.contains(e.target) && e.target !== input && e.target !== btn && !btn?.contains(e.target)) {
+            container.classList.add('hidden');
+        }
+    }
+});
 
 window.openViewPOModal = openViewPOModal;
 window.openEditPOModal = openEditPOModal;
