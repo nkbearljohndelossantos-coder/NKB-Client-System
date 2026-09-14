@@ -135,7 +135,7 @@
                 <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Dispatched By (Warehouse / Production Lead):</span>
                 <div class="border-b border-slate-400 pb-1 mt-6">
                     <div class="font-bold text-slate-800">Warehouse & Logistics Team</div>
-                    <div id="dr-dispatched-company" class="text-[10px] text-slate-500">NKB Manufacturing Corporation</div>
+                    <div id="dr-dispatched-company" class="text-[10px] text-slate-500">NKB MANUFACTURING CORPORATION</div>
                 </div>
             </div>
 
@@ -182,6 +182,8 @@
                     document.getElementById('client-contact-display').textContent = `Company: ${dr.company_name}`;
                 } else {
                     document.getElementById('dr-company-name-hdr').textContent = 'NKB MANUFACTURING CORPORATION';
+                    const sub = document.getElementById('dr-dispatched-company');
+                    if (sub) sub.textContent = 'NKB MANUFACTURING CORPORATION';
                     document.getElementById('client-company-display').textContent = dr.company_name;
                     document.getElementById('client-contact-display').textContent = `Attn: ${dr.contact_person}`;
                 }
