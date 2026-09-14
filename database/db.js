@@ -55,7 +55,7 @@ function runMigrations(dbInstance, isMysql) {
                 `);
             }
         } catch (_) {}
-        // Clean item_name for all Vyuceutical PO items if missing
+        // Clean item_name for all Vyuceutical PO items
         try {
             const brandList = [
                 'HER CHOICE PH', 'HER CHOICE', 'BELLA SKIN', 'K BELLA SKIN', 'SKEENCARE',
@@ -67,28 +67,32 @@ function runMigrations(dbInstance, isMysql) {
             ].sort((a, b) => b.length - a.length);
 
             const itemsToClean = dbInstance.prepare(`
-                SELECT poi.id, p.name as product_name
+                SELECT poi.id, poi.item_name, p.name as product_name
                 FROM purchase_order_items poi
                 JOIN purchase_orders po ON poi.po_id = po.id
                 JOIN clients c ON po.client_id = c.id
                 JOIN products p ON poi.product_id = p.id
                 WHERE (c.is_vyuceutical_ops = 1 OR LOWER(c.company_name) LIKE '%vyuceutical%')
-                  AND (poi.item_name IS NULL OR poi.item_name = '')
             `).all();
 
             for (const it of itemsToClean) {
-                let cleaned = (it.product_name || '').trim();
+                const current = (it.item_name || it.product_name || '').trim();
+                let cleaned = current;
+                cleaned = cleaned.replace(/^SUS\s*[-:–—]?\s*/i, '');
                 for (const b of brandList) {
                     const esc = b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                     const reg = new RegExp('^' + esc + '\\s*[-:–—]?\\s*', 'i');
                     if (reg.test(cleaned)) {
                         cleaned = cleaned.replace(reg, '');
                         cleaned = cleaned.replace(new RegExp('\\(' + esc + '\\s*[-:–—]?\\s*', 'gi'), '(');
+                        cleaned = cleaned.replace(/^SUS\s*[-:–—]?\s*/i, '');
                         break;
                     }
                 }
-                cleaned = cleaned.trim() || it.product_name;
-                dbInstance.prepare('UPDATE purchase_order_items SET item_name = ? WHERE id = ?').run(cleaned, it.id);
+                cleaned = cleaned.trim() || current;
+                if (cleaned !== it.item_name) {
+                    dbInstance.prepare('UPDATE purchase_order_items SET item_name = ? WHERE id = ?').run(cleaned, it.id);
+                }
             }
         } catch (cleanErr) {
             console.warn('Item name cleaning note:', cleanErr.message);

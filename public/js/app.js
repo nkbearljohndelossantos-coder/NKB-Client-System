@@ -645,6 +645,9 @@ window.KNOWN_PO_BRANDS = [
 window.detectPOBrand = function(name) {
     if (!name) return null;
     const upper = name.toUpperCase().trim();
+    if (upper.startsWith('SUS ') || upper.startsWith('SUS-') || upper === 'SUS') {
+        return 'BELLA SKIN';
+    }
     for (const b of window.KNOWN_PO_BRANDS) {
         if (upper.startsWith(b)) {
             return b;
@@ -660,13 +663,20 @@ window.cleanPOBrandFromName = function(name, chosenBrand = null) {
         const esc = chosenBrand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         cleaned = cleaned.replace(new RegExp('^' + esc + '\\s*[-:–—]?\\s*', 'i'), '');
         cleaned = cleaned.replace(new RegExp('\\(' + esc + '\\s*[-:–—]?\\s*', 'gi'), '(');
+        if (chosenBrand.toUpperCase() === 'BELLA SKIN') {
+            cleaned = cleaned.replace(/^SUS\s*[-:–—]?\s*/i, '');
+        }
     } else {
+        if (/^SUS\s*[-:–—]?\s*/i.test(cleaned)) {
+            cleaned = cleaned.replace(/^SUS\s*[-:–—]?\s*/i, '');
+        }
         for (const b of window.KNOWN_PO_BRANDS) {
             const esc = b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const reg = new RegExp('^' + esc + '\\s*[-:–—]?\\s*', 'i');
             if (reg.test(cleaned)) {
                 cleaned = cleaned.replace(reg, '');
                 cleaned = cleaned.replace(new RegExp('\\(' + esc + '\\s*[-:–—]?\\s*', 'gi'), '(');
+                cleaned = cleaned.replace(/^SUS\s*[-:–—]?\s*/i, '');
                 break;
             }
         }

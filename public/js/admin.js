@@ -2335,6 +2335,9 @@ if (!window.detectPOBrand) {
     window.detectPOBrand = function(name) {
         if (!name) return null;
         const upper = name.toUpperCase().trim();
+        if (upper.startsWith('SUS ') || upper.startsWith('SUS-') || upper === 'SUS') {
+            return 'BELLA SKIN';
+        }
         for (const b of window.KNOWN_PO_BRANDS) {
             if (upper.startsWith(b)) return b;
         }
@@ -2349,13 +2352,20 @@ if (!window.cleanPOBrandFromName) {
             const esc = chosenBrand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             cleaned = cleaned.replace(new RegExp('^' + esc + '\\s*[-:–—]?\\s*', 'i'), '');
             cleaned = cleaned.replace(new RegExp('\\(' + esc + '\\s*[-:–—]?\\s*', 'gi'), '(');
+            if (chosenBrand.toUpperCase() === 'BELLA SKIN') {
+                cleaned = cleaned.replace(/^SUS\s*[-:–—]?\s*/i, '');
+            }
         } else {
+            if (/^SUS\s*[-:–—]?\s*/i.test(cleaned)) {
+                cleaned = cleaned.replace(/^SUS\s*[-:–—]?\s*/i, '');
+            }
             for (const b of window.KNOWN_PO_BRANDS) {
                 const esc = b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 const reg = new RegExp('^' + esc + '\\s*[-:–—]?\\s*', 'i');
                 if (reg.test(cleaned)) {
                     cleaned = cleaned.replace(reg, '');
                     cleaned = cleaned.replace(new RegExp('\\(' + esc + '\\s*[-:–—]?\\s*', 'gi'), '(');
+                    cleaned = cleaned.replace(/^SUS\s*[-:–—]?\s*/i, '');
                     break;
                 }
             }
@@ -2534,6 +2544,9 @@ function applyAdminPOBrandFilter(isVyuceutical) {
         if (chosenBrand && chosenBrand !== 'ALL') {
             filtered = filtered.filter(p => {
                 const b = detectPOBrand(p.name);
+                if (chosenBrand === 'BELLA SKIN') {
+                    return b === 'BELLA SKIN' || p.name.toUpperCase().startsWith('BELLA SKIN') || p.name.toUpperCase().startsWith('SUS ') || p.name.toUpperCase().startsWith('SUS-');
+                }
                 return b === chosenBrand || p.name.toUpperCase().startsWith(chosenBrand.toUpperCase());
             });
         }

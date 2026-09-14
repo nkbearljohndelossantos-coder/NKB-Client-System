@@ -6,6 +6,28 @@ const { authenticateToken, requireRoles, enforceClientIsolation } = require('../
 const { getNextDocumentNumber } = require('../services/documentNumberService');
 const { logAudit } = require('../services/auditService');
 
+const KNOWN_PO_BRANDS = [
+    'HER CHOICE PH', 'HER CHOICE', 'BELLA SKIN', 'K BELLA SKIN', 'SKEENCARE',
+    'NATASHA', 'HANAPAM', 'GELIS PHARMA', 'JGLOWW', 'BRIGHTEST SKIN',
+    'BRIGHTEST', 'ROYCE B', 'ELIXIA', 'ADORN', 'CUTIS ANO NE',
+    'TARATITAT', 'MAGNIFIQUE WHITE', 'DREAM GIRL', 'SABELA SKIN', 'KKSKIN.PH',
+    'KYLE SKIN', 'RG LOVE', 'CZAR', 'MI.SKIN', 'EIGHT',
+    'BEAUTAIN', 'BIOESSENCE', 'INTIMATE WHITE', 'JLS NO BRAND'
+].sort((a, b) => b.length - a.length);
+
+function cleanItemNameForVyuceutical(rawName) {
+    if (!rawName) return null;
+    let cleaned = rawName.trim();
+    cleaned = cleaned.replace(/^SUS\s*[-:–—]?\s*/i, '');
+    for (const b of KNOWN_PO_BRANDS) {
+        const esc = b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        cleaned = cleaned.replace(new RegExp('^' + esc + '\\s*[-:–—]?\\s*', 'i'), '');
+        cleaned = cleaned.replace(new RegExp('\\(' + esc + '\\s*[-:–—]?\\s*', 'gi'), '(');
+        cleaned = cleaned.replace(/^SUS\s*[-:–—]?\s*/i, '');
+    }
+    return cleaned.trim() || rawName;
+}
+
 /**
  * GET /api/orders
  * Supports filtering by client, status, search
@@ -243,11 +265,15 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
             const minQty = Math.floor(targetQty * (1 - tolerance / 100));
             const maxQty = Math.ceil(targetQty * (1 + tolerance / 100));
 
+            const isVyuceutical = client && (client.is_vyuceutical_ops === 1 || (client.company_name && client.company_name.toLowerCase().includes('vyuceutical')));
+            let rawItemName = item.item_name ? item.item_name.trim() : (isVyuceutical ? product.name : null);
+            let finalItemName = isVyuceutical ? cleanItemNameForVyuceutical(rawItemName) : rawItemName;
+
             processedItems.push({
                 id: uuidv4(),
                 poId,
                 productId: product.id,
-                itemName: item.item_name ? item.item_name.trim() : null,
+                itemName: finalItemName,
                 targetQuantity: targetQty,
                 minAllowedQuantity: minQty,
                 maxAllowedQuantity: maxQty,
@@ -383,6 +409,9 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
         ? parseFloat(tax_percent)
         : (po.tax_percent !== null ? po.tax_percent : 0.0);
 
+    const client = db.prepare('SELECT * FROM clients WHERE id = ?').get(po.client_id);
+    const isVyuceutical = client && (client.is_vyuceutical_ops === 1 || (client.company_name && client.company_name.toLowerCase().includes('vyuceutical')));
+
     const updateOrderTx = db.transaction(() => {
         let subtotal = 0.0;
         const processedItems = [];
@@ -414,11 +443,14 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
                 const minQty = Math.floor(targetQty * (1 - tolerance / 100));
                 const maxQty = Math.ceil(targetQty * (1 + tolerance / 100));
 
+                let rawItemName = item.item_name ? item.item_name.trim() : (isVyuceutical ? product.name : null);
+                let finalItemName = isVyuceutical ? cleanItemNameForVyuceutical(rawItemName) : rawItemName;
+
                 processedItems.push({
                     id: uuidv4(),
                     poId: id,
                     productId: product.id,
-                    itemName: item.item_name ? item.item_name.trim() : null,
+                    itemName: finalItemName,
                     targetQuantity: targetQty,
                     minAllowedQuantity: minQty,
                     maxAllowedQuantity: maxQty,

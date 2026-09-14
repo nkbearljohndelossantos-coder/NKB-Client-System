@@ -10,7 +10,7 @@ const useMysql = dbDriver === 'mysql'
 
 const rules = [
     { clientPattern: /Her Choice/i, prodPattern: /HER CHOICE|HC/i, excludePattern: null },
-    { clientPattern: /Bella Skin/i, prodPattern: /BELLA SKIN|K BELLA|BSPT|BSPP|BSFS|BST|BSDS|BS3S|BSNJ|BSRS|BSML|BSLT|BS7A|BSTS|BSPL|BSMS|BSRC|BSPF|BSFF|BSFY|BSKH|BSPW|BSNC|BSLC|BSMG|BSU|BSCB|BSRP|KBSS/i, excludePattern: /BRIGHTEST/i },
+    { clientPattern: /Bella Skin/i, prodPattern: /BELLA SKIN|K BELLA|SUS|BSS|BSPT|BSPP|BSFS|BST|BSDS|BS3S|BSNJ|BSRS|BSML|BSLT|BS7A|BSTS|BSPL|BSMS|BSRC|BSPF|BSFF|BSFY|BSKH|BSPW|BSNC|BSLC|BSMG|BSU|BSCB|BSRP|KBSS/i, excludePattern: /BRIGHTEST/i },
     { clientPattern: /SKEENCARE/i, prodPattern: /SKEENCARE|SKC|STSC|SRT|SNBS|SMC|SKPS|SOS|SBNS|S4I1|SSNS|CANM|SPC|ADORN/i, excludePattern: null },
     { clientPattern: /Natasha/i, prodPattern: /NATASHA|NTSS|NBLS/i, excludePattern: null },
     { clientPattern: /Hanapam/i, prodPattern: /HANAPAM|HLS|HBB|HL-/i, excludePattern: null },
