@@ -37,6 +37,62 @@ function runMigrations(dbInstance, isMysql) {
         try {
             dbInstance.exec(`ALTER TABLE purchase_order_items ADD COLUMN item_name ${textType};`);
         } catch (_) {}
+        // Ensure PO-2026-000004 is under Vyuceutical OPC (Janice Sandoval I)
+        try {
+            if (isMysql) {
+                dbInstance.exec(`
+                    UPDATE purchase_orders po 
+                    JOIN clients c ON c.contact_person LIKE '%Janice Sandoval%' 
+                    SET po.client_id = c.id 
+                    WHERE po.po_number = 'PO-2026-000004';
+                `);
+            } else {
+                dbInstance.exec(`
+                    UPDATE purchase_orders 
+                    SET client_id = (SELECT id FROM clients WHERE contact_person LIKE '%Janice Sandoval%' LIMIT 1) 
+                    WHERE po_number = 'PO-2026-000004' 
+                      AND EXISTS (SELECT 1 FROM clients WHERE contact_person LIKE '%Janice Sandoval%');
+                `);
+            }
+        } catch (_) {}
+        // Clean item_name for all Vyuceutical PO items if missing
+        try {
+            const brandList = [
+                'HER CHOICE PH', 'HER CHOICE', 'BELLA SKIN', 'K BELLA SKIN', 'SKEENCARE',
+                'NATASHA', 'HANAPAM', 'GELIS PHARMA', 'JGLOWW', 'BRIGHTEST SKIN',
+                'BRIGHTEST', 'ROYCE B', 'ELIXIA', 'ADORN', 'CUTIS ANO NE',
+                'TARATITAT', 'MAGNIFIQUE WHITE', 'DREAM GIRL', 'SABELA SKIN', 'KKSKIN.PH',
+                'KYLE SKIN', 'RG LOVE', 'CZAR', 'MI.SKIN', 'EIGHT',
+                'BEAUTAIN', 'BIOESSENCE', 'INTIMATE WHITE', 'JLS NO BRAND'
+            ].sort((a, b) => b.length - a.length);
+
+            const itemsToClean = dbInstance.prepare(`
+                SELECT poi.id, p.name as product_name
+                FROM purchase_order_items poi
+                JOIN purchase_orders po ON poi.po_id = po.id
+                JOIN clients c ON po.client_id = c.id
+                JOIN products p ON poi.product_id = p.id
+                WHERE (c.is_vyuceutical_ops = 1 OR LOWER(c.company_name) LIKE '%vyuceutical%')
+                  AND (poi.item_name IS NULL OR poi.item_name = '')
+            `).all();
+
+            for (const it of itemsToClean) {
+                let cleaned = (it.product_name || '').trim();
+                for (const b of brandList) {
+                    const esc = b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    const reg = new RegExp('^' + esc + '\\s*[-:–—]?\\s*', 'i');
+                    if (reg.test(cleaned)) {
+                        cleaned = cleaned.replace(reg, '');
+                        cleaned = cleaned.replace(new RegExp('\\(' + esc + '\\s*[-:–—]?\\s*', 'gi'), '(');
+                        break;
+                    }
+                }
+                cleaned = cleaned.trim() || it.product_name;
+                dbInstance.prepare('UPDATE purchase_order_items SET item_name = ? WHERE id = ?').run(cleaned, it.id);
+            }
+        } catch (cleanErr) {
+            console.warn('Item name cleaning note:', cleanErr.message);
+        }
     } catch (migErr) {
         console.warn('Migration note:', migErr.message);
     }
