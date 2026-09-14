@@ -427,8 +427,8 @@ async function openViewPOModal(poId) {
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-200">
                         <div class="space-y-1">
                             <span class="text-[10px] uppercase font-bold text-slate-400">Buyer / Client</span>
-                            <div class="font-extrabold text-sm text-slate-900">${(po.is_vyuceutical_ops === 1 || (po.company_name && po.company_name.toLowerCase().includes('vyuceutical'))) ? (po.contact_person || po.company_name) : po.company_name}</div>
-                            ${(po.is_vyuceutical_ops === 1 || (po.company_name && po.company_name.toLowerCase().includes('vyuceutical'))) ? `<div class="text-[11px] text-purple-700 font-bold">Vyuceutical OPS (${po.company_name})</div>` : (po.contact_person ? `<div class="text-slate-600 font-medium">Attn: ${po.contact_person}</div>` : '')}
+                            <div class="font-extrabold text-sm text-slate-900">${(po.is_vyuceutical_ops === 1 || (po.company_name && po.company_name.toLowerCase().includes('vyuceutical'))) ? `Vyuceutical OPS - ${po.contact_person || po.company_name}` : po.company_name}</div>
+                            ${(po.is_vyuceutical_ops === 1 || (po.company_name && po.company_name.toLowerCase().includes('vyuceutical'))) ? `<div class="text-[11px] text-purple-700 font-bold">Vyuceutical OPS - ${po.contact_person || po.company_name} (${po.company_name})</div>` : (po.contact_person ? `<div class="text-slate-600 font-medium">Attn: ${po.contact_person}</div>` : '')}
                             <div class="text-slate-500 text-[11px] leading-relaxed">${(po.client_address || '').trim() || 'Phils.'}</div>
                             <div class="text-slate-500 text-[11px]">${po.client_email || ''} ${po.client_phone ? '• ' + po.client_phone : ''}</div>
                             ${po.client_tin ? `<div class="text-[11px] font-mono text-slate-500">TIN: ${po.client_tin}</div>` : ''}
@@ -782,7 +782,7 @@ async function openEditPOModal(poId) {
                         <div>
                             <label class="block text-slate-600 mb-1">Client / Buyer</label>
                             <div class="px-3 py-2 border rounded-xl bg-slate-100 text-slate-800 font-bold">
-                                ${po.company_name}
+                                ${(po.is_vyuceutical_ops === 1 || (po.company_name && po.company_name.toLowerCase().includes('vyuceutical'))) ? `Vyuceutical OPS - ${po.contact_person || po.company_name}` : po.company_name}
                             </div>
                         </div>
                         <div>

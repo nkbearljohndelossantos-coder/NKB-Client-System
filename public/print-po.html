@@ -225,10 +225,11 @@
                 const isVyuceutical = po.is_vyuceutical_ops === 1 || (po.company_name && po.company_name.toLowerCase().includes('vyuceutical'));
 
                 if (isVyuceutical) {
-                    document.getElementById('po-company-name-hdr').textContent = 'VYUCEUTICAL OPS';
+                    const clientName = po.contact_person || po.company_name || 'Client';
+                    document.getElementById('po-company-name-hdr').textContent = `VYUCEUTICAL OPS - ${clientName.toUpperCase()}`;
                     const sub = document.getElementById('po-signatory-sub');
-                    if (sub) sub.textContent = 'VYUCEUTICAL OPS';
-                    document.getElementById('po-client-name').textContent = po.contact_person || po.company_name;
+                    if (sub) sub.textContent = `VYUCEUTICAL OPS - ${clientName.toUpperCase()}`;
+                    document.getElementById('po-client-name').textContent = `Vyuceutical OPS - ${clientName}`;
                     document.getElementById('po-client-contact').textContent = `Company: ${po.company_name}`;
                 } else {
                     document.getElementById('po-company-name-hdr').textContent = 'NKB MANUFACTURING CORPORATION';

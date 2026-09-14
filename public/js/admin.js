@@ -314,7 +314,7 @@ async function loadDashboard() {
         tbody.innerHTML = unbilledRes.data.map(dr => `
             <tr class="hover:bg-slate-50 transition">
                 <td class="py-3 px-4 font-bold text-indigo-600">${dr.dr_number}</td>
-                <td class="py-3 px-4 font-bold text-slate-800">${dr.company_name}</td>
+                <td class="py-3 px-4 font-bold text-slate-800">${(dr.is_vyuceutical_ops === 1 || (dr.company_name && dr.company_name.toLowerCase().includes('vyuceutical'))) ? `Vyuceutical OPS - ${dr.contact_person || dr.company_name}` : dr.company_name}</td>
                 <td class="py-3 px-4">
                     <button onclick="openViewPOModal('${dr.po_id}')" class="font-bold text-indigo-600 hover:text-indigo-800 hover:underline" title="View Purchase Order Details">
                         ${dr.po_number}
@@ -427,7 +427,7 @@ async function loadOrders() {
                 <td class="py-3 px-4 text-slate-600 whitespace-nowrap">
                     <div class="font-medium text-slate-800">${NKB.formatDate(po.po_date)}</div>
                 </td>
-                <td class="py-3 px-4 font-bold text-slate-800">${po.company_name}</td>
+                <td class="py-3 px-4 font-bold text-slate-800">${(po.is_vyuceutical_ops === 1 || (po.company_name && po.company_name.toLowerCase().includes('vyuceutical'))) ? `<span class="text-purple-900 font-extrabold">Vyuceutical OPS - ${po.contact_person || po.company_name}</span>` : po.company_name}</td>
                 <td class="py-3 px-4">
                     <div class="space-y-1 w-64">
                         ${itemsList}
@@ -546,6 +546,8 @@ function renderJobOrdersTable(jobOrders) {
             grouped.set(ckey, {
                 clientId: jo.client_id,
                 companyName: jo.company_name,
+                contactPerson: jo.contact_person,
+                is_vyuceutical_ops: jo.is_vyuceutical_ops,
                 items: []
             });
         }
@@ -560,6 +562,8 @@ function renderJobOrdersTable(jobOrders) {
         const pendingBatchItems = group.items.filter(j => !j.batch_count || j.batch_count === 0);
         const allBatchesStarted = group.items.length > 0 && pendingBatchItems.length === 0;
         const allDispatched = group.items.length > 0 && group.items.every(j => j.latest_dr_number);
+        const isGroupVyu = group.is_vyuceutical_ops === 1 || (group.companyName && group.companyName.toLowerCase().includes('vyuceutical'));
+        const groupDisplayName = isGroupVyu ? `Vyuceutical OPS - ${group.contactPerson || group.companyName}` : group.companyName;
 
         html += `
             <!-- Client Group Banner Row -->
@@ -569,7 +573,7 @@ function renderJobOrdersTable(jobOrders) {
                         <div class="flex items-center gap-2.5">
                             <span class="text-base">🏢</span>
                             <div>
-                                <span class="font-extrabold text-sm text-slate-900">${group.companyName}</span>
+                                <span class="font-extrabold text-sm text-slate-900">${groupDisplayName}</span>
                                 <span class="ml-2 px-2.5 py-0.5 bg-indigo-100/90 text-indigo-800 font-mono font-bold text-xs rounded-lg border border-indigo-200" title="Sales Order Number for this Client">SO: ${clientSO}</span>
                                 <span class="text-[11px] text-indigo-700 font-semibold ml-2">(${group.items.length} Product${group.items.length > 1 ? 's' : ''} in Production • Total: ${NKB.formatNumber(totalQty)} pcs)</span>
                             </div>
@@ -775,7 +779,7 @@ async function loadDeliveries() {
             <tr class="hover:bg-slate-50 transition">
                 <td class="py-3 px-4 font-bold text-indigo-600">${dr.dr_number}</td>
                 <td class="py-3 px-4 text-slate-600">${NKB.formatDate(dr.delivery_date)}</td>
-                <td class="py-3 px-4 font-bold text-slate-800">${dr.company_name}</td>
+                <td class="py-3 px-4 font-bold text-slate-800">${(dr.is_vyuceutical_ops === 1 || (dr.company_name && dr.company_name.toLowerCase().includes('vyuceutical'))) ? `<span class="text-purple-900 font-extrabold">Vyuceutical OPS - ${dr.contact_person || dr.company_name}</span>` : dr.company_name}</td>
                 <td class="py-3 px-4">
                     <button onclick="openViewPOModal('${dr.po_id}')" class="font-bold text-indigo-600 hover:text-indigo-800 hover:underline" title="View Purchase Order Details">
                         ${dr.po_number}
@@ -817,7 +821,7 @@ async function loadInvoices() {
             <tr class="hover:bg-slate-50 transition">
                 <td class="py-3 px-4 font-bold text-indigo-600">${si.invoice_number}</td>
                 <td class="py-3 px-4 text-slate-600">${NKB.formatDate(si.invoice_date)} <br><span class="text-[10px] text-slate-400">Due: ${NKB.formatDate(si.due_date)}</span></td>
-                <td class="py-3 px-4 font-bold text-slate-800">${si.company_name}</td>
+                <td class="py-3 px-4 font-bold text-slate-800">${(si.is_vyuceutical_ops === 1 || (si.company_name && si.company_name.toLowerCase().includes('vyuceutical'))) ? `<span class="text-purple-900 font-extrabold">Vyuceutical OPS - ${si.contact_person || si.company_name}</span>` : si.company_name}</td>
                 <td class="py-3 px-4">
                     <div class="text-slate-700 font-medium">${si.dr_number}</div>
                     ${si.po_id ? `
@@ -1325,7 +1329,7 @@ async function loadClients() {
                     <div class="flex items-center gap-1.5 flex-wrap">
                         <span>${c.company_name}</span>
                         ${(c.is_vyuceutical_ops === 1 || (c.company_name && c.company_name.toLowerCase().includes('vyuceutical'))) ? `
-                            <span class="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-purple-100 text-purple-800 border border-purple-200" title="Registered as VYUCEUTICAL OPS">Vyuceutical OPS</span>
+                            <span class="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-purple-100 text-purple-800 border border-purple-200" title="Registered as VYUCEUTICAL OPS">Vyuceutical OPS - ${c.contact_person || c.company_name}</span>
                         ` : ''}
                     </div>
                 </td>
@@ -2385,7 +2389,11 @@ async function openCreatePOModal() {
                         <div>
                             <label class="block text-slate-600 mb-1">Select Client *</label>
                             <select id="po-client-id" onchange="onAdminPOClientChanged()" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-900">
-                                ${cachedClients.map(c => `<option value="${c.id}">${c.company_name}</option>`).join('')}
+                                ${cachedClients.map(c => {
+                                    const isVyu = c.is_vyuceutical_ops === 1 || (c.company_name && c.company_name.toLowerCase().includes('vyuceutical'));
+                                    const label = isVyu ? `Vyuceutical OPS - ${c.contact_person || c.company_name}` : c.company_name;
+                                    return `<option value="${c.id}">${label}</option>`;
+                                }).join('')}
                             </select>
                         </div>
                         <div>
@@ -2481,7 +2489,13 @@ async function onAdminPOClientChanged() {
     const brandSelect = document.getElementById('po-brand-select');
 
     if (isVyuceutical) {
-        if (brandContainer) brandContainer.classList.remove('hidden');
+        if (brandContainer) {
+            brandContainer.classList.remove('hidden');
+            const brandLabel = brandContainer.querySelector('label');
+            if (brandLabel) {
+                brandLabel.textContent = `Choose Brand (Vyuceutical OPS - ${client.contact_person || client.company_name}) *`;
+            }
+        }
 
         // Extract unique brands present in raw products
         const brandSet = new Set();

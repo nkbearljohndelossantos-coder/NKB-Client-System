@@ -209,12 +209,13 @@
                 const isVyuceutical = si.is_vyuceutical_ops === 1 || (si.company_name && si.company_name.toLowerCase().includes('vyuceutical'));
 
                 if (isVyuceutical) {
-                    document.getElementById('si-company-name-hdr').textContent = 'VYUCEUTICAL OPS';
+                    const clientName = si.contact_person || si.company_name || 'Client';
+                    document.getElementById('si-company-name-hdr').textContent = `VYUCEUTICAL OPS - ${clientName.toUpperCase()}`;
                     const acct = document.getElementById('si-bank-acct-name');
-                    if (acct) acct.textContent = 'VYUCEUTICAL OPS';
+                    if (acct) acct.textContent = `VYUCEUTICAL OPS - ${clientName.toUpperCase()}`;
                     const sub = document.getElementById('si-cert-company');
-                    if (sub) sub.textContent = 'VYUCEUTICAL OPS';
-                    document.getElementById('si-client-name').textContent = si.contact_person || si.company_name;
+                    if (sub) sub.textContent = `VYUCEUTICAL OPS - ${clientName.toUpperCase()}`;
+                    document.getElementById('si-client-name').textContent = `Vyuceutical OPS - ${clientName}`;
                     document.getElementById('si-client-contact').textContent = `Company: ${si.company_name}`;
                 } else {
                     document.getElementById('si-company-name-hdr').textContent = 'NKB MANUFACTURING CORPORATION';
