@@ -56,8 +56,12 @@ router.get('/', authenticateToken, enforceClientIsolation, (req, res) => {
                    (SELECT jo.id FROM job_orders jo WHERE jo.po_id = poi.po_id AND jo.product_id = poi.product_id ORDER BY jo.created_at DESC LIMIT 1) as jo_id,
                    (SELECT jo.jo_number FROM job_orders jo WHERE jo.po_id = poi.po_id AND jo.product_id = poi.product_id ORDER BY jo.created_at DESC LIMIT 1) as jo_number,
                    (SELECT jo.status FROM job_orders jo WHERE jo.po_id = poi.po_id AND jo.product_id = poi.product_id ORDER BY jo.created_at DESC LIMIT 1) as jo_status,
+                   (SELECT pb.id FROM production_batches pb JOIN job_orders jo ON pb.jo_id = jo.id WHERE jo.po_id = poi.po_id AND jo.product_id = poi.product_id ORDER BY pb.created_at DESC LIMIT 1) as batch_id,
                    (SELECT pb.batch_number FROM production_batches pb JOIN job_orders jo ON pb.jo_id = jo.id WHERE jo.po_id = poi.po_id AND jo.product_id = poi.product_id ORDER BY pb.created_at DESC LIMIT 1) as batch_number,
-                   (SELECT pb.status FROM production_batches pb JOIN job_orders jo ON pb.jo_id = jo.id WHERE jo.po_id = poi.po_id AND jo.product_id = poi.product_id ORDER BY pb.created_at DESC LIMIT 1) as batch_status
+                   (SELECT pb.status FROM production_batches pb JOIN job_orders jo ON pb.jo_id = jo.id WHERE jo.po_id = poi.po_id AND jo.product_id = poi.product_id ORDER BY pb.created_at DESC LIMIT 1) as batch_status,
+                   (SELECT pb.actual_yield FROM production_batches pb JOIN job_orders jo ON pb.jo_id = jo.id WHERE jo.po_id = poi.po_id AND jo.product_id = poi.product_id ORDER BY pb.created_at DESC LIMIT 1) as actual_yield,
+                   (SELECT dr.dr_number FROM delivery_items di JOIN delivery_receipts dr ON di.dr_id = dr.id WHERE di.batch_id = (SELECT pb2.id FROM production_batches pb2 JOIN job_orders jo2 ON pb2.jo_id = jo2.id WHERE jo2.po_id = poi.po_id AND jo2.product_id = poi.product_id ORDER BY pb2.created_at DESC LIMIT 1) LIMIT 1) as dr_number,
+                   (SELECT dr.status FROM delivery_items di JOIN delivery_receipts dr ON di.dr_id = dr.id WHERE di.batch_id = (SELECT pb2.id FROM production_batches pb2 JOIN job_orders jo2 ON pb2.jo_id = jo2.id WHERE jo2.po_id = poi.po_id AND jo2.product_id = poi.product_id ORDER BY pb2.created_at DESC LIMIT 1) LIMIT 1) as dr_status
             FROM purchase_order_items poi
             JOIN products p ON poi.product_id = p.id
             WHERE poi.po_id = ?
@@ -122,7 +126,9 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
                (SELECT pb.bottling_lead FROM production_batches pb JOIN job_orders jo ON pb.jo_id = jo.id WHERE jo.po_id = poi.po_id AND pb.product_id = poi.product_id ORDER BY pb.created_at DESC LIMIT 1) as bottling_lead,
                (SELECT pb.qc_inspector FROM production_batches pb JOIN job_orders jo ON pb.jo_id = jo.id WHERE jo.po_id = poi.po_id AND pb.product_id = poi.product_id ORDER BY pb.created_at DESC LIMIT 1) as qc_inspector,
                (SELECT pb.line_assignment FROM production_batches pb JOIN job_orders jo ON pb.jo_id = jo.id WHERE jo.po_id = poi.po_id AND pb.product_id = poi.product_id ORDER BY pb.created_at DESC LIMIT 1) as line_assignment,
-               (SELECT pb.qc_notes FROM production_batches pb JOIN job_orders jo ON pb.jo_id = jo.id WHERE jo.po_id = poi.po_id AND pb.product_id = poi.product_id ORDER BY pb.created_at DESC LIMIT 1) as qc_notes
+               (SELECT pb.qc_notes FROM production_batches pb JOIN job_orders jo ON pb.jo_id = jo.id WHERE jo.po_id = poi.po_id AND pb.product_id = poi.product_id ORDER BY pb.created_at DESC LIMIT 1) as qc_notes,
+               (SELECT dr.dr_number FROM delivery_items di JOIN delivery_receipts dr ON di.dr_id = dr.id WHERE dr.po_id = poi.po_id AND di.product_id = poi.product_id ORDER BY dr.created_at DESC LIMIT 1) as dr_number,
+               (SELECT dr.status FROM delivery_items di JOIN delivery_receipts dr ON di.dr_id = dr.id WHERE dr.po_id = poi.po_id AND di.product_id = poi.product_id ORDER BY dr.created_at DESC LIMIT 1) as dr_status
         FROM purchase_order_items poi
         JOIN products p ON poi.product_id = p.id
         LEFT JOIN client_product_prices cpp ON cpp.product_id = p.id AND cpp.client_id = ?

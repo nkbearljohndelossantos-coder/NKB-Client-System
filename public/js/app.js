@@ -262,8 +262,12 @@ async function openViewPOModal(poId) {
                     ${NKB.formatNumber(delivered)} / ${NKB.formatNumber(item.target_quantity)}
                 </td>
                 <td class="py-3 px-3 text-center whitespace-nowrap">
-                    ${item.jo_number ? `
-                        <span class="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded font-mono font-bold text-[10px]" title="${item.jo_status || 'IN_PRODUCTION'}">✓ ${item.jo_number}</span>
+                    ${item.dr_number ? `
+                        <span class="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded font-mono font-bold text-[10px]" title="Dispatched on DR ${item.dr_number}">🚚 ${item.dr_number}</span>
+                    ` : item.batch_number ? `
+                        <span class="px-2 py-0.5 bg-purple-50 text-purple-700 border border-purple-200 rounded font-mono font-bold text-[10px]" title="Batched and ready for delivery">✓ ${item.batch_number} (Batched)</span>
+                    ` : item.jo_number ? `
+                        <span class="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded font-mono font-bold text-[10px]" title="Job Order active (Product being made in factory)">🏭 ${item.jo_number} (Making)</span>
                     ` : `
                         <span class="px-2 py-0.5 bg-slate-100 text-slate-500 rounded font-mono text-[10px]">Pending JO</span>
                     `}
@@ -386,6 +390,10 @@ async function openViewPOModal(poId) {
             </div>
         `;
     }).join('');
+
+    const allJOsStarted = items.length > 0 && jobOrders.length >= items.length;
+    const allBatchesStarted = items.length > 0 && items.every(it => it.batch_number);
+    const allDispatched = items.length > 0 && items.every(it => it.dr_number);
 
     root.innerHTML = `
         <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50 overflow-y-auto">
@@ -560,15 +568,24 @@ async function openViewPOModal(poId) {
                                 Approve Order
                             </button>
                         ` : ''}
-                        ${(NKB.user && (NKB.user.role === 'ADMIN' || NKB.user.role === 'SUPER_ADMIN') && (po.status === 'APPROVED' || po.status === 'IN_PRODUCTION')) ? `
-                            <button onclick="closeModal(); openCreateJOModal('${po.id}', '${po.po_number}', '${po.company_name.replace(/'/g, "\\'")}');" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-xs shadow-md shadow-indigo-600/30 transition flex items-center gap-1.5">
-                                <span>🏭 Start Job Order (All Products)</span>
-                            </button>
-                            ${(jobOrders && jobOrders.length > 0) ? `
-                                <button onclick="closeModal(); openCreateAllBatchesModal('${po.client_id}', '${po.id}', '${po.company_name.replace(/'/g, "\\'")}');" class="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-bold text-xs shadow-md shadow-purple-600/30 transition flex items-center gap-1.5">
-                                    <span>⚗️ Start Batch (All Products)</span>
+                        ${(NKB.user && (NKB.user.role === 'ADMIN' || NKB.user.role === 'SUPER_ADMIN') && (po.status === 'APPROVED' || po.status === 'IN_PRODUCTION' || po.status === 'PARTIALLY_DELIVERED')) ? `
+                            ${!allJOsStarted ? `
+                                <button onclick="closeModal(); openCreateJOModal('${po.id}', '${po.po_number}', '${po.company_name.replace(/'/g, "\\'")}');" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-xs shadow-md shadow-indigo-600/30 transition flex items-center gap-1.5" title="Start Job Orders for all products in this order">
+                                    <span>🏭 Start Job Order (All Products)</span>
                                 </button>
-                            ` : ''}
+                            ` : !allBatchesStarted ? `
+                                <button onclick="closeModal(); openCreateAllBatchesModal('${po.client_id}', '${po.id}', '${po.company_name.replace(/'/g, "\\'")}');" class="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-bold text-xs shadow-md shadow-purple-600/30 transition flex items-center gap-1.5" title="Products are made. Record batch numbers & actual yield before delivering.">
+                                    <span>⚗️ Batch Products (Products Made)</span>
+                                </button>
+                            ` : !allDispatched ? `
+                                <button onclick="closeModal(); openCreateAllDRModal('${po.client_id}', '${po.id}', '${po.company_name.replace(/'/g, "\\'")}');" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs shadow-md shadow-emerald-600/30 transition flex items-center gap-1.5" title="Batches are ready. Create unified Delivery Receipt.">
+                                    <span>🚚 Deliver All Products (Create DR)</span>
+                                </button>
+                            ` : `
+                                <span class="px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl font-bold text-xs font-mono inline-flex items-center gap-1.5">
+                                    <span>✓ Dispatched</span>
+                                </span>
+                            `}
                         ` : ''}
                     </div>
                     <div class="flex items-center gap-2">

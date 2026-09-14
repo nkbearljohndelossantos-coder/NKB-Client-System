@@ -134,35 +134,43 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
             const ids = items.map(i => i.jo_id);
             const placeholders = ids.map(() => '?').join(',');
             candidateJOs = db.prepare(`
-                SELECT jo.*, p.shelf_life_months, p.formula_code as default_formula, p.name as product_name
+                SELECT jo.*, p.shelf_life_months, p.formula_code as default_formula, p.name as product_name,
+                       po.tolerance_percent, po.id as po_id
                 FROM job_orders jo
                 JOIN products p ON jo.product_id = p.id
+                JOIN purchase_orders po ON jo.po_id = po.id
                 WHERE jo.id IN (${placeholders})
             `).all(...ids);
             const itemMap = new Map(items.map(i => [i.jo_id, i]));
             candidateJOs.forEach(j => {
                 const spec = itemMap.get(j.id);
                 if (spec && spec.target_quantity) j.target_quantity = parseInt(spec.target_quantity);
+                if (spec && spec.actual_yield !== undefined) j.actual_yield = parseInt(spec.actual_yield);
                 if (spec && spec.formula_code) j.custom_formula_code = spec.formula_code;
             });
         } else if (jo_ids && Array.isArray(jo_ids) && jo_ids.length > 0) {
             const placeholders = jo_ids.map(() => '?').join(',');
             candidateJOs = db.prepare(`
-                SELECT jo.*, p.shelf_life_months, p.formula_code as default_formula, p.name as product_name
+                SELECT jo.*, p.shelf_life_months, p.formula_code as default_formula, p.name as product_name,
+                       po.tolerance_percent, po.id as po_id
                 FROM job_orders jo
                 JOIN products p ON jo.product_id = p.id
+                JOIN purchase_orders po ON jo.po_id = po.id
                 WHERE jo.id IN (${placeholders})
             `).all(...jo_ids);
         } else if (po_id) {
             candidateJOs = db.prepare(`
-                SELECT jo.*, p.shelf_life_months, p.formula_code as default_formula, p.name as product_name
+                SELECT jo.*, p.shelf_life_months, p.formula_code as default_formula, p.name as product_name,
+                       po.tolerance_percent, po.id as po_id
                 FROM job_orders jo
                 JOIN products p ON jo.product_id = p.id
+                JOIN purchase_orders po ON jo.po_id = po.id
                 WHERE jo.po_id = ? AND jo.status != 'CANCELLED'
             `).all(po_id);
         } else if (client_id) {
             candidateJOs = db.prepare(`
-                SELECT jo.*, p.shelf_life_months, p.formula_code as default_formula, p.name as product_name
+                SELECT jo.*, p.shelf_life_months, p.formula_code as default_formula, p.name as product_name,
+                       po.tolerance_percent, po.id as po_id
                 FROM job_orders jo
                 JOIN purchase_orders po ON jo.po_id = po.id
                 JOIN products p ON jo.product_id = p.id
@@ -210,10 +218,26 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
                     expDate = prodDate.toISOString().split('T')[0];
                 }
 
+                // Batching after product is made: calculate actual yield and check tolerance
+                const targetQty = parseInt(jo.target_quantity);
+                const actualYield = jo.actual_yield !== undefined ? parseInt(jo.actual_yield) : (req.body.actual_yield !== undefined ? parseInt(req.body.actual_yield) : targetQty);
+                const varianceQty = actualYield - targetQty;
+                const variancePercent = targetQty > 0 ? parseFloat(((varianceQty / targetQty) * 100).toFixed(2)) : 0.0;
+
+                const tolerance = jo.tolerance_percent || 10.0;
+                const maxAllowed = Math.ceil(targetQty * (1 + tolerance / 100));
+
+                let batchStatus = 'APPROVED_FOR_DISPATCH';
+                let isException = false;
+                if (actualYield > maxAllowed) {
+                    batchStatus = 'EXCEPTION_REQUIRES_APPROVAL';
+                    isException = true;
+                }
+
                 db.prepare(`
                     INSERT INTO production_batches
-                    (id, batch_number, jo_id, product_id, formula_code, production_date, expiry_date, target_quantity, actual_yield, variance_quantity, variance_percent, status, compounding_operator, bottling_lead, qc_inspector, line_assignment, created_by)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0.0, 'MIXING', ?, ?, ?, ?, ?)
+                    (id, batch_number, jo_id, product_id, formula_code, production_date, expiry_date, target_quantity, actual_yield, variance_quantity, variance_percent, status, compounding_operator, bottling_lead, qc_inspector, line_assignment, qc_passed_by, qc_passed_at, created_by)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 `).run(
                     batchId,
                     batchNumber,
@@ -222,15 +246,52 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
                     jo.custom_formula_code || jo.default_formula || formula_code || 'FORM-2026-V1',
                     production_date || new Date().toISOString().split('T')[0],
                     expDate,
-                    parseInt(jo.target_quantity),
+                    targetQty,
+                    actualYield,
+                    varianceQty,
+                    variancePercent,
+                    batchStatus,
                     compounding_operator || null,
                     bottling_lead || null,
                     qc_inspector || null,
                     line_assignment || 'Cleanroom Line 1 (Alpha)',
+                    !isException ? req.user.id : null,
+                    !isException ? new Date().toISOString() : null,
                     req.user.id
                 );
 
-                db.prepare("UPDATE job_orders SET status = 'IN_PRODUCTION' WHERE id = ? AND status != 'COMPLETED'").run(jo.id);
+                // Insert yield record
+                db.prepare(`
+                    INSERT INTO batch_yields
+                    (id, batch_id, recorded_at, target_quantity, actual_yield, variance_quantity, variance_percent, logged_by, notes)
+                    VALUES (?, ?, datetime('now'), ?, ?, ?, ?, ?, ?)
+                `).run(
+                    uuidv4(),
+                    batchId,
+                    targetQty,
+                    actualYield,
+                    varianceQty,
+                    variancePercent,
+                    req.user.id,
+                    `Batch completed and inspected: ${actualYield} pcs produced (Target: ${targetQty} pcs, Variance: ${varianceQty >= 0 ? '+' : ''}${varianceQty})`
+                );
+
+                // If approved for dispatch, update inventory
+                if (batchStatus === 'APPROVED_FOR_DISPATCH') {
+                    recordMovement({
+                        productId: jo.product_id,
+                        batchId: batchId,
+                        movementType: 'PRODUCTION_OUTPUT',
+                        quantity: actualYield,
+                        referenceType: 'BATCH',
+                        referenceId: batchNumber,
+                        notes: `Production output logged for batch ${batchNumber} (Product Made)`,
+                        createdBy: req.user.id
+                    });
+                }
+
+                // Complete Job Order since product is made and batched
+                db.prepare("UPDATE job_orders SET status = 'COMPLETED', updated_at = datetime('now') WHERE id = ?").run(jo.id);
                 if (jo.po_id) affectedPOIds.add(jo.po_id);
 
                 createdBatches.push({
@@ -240,7 +301,10 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
                     jo_number: jo.jo_number,
                     product_id: jo.product_id,
                     product_name: jo.product_name,
-                    target_quantity: jo.target_quantity
+                    target_quantity: targetQty,
+                    actual_yield: actualYield,
+                    status: batchStatus,
+                    is_exception: isException
                 });
             }
 
@@ -271,7 +335,7 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
         return res.status(201).json({
             success: true,
             count: createdBatches.length,
-            message: `Successfully started ${createdBatches.length} production batches.`,
+            message: `Successfully batched ${createdBatches.length} product(s) ready for delivery!`,
             data: createdBatches
         });
     }
@@ -303,10 +367,27 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
         expDate = prodDate.toISOString().split('T')[0];
     }
 
+    const targetQty = parseInt(target_quantity);
+    const actualYield = req.body.actual_yield !== undefined ? parseInt(req.body.actual_yield) : targetQty;
+    const varianceQty = actualYield - targetQty;
+    const variancePercent = targetQty > 0 ? parseFloat(((varianceQty / targetQty) * 100).toFixed(2)) : 0.0;
+
+    // Tolerance check
+    const po = jo.po_id ? db.prepare('SELECT tolerance_percent FROM purchase_orders WHERE id = ?').get(jo.po_id) : null;
+    const tolerance = (po && po.tolerance_percent) || 10.0;
+    const maxAllowed = Math.ceil(targetQty * (1 + tolerance / 100));
+
+    let batchStatus = 'APPROVED_FOR_DISPATCH';
+    let isException = false;
+    if (actualYield > maxAllowed) {
+        batchStatus = 'EXCEPTION_REQUIRES_APPROVAL';
+        isException = true;
+    }
+
     db.prepare(`
         INSERT INTO production_batches
-        (id, batch_number, jo_id, product_id, formula_code, production_date, expiry_date, target_quantity, actual_yield, variance_quantity, variance_percent, status, compounding_operator, bottling_lead, qc_inspector, line_assignment, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0.0, 'MIXING', ?, ?, ?, ?, ?)
+        (id, batch_number, jo_id, product_id, formula_code, production_date, expiry_date, target_quantity, actual_yield, variance_quantity, variance_percent, status, compounding_operator, bottling_lead, qc_inspector, line_assignment, qc_passed_by, qc_passed_at, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
         batchId,
         batchNumber,
@@ -315,15 +396,52 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
         formula_code || jo.default_formula || 'FORM-2026-V1',
         production_date || new Date().toISOString().split('T')[0],
         expDate,
-        parseInt(target_quantity),
+        targetQty,
+        actualYield,
+        varianceQty,
+        variancePercent,
+        batchStatus,
         compounding_operator || null,
         bottling_lead || null,
         qc_inspector || null,
         line_assignment || 'Line 1 (Alpha)',
+        !isException ? req.user.id : null,
+        !isException ? new Date().toISOString() : null,
         req.user.id
     );
 
-    db.prepare("UPDATE job_orders SET status = 'IN_PRODUCTION' WHERE id = ? AND status != 'COMPLETED'").run(jo_id);
+    // Insert yield record
+    db.prepare(`
+        INSERT INTO batch_yields
+        (id, batch_id, recorded_at, target_quantity, actual_yield, variance_quantity, variance_percent, logged_by, notes)
+        VALUES (?, ?, datetime('now'), ?, ?, ?, ?, ?, ?)
+    `).run(
+        uuidv4(),
+        batchId,
+        targetQty,
+        actualYield,
+        varianceQty,
+        variancePercent,
+        req.user.id,
+        `Batch completed and inspected: ${actualYield} pcs produced (Target: ${targetQty} pcs, Variance: ${varianceQty >= 0 ? '+' : ''}${varianceQty})`
+    );
+
+    // If approved for dispatch, update inventory
+    if (batchStatus === 'APPROVED_FOR_DISPATCH') {
+        recordMovement({
+            productId: jo.product_id,
+            batchId: batchId,
+            movementType: 'PRODUCTION_OUTPUT',
+            quantity: actualYield,
+            referenceType: 'BATCH',
+            referenceId: batchNumber,
+            notes: `Production output logged for batch ${batchNumber} (Product Made)`,
+            createdBy: req.user.id
+        });
+    }
+
+    // Complete Job Order since product is made and batched
+    db.prepare("UPDATE job_orders SET status = 'COMPLETED', updated_at = datetime('now') WHERE id = ?").run(jo_id);
     if (jo.po_id) {
         db.prepare("UPDATE purchase_orders SET status = 'IN_PRODUCTION' WHERE id = ? AND status != 'COMPLETED'").run(jo.po_id);
     }
@@ -335,7 +453,7 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
         action: 'CREATE_BATCH',
         entityType: 'PRODUCTION_BATCH',
         entityId: batchNumber,
-        details: { batchId, batchNumber, joId: jo_id, target_quantity, compounding_operator, bottling_lead, qc_inspector }
+        details: { batchId, batchNumber, joId: jo_id, target_quantity: targetQty, actualYield, compounding_operator, bottling_lead, qc_inspector }
     });
 
     const created = db.prepare('SELECT * FROM production_batches WHERE id = ?').get(batchId);
