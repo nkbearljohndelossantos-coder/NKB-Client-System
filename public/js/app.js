@@ -1389,8 +1389,32 @@ if (!window.voidPO) {
             if (root && root.innerHTML.includes(poNumber) && typeof openViewPOModal === 'function') {
                 await openViewPOModal(id);
             }
+            const newNo = (res.data && res.data.po_number) ? res.data.po_number : poNumber;
+            if (confirm(`Purchase Order "${poNumber}" is now VOIDED.\n\nWould you like to permanently delete it from the database right now?`)) {
+                if (typeof window.deletePO === 'function') {
+                    await window.deletePO(id, newNo);
+                }
+            }
         } else {
             NKB.showToast(res.error || 'Failed to void Purchase Order.', 'error');
+        }
+    };
+}
+
+if (!window.deletePO) {
+    window.deletePO = async function(id, poNumber) {
+        if (!confirm(`Are you sure you want to PERMANENTLY delete Purchase Order "${poNumber}"?\n\nThis will completely remove this order and all its records from the database. This action cannot be undone.`)) {
+            return;
+        }
+        const res = await NKB.api(`/api/orders/${id}`, { method: 'DELETE' });
+        if (res.success) {
+            NKB.showToast(res.message || `Purchase Order ${poNumber} permanently deleted.`, 'success');
+            if (typeof loadOrders === 'function') loadOrders();
+            if (typeof loadDashboard === 'function') loadDashboard();
+            if (typeof loadClientOrders === 'function') loadClientOrders();
+            if (typeof closeModal === 'function') closeModal();
+        } else {
+            NKB.showToast(res.error || 'Failed to delete Purchase Order.', 'error');
         }
     };
 }

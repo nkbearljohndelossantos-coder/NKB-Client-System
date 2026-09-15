@@ -933,4 +933,129 @@ router.post('/:id/void', authenticateToken, (req, res) => {
     }
 });
 
+// DELETE /api/orders/:id - Permanently delete a voided (or draft/cancelled) order
+router.delete('/:id', authenticateToken, (req, res) => {
+    const { id } = req.params;
+    const db = getDb();
+
+    if (req.user.role !== 'ADMIN' && req.user.role !== 'SUPER_ADMIN' && req.user.role !== 'IT_ADMIN') {
+        return res.status(403).json({ success: false, error: 'Access denied.', code: 'FORBIDDEN' });
+    }
+
+    const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
+    if (!po) {
+        return res.status(404).json({ success: false, error: 'Purchase Order not found.' });
+    }
+
+    // Allow deleting VOIDED, DRAFT, or CANCELLED orders
+    if (po.status !== 'VOIDED' && po.status !== 'DRAFT' && po.status !== 'CANCELLED') {
+        return res.status(400).json({
+            success: false,
+            error: `Cannot permanently delete order in '${po.status}' status. Please VOID the order first.`
+        });
+    }
+
+    const deleteOrderTx = db.transaction(() => {
+        // Find linked Job Orders
+        const jos = db.prepare('SELECT id FROM job_orders WHERE po_id = ?').all(id);
+        const joIds = jos.map(j => j.id);
+
+        // Find linked Delivery Receipts
+        const drs = db.prepare('SELECT id FROM delivery_receipts WHERE po_id = ?').all(id);
+        const drIds = drs.map(d => d.id);
+
+        // Find linked Sales Invoices
+        const sis = db.prepare('SELECT id FROM sales_invoices WHERE po_id = ?').all(id);
+        const siIds = sis.map(s => s.id);
+
+        // 1. Delete payments
+        if (siIds.length > 0) {
+            db.prepare(`DELETE FROM payments WHERE invoice_id IN (${siIds.map(() => '?').join(',')})`).run(...siIds);
+        }
+
+        // 2. Delete sales invoices
+        if (siIds.length > 0) {
+            try {
+                db.prepare(`DELETE FROM sales_invoice_items WHERE invoice_id IN (${siIds.map(() => '?').join(',')})`).run(...siIds);
+            } catch (e) {}
+            db.prepare(`DELETE FROM sales_invoices WHERE id IN (${siIds.map(() => '?').join(',')})`).run(...siIds);
+        }
+
+        // 3. Delete delivery receipts
+        if (drIds.length > 0) {
+            try {
+                db.prepare(`DELETE FROM delivery_acceptances WHERE delivery_id IN (${drIds.map(() => '?').join(',')})`).run(...drIds);
+            } catch (e) {}
+            try {
+                db.prepare(`DELETE FROM delivery_receipt_items WHERE dr_id IN (${drIds.map(() => '?').join(',')})`).run(...drIds);
+            } catch (e) {}
+            db.prepare(`DELETE FROM delivery_receipts WHERE id IN (${drIds.map(() => '?').join(',')})`).run(...drIds);
+        }
+
+        // 4. Delete production batches
+        if (joIds.length > 0) {
+            db.prepare(`DELETE FROM production_batches WHERE jo_id IN (${joIds.map(() => '?').join(',')})`).run(...joIds);
+        }
+
+        // 5. Delete job orders
+        if (joIds.length > 0) {
+            db.prepare(`DELETE FROM job_orders WHERE id IN (${joIds.map(() => '?').join(',')})`).run(...joIds);
+        }
+
+        // 6. Delete PO items
+        db.prepare('DELETE FROM purchase_order_items WHERE po_id = ?').run(id);
+
+        // 7. Delete PO
+        db.prepare('DELETE FROM purchase_orders WHERE id = ?').run(id);
+
+        // Synchronize sequence numbers
+        const year = new Date().getFullYear();
+        const activeRows = db.prepare(`
+            SELECT po_number FROM purchase_orders 
+            WHERE status != 'VOIDED' AND po_number LIKE ?
+        `).all(`PO-${year}-%`);
+        
+        let maxSeq = 0;
+        for (const row of activeRows) {
+            const parts = row.po_number.split('-');
+            if (parts.length === 3) {
+                const seq = parseInt(parts[2], 10);
+                if (!isNaN(seq) && seq > maxSeq) {
+                    maxSeq = seq;
+                }
+            }
+        }
+        
+        const existingSeq = db.prepare('SELECT doc_type FROM document_sequences WHERE doc_type = ?').get('PO');
+        if (existingSeq) {
+            db.prepare('UPDATE document_sequences SET current_year = ?, last_sequence = ? WHERE doc_type = ?').run(year, maxSeq, 'PO');
+        }
+
+        logAudit({
+            userId: req.user.id,
+            userName: req.user.name,
+            userRole: req.user.role,
+            action: 'DELETE_PO_PERMANENT',
+            entityType: 'PURCHASE_ORDER',
+            entityId: po.po_number,
+            details: {
+                poId: id,
+                poNumber: po.po_number,
+                deletedBy: req.user.name
+            }
+        });
+    });
+
+    try {
+        deleteOrderTx();
+        return res.json({
+            success: true,
+            message: `Purchase Order ${po.po_number} has been permanently deleted.`
+        });
+    } catch (err) {
+        console.error('Error permanently deleting PO:', err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 module.exports = router;

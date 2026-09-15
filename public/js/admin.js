@@ -563,6 +563,11 @@ async function loadOrders() {
                             <span>🚫 Void</span>
                         </button>
                     ` : ''}
+                    ${(isExecAdmin && po.status === 'VOIDED') ? `
+                        <button onclick="deletePO('${po.id}', '${po.po_number}')" class="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1 shadow-sm" title="Permanently Delete Voided Order ${po.po_number}">
+                            <span>🗑️ Delete</span>
+                        </button>
+                    ` : ''}
                 </td>
             </tr>
             `;
@@ -825,11 +830,34 @@ async function voidPO(id, poNumber) {
         if (root && root.innerHTML.includes(poNumber) && typeof openViewPOModal === 'function') {
             await openViewPOModal(id);
         }
+
+        // Offer immediate permanent deletion if desired
+        const newNo = (res.data && res.data.po_number) ? res.data.po_number : poNumber;
+        if (confirm(`Purchase Order "${poNumber}" is now VOIDED.\n\nWould you like to permanently delete it from the database right now?`)) {
+            await deletePO(id, newNo);
+        }
     } else {
         NKB.showToast(res.error || 'Failed to void Purchase Order.', 'error');
     }
 }
 window.voidPO = voidPO;
+
+async function deletePO(id, poNumber) {
+    if (!confirm(`Are you sure you want to PERMANENTLY delete Purchase Order "${poNumber}"?\n\nThis will completely remove this order and all its linked records from the database. This action cannot be undone.`)) {
+        return;
+    }
+    const res = await NKB.api(`/api/orders/${id}`, { method: 'DELETE' });
+    if (res.success) {
+        NKB.showToast(res.message || `Purchase Order ${poNumber} permanently deleted.`, 'success');
+        if (typeof loadOrders === 'function') loadOrders();
+        if (typeof loadDashboard === 'function') loadDashboard();
+        if (typeof loadClientOrders === 'function') loadClientOrders();
+        if (typeof closeModal === 'function') closeModal();
+    } else {
+        NKB.showToast(res.error || 'Failed to delete Purchase Order.', 'error');
+    }
+}
+window.deletePO = deletePO;
 
 // -------------------------------------------------------------
 // 3. JOB ORDERS (JO)
