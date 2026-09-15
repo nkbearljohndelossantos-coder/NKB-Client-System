@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS users (
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
-    role ENUM('SUPER_ADMIN', 'ADMIN', 'PRODUCTION', 'WAREHOUSE', 'ACCOUNTING', 'CLIENT') NOT NULL,
+    role ENUM('SUPER_ADMIN', 'IT_ADMIN', 'ADMIN', 'PRODUCTION', 'WAREHOUSE', 'ACCOUNTING', 'INVENTORY', 'CLIENT') NOT NULL,
     client_id VARCHAR(36) NULL,
     phone VARCHAR(50) NULL,
     is_active TINYINT(1) NOT NULL DEFAULT 1,
@@ -104,12 +104,19 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
     expected_delivery_date DATE NULL,
     tolerance_percent DECIMAL(5,2) NOT NULL DEFAULT 10.00,
     billing_policy ENUM('ACTUAL_DELIVERY', 'FIXED_PO_BUFFER') NOT NULL DEFAULT 'ACTUAL_DELIVERY',
-    status ENUM('DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'IN_PRODUCTION', 'PARTIALLY_DELIVERED', 'COMPLETED', 'CANCELLED') NOT NULL DEFAULT 'PENDING_APPROVAL',
+    status ENUM('DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'IN_PRODUCTION', 'PARTIALLY_DELIVERED', 'COMPLETED', 'CANCELLED', 'VOIDED') NOT NULL DEFAULT 'PENDING_APPROVAL',
     notes TEXT NULL,
     subtotal DECIMAL(14,2) NOT NULL DEFAULT 0.00,
     tax_percent DECIMAL(5,2) NOT NULL DEFAULT 0.00,
     tax_amount DECIMAL(14,2) NOT NULL DEFAULT 0.00,
     grand_total DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+    accounting_confirmed TINYINT(1) NOT NULL DEFAULT 0,
+    accounting_confirmed_at DATETIME NULL,
+    accounting_confirmed_by VARCHAR(36) NULL,
+    inventory_confirmed TINYINT(1) NOT NULL DEFAULT 0,
+    inventory_confirmed_at DATETIME NULL,
+    inventory_confirmed_by VARCHAR(36) NULL,
+    raw_materials_status VARCHAR(50) NOT NULL DEFAULT 'PENDING_CHECK',
     created_by VARCHAR(36) NOT NULL,
     approved_by VARCHAR(36) NULL,
     approved_at DATETIME NULL,
@@ -404,7 +411,25 @@ CREATE TABLE IF NOT EXISTS inventory_movements (
     CONSTRAINT fk_im_created_by FOREIGN KEY (created_by) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 21. Audit Logs
+-- 21. Supply Requests Table (Purchasing Department requisitions from Inventory)
+CREATE TABLE IF NOT EXISTS supply_requests (
+    id VARCHAR(36) NOT NULL PRIMARY KEY,
+    po_id VARCHAR(36) NOT NULL,
+    requested_by VARCHAR(36) NOT NULL,
+    department VARCHAR(100) NOT NULL DEFAULT 'Purchasing Department',
+    materials_needed TEXT NOT NULL,
+    urgency VARCHAR(50) NOT NULL DEFAULT 'NORMAL',
+    target_date VARCHAR(50) NULL,
+    notes TEXT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'SUBMITTED',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_sr_po (po_id),
+    CONSTRAINT fk_sr_po FOREIGN KEY (po_id) REFERENCES purchase_orders(id) ON DELETE CASCADE,
+    CONSTRAINT fk_sr_user FOREIGN KEY (requested_by) REFERENCES users(id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 22. Audit Logs
 CREATE TABLE IF NOT EXISTS audit_logs (
     id VARCHAR(36) NOT NULL PRIMARY KEY,
     user_id VARCHAR(36) NULL,

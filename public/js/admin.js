@@ -177,10 +177,12 @@ function applyRoleBasedUI() {
     const role = NKB.user.role;
     const roleMap = {
         'SUPER_ADMIN': { title: 'Executive Admin', badge: 'bg-red-900/80 text-red-300 border-red-700/50' },
+        'IT_ADMIN': { title: 'IT Administrator', badge: 'bg-cyan-900/80 text-cyan-300 border-cyan-700/50' },
         'ADMIN': { title: 'Operations Manager', badge: 'bg-indigo-900/80 text-indigo-300 border-indigo-700/50' },
         'PRODUCTION': { title: 'Production Supervisor', badge: 'bg-amber-900/80 text-amber-300 border-amber-700/50' },
         'WAREHOUSE': { title: 'Logistics & Warehouse', badge: 'bg-purple-900/80 text-purple-300 border-purple-700/50' },
-        'ACCOUNTING': { title: 'Senior Accountant', badge: 'bg-emerald-900/80 text-emerald-300 border-emerald-700/50' }
+        'ACCOUNTING': { title: 'Senior Accountant', badge: 'bg-emerald-900/80 text-emerald-300 border-emerald-700/50' },
+        'INVENTORY': { title: 'Inventory Officer', badge: 'bg-teal-900/80 text-teal-300 border-teal-700/50' }
     };
 
     const config = roleMap[role] || { title: role };
@@ -199,7 +201,22 @@ function applyRoleBasedUI() {
         if (btn) btn.style.display = 'none';
     };
 
-    if (role === 'PRODUCTION') {
+    if (role === 'INVENTORY') {
+        // Inventory role: No new tab created, focused directly on Orders with SO copy, confirmation, and supplies request
+        hideTab('dashboard');
+        hideTab('job-orders');
+        hideTab('production');
+        hideTab('deliveries');
+        hideTab('invoices');
+        hideTab('payments');
+        hideTab('buffer');
+        hideTab('clients');
+        hideTab('products');
+        hideTab('users');
+        hideTab('reports');
+        hideTab('audit');
+        switchTab('orders');
+    } else if (role === 'PRODUCTION') {
         // PRODUCTION role now manages deliveries alongside ADMIN and WAREHOUSE
         hideTab('invoices');
         hideTab('payments');
@@ -223,8 +240,8 @@ function applyRoleBasedUI() {
         hideTab('clients');
         hideTab('users');
         hideTab('audit');
-    } else if (role === 'ADMIN') {
-        // Admin sees everything except super-admin exclusive config
+    } else if (role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'IT_ADMIN') {
+        // IT Admin has identical universal authority as Super Admin
     }
 }
 
@@ -314,7 +331,7 @@ async function loadDashboard() {
         tbody.innerHTML = unbilledRes.data.map(dr => `
             <tr class="hover:bg-slate-50 transition">
                 <td class="py-3 px-4 font-bold text-indigo-600">${dr.dr_number}</td>
-                <td class="py-3 px-4 font-bold text-slate-800">${(dr.is_vyuceutical_ops === 1 || (dr.company_name && dr.company_name.toLowerCase().includes('vyuceutical'))) ? `Vyuceutical OPS - ${dr.contact_person || dr.company_name}` : dr.company_name}</td>
+                <td class="py-3 px-4 font-bold text-slate-800">${(dr.is_vyuceutical_ops === 1 || (dr.company_name && dr.company_name.toLowerCase().includes('vyuceutical'))) ? `Vyuceutical OPC - ${dr.contact_person || dr.company_name}` : dr.company_name}</td>
                 <td class="py-3 px-4">
                     <button onclick="openViewPOModal('${dr.po_id}')" class="font-bold text-indigo-600 hover:text-indigo-800 hover:underline" title="View Purchase Order Details">
                         ${dr.po_number}
@@ -382,6 +399,12 @@ async function loadOrders() {
     const tbody = document.getElementById('table-orders-body');
 
     if (res.success && res.data && res.data.length > 0) {
+        const userRole = NKB.user ? NKB.user.role : '';
+        const isExecAdmin = ['ADMIN', 'SUPER_ADMIN', 'IT_ADMIN'].includes(userRole);
+        const canConfirmAccounting = isExecAdmin || userRole === 'ACCOUNTING';
+        const canConfirmInventory = isExecAdmin || userRole === 'INVENTORY';
+        const canManageProduction = isExecAdmin || userRole === 'PRODUCTION' || userRole === 'WAREHOUSE';
+
         tbody.innerHTML = res.data.map(po => {
             const itemsList = (po.items && po.items.length > 0)
                 ? po.items.map(it => {
@@ -390,16 +413,16 @@ async function loadOrders() {
                     <div class="flex flex-col gap-1 text-[11px] bg-slate-50 hover:bg-slate-100/70 p-2 rounded-xl border border-slate-200 transition mb-1 last:mb-0">
                         <div class="flex items-center justify-between gap-2">
                             <div class="truncate max-w-[140px]">
-                                <span class="font-bold text-slate-900 block truncate" title="${it.product_name}">${it.product_name}</span>
-                                <span class="text-[10px] text-slate-400 font-mono">${it.sku}</span>
+                                <span class="font-black text-slate-950 text-xs block truncate" title="${it.product_name}">${it.product_name}</span>
+                                <span class="text-[10px] text-indigo-900 font-mono font-bold bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200 inline-block mt-0.5">${it.sku}</span>
                             </div>
                             <div class="text-right font-mono flex-shrink-0">
-                                <span class="font-bold text-slate-800 block">${NKB.formatNumber(it.target_quantity)} ${it.unit || 'pcs'}</span>
-                                <span class="text-[10px] text-indigo-700 font-semibold">@ ₱${Number(it.unit_price).toFixed(2)}</span>
+                                <span class="font-black text-slate-950 text-xs block">${NKB.formatNumber(it.target_quantity)} ${it.unit || 'pcs'}</span>
+                                <span class="text-[10px] text-emerald-900 font-bold font-mono">@ ₱${Number(it.unit_price).toFixed(2)}</span>
                             </div>
                         </div>
                         <div class="pt-1 border-t border-slate-200/60 flex justify-between items-center text-[10px]">
-                            <span class="text-slate-400 font-medium">Status:</span>
+                            <span class="text-slate-500 font-bold">Status:</span>
                             ${it.dr_number ? `
                                 <span class="px-1.5 py-0.2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded font-mono font-bold text-[9.5px]" title="Dispatched on Delivery Receipt ${it.dr_number}">🚚 ${it.dr_number}</span>
                             ` : it.batch_number ? `
@@ -418,61 +441,130 @@ async function loadOrders() {
             const allJOsStarted = totalItemsCount > 0 && (po.jo_count >= totalItemsCount);
             const allBatchesStarted = totalItemsCount > 0 && po.items && po.items.every(it => it.batch_number);
             const allDispatched = totalItemsCount > 0 && po.items && po.items.every(it => it.dr_number);
+            const isVoided = po.status === 'VOIDED';
 
             return `
-            <tr class="hover:bg-slate-50 transition">
+            <tr class="hover:bg-slate-50 transition ${isVoided ? 'opacity-60 bg-rose-50/20' : ''}">
                 <td class="py-3 px-4 font-bold text-indigo-600 cursor-pointer hover:underline whitespace-nowrap" onclick="openViewPOModal('${po.id}')" title="Click to view full PO details">
                     ${po.po_number}
                 </td>
                 <td class="py-3 px-4 text-slate-600 whitespace-nowrap">
                     <div class="font-medium text-slate-800">${NKB.formatDate(po.po_date)}</div>
                 </td>
-                <td class="py-3 px-4 font-bold text-slate-800">${(po.is_vyuceutical_ops === 1 || (po.company_name && po.company_name.toLowerCase().includes('vyuceutical'))) ? `<span class="text-purple-900 font-extrabold">Vyuceutical OPS - ${po.contact_person || po.company_name}</span>` : po.company_name}</td>
+                <td class="py-3 px-4 font-bold text-slate-800">${(po.is_vyuceutical_ops === 1 || (po.company_name && po.company_name.toLowerCase().includes('vyuceutical'))) ? `<span class="text-purple-900 font-extrabold">Vyuceutical OPC - ${po.contact_person || po.company_name}</span>` : po.company_name}</td>
                 <td class="py-3 px-4">
-                    <div class="space-y-1 w-64">
+                    <div class="space-y-1 w-64 max-h-28 overflow-y-auto pr-1">
                         ${itemsList}
                     </div>
                 </td>
                 <td class="py-3 px-4 whitespace-nowrap"><span class="badge bg-slate-100 text-slate-700">±${po.tolerance_percent}%</span></td>
                 <td class="py-3 px-4 whitespace-nowrap"><span class="badge ${po.billing_policy === 'ACTUAL_DELIVERY' ? 'bg-indigo-50 text-indigo-700' : 'bg-purple-50 text-purple-700'}">${po.billing_policy}</span></td>
-                <td class="py-3 px-4 font-bold text-slate-700 whitespace-nowrap font-mono">${NKB.formatNumber(po.total_target_quantity)} pcs</td>
+                <td class="py-3 px-4 font-black text-slate-950 whitespace-nowrap font-mono">${NKB.formatNumber(po.total_target_quantity)} pcs</td>
                 <td class="py-3 px-4 font-extrabold text-slate-900 whitespace-nowrap font-mono">${NKB.formatCurrency(po.grand_total)}</td>
-                <td class="py-3 px-4 whitespace-nowrap">${NKB.renderStatusBadge(po.status)}</td>
+                <td class="py-3 px-4 whitespace-nowrap">
+                    <div>${NKB.renderStatusBadge(po.status)}</div>
+                    ${po.accounting_confirmed === 1 ? `
+                        <div class="mt-1">
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 inline-flex items-center gap-1" title="Confirmed by Accounting on ${po.accounting_confirmed_at ? NKB.formatDate(po.accounting_confirmed_at) : 'N/A'}">
+                                💳 Acct Confirmed
+                            </span>
+                        </div>
+                    ` : `
+                        <div class="mt-1">
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 inline-flex items-center gap-1">
+                                ⏳ Acct Pending
+                            </span>
+                        </div>
+                    `}
+                    ${po.raw_materials_status === 'SUPPLIES_REQUESTED' ? `
+                        <div class="mt-1">
+                            <button onclick="viewSupplyRequestsModal('${po.id}', '${po.po_number}')" class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-100 text-rose-800 border border-rose-300 hover:bg-rose-200 transition inline-flex items-center gap-1" title="Click to view supply requisition submitted to Purchasing Dept">
+                                ⚠️ Supplies Needed (${po.supply_requests_count || 1})
+                            </button>
+                        </div>
+                    ` : po.inventory_confirmed === 1 ? `
+                        <div class="mt-1">
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-teal-100 text-teal-800 border border-teal-300 inline-flex items-center gap-1" title="Raw Materials Confirmed Sufficient on ${po.inventory_confirmed_at ? NKB.formatDate(po.inventory_confirmed_at) : 'N/A'}">
+                                ✓ Materials Confirmed
+                            </span>
+                        </div>
+                    ` : `
+                        <div class="mt-1">
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200 inline-flex items-center gap-1">
+                                ⏳ Materials Pending
+                            </span>
+                        </div>
+                    `}
+                </td>
                 <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
                     <button onclick="openViewPOModal('${po.id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="View Full Order Info">
                         <span>👁️ View</span>
                     </button>
                     <a href="/print-po.html?id=${po.id}" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Print Purchase Order">
-                        <span>🖨️ Print</span>
+                        <span>🖨️ PO</span>
                     </a>
-                    ${po.jo_count === 0 && po.status !== 'CANCELLED' ? `
+                    <a href="/print-jo.html?po_id=${po.id}" class="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Print Sales Order Copy (2 Portrait Slips on A4 Landscape)">
+                        <span>📄 SO Copy</span>
+                    </a>
+                    ${(canConfirmAccounting && !po.accounting_confirmed && po.status !== 'CANCELLED' && po.status !== 'VOIDED') ? `
+                        <button onclick="confirmAccountingPO('${po.id}', '${po.po_number}')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition inline-flex items-center gap-1 shadow-sm" title="Confirm order financing & payment terms">
+                            <span>💳 Confirm (Accounting)</span>
+                        </button>
+                    ` : ''}
+                    ${(canConfirmInventory && !po.inventory_confirmed && po.status !== 'CANCELLED' && po.status !== 'VOIDED') ? `
+                        ${po.accounting_confirmed === 1 ? `
+                            <button onclick="confirmInventoryPO('${po.id}', '${po.po_number}')" class="px-2.5 py-1 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-xs font-bold transition inline-flex items-center gap-1 shadow-sm" title="Confirm sufficient raw materials exist for manufacturing">
+                                <span>✅ Confirm Raw Materials</span>
+                            </button>
+                        ` : `
+                            <button disabled class="px-2.5 py-1 bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed rounded-lg text-xs font-medium inline-flex items-center gap-1" title="Order must first be confirmed by Accounting Department">
+                                <span>⏳ Awaiting Acct Confirm</span>
+                            </button>
+                        `}
+                    ` : ''}
+                    ${(canConfirmInventory && po.status !== 'CANCELLED' && po.status !== 'VOIDED') ? `
+                        <button onclick="openSupplyRequestModal('${po.id}', '${po.po_number}', '${(po.company_name || '').replace(/'/g, "\\'")}')" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-xs font-bold transition inline-flex items-center gap-1 shadow-sm" title="Submit requisition form to Purchasing Department for needed raw materials / supplies">
+                            <span>📋 Request Supplies</span>
+                        </button>
+                    ` : ''}
+                    ${(po.supply_requests_count > 0) ? `
+                        <button onclick="viewSupplyRequestsModal('${po.id}', '${po.po_number}')" class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="View submitted requisitions for Purchasing Dept">
+                            <span>📜 View Requisitions (${po.supply_requests_count})</span>
+                        </button>
+                    ` : ''}
+                    ${(isExecAdmin && po.jo_count === 0 && po.status !== 'CANCELLED' && po.status !== 'VOIDED') ? `
                         <button onclick="openEditPOModal('${po.id}')" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Edit Purchase Order (before entering JO)">
                             <span>✏️ Edit</span>
                         </button>
                     ` : ''}
-                    ${po.status === 'PENDING_APPROVAL' ? `
+                    ${(isExecAdmin && po.status === 'PENDING_APPROVAL') ? `
                         <button onclick="approvePO('${po.id}', '${po.po_number}')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition">
                             Approve
                         </button>
                     ` : ''}
-                    ${(po.status === 'APPROVED' || po.status === 'IN_PRODUCTION' || po.status === 'PARTIALLY_DELIVERED') ? `
+                    ${(canManageProduction && (po.status === 'APPROVED' || po.status === 'IN_PRODUCTION' || po.status === 'PARTIALLY_DELIVERED')) ? `
                         ${!allJOsStarted ? `
                             <button onclick="openCreateJOModal('${po.id}', '${po.po_number}', '${po.company_name.replace(/'/g, "\\'")}')" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-extrabold transition inline-flex items-center gap-1.5 shadow-sm" title="Start Job Orders for all products in this order for ${po.company_name}">
-                                <span>🏭 Start Job Order (All Products)</span>
+                                <span>🏭 Start Job Order</span>
                             </button>
                         ` : !allBatchesStarted ? `
                             <button onclick="openCreateAllBatchesModal('${po.client_id}', '${po.id}', '${po.company_name.replace(/'/g, "\\'")}')" class="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-xl text-xs font-extrabold transition inline-flex items-center gap-1.5 shadow-md shadow-purple-600/20" title="Products are made. Click to record batch numbers and actual yield before delivering.">
-                                <span>⚗️ Batch Products (Products Made)</span>
+                                <span>⚗️ Batch Products</span>
                             </button>
                         ` : !allDispatched ? `
                             <button onclick="openCreateAllDRModal('${po.client_id}', '${po.id}', '${po.company_name.replace(/'/g, "\\'")}')" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-extrabold transition inline-flex items-center gap-1.5 shadow-md shadow-emerald-600/20" title="Batches are ready for delivery. Click to create Delivery Receipt.">
-                                <span>🚚 Deliver (Create DR)</span>
+                                <span>🚚 Deliver (DR)</span>
                             </button>
                         ` : `
                             <span class="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold font-mono inline-flex items-center gap-1" title="All products have been dispatched on Delivery Receipts">
                                 <span>✓ Dispatched</span>
                             </span>
                         `}
+                    ` : ''}
+                    ${(isExecAdmin && po.status !== 'VOIDED' && po.status !== 'CANCELLED' && po.status !== 'COMPLETED') ? `
+                        <button onclick="voidPO('${po.id}', '${po.po_number}')" class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1 shadow-sm" title="Void Purchase Order ${po.po_number}">
+                            <span>🚫 Void</span>
+                        </button>
                     ` : ''}
                 </td>
             </tr>
@@ -493,6 +585,254 @@ async function approvePO(id, poNumber) {
         NKB.showToast(res.error || 'Failed to approve PO.', 'error');
     }
 }
+
+async function confirmAccountingPO(id, poNumber) {
+    if (!confirm(`Confirm Purchase Order ${poNumber} for Accounting Department?\n\nThis certifies that payment terms, client ledger, and order financing are confirmed.`)) return;
+    const res = await NKB.api(`/api/orders/${id}/accounting-confirm`, { method: 'POST' });
+    if (res.success) {
+        NKB.showToast(`Purchase Order ${poNumber} confirmed by Accounting Department!`, 'success');
+        loadOrders();
+    } else {
+        NKB.showToast(res.error || 'Failed to confirm order for Accounting.', 'error');
+    }
+}
+
+async function confirmInventoryPO(id, poNumber) {
+    if (!confirm(`Confirm sufficient raw materials for Purchase Order ${poNumber}?\n\nThis certifies that sufficient chemicals, packaging, and raw materials exist in inventory for manufacturing.`)) return;
+    const res = await NKB.api(`/api/orders/${id}/inventory-confirm`, { method: 'POST' });
+    if (res.success) {
+        NKB.showToast(`Raw materials confirmed for ${poNumber}! Order is ready for production.`, 'success');
+        loadOrders();
+    } else {
+        NKB.showToast(res.error || 'Failed to confirm raw materials.', 'error');
+    }
+}
+
+async function openSupplyRequestModal(poId, poNumber, companyName) {
+    const root = document.getElementById('modals-root');
+    if (!root) return;
+
+    // Fetch PO details to get ordered items
+    const res = await NKB.api(`/api/orders/${poId}`);
+    const po = (res.success && res.data) ? res.data : null;
+    const items = po?.items || [];
+
+    root.innerHTML = `
+        <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+            <div class="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 my-auto">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 text-base font-bold">📋</div>
+                        <div>
+                            <h3 class="text-base font-extrabold text-slate-900">Supply Requisition Form</h3>
+                            <p class="text-[11px] text-slate-500">Request missing raw materials/supplies to Purchasing Department</p>
+                        </div>
+                    </div>
+                    <button onclick="closeModal()" class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 font-bold flex items-center justify-center transition">✕</button>
+                </div>
+
+                <div class="p-3 bg-amber-50/70 border border-amber-200 rounded-2xl text-xs space-y-1">
+                    <div class="flex justify-between">
+                        <span class="text-amber-800 font-bold">PO Reference:</span>
+                        <span class="font-mono font-extrabold text-amber-950">${poNumber}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-amber-800 font-bold">Client:</span>
+                        <span class="font-bold text-amber-950">${companyName}</span>
+                    </div>
+                </div>
+
+                <form onsubmit="submitSupplyRequest(event, '${poId}', '${poNumber}')" class="space-y-3.5 text-xs">
+                    ${items.length > 0 ? `
+                        <div>
+                            <label class="block text-slate-700 mb-1.5 font-bold">Select Ordered Products Needing Supplies:</label>
+                            <div class="max-h-32 overflow-y-auto border border-slate-200 rounded-xl p-2 space-y-1.5 bg-slate-50">
+                                ${items.map((it, idx) => `
+                                    <label class="flex items-center gap-2 text-[11px] hover:bg-white p-1 rounded-lg transition cursor-pointer">
+                                        <input type="checkbox" name="sr_product" value="${it.product_name} (${it.sku})" class="rounded text-amber-600 focus:ring-amber-500">
+                                        <span class="font-black text-slate-950">${it.product_name}</span>
+                                        <span class="text-[10px] font-mono text-indigo-900 font-bold bg-indigo-50 border border-indigo-200 px-1 rounded">${it.sku}</span>
+                                        <span class="text-slate-900 ml-auto font-black font-mono">${NKB.formatNumber(it.target_quantity)} pcs</span>
+                                    </label>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    <div>
+                        <label class="block text-slate-700 mb-1 font-bold">Raw Materials & Supplies Needed <span class="text-rose-500">*</span></label>
+                        <textarea id="sr-materials-needed" rows="3" required placeholder="Specify raw materials needed by Purchasing Dept (e.g. 5,000 pcs 50ml Amber Glass Dropper Bottles, 25kg Niacinamide Raw Powder, 5,000 pcs Gold Matte Pump Caps)..." class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition font-bold text-slate-900"></textarea>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-slate-700 mb-1 font-bold">Urgency Level <span class="text-rose-500">*</span></label>
+                            <select id="sr-urgency" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white font-bold text-slate-800 focus:ring-2 focus:ring-amber-500 transition">
+                                <option value="NORMAL">Standard / Normal Requisition</option>
+                                <option value="HIGH">High Priority (Tight Deadline)</option>
+                                <option value="CRITICAL">🚨 Critical / Production Blocked</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-slate-700 mb-1 font-bold">Target Needed By Date</label>
+                            <input type="date" id="sr-target-date" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white font-bold text-slate-800 focus:ring-2 focus:ring-amber-500 transition">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-slate-700 mb-1 font-bold">Additional Notes / Preferred Supplier</label>
+                        <textarea id="sr-notes" rows="2" placeholder="Optional notes for Purchasing Department (e.g. check supplier X for available stock, rush courier)..." class="w-full px-3.5 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white text-slate-800"></textarea>
+                    </div>
+
+                    <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition">Cancel</button>
+                        <button type="submit" id="btn-submit-supply-request" class="px-5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-bold shadow-lg shadow-amber-600/20 transition flex items-center gap-1.5">
+                            <span>📤</span><span>Submit to Purchasing Department</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+}
+
+async function submitSupplyRequest(e, poId, poNumber) {
+    e.preventDefault();
+    const btn = document.getElementById('btn-submit-supply-request');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = 'Submitting Requisition...';
+    }
+
+    const checkedBoxes = Array.from(document.querySelectorAll('input[name="sr_product"]:checked'));
+    const affectedProducts = checkedBoxes.map(cb => cb.value).join(', ');
+    const materialsNeeded = document.getElementById('sr-materials-needed')?.value || '';
+    const urgency = document.getElementById('sr-urgency')?.value || 'NORMAL';
+    const targetDate = document.getElementById('sr-target-date')?.value || '';
+    const notes = document.getElementById('sr-notes')?.value || '';
+
+    try {
+        const res = await NKB.api(`/api/orders/${poId}/request-supplies`, {
+            method: 'POST',
+            body: {
+                materials_needed: materialsNeeded,
+                urgency,
+                target_date: targetDate,
+                notes,
+                affected_products: affectedProducts
+            }
+        });
+
+        if (res.success) {
+            NKB.showToast(`Supply requisition submitted to Purchasing Department for ${poNumber}!`, 'success');
+            closeModal();
+            loadOrders();
+        } else {
+            NKB.showToast(res.error || 'Failed to submit supply requisition.', 'error');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<span>📤</span><span>Submit to Purchasing Department</span>';
+            }
+        }
+    } catch (err) {
+        NKB.showToast('Network error while submitting requisition.', 'error');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<span>📤</span><span>Submit to Purchasing Department</span>';
+        }
+    }
+}
+
+async function viewSupplyRequestsModal(poId, poNumber) {
+    const root = document.getElementById('modals-root');
+    if (!root) return;
+
+    const res = await NKB.api(`/api/orders/${poId}/supply-requests`);
+    const requests = (res.success && res.data) ? res.data : [];
+
+    root.innerHTML = `
+        <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+            <div class="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 my-auto">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-700 text-base font-bold">📜</div>
+                        <div>
+                            <h3 class="text-base font-extrabold text-slate-900">Purchasing Requisition History</h3>
+                            <p class="text-[11px] text-slate-500">Supplies and raw materials requested for ${poNumber}</p>
+                        </div>
+                    </div>
+                    <button onclick="closeModal()" class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 font-bold flex items-center justify-center transition">✕</button>
+                </div>
+
+                ${requests.length === 0 ? `
+                    <div class="p-8 text-center text-slate-400 font-medium">No requisitions submitted for this order yet.</div>
+                ` : `
+                    <div class="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+                        ${requests.map((r, idx) => `
+                            <div class="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-2">
+                                <div class="flex justify-between items-center flex-wrap gap-2">
+                                    <div class="flex items-center gap-2">
+                                        <span class="px-2 py-0.5 rounded-lg text-[10px] font-black ${r.urgency === 'CRITICAL' ? 'bg-red-100 text-red-800 border border-red-300' : (r.urgency === 'HIGH' ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-indigo-50 text-indigo-800 border border-indigo-200')}">
+                                            ${r.urgency === 'CRITICAL' ? '🚨 CRITICAL' : (r.urgency === 'HIGH' ? '⚡ HIGH' : '● NORMAL')}
+                                        </span>
+                                        <span class="font-bold text-slate-900 text-xs">To: ${r.department || 'Purchasing Department'}</span>
+                                    </div>
+                                    <span class="text-[11px] text-slate-400 font-mono">${NKB.formatDate(r.created_at)}</span>
+                                </div>
+                                <div class="p-3 bg-white rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 whitespace-pre-line">
+                                    ${r.materials_needed}
+                                </div>
+                                ${r.notes ? `
+                                    <div class="text-[11px] text-slate-600 whitespace-pre-line pl-1">
+                                        ${r.notes}
+                                    </div>
+                                ` : ''}
+                                <div class="flex justify-between items-center text-[10px] text-slate-400 pt-1 border-t border-slate-200/60">
+                                    <span>Requested by: <strong class="text-slate-700">${r.requester_name || 'Inventory Officer'}</strong></span>
+                                    <span>Target Date: <strong class="text-slate-700 font-mono">${r.target_date ? NKB.formatDate(r.target_date) : 'ASAP'}</strong></span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `}
+
+                <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition">Close</button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+window.confirmAccountingPO = confirmAccountingPO;
+window.confirmInventoryPO = confirmInventoryPO;
+window.openSupplyRequestModal = openSupplyRequestModal;
+window.submitSupplyRequest = submitSupplyRequest;
+window.viewSupplyRequestsModal = viewSupplyRequestsModal;
+
+async function voidPO(id, poNumber) {
+    if (!confirm(`Are you sure you want to VOID Purchase Order "${poNumber}"?\n\nThis will mark the order as VOIDED and automatically cancel any open Job Orders. This action cannot be undone.`)) {
+        return;
+    }
+    const res = await NKB.api(`/api/orders/${id}/void`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: 'Voided by user' })
+    });
+    if (res.success) {
+        NKB.showToast(`Purchase Order ${poNumber} has been voided.`, 'success');
+        if (typeof loadOrders === 'function') loadOrders();
+        if (typeof loadDashboard === 'function') loadDashboard();
+        if (typeof loadClientOrders === 'function') loadClientOrders();
+        // If View PO modal is currently open for this PO, refresh it
+        const root = document.getElementById('modals-root') || document.getElementById('client-modals-root');
+        if (root && root.innerHTML.includes(poNumber) && typeof openViewPOModal === 'function') {
+            await openViewPOModal(id);
+        }
+    } else {
+        NKB.showToast(res.error || 'Failed to void Purchase Order.', 'error');
+    }
+}
+window.voidPO = voidPO;
 
 // -------------------------------------------------------------
 // 3. JOB ORDERS (JO)
@@ -538,57 +878,80 @@ function renderJobOrdersTable(jobOrders) {
         return;
     }
 
-    // Group job orders by Client
+    // Group job orders by Purchase Order (separating every order per PO regardless of brand)
     const grouped = new Map();
     jobOrders.forEach(jo => {
-        const ckey = jo.client_id || jo.company_name || 'other';
-        if (!grouped.has(ckey)) {
-            grouped.set(ckey, {
+        const pkey = jo.po_id || jo.po_number || 'other';
+        if (!grouped.has(pkey)) {
+            const rawSo = (jo.po_number && jo.po_number.startsWith('PO-'))
+                ? jo.po_number.replace('PO-', 'SO-')
+                : (jo.so_number || 'SO-2026-000001');
+            grouped.set(pkey, {
+                poId: jo.po_id,
+                poNumber: jo.po_number || 'Unlinked PO',
+                soNumber: rawSo,
                 clientId: jo.client_id,
-                companyName: jo.company_name,
-                contactPerson: jo.contact_person,
+                companyName: jo.company_name || 'Client',
+                contactPerson: jo.contact_person || '',
                 is_vyuceutical_ops: jo.is_vyuceutical_ops,
+                dateEncoded: jo.po_created_at || jo.created_at,
+                poDate: jo.po_date,
                 items: []
             });
         }
-        grouped.get(ckey).items.push(jo);
+        grouped.get(pkey).items.push(jo);
+    });
+
+    // Sort PO groups by date encoded (Newest Encoded first by default)
+    const sortVal = document.getElementById('filter-jo-sort')?.value || 'date_desc';
+    const groupsArray = Array.from(grouped.values());
+    groupsArray.sort((a, b) => {
+        const timeA = new Date(a.dateEncoded || 0).getTime();
+        const timeB = new Date(b.dateEncoded || 0).getTime();
+        return sortVal === 'date_asc' ? (timeA - timeB) : (timeB - timeA);
     });
 
     let html = '';
-    grouped.forEach(group => {
+    groupsArray.forEach(group => {
         const totalQty = group.items.reduce((sum, j) => sum + (j.target_quantity || 0), 0);
-        const primaryPo = group.items[0]?.po_number || '';
-        const clientSO = primaryPo ? primaryPo.replace('PO-', 'SO-') : 'SO-2026-000001';
+        const poNumber = group.poNumber || '';
+        // Strict tally: SO must always tally with PO number
+        const clientSO = (poNumber && poNumber.startsWith('PO-')) ? poNumber.replace('PO-', 'SO-') : group.soNumber;
         const pendingBatchItems = group.items.filter(j => !j.batch_count || j.batch_count === 0);
         const allBatchesStarted = group.items.length > 0 && pendingBatchItems.length === 0;
         const allDispatched = group.items.length > 0 && group.items.every(j => j.latest_dr_number);
         const isGroupVyu = group.is_vyuceutical_ops === 1 || (group.companyName && group.companyName.toLowerCase().includes('vyuceutical'));
-        const groupDisplayName = isGroupVyu ? `Vyuceutical OPS - ${group.contactPerson || group.companyName}` : group.companyName;
+        const groupDisplayName = isGroupVyu ? `Vyuceutical OPC - ${group.contactPerson || group.companyName}` : group.companyName;
+        const encodedDateFormatted = group.dateEncoded ? NKB.formatDate(group.dateEncoded) : (group.poDate ? NKB.formatDate(group.poDate) : 'N/A');
 
         html += `
-            <!-- Client Group Banner Row -->
+            <!-- PO Order Group Banner Row (Separated per PO) -->
             <tr class="bg-indigo-50/80 border-t-2 border-indigo-200">
                 <td colspan="7" class="py-2.5 px-4">
                     <div class="flex flex-wrap items-center justify-between gap-2">
                         <div class="flex items-center gap-2.5">
-                            <span class="text-base">🏢</span>
+                            <span class="text-base">📦</span>
                             <div>
-                                <span class="font-extrabold text-sm text-slate-900">${groupDisplayName}</span>
-                                <span class="ml-2 px-2.5 py-0.5 bg-indigo-100/90 text-indigo-800 font-mono font-bold text-xs rounded-lg border border-indigo-200" title="Sales Order Number for this Client">SO: ${clientSO}</span>
-                                <span class="text-[11px] text-indigo-700 font-semibold ml-2">(${group.items.length} Product${group.items.length > 1 ? 's' : ''} in Production • Total: ${NKB.formatNumber(totalQty)} pcs)</span>
+                                <span class="font-black text-sm text-slate-900 font-mono">${poNumber}</span>
+                                <span class="ml-2 px-2.5 py-0.5 bg-indigo-100/90 text-indigo-800 font-mono font-bold text-xs rounded-lg border border-indigo-200" title="Sales Order Number tallied to this PO">SO: ${clientSO}</span>
+                                <span class="ml-2 font-bold text-xs text-slate-700">(${groupDisplayName})</span>
+                                <span class="text-[11px] text-indigo-700 font-semibold ml-2">
+                                    • Encoded: ${encodedDateFormatted} 
+                                    • ${group.items.length} Product${group.items.length > 1 ? 's' : ''} (${NKB.formatNumber(totalQty)} pcs)
+                                </span>
                             </div>
                         </div>
                         <div class="flex items-center gap-2">
-                            <a href="/print-jo.html?client_id=${group.clientId}&po_id=${group.items[0]?.po_id || ''}" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-bold transition inline-flex items-center gap-1.5 shadow-sm" title="Print Job Order / Sales Order for ${group.companyName} (${clientSO}) (2 Portrait Copies on A4 Landscape)">
-                                <span>🖨️ Print Client JO (${group.items.length} Products)</span>
+                            <a href="/print-jo.html?po_id=${group.poId}&client_id=${group.clientId}" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-bold transition inline-flex items-center gap-1.5 shadow-sm" title="Print Job Order / Sales Order for ${poNumber} (${clientSO}) (2 Portrait Copies on A4 Landscape)">
+                                <span>🖨️ Print PO JO/SO</span>
                             </a>
                             ${!allBatchesStarted ? `
-                                <button onclick="openCreateAllBatchesModal('${group.clientId}', '${group.items[0]?.po_id || ''}', '${group.companyName.replace(/'/g, "\\'")}')" class="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-xl text-xs font-extrabold transition inline-flex items-center gap-1.5 shadow-md shadow-purple-600/20" title="Products are made. Click to record batch numbers and actual yield before delivering.">
-                                    <span>⚗️ Batch All Products (Products Made)</span>
+                                <button onclick="openCreateAllBatchesModal('${group.clientId}', '${group.poId}', '${(group.companyName || '').replace(/'/g, "\\'")}')" class="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-xl text-xs font-extrabold transition inline-flex items-center gap-1.5 shadow-md shadow-purple-600/20" title="Products are made. Click to record batch numbers and actual yield before delivering.">
+                                <span>⚗️ Batch All Products</span>
                                 </button>
                             ` : !allDispatched ? `
-                                <button onclick="openCreateAllDRModal('${group.clientId}', '${group.items[0]?.po_id || ''}', '${group.companyName.replace(/'/g, "\\'")}')" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-extrabold transition inline-flex items-center gap-1.5 shadow-md shadow-emerald-600/20" title="Batches are ready for delivery. Click to create Delivery Receipt.">
-                                    <span>🚚 Deliver All Products (Create DR)</span>
+                                <button onclick="openCreateAllDRModal('${group.clientId}', '${group.poId}', '${(group.companyName || '').replace(/'/g, "\\'")}')" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-extrabold transition inline-flex items-center gap-1.5 shadow-md shadow-emerald-600/20" title="Batches are ready for delivery. Click to create Delivery Receipt.">
+                                <span>🚚 Deliver All Products (DR)</span>
                                 </button>
                             ` : `
                                 <span class="px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold font-mono inline-flex items-center gap-1.5">
@@ -601,10 +964,11 @@ function renderJobOrdersTable(jobOrders) {
             </tr>
         `;
 
-        // Product Job Order rows under this client (7 clean columns)
+        // Product Job Order rows under this PO (regardless of brand)
         group.items.forEach(jo => {
             const hasBatch = jo.batch_count > 0;
             const hasDR = !!jo.latest_dr_number;
+            const itemSO = (jo.po_number && jo.po_number.startsWith('PO-')) ? jo.po_number.replace('PO-', 'SO-') : clientSO;
             html += `
             <tr class="hover:bg-slate-50 transition border-b border-slate-100 last:border-b-2">
                 <td class="py-3 px-4 font-bold text-indigo-600 font-mono">${jo.jo_number}</td>
@@ -614,10 +978,10 @@ function renderJobOrdersTable(jobOrders) {
                     </button>
                 </td>
                 <td class="py-3 px-4">
-                    <span class="font-semibold text-slate-800">${jo.product_name}</span>
-                    ${jo.sku ? `<br><span class="text-[11px] text-slate-400 font-mono">SKU: ${jo.sku}</span>` : ''}
+                    <span class="font-black text-slate-950 text-xs">${jo.product_name}</span>
+                    ${jo.sku ? `<div class="mt-0.5"><span class="text-[10px] text-indigo-900 font-mono font-bold bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200 inline-block">SKU: ${jo.sku}</span></div>` : ''}
                 </td>
-                <td class="py-3 px-4 font-bold text-slate-700 font-mono">${NKB.formatNumber(jo.target_quantity)} pcs</td>
+                <td class="py-3 px-4 font-black text-slate-950 font-mono">${NKB.formatNumber(jo.target_quantity)} pcs</td>
                 <td class="py-3 px-4 text-slate-600 font-medium">${jo.assigned_team || 'Team Alpha'}</td>
                 <td class="py-3 px-4">
                     ${jo.status === 'COMPLETED' ? `
@@ -630,7 +994,7 @@ function renderJobOrdersTable(jobOrders) {
                     <button onclick="openViewPOModal('${jo.po_id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition" title="View Purchase Order Details">
                         👁️ View PO
                     </button>
-                    <a href="/print-jo.html?client_id=${jo.client_id}&po_id=${jo.po_id}" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Print Client Job Order / Sales Order (${clientSO}) (2 Portrait Copies on A4 Landscape)">
+                    <a href="/print-jo.html?po_id=${jo.po_id}&client_id=${jo.client_id}" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Print PO Job Order / Sales Order (${itemSO}) (2 Portrait Copies on A4 Landscape)">
                         🖨️ Print
                     </a>
                     ${hasDR ? `
@@ -638,11 +1002,11 @@ function renderJobOrdersTable(jobOrders) {
                             <span>🚚 ${jo.latest_dr_number}</span>
                         </span>
                     ` : hasBatch ? `
-                        <button onclick="openCreateDRModal('${jo.po_number}', '${jo.jo_number}', '${jo.latest_batch_id}', '${jo.latest_batch_number}', ${jo.total_yield || jo.target_quantity}, '${jo.product_name.replace(/'/g, "\\'")}', '${jo.client_id}')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Batch ${jo.latest_batch_number} ready. Click to create Delivery Receipt.">
+                        <button onclick="openCreateDRModal('${jo.po_number}', '${jo.jo_number}', '${jo.latest_batch_id}', '${jo.latest_batch_number}', ${jo.total_yield || jo.target_quantity}, '${(jo.product_name || '').replace(/'/g, "\\'")}', '${jo.client_id}')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Batch ${jo.latest_batch_number} ready. Click to create Delivery Receipt.">
                             <span>🚚 Dispatch / DR</span>
                         </button>
                     ` : `
-                        <button onclick="openCreateBatchModal('${jo.id}', '${jo.jo_number}', ${jo.target_quantity}, '${jo.product_name.replace(/'/g, "\\'")}')" class="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Product is made. Click to record batch & yield before delivering.">
+                        <button onclick="openCreateBatchModal('${jo.id}', '${jo.jo_number}', ${jo.target_quantity}, '${(jo.product_name || '').replace(/'/g, "\\'")}')" class="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Product is made. Click to record batch & yield before delivering.">
                             <span>⚗️ Batch Product</span>
                         </button>
                     `}
@@ -672,15 +1036,19 @@ function filterJobOrders() {
         filtered = filtered.filter(j => {
             const joNum = (j.jo_number || '').toLowerCase();
             const poNum = (j.po_number || '').toLowerCase();
+            const soNum = (j.so_number || (j.po_number ? j.po_number.replace('PO-', 'SO-') : '')).toLowerCase();
             const prodName = (j.product_name || '').toLowerCase();
             const sku = (j.sku || '').toLowerCase();
             const clientName = (j.company_name || '').toLowerCase();
+            const contactPerson = (j.contact_person || '').toLowerCase();
             const team = (j.assigned_team || '').toLowerCase();
             return joNum.includes(searchVal) ||
                    poNum.includes(searchVal) ||
+                   soNum.includes(searchVal) ||
                    prodName.includes(searchVal) ||
                    sku.includes(searchVal) ||
                    clientName.includes(searchVal) ||
+                   contactPerson.includes(searchVal) ||
                    team.includes(searchVal);
         });
     }
@@ -779,7 +1147,7 @@ async function loadDeliveries() {
             <tr class="hover:bg-slate-50 transition">
                 <td class="py-3 px-4 font-bold text-indigo-600">${dr.dr_number}</td>
                 <td class="py-3 px-4 text-slate-600">${NKB.formatDate(dr.delivery_date)}</td>
-                <td class="py-3 px-4 font-bold text-slate-800">${(dr.is_vyuceutical_ops === 1 || (dr.company_name && dr.company_name.toLowerCase().includes('vyuceutical'))) ? `<span class="text-purple-900 font-extrabold">Vyuceutical OPS - ${dr.contact_person || dr.company_name}</span>` : dr.company_name}</td>
+                <td class="py-3 px-4 font-bold text-slate-800">${(dr.is_vyuceutical_ops === 1 || (dr.company_name && dr.company_name.toLowerCase().includes('vyuceutical'))) ? `<span class="text-purple-900 font-extrabold">Vyuceutical OPC - ${dr.contact_person || dr.company_name}</span>` : dr.company_name}</td>
                 <td class="py-3 px-4">
                     <button onclick="openViewPOModal('${dr.po_id}')" class="font-bold text-indigo-600 hover:text-indigo-800 hover:underline" title="View Purchase Order Details">
                         ${dr.po_number}
@@ -821,7 +1189,7 @@ async function loadInvoices() {
             <tr class="hover:bg-slate-50 transition">
                 <td class="py-3 px-4 font-bold text-indigo-600">${si.invoice_number}</td>
                 <td class="py-3 px-4 text-slate-600">${NKB.formatDate(si.invoice_date)} <br><span class="text-[10px] text-slate-400">Due: ${NKB.formatDate(si.due_date)}</span></td>
-                <td class="py-3 px-4 font-bold text-slate-800">${(si.is_vyuceutical_ops === 1 || (si.company_name && si.company_name.toLowerCase().includes('vyuceutical'))) ? `<span class="text-purple-900 font-extrabold">Vyuceutical OPS - ${si.contact_person || si.company_name}</span>` : si.company_name}</td>
+                <td class="py-3 px-4 font-bold text-slate-800">${(si.is_vyuceutical_ops === 1 || (si.company_name && si.company_name.toLowerCase().includes('vyuceutical'))) ? `<span class="text-purple-900 font-extrabold">Vyuceutical OPC - ${si.contact_person || si.company_name}</span>` : si.company_name}</td>
                 <td class="py-3 px-4">
                     <div class="text-slate-700 font-medium">${si.dr_number}</div>
                     ${si.po_id ? `
@@ -1329,7 +1697,7 @@ async function loadClients() {
                     <div class="flex items-center gap-1.5 flex-wrap">
                         <span>${c.company_name}</span>
                         ${(c.is_vyuceutical_ops === 1 || (c.company_name && c.company_name.toLowerCase().includes('vyuceutical'))) ? `
-                            <span class="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-purple-100 text-purple-800 border border-purple-200" title="Registered as VYUCEUTICAL OPS">Vyuceutical OPS - ${c.contact_person || c.company_name}</span>
+                            <span class="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-purple-100 text-purple-800 border border-purple-200" title="Registered as VYUCEUTICAL OPC">Vyuceutical OPC - ${c.contact_person || c.company_name}</span>
                         ` : ''}
                     </div>
                 </td>
@@ -2138,14 +2506,14 @@ async function openEditClientModal(clientId) {
                         </div>
                     </div>
 
-                    <!-- Vyuceutical OPS Affiliation -->
+                    <!-- Vyuceutical OPC Affiliation -->
                     <div class="p-3 bg-purple-50/80 border border-purple-200 rounded-xl space-y-1">
                         <label class="flex items-center gap-2 font-bold text-purple-900 cursor-pointer text-xs">
                             <input type="checkbox" id="edit-client-is-vyuceutical" ${client.is_vyuceutical_ops ? 'checked' : ''} class="rounded border-purple-300 text-purple-600 focus:ring-purple-500">
-                            <span>Affiliated Under Vyuceutical OPS</span>
+                            <span>Affiliated Under Vyuceutical OPC</span>
                         </label>
                         <p class="text-[10px] text-purple-700 leading-normal">
-                            When active, official documents will display manufacturer as <strong>VYUCEUTICAL OPS</strong> and client name as the <strong>contact person</strong>. When creating POs, brands will be selectable and brand prefixes will be removed from product names.
+                            When active, official documents will display manufacturer as <strong>VYUCEUTICAL OPC</strong> and client name as the <strong>contact person</strong>. When creating POs, brands will be selectable and brand prefixes will be removed from product names.
                         </p>
                     </div>
 
@@ -2385,8 +2753,8 @@ async function openCreatePOModal() {
     adminPOCatalog = cachedProducts.slice();
 
     root.innerHTML = `
-        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
-            <div class="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50 overflow-y-auto">
+            <div class="bg-white rounded-2xl max-w-4xl w-full p-6 sm:p-7 shadow-2xl space-y-4 max-h-[92vh] flex flex-col my-auto">
                 <div class="flex justify-between items-center border-b border-slate-100 pb-3 flex-shrink-0">
                     <div>
                         <h3 class="text-lg font-bold text-slate-900">Create Multi-Item Purchase Order (PO)</h3>
@@ -2401,7 +2769,7 @@ async function openCreatePOModal() {
                             <select id="po-client-id" onchange="onAdminPOClientChanged()" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-900">
                                 ${cachedClients.map(c => {
                                     const isVyu = c.is_vyuceutical_ops === 1 || (c.company_name && c.company_name.toLowerCase().includes('vyuceutical'));
-                                    const label = isVyu ? `Vyuceutical OPS - ${c.contact_person || c.company_name}` : c.company_name;
+                                    const label = isVyu ? `Vyuceutical OPC - ${c.contact_person || c.company_name}` : c.company_name;
                                     return `<option value="${c.id}">${label}</option>`;
                                 }).join('')}
                             </select>
@@ -2479,21 +2847,23 @@ async function openCreatePOModal() {
                             </button>
                         </div>
 
-                        <div class="overflow-x-auto border border-slate-200 rounded-xl">
-                            <table class="w-full text-left text-xs">
-                                <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase">
-                                    <tr>
-                                        <th class="py-2.5 px-3">Product</th>
-                                        <th class="py-2.5 px-3 w-32">Target Qty (pcs)</th>
-                                        <th class="py-2.5 px-3 w-36">Fixed Unit Price (₱)</th>
-                                        <th class="py-2.5 px-3 w-32">Subtotal (₱)</th>
-                                        <th class="py-2.5 px-2 w-12 text-center">Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="admin-po-lines-body" class="divide-y divide-slate-100 font-medium">
-                                    <!-- Dynamic Rows -->
-                                </tbody>
-                            </table>
+                        <div class="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                            <div class="max-h-72 sm:max-h-80 overflow-y-auto overflow-x-auto">
+                                <table class="w-full text-left text-xs">
+                                    <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase sticky top-0 z-10 shadow-sm">
+                                        <tr>
+                                            <th class="py-2.5 px-3">Product</th>
+                                            <th class="py-2.5 px-3 w-32">Target Qty (pcs)</th>
+                                            <th class="py-2.5 px-3 w-36">Fixed Unit Price (₱)</th>
+                                            <th class="py-2.5 px-3 w-32">Subtotal (₱)</th>
+                                            <th class="py-2.5 px-2 w-12 text-center">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="admin-po-lines-body" class="divide-y divide-slate-100 font-medium">
+                                        <!-- Dynamic Rows -->
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
 
@@ -2567,7 +2937,7 @@ async function onAdminPOClientChanged() {
     const noteEl = document.getElementById('po-search-note');
     if (noteEl) {
         if (isVyuceutical) {
-            noteEl.innerHTML = `<span>💡</span><span>Vyuceutical OPS (${client.contact_person || client.company_name}): Brand names & SUS prefixes are automatically removed. You can order items across different brands simultaneously.</span>`;
+            noteEl.innerHTML = `<span>💡</span><span>Vyuceutical OPC (${client.contact_person || client.company_name}): Brand names & SUS prefixes are automatically removed. You can order items across different brands simultaneously.</span>`;
         } else {
             noteEl.innerHTML = `<span>💡</span><span>Order products across multiple different brands in the same PO. Click any suggestion or use Search Product to add items.</span>`;
         }
@@ -2683,13 +3053,13 @@ function renderPOSuggestions(query = '') {
                         <div class="min-w-0 flex-1">
                             <div class="flex items-center gap-2 flex-wrap">
                                 <span class="px-2 py-0.5 rounded text-[10px] font-bold ${window.getBrandBadgeClass ? window.getBrandBadgeClass(p.brand) : 'bg-slate-100 text-slate-700'}">${p.brand || 'OTHER'}</span>
-                                <span class="font-bold text-xs text-slate-900 truncate">${p.display_name}</span>
-                                <span class="text-[10px] font-mono text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">${p.effective_sku || p.sku}</span>
+                                <span class="font-black text-xs text-slate-950 truncate">${p.display_name}</span>
+                                <span class="text-[10px] font-mono text-indigo-900 font-bold bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200">${p.effective_sku || p.sku}</span>
                             </div>
-                            ${isCleaned ? `<div class="text-[10px] text-slate-400 mt-0.5 truncate">Original: ${p.name}</div>` : ''}
+                            ${isCleaned ? `<div class="text-[10px] text-slate-500 mt-0.5 truncate font-medium">Original: ${p.name}</div>` : ''}
                         </div>
                         <div class="flex items-center gap-2 flex-shrink-0">
-                            <span class="text-xs font-bold text-slate-800 font-mono">₱${Number(p.default_price || 0).toFixed(2)}</span>
+                            <span class="text-xs font-black text-emerald-900 font-mono">₱${Number(p.default_price || 0).toFixed(2)}</span>
                             <button type="button" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white rounded-lg text-[11px] font-bold border border-indigo-200 hover:border-indigo-600 transition flex items-center gap-1 shadow-sm">
                                 <span>➕</span><span>Add</span>
                             </button>
@@ -2869,9 +3239,9 @@ function renderAdminPOLineItems() {
                 <td class="py-2.5 px-3">
                     <div class="flex items-center gap-1 mb-1">
                         ${brandBadge}
-                        <span class="text-[10px] font-mono text-slate-500">${currentProd ? (currentProd.effective_sku || currentProd.sku) : ''}</span>
+                        <span class="text-[10px] font-mono text-indigo-900 font-bold bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded">${currentProd ? (currentProd.effective_sku || currentProd.sku) : ''}</span>
                     </div>
-                    <select onchange="updateAdminPOLineItem(${idx}, 'product_id', this.value)" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white font-medium focus:ring-2 focus:ring-indigo-500">
+                    <select onchange="updateAdminPOLineItem(${idx}, 'product_id', this.value)" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500">
                         ${window.renderProductOptionsGroupedByBrand ? window.renderProductOptionsGroupedByBrand(adminPOCatalog, item.product_id) : adminPOCatalog.map(p => `
                             <option value="${p.id}" ${p.id === item.product_id ? 'selected' : ''}>
                                 ${p.display_name || p.clean_name || p.name} (${p.effective_sku || p.sku}) - ₱${Number(p.default_price).toFixed(2)}${p.has_custom_price ? ' [Contract Rate]' : ''}
@@ -2931,34 +3301,49 @@ async function submitCreatePO(e) {
         }
     }
 
-    const res = await NKB.api('/api/orders', {
-        method: 'POST',
-        body: JSON.stringify({
-            client_id: clientId,
-            tolerance_percent: tolerance,
-            billing_policy: policy,
-            notes,
-            items: adminPOLineItems.map(item => {
-                const prod = adminPOCatalog.find(p => p.id === item.product_id);
-                return {
-                    product_id: item.product_id,
-                    item_name: prod ? (prod.clean_name || prod.display_name || prod.name) : undefined,
-                    target_quantity: item.target_quantity,
-                    unit_price: Math.round(Number(item.unit_price || 0) * 100) / 100
-                };
-            })
-        })
-    });
+    const submitBtn = document.querySelector('#modals-root button[type="submit"]') || document.querySelector('button[type="submit"]');
+    if (submitBtn) {
+        if (submitBtn.disabled) return;
+        submitBtn.disabled = true;
+        submitBtn.dataset.origHtml = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Creating PO...';
+    }
 
-    if (res.success) {
-        NKB.showToast(`Purchase Order ${res.data.po_number} created successfully!`, 'success');
-        closeModal();
-        loadOrders();
-        if (res.data && res.data.id) {
-            await openViewPOModal(res.data.id);
+    try {
+        const res = await NKB.api('/api/orders', {
+            method: 'POST',
+            body: JSON.stringify({
+                client_id: clientId,
+                tolerance_percent: tolerance,
+                billing_policy: policy,
+                notes,
+                items: adminPOLineItems.map(item => {
+                    const prod = adminPOCatalog.find(p => p.id === item.product_id);
+                    return {
+                        product_id: item.product_id,
+                        item_name: prod ? (prod.clean_name || prod.display_name || prod.name) : undefined,
+                        target_quantity: item.target_quantity,
+                        unit_price: Math.round(Number(item.unit_price || 0) * 100) / 100
+                    };
+                })
+            })
+        });
+
+        if (res.success) {
+            NKB.showToast(`Purchase Order ${res.data.po_number} created successfully!`, 'success');
+            closeModal();
+            loadOrders();
+            if (res.data && res.data.id) {
+                await openViewPOModal(res.data.id);
+            }
+        } else {
+            NKB.showToast(res.error || 'Failed to create PO.', 'error');
         }
-    } else {
-        NKB.showToast(res.error || 'Failed to create PO.', 'error');
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            if (submitBtn.dataset.origHtml) submitBtn.innerHTML = submitBtn.dataset.origHtml;
+        }
     }
 }
 
@@ -4200,14 +4585,14 @@ function openCreateClientModal() {
                         </select>
                     </div>
 
-                    <!-- Vyuceutical OPS Affiliation -->
+                    <!-- Vyuceutical OPC Affiliation -->
                     <div class="p-3 bg-purple-50/80 border border-purple-200 rounded-xl space-y-1">
                         <label class="flex items-center gap-2 font-bold text-purple-900 cursor-pointer text-xs">
                             <input type="checkbox" id="client-is-vyuceutical" class="rounded border-purple-300 text-purple-600 focus:ring-purple-500">
-                            <span>Affiliated Under Vyuceutical OPS</span>
+                            <span>Affiliated Under Vyuceutical OPC</span>
                         </label>
                         <p class="text-[10px] text-purple-700 leading-normal">
-                            When active, official documents will display manufacturer as <strong>VYUCEUTICAL OPS</strong> and the client name as the <strong>contact person</strong>. When creating POs, brands will be selectable and brand prefixes will be removed from product names.
+                            When active, official documents will display manufacturer as <strong>VYUCEUTICAL OPC</strong> and the client name as the <strong>contact person</strong>. When creating POs, brands will be selectable and brand prefixes will be removed from product names.
                         </p>
                     </div>
 
@@ -4578,19 +4963,23 @@ async function loadUsers() {
 
     const roleBadges = {
         'SUPER_ADMIN': 'bg-red-100 text-red-800 border-red-200',
+        'IT_ADMIN': 'bg-cyan-100 text-cyan-800 border-cyan-200',
         'ADMIN': 'bg-indigo-100 text-indigo-800 border-indigo-200',
         'PRODUCTION': 'bg-amber-100 text-amber-800 border-amber-200',
         'WAREHOUSE': 'bg-purple-100 text-purple-800 border-purple-200',
         'ACCOUNTING': 'bg-emerald-100 text-emerald-800 border-emerald-200',
+        'INVENTORY': 'bg-teal-100 text-teal-800 border-teal-200',
         'CLIENT': 'bg-blue-100 text-blue-800 border-blue-200'
     };
 
     const roleIcons = {
         'SUPER_ADMIN': '🛡️',
+        'IT_ADMIN': '💻',
         'ADMIN': '👑',
         'PRODUCTION': '🧪',
         'WAREHOUSE': '🚚',
         'ACCOUNTING': '💰',
+        'INVENTORY': '📦',
         'CLIENT': '🏢'
     };
 
@@ -4642,7 +5031,7 @@ function toggleClientDropdown(role, containerId = 'client-select-container') {
 async function openCreateUserModal() {
     await ensureClientsLoaded();
     const root = document.getElementById('modals-root');
-    const isSuperAdmin = NKB.user && NKB.user.role === 'SUPER_ADMIN';
+    const isSuperAdmin = NKB.user && (NKB.user.role === 'SUPER_ADMIN' || NKB.user.role === 'IT_ADMIN');
 
     const clientOptions = (cachedClients || []).map(c => `
         <option value="${c.id}">${c.company_name} (${c.client_code || 'ID: ' + c.id.slice(0, 6)})</option>
@@ -4680,8 +5069,12 @@ async function openCreateUserModal() {
                             <option value="PRODUCTION">🧪 Production Supervisor (Formulas & Batches)</option>
                             <option value="WAREHOUSE">🚚 Logistics & Warehouse (Inventory & DR)</option>
                             <option value="ACCOUNTING">💰 Senior Accountant (Invoices & AR)</option>
+                            <option value="INVENTORY">📦 Inventory Officer (Raw Materials & Supplies)</option>
                             <option value="ADMIN">👑 Operations Manager (Admin)</option>
-                            ${isSuperAdmin ? '<option value="SUPER_ADMIN">🛡️ Executive Super Admin (Full Control)</option>' : ''}
+                            ${isSuperAdmin ? `
+                                <option value="IT_ADMIN">💻 IT Administrator (Universal Control)</option>
+                                <option value="SUPER_ADMIN">🛡️ Executive Super Admin (Full Control)</option>
+                            ` : ''}
                             <option value="CLIENT">🏢 B2B Client Portal User</option>
                         </select>
                     </div>
@@ -4774,13 +5167,13 @@ async function openEditUserModal(userId) {
     }
 
     const u = res.data;
-    const isCurrentUserSuperAdmin = NKB.user && NKB.user.role === 'SUPER_ADMIN';
-    const isTargetSuperAdmin = u.role === 'SUPER_ADMIN';
+    const isCurrentUserSuperAdmin = NKB.user && (NKB.user.role === 'SUPER_ADMIN' || NKB.user.role === 'IT_ADMIN');
+    const isTargetSuperAdmin = u.role === 'SUPER_ADMIN' || u.role === 'IT_ADMIN';
     const isSelf = NKB.user && NKB.user.id === u.id;
 
     if (isTargetSuperAdmin && !isCurrentUserSuperAdmin) {
         closeModal();
-        alert('Only Super Administrators have permission to edit Super Admin accounts.');
+        alert('Only Super Administrators or IT Administrators have permission to edit Admin accounts.');
         return;
     }
 
@@ -4817,8 +5210,12 @@ async function openEditUserModal(userId) {
                                 <option value="PRODUCTION" ${u.role === 'PRODUCTION' ? 'selected' : ''}>🧪 Production Supervisor</option>
                                 <option value="WAREHOUSE" ${u.role === 'WAREHOUSE' ? 'selected' : ''}>🚚 Logistics & Warehouse</option>
                                 <option value="ACCOUNTING" ${u.role === 'ACCOUNTING' ? 'selected' : ''}>💰 Senior Accountant</option>
+                                <option value="INVENTORY" ${u.role === 'INVENTORY' ? 'selected' : ''}>📦 Inventory Officer</option>
                                 <option value="ADMIN" ${u.role === 'ADMIN' ? 'selected' : ''}>👑 Operations Manager</option>
-                                ${isCurrentUserSuperAdmin ? `<option value="SUPER_ADMIN" ${u.role === 'SUPER_ADMIN' ? 'selected' : ''}>🛡️ Executive Super Admin</option>` : ''}
+                                ${isCurrentUserSuperAdmin ? `
+                                    <option value="IT_ADMIN" ${u.role === 'IT_ADMIN' ? 'selected' : ''}>💻 IT Administrator</option>
+                                    <option value="SUPER_ADMIN" ${u.role === 'SUPER_ADMIN' ? 'selected' : ''}>🛡️ Executive Super Admin</option>
+                                ` : ''}
                                 <option value="CLIENT" ${u.role === 'CLIENT' ? 'selected' : ''}>🏢 B2B Client Portal</option>
                             </select>
                         </div>

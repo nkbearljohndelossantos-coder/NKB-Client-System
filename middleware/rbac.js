@@ -5,10 +5,12 @@
 
 const ROLES = {
     SUPER_ADMIN: 'SUPER_ADMIN',
+    IT_ADMIN: 'IT_ADMIN',
     ADMIN: 'ADMIN',
     PRODUCTION: 'PRODUCTION',
     WAREHOUSE: 'WAREHOUSE',
     ACCOUNTING: 'ACCOUNTING',
+    INVENTORY: 'INVENTORY',
     CLIENT: 'CLIENT'
 };
 
@@ -17,8 +19,11 @@ const ROLE_ALIASES = {
     'PRODUCTION_SUPERVISOR': ROLES.PRODUCTION,
     'WAREHOUSE_OFFICER': ROLES.WAREHOUSE,
     'ACCOUNTING_OFFICER': ROLES.ACCOUNTING,
+    'INVENTORY_OFFICER': ROLES.INVENTORY,
     'CLIENT_USER': ROLES.CLIENT,
-    'OWNER': ROLES.SUPER_ADMIN
+    'OWNER': ROLES.SUPER_ADMIN,
+    'IT': ROLES.IT_ADMIN,
+    'IT_ADMINISTRATOR': ROLES.IT_ADMIN
 };
 
 function normalizeRole(role) {
@@ -44,55 +49,59 @@ const PERMISSIONS = {
     'users:delete': [ROLES.SUPER_ADMIN],
 
     // Product Master Data
-    'products:view': [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.PRODUCTION, ROLES.WAREHOUSE, ROLES.ACCOUNTING, ROLES.CLIENT],
-    'products:create': [ROLES.SUPER_ADMIN, ROLES.ADMIN],
-    'products:update': [ROLES.SUPER_ADMIN, ROLES.ADMIN],
-    'products:delete': [ROLES.SUPER_ADMIN],
+    'products:view': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.PRODUCTION, ROLES.WAREHOUSE, ROLES.ACCOUNTING, ROLES.INVENTORY, ROLES.CLIENT],
+    'products:create': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN],
+    'products:update': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN],
+    'products:delete': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN],
 
-    // Purchase Orders (PO)
-    'orders:view': [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.PRODUCTION, ROLES.WAREHOUSE, ROLES.ACCOUNTING, ROLES.CLIENT],
-    'orders:create': [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.CLIENT],
-    'orders:update': [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.CLIENT],
-    'orders:approve': [ROLES.SUPER_ADMIN, ROLES.ADMIN],
-    'orders:cancel': [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.CLIENT],
+    // Purchase Orders (PO) & Confirmations
+    'orders:view': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.PRODUCTION, ROLES.WAREHOUSE, ROLES.ACCOUNTING, ROLES.INVENTORY, ROLES.CLIENT],
+    'orders:create': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.CLIENT],
+    'orders:update': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.CLIENT],
+    'orders:approve': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN],
+    'orders:confirm_accounting': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.ACCOUNTING],
+    'orders:confirm_inventory': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.INVENTORY],
+    'orders:request_supplies': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.INVENTORY],
+    'orders:cancel': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.CLIENT],
+    'orders:void': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN],
 
     // Job Orders (JO)
-    'job_orders:view': [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.PRODUCTION, ROLES.WAREHOUSE, ROLES.CLIENT],
-    'job_orders:create': [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.PRODUCTION],
-    'job_orders:update': [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.PRODUCTION],
+    'job_orders:view': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.PRODUCTION, ROLES.WAREHOUSE, ROLES.CLIENT],
+    'job_orders:create': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.PRODUCTION],
+    'job_orders:update': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.PRODUCTION],
 
     // Production Batches & Yields
-    'production:view': [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.PRODUCTION, ROLES.WAREHOUSE, ROLES.CLIENT],
-    'production:create_batch': [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.PRODUCTION],
-    'production:log_yield': [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.PRODUCTION],
-    'production:approve_overrun': [ROLES.SUPER_ADMIN, ROLES.ADMIN],
+    'production:view': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.PRODUCTION, ROLES.WAREHOUSE, ROLES.CLIENT],
+    'production:create_batch': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.PRODUCTION],
+    'production:log_yield': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.PRODUCTION],
+    'production:approve_overrun': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN],
 
     // Deliveries & DRs
-    'deliveries:view': [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.PRODUCTION, ROLES.WAREHOUSE, ROLES.ACCOUNTING, ROLES.CLIENT],
-    'deliveries:create': [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.WAREHOUSE, ROLES.PRODUCTION],
-    'deliveries:dispatch': [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.WAREHOUSE, ROLES.PRODUCTION],
-    'deliveries:accept': [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.CLIENT],
+    'deliveries:view': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.PRODUCTION, ROLES.WAREHOUSE, ROLES.ACCOUNTING, ROLES.CLIENT],
+    'deliveries:create': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.WAREHOUSE, ROLES.PRODUCTION],
+    'deliveries:dispatch': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.WAREHOUSE, ROLES.PRODUCTION],
+    'deliveries:accept': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.CLIENT],
 
     // Invoices & Billing
-    'invoices:view': [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.ACCOUNTING, ROLES.CLIENT],
-    'invoices:create': [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.ACCOUNTING],
-    'invoices:void': [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.ACCOUNTING],
+    'invoices:view': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.ACCOUNTING, ROLES.CLIENT],
+    'invoices:create': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.ACCOUNTING],
+    'invoices:void': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.ACCOUNTING],
 
     // Payments & Receivables
-    'payments:view': [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.ACCOUNTING, ROLES.CLIENT],
-    'payments:create': [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.ACCOUNTING],
+    'payments:view': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.ACCOUNTING, ROLES.CLIENT],
+    'payments:create': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.ACCOUNTING],
 
     // Buffer Stock Management
-    'buffer_stock:view': [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.WAREHOUSE, ROLES.ACCOUNTING, ROLES.CLIENT],
-    'buffer_stock:release': [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.WAREHOUSE, ROLES.ACCOUNTING],
+    'buffer_stock:view': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.WAREHOUSE, ROLES.ACCOUNTING, ROLES.CLIENT],
+    'buffer_stock:release': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.WAREHOUSE, ROLES.ACCOUNTING],
 
     // Reports & Analytics
-    'reports:view': [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.ACCOUNTING, ROLES.CLIENT],
-    'reports:financial': [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.ACCOUNTING],
-    'reports:production': [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.PRODUCTION],
+    'reports:view': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.ACCOUNTING, ROLES.CLIENT],
+    'reports:financial': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.ACCOUNTING],
+    'reports:production': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.PRODUCTION],
 
     // Audit Logs
-    'audit_logs:view': [ROLES.SUPER_ADMIN, ROLES.ADMIN]
+    'audit_logs:view': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN]
 };
 
 /**
@@ -101,7 +110,7 @@ const PERMISSIONS = {
 function roleHasPermission(role, permissionName) {
     const norm = normalizeRole(role);
     if (!norm) return false;
-    if (norm === ROLES.SUPER_ADMIN) return true; // Super Admin has universal access
+    if (norm === ROLES.SUPER_ADMIN || norm === ROLES.IT_ADMIN) return true; // Super Admin & IT Admin have universal authority
     const allowed = PERMISSIONS[permissionName];
     return Array.isArray(allowed) && allowed.includes(norm);
 }
@@ -120,7 +129,7 @@ function requirePermission(permissionName) {
         }
 
         const userRole = normalizeRole(req.user.role);
-        if (userRole === ROLES.SUPER_ADMIN || roleHasPermission(userRole, permissionName)) {
+        if (userRole === ROLES.SUPER_ADMIN || userRole === ROLES.IT_ADMIN || roleHasPermission(userRole, permissionName)) {
             return next();
         }
 
@@ -148,7 +157,7 @@ function requireRoles(...allowedRoles) {
         }
 
         const userRole = normalizeRole(req.user.role);
-        if (userRole === ROLES.SUPER_ADMIN || normalizedAllowed.includes(userRole) || allowedRoles.includes(req.user.role)) {
+        if (userRole === ROLES.SUPER_ADMIN || userRole === ROLES.IT_ADMIN || normalizedAllowed.includes(userRole) || allowedRoles.includes(req.user.role)) {
             return next();
         }
 

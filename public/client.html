@@ -7,7 +7,7 @@
     <!-- Standalone Production CSS -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <link rel="stylesheet" href="/css/tailwind.min.css">
-    <link rel="stylesheet" href="/css/style.css?v=2.0.5">
+    <link rel="stylesheet" href="/css/style.css?v=2.1.5">
 </head>
 <body class="bg-slate-50 text-slate-800 antialiased min-h-screen flex flex-col">
 
@@ -218,9 +218,9 @@
                             </div>
 
                             <!-- Line Items Table -->
-                            <div class="overflow-x-auto border border-slate-200 rounded-xl">
+                            <div class="overflow-x-auto max-h-72 overflow-y-auto border border-slate-200 rounded-xl shadow-sm">
                                 <table class="w-full text-left text-xs">
-                                    <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase">
+                                    <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase sticky top-0 z-10 shadow-sm">
                                         <tr>
                                             <th class="py-2.5 px-3">Product</th>
                                             <th class="py-2.5 px-2 w-24">Qty (pcs)</th>
@@ -298,9 +298,9 @@
                 </div>
 
                 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-                    <div class="overflow-x-auto">
+                    <div class="overflow-x-auto max-h-[75vh] overflow-y-auto border border-slate-200 rounded-xl shadow-sm">
                         <table class="w-full text-left text-xs">
-                            <thead class="bg-slate-50 border-y border-slate-200 text-slate-600 font-bold uppercase tracking-wider">
+                            <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider sticky top-0 z-10 shadow-sm">
                                 <tr>
                                     <th class="py-3 px-4">PO Number</th>
                                     <th class="py-3 px-4">Date</th>
@@ -428,7 +428,7 @@
     <!-- Modals Container -->
     <div id="client-modals-root"></div>
 
-    <script src="/js/app.js?v=2.1.4"></script>
-    <script src="/js/client.js?v=2.1.4"></script>
+    <script src="/js/app.js?v=2.1.8"></script>
+    <script src="/js/client.js?v=2.1.8"></script>
 </body>
 </html>

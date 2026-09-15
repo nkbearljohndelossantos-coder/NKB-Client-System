@@ -227,10 +227,10 @@ function seedDatabase() {
         // 11. Initialize Document Sequences with last_sequence = 1
         const currentYear = new Date().getFullYear();
         db.exec('DELETE FROM document_sequences;');
-        const insertSeq = db.prepare('INSERT INTO document_sequences (doc_type, current_year, last_sequence) VALUES (?, ?, 1)');
+        const initSeq = db.prepare('INSERT INTO document_sequences (doc_type, current_year, last_sequence) VALUES (?, ?, 1)');
         const docTypes = ['PO', 'JO', 'BAT', 'DR', 'SI', 'PAY'];
         for (const type of docTypes) {
-            insertSeq.run(type, currentYear);
+            initSeq.run(type, currentYear);
         }
 
         console.log('✅ Seed transaction completed successfully.');

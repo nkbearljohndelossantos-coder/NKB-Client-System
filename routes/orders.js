@@ -41,7 +41,10 @@ router.get('/', authenticateToken, enforceClientIsolation, (req, res) => {
                (SELECT SUM(target_quantity) FROM purchase_order_items WHERE po_id = po.id) as total_target_quantity,
                (SELECT COUNT(*) FROM job_orders WHERE po_id = po.id) as jo_count,
                (SELECT COUNT(*) FROM delivery_receipts WHERE po_id = po.id) as dr_count,
-               (SELECT COUNT(*) FROM sales_invoices WHERE po_id = po.id) as invoice_count
+               (SELECT COUNT(*) FROM sales_invoices WHERE po_id = po.id) as invoice_count,
+               (SELECT COUNT(*) FROM supply_requests WHERE po_id = po.id) as supply_requests_count,
+               (SELECT name FROM users WHERE id = po.accounting_confirmed_by) as accounting_confirmed_by_name,
+               (SELECT name FROM users WHERE id = po.inventory_confirmed_by) as inventory_confirmed_by_name
         FROM purchase_orders po
         JOIN clients c ON po.client_id = c.id
         WHERE 1=1
@@ -285,8 +288,8 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
         const taxAmount = Math.round(((subtotal * taxRate) / 100) * 100) / 100;
         const grandTotal = Math.round((subtotal + taxAmount) * 100) / 100;
 
-        // Auto-approve if created by Admin/SuperAdmin, otherwise PENDING_APPROVAL
-        const initialStatus = (req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN') ? 'APPROVED' : 'PENDING_APPROVAL';
+        // Auto-approve if created by Admin/SuperAdmin/ITAdmin, otherwise PENDING_APPROVAL
+        const initialStatus = (req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN' || req.user.role === 'IT_ADMIN') ? 'APPROVED' : 'PENDING_APPROVAL';
         const soNumber = poNumber.replace('PO-', 'SO-');
 
         db.prepare(`
@@ -385,19 +388,19 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
         }
     }
 
+    if (po.status === 'IN_PRODUCTION' || po.status === 'COMPLETED' || po.status === 'CANCELLED' || po.status === 'VOIDED') {
+        return res.status(400).json({
+            success: false,
+            error: `Cannot edit Purchase Order with status "${po.status}".`
+        });
+    }
+
     // Crucial rule: Check if a Job Order (JO) has already been created for this PO
     const joCheck = db.prepare('SELECT COUNT(*) as count FROM job_orders WHERE po_id = ?').get(id);
     if (joCheck && joCheck.count > 0) {
         return res.status(400).json({
             success: false,
             error: 'Cannot edit Purchase Order: A Job Order (JO) has already been created for this order.'
-        });
-    }
-
-    if (po.status === 'IN_PRODUCTION' || po.status === 'COMPLETED' || po.status === 'CANCELLED') {
-        return res.status(400).json({
-            success: false,
-            error: `Cannot edit Purchase Order with status "${po.status}".`
         });
     }
 
@@ -591,6 +594,343 @@ router.post('/:id/approve', authenticateToken, requireRoles('ADMIN'), (req, res)
 
     const updated = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
     return res.json({ success: true, message: 'Purchase Order approved successfully.', data: updated });
+});
+
+/**
+ * POST /api/orders/:id/accounting-confirm
+ * Accounting Department confirms the order (credit, pricing & payments check)
+ */
+router.post('/:id/accounting-confirm', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'IT_ADMIN', 'SUPER_ADMIN'), (req, res) => {
+    const { id } = req.params;
+
+    const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
+    if (!po) {
+        return res.status(404).json({ success: false, error: 'Purchase Order not found.' });
+    }
+
+    if (po.status === 'CANCELLED' || po.status === 'VOIDED') {
+        return res.status(400).json({ success: false, error: `Cannot confirm an order with status "${po.status}".` });
+    }
+
+    db.prepare(`
+        UPDATE purchase_orders
+        SET accounting_confirmed = 1,
+            accounting_confirmed_at = datetime('now'),
+            accounting_confirmed_by = ?,
+            updated_at = datetime('now')
+        WHERE id = ?
+    `).run(req.user.id, id);
+
+    logAudit({
+        userId: req.user.id,
+        userName: req.user.name,
+        userRole: req.user.role,
+        action: 'ACCOUNTING_CONFIRM_PO',
+        entityType: 'PURCHASE_ORDER',
+        entityId: po.po_number,
+        details: { poId: id, confirmedBy: req.user.name, confirmedRole: req.user.role }
+    });
+
+    const updated = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
+    return res.json({ 
+        success: true, 
+        message: `Purchase Order ${po.po_number} successfully confirmed by Accounting Department.`, 
+        data: updated 
+    });
+});
+
+/**
+ * POST /api/orders/:id/inventory-confirm
+ * Inventory confirms sufficient raw materials for product production.
+ * Crucial rule: Inventory confirms AFTER Accounting Department has confirmed.
+ */
+router.post('/:id/inventory-confirm', authenticateToken, requireRoles('INVENTORY', 'ADMIN', 'IT_ADMIN', 'SUPER_ADMIN'), (req, res) => {
+    const { id } = req.params;
+
+    const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
+    if (!po) {
+        return res.status(404).json({ success: false, error: 'Purchase Order not found.' });
+    }
+
+    if (po.status === 'CANCELLED' || po.status === 'VOIDED') {
+        return res.status(400).json({ success: false, error: `Cannot confirm an order with status "${po.status}".` });
+    }
+
+    const isExecAdmin = ['ADMIN', 'SUPER_ADMIN', 'IT_ADMIN'].includes(req.user.role);
+    if (po.accounting_confirmed !== 1 && !isExecAdmin) {
+        return res.status(400).json({ 
+            success: false, 
+            error: 'ACCOUNTING_CONFIRMATION_REQUIRED',
+            message: 'Cannot confirm raw materials: This order must first be confirmed by the Accounting Department.' 
+        });
+    }
+
+    // Auto-approve PO if currently PENDING_APPROVAL or DRAFT
+    const shouldApprove = po.status === 'PENDING_APPROVAL' || po.status === 'DRAFT';
+    const newStatus = shouldApprove ? 'APPROVED' : po.status;
+
+    db.prepare(`
+        UPDATE purchase_orders
+        SET inventory_confirmed = 1,
+            inventory_confirmed_at = datetime('now'),
+            inventory_confirmed_by = ?,
+            raw_materials_status = 'SUFFICIENT',
+            status = ?,
+            approved_by = COALESCE(approved_by, ?),
+            approved_at = COALESCE(approved_at, datetime('now')),
+            updated_at = datetime('now')
+        WHERE id = ?
+    `).run(req.user.id, newStatus, req.user.id, id);
+
+    logAudit({
+        userId: req.user.id,
+        userName: req.user.name,
+        userRole: req.user.role,
+        action: 'INVENTORY_CONFIRM_PO',
+        entityType: 'PURCHASE_ORDER',
+        entityId: po.po_number,
+        details: { poId: id, confirmedBy: req.user.name, rawMaterialsStatus: 'SUFFICIENT', newStatus }
+    });
+
+    const updated = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
+    return res.json({ 
+        success: true, 
+        message: `Raw materials confirmed for ${po.po_number}. Order is ready for production.`, 
+        data: updated 
+    });
+});
+
+/**
+ * POST /api/orders/:id/request-supplies
+ * Inventory submits supply request to Purchasing Department for missing raw materials
+ */
+router.post('/:id/request-supplies', authenticateToken, requireRoles('INVENTORY', 'ADMIN', 'IT_ADMIN', 'SUPER_ADMIN'), (req, res) => {
+    const { id } = req.params;
+    const { materials_needed, urgency, target_date, notes, affected_products } = req.body || {};
+
+    const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
+    if (!po) {
+        return res.status(404).json({ success: false, error: 'Purchase Order not found.' });
+    }
+
+    if (!materials_needed || !materials_needed.trim()) {
+        return res.status(400).json({ success: false, error: 'Please describe the raw materials/supplies needed for the Purchasing Department.' });
+    }
+
+    const reqId = uuidv4();
+    const formattedNotes = [
+        affected_products ? `Affected Products: ${affected_products}` : null,
+        notes ? `Notes: ${notes}` : null
+    ].filter(Boolean).join('\n');
+
+    db.prepare(`
+        INSERT INTO supply_requests
+        (id, po_id, requested_by, department, materials_needed, urgency, target_date, notes, status, created_at, updated_at)
+        VALUES (?, ?, ?, 'Purchasing Department', ?, ?, ?, ?, 'SUBMITTED', datetime('now'), datetime('now'))
+    `).run(
+        reqId,
+        id,
+        req.user.id,
+        materials_needed.trim(),
+        urgency || 'NORMAL',
+        target_date || null,
+        formattedNotes || null
+    );
+
+    // Update PO raw materials status
+    db.prepare(`
+        UPDATE purchase_orders
+        SET raw_materials_status = 'SUPPLIES_REQUESTED',
+            updated_at = datetime('now')
+        WHERE id = ?
+    `).run(id);
+
+    logAudit({
+        userId: req.user.id,
+        userName: req.user.name,
+        userRole: req.user.role,
+        action: 'CREATE_SUPPLY_REQUEST',
+        entityType: 'PURCHASE_ORDER',
+        entityId: po.po_number,
+        details: { poId: id, requestId: reqId, materials: materials_needed.trim(), urgency }
+    });
+
+    const createdReq = db.prepare('SELECT * FROM supply_requests WHERE id = ?').get(reqId);
+    return res.status(201).json({ 
+        success: true, 
+        message: 'Requisition for supplies submitted to Purchasing Department.', 
+        data: createdReq 
+    });
+});
+
+/**
+ * GET /api/orders/:id/supply-requests
+ * Retrieve all supply requests for a Purchase Order
+ */
+router.get('/:id/supply-requests', authenticateToken, (req, res) => {
+    const { id } = req.params;
+    const requests = db.prepare(`
+        SELECT sr.*, u.name as requested_by_name, u.email as requested_by_email
+        FROM supply_requests sr
+        JOIN users u ON sr.requested_by = u.id
+        WHERE sr.po_id = ?
+        ORDER BY sr.created_at DESC
+    `).all(id);
+
+    return res.json({ success: true, data: requests });
+});
+
+/**
+ * POST /api/orders/:id/void
+ * Void a Purchase Order
+ */
+router.post('/:id/void', authenticateToken, (req, res) => {
+    const { id } = req.params;
+    const { reason } = req.body || {};
+
+    const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
+    if (!po) {
+        return res.status(404).json({ success: false, error: 'Purchase Order not found.' });
+    }
+
+    if (req.user.role === 'CLIENT') {
+        if (po.client_id !== req.clientId) {
+            return res.status(403).json({ success: false, error: 'Access denied.', code: 'FORBIDDEN' });
+        }
+        if (po.status !== 'PENDING_APPROVAL' && po.status !== 'DRAFT') {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Clients can only void pending orders before they are approved.' 
+            });
+        }
+    } else if (req.user.role !== 'ADMIN' && req.user.role !== 'SUPER_ADMIN' && req.user.role !== 'IT_ADMIN') {
+        return res.status(403).json({ success: false, error: 'Access denied.', code: 'FORBIDDEN' });
+    }
+
+    if (po.status === 'VOIDED') {
+        return res.status(400).json({ success: false, error: 'This Purchase Order is already voided.' });
+    }
+
+    if (po.status === 'COMPLETED') {
+        return res.status(400).json({ 
+            success: false, 
+            error: 'Cannot void a completed Purchase Order with fulfilled deliveries.' 
+        });
+    }
+
+    // Check if active Delivery Receipts exist
+    const activeDeliveries = db.prepare(`
+        SELECT COUNT(*) as count 
+        FROM delivery_receipts 
+        WHERE po_id = ? AND status NOT IN ('CANCELLED', 'REJECTED')
+    `).get(id);
+
+    if (activeDeliveries && activeDeliveries.count > 0) {
+        return res.status(400).json({
+            success: false,
+            error: `Cannot void Purchase Order ${po.po_number}: It has ${activeDeliveries.count} active Delivery Receipt(s). Please cancel or reject the deliveries first.`
+        });
+    }
+
+    // Check if active Sales Invoices exist
+    const activeInvoices = db.prepare(`
+        SELECT COUNT(*) as count 
+        FROM sales_invoices 
+        WHERE po_id = ? AND status != 'CANCELLED'
+    `).get(id);
+
+    if (activeInvoices && activeInvoices.count > 0) {
+        return res.status(400).json({
+            success: false,
+            error: `Cannot void Purchase Order ${po.po_number}: It has ${activeInvoices.count} active Sales Invoice(s).`
+        });
+    }
+
+    const voidOrderTx = db.transaction(() => {
+        const voidStamp = `[VOIDED on ${new Date().toISOString().slice(0, 10)}${reason ? ': ' + reason.trim() : ''}]`;
+        const updatedNotes = po.notes ? (po.notes + ' ' + voidStamp) : voidStamp;
+
+        // Release the PO number so voids do not consume or block sequence numbering
+        let newPoNumber = po.po_number;
+        if (!newPoNumber.startsWith('VOID-')) {
+            newPoNumber = 'VOID-' + po.po_number;
+            const existingVoid = db.prepare('SELECT id FROM purchase_orders WHERE po_number = ?').get(newPoNumber);
+            if (existingVoid) {
+                newPoNumber = 'VOID-' + po.po_number + '-' + id.slice(0, 6);
+            }
+        }
+
+        db.prepare(`
+            UPDATE purchase_orders
+            SET status = 'VOIDED',
+                po_number = ?,
+                notes = ?,
+                updated_at = datetime('now')
+            WHERE id = ?
+        `).run(newPoNumber, updatedNotes, id);
+
+        // Cancel any linked non-completed Job Orders
+        db.prepare(`
+            UPDATE job_orders
+            SET status = 'CANCELLED',
+                notes = COALESCE(notes, '') || ' [Cancelled due to PO Void]'
+            WHERE po_id = ? AND status != 'CANCELLED' AND status != 'COMPLETED'
+        `).run(id);
+
+        // Synchronize document_sequences so last_sequence reflects the highest active (non-voided) PO
+        const year = new Date().getFullYear();
+        const activeRows = db.prepare(`
+            SELECT po_number FROM purchase_orders 
+            WHERE status != 'VOIDED' AND po_number LIKE ?
+        `).all(`PO-${year}-%`);
+        
+        let maxSeq = 0;
+        for (const row of activeRows) {
+            const parts = row.po_number.split('-');
+            if (parts.length === 3) {
+                const seq = parseInt(parts[2], 10);
+                if (!isNaN(seq) && seq > maxSeq) {
+                    maxSeq = seq;
+                }
+            }
+        }
+        
+        const existingSeq = db.prepare('SELECT doc_type FROM document_sequences WHERE doc_type = ?').get('PO');
+        if (existingSeq) {
+            db.prepare('UPDATE document_sequences SET current_year = ?, last_sequence = ? WHERE doc_type = ?').run(year, maxSeq, 'PO');
+        } else {
+            db.prepare('INSERT INTO document_sequences (doc_type, current_year, last_sequence) VALUES (?, ?, ?)').run('PO', year, maxSeq);
+        }
+
+        logAudit({
+            userId: req.user.id,
+            userName: req.user.name,
+            userRole: req.user.role,
+            action: 'VOID_PO',
+            entityType: 'PURCHASE_ORDER',
+            entityId: po.po_number,
+            details: {
+                poId: id,
+                poNumber: po.po_number,
+                previousStatus: po.status,
+                voidedBy: req.user.name,
+                reason: reason || 'User voided order'
+            }
+        });
+
+        return db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
+    });
+
+    try {
+        const updated = voidOrderTx();
+        return res.json({
+            success: true,
+            message: `Purchase Order ${po.po_number} has been voided successfully.`,
+            data: updated
+        });
+    } catch (err) {
+        return res.status(400).json({ success: false, error: err.message });
+    }
 });
 
 module.exports = router;

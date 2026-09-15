@@ -8,7 +8,7 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <link rel="stylesheet" href="/css/tailwind.min.css">
     <script src="/js/chart.umd.min.js"></script>
-    <link rel="stylesheet" href="/css/style.css?v=2.0.5">
+    <link rel="stylesheet" href="/css/style.css?v=2.1.5">
 </head>
 <body class="bg-slate-50 text-slate-800 antialiased min-h-screen flex flex-col">
 
@@ -259,19 +259,21 @@
                 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
                     <div class="flex flex-col sm:flex-row gap-3 items-center justify-between">
                         <input type="text" id="filter-po-search" oninput="loadOrders()" placeholder="Search PO number, client..." class="w-full sm:w-72 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                        <select id="filter-po-status" onchange="loadOrders()" class="w-full sm:w-48 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <select id="filter-po-status" onchange="loadOrders()" class="w-full sm:w-48 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 font-semibold text-slate-700">
                             <option value="">All Statuses</option>
                             <option value="PENDING_APPROVAL">Pending Approval</option>
                             <option value="APPROVED">Approved</option>
                             <option value="IN_PRODUCTION">In Production</option>
                             <option value="PARTIALLY_DELIVERED">Partially Delivered</option>
                             <option value="COMPLETED">Completed</option>
+                            <option value="CANCELLED">Cancelled</option>
+                            <option value="VOIDED">Voided</option>
                         </select>
                     </div>
 
-                    <div class="overflow-x-auto">
+                    <div class="overflow-x-auto max-h-[75vh] overflow-y-auto border border-slate-200 rounded-xl shadow-sm">
                         <table class="w-full text-left text-xs">
-                            <thead class="bg-slate-50 border-y border-slate-200 text-slate-600 font-bold uppercase tracking-wider">
+                            <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider sticky top-0 z-10 shadow-sm">
                                 <tr>
                                     <th class="py-3 px-4">PO Number</th>
                                     <th class="py-3 px-4">Date</th>
@@ -314,13 +316,17 @@
                             <select id="filter-jo-client" onchange="filterJobOrders()" class="w-full sm:w-60 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 font-semibold text-slate-700">
                                 <option value="">All Clients</option>
                             </select>
-                            <select id="filter-jo-status" onchange="filterJobOrders()" class="w-full sm:w-44 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 font-semibold text-slate-700">
+                            <select id="filter-jo-status" onchange="filterJobOrders()" class="w-full sm:w-40 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 font-semibold text-slate-700">
                                 <option value="">All Statuses</option>
                                 <option value="PENDING">Pending</option>
                                 <option value="SCHEDULED">Scheduled</option>
                                 <option value="IN_PROGRESS">In Progress</option>
                                 <option value="COMPLETED">Completed</option>
                                 <option value="CANCELLED">Cancelled</option>
+                            </select>
+                            <select id="filter-jo-sort" onchange="filterJobOrders()" class="w-full sm:w-56 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 font-semibold text-slate-700">
+                                <option value="date_desc" selected>📅 Date Encoded (Newest First)</option>
+                                <option value="date_asc">📅 Date Encoded (Oldest First)</option>
                             </select>
                         </div>
                     </div>
@@ -804,7 +810,7 @@
     <div id="modals-root"></div>
 
     <script src="/js/xlsx.full.min.js"></script>
-    <script src="/js/app.js?v=2.1.4"></script>
-    <script src="/js/admin.js?v=2.1.4"></script>
+    <script src="/js/app.js?v=2.1.8"></script>
+    <script src="/js/admin.js?v=2.1.8"></script>
 </body>
 </html>

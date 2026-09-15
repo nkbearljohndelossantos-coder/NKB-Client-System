@@ -153,6 +153,7 @@ const NKB = {
             'PARTIALLY_DELIVERED': 'bg-purple-50 text-purple-700 border border-purple-300',
             'COMPLETED': 'bg-emerald-100 text-emerald-800 border border-emerald-400',
             'CANCELLED': 'bg-red-50 text-red-700 border border-red-300',
+            'VOIDED': 'bg-rose-100 text-rose-800 border border-rose-400 font-extrabold',
             'MIXING': 'bg-sky-50 text-sky-700 border border-sky-300',
             'BOTTLING': 'bg-indigo-50 text-indigo-700 border border-indigo-300',
             'QC_PASSED': 'bg-emerald-50 text-emerald-700 border border-emerald-300',
@@ -249,12 +250,12 @@ async function openViewPOModal(poId) {
             <tr class="hover:bg-slate-50 transition">
                 <td class="py-3 px-3 text-center text-slate-400 font-bold">${idx + 1}</td>
                 <td class="py-3 px-3">
-                    <div class="font-bold text-slate-900">${item.product_name}</div>
-                    <div class="text-[10px] text-slate-400 font-mono">SKU: ${item.sku}</div>
+                    <div class="font-black text-slate-950 text-xs">${item.product_name}</div>
+                    <div class="text-[10px] text-indigo-900 font-bold font-mono bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded inline-block mt-0.5">SKU: ${item.sku}</div>
                 </td>
                 <td class="py-3 px-3 text-center"><span class="badge bg-slate-100 text-slate-700 font-mono text-[10px]">${item.formula_code || 'FORM-2026-V1'}</span></td>
                 <td class="py-3 px-3 text-center text-slate-600">${item.shelf_life_months || 24} mos</td>
-                <td class="py-3 px-3 text-center font-bold text-slate-900 font-mono">${NKB.formatNumber(item.target_quantity)} ${item.unit || 'pcs'}</td>
+                <td class="py-3 px-3 text-center font-black text-slate-950 font-mono">${NKB.formatNumber(item.target_quantity)} ${item.unit || 'pcs'}</td>
                 <td class="py-3 px-3 text-center text-slate-500 font-mono text-[11px]">${NKB.formatNumber(item.min_allowed_quantity)} – ${NKB.formatNumber(item.max_allowed_quantity)}</td>
                 <td class="py-3 px-3 text-right font-bold text-indigo-900 font-mono">₱${Number(item.unit_price).toFixed(2)}</td>
                 <td class="py-3 px-3 text-right font-extrabold text-slate-900 font-mono">${NKB.formatCurrency(item.subtotal)}</td>
@@ -291,9 +292,9 @@ async function openViewPOModal(poId) {
                             #${idx + 1}
                         </span>
                         <div>
-                            <h4 class="font-extrabold text-slate-900 text-sm leading-tight">${item.product_name}</h4>
+                            <h4 class="font-black text-slate-950 text-sm leading-tight">${item.product_name}</h4>
                             <div class="flex items-center gap-2 mt-0.5">
-                                <span class="font-mono text-xs text-indigo-600 font-bold">SKU: ${item.sku}</span>
+                                <span class="font-mono text-xs text-indigo-900 font-bold bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded">SKU: ${item.sku}</span>
                                 <span class="text-slate-300">•</span>
                                 <span class="badge bg-slate-100 text-slate-700 text-[10px]">${item.category || 'Cosmetics'}</span>
                             </div>
@@ -427,8 +428,8 @@ async function openViewPOModal(poId) {
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-200">
                         <div class="space-y-1">
                             <span class="text-[10px] uppercase font-bold text-slate-400">Buyer / Client</span>
-                            <div class="font-extrabold text-sm text-slate-900">${(po.is_vyuceutical_ops === 1 || (po.company_name && po.company_name.toLowerCase().includes('vyuceutical'))) ? `Vyuceutical OPS - ${po.contact_person || po.company_name}` : po.company_name}</div>
-                            ${(po.is_vyuceutical_ops === 1 || (po.company_name && po.company_name.toLowerCase().includes('vyuceutical'))) ? `<div class="text-[11px] text-purple-700 font-bold">Vyuceutical OPS - ${po.contact_person || po.company_name} (${po.company_name})</div>` : (po.contact_person ? `<div class="text-slate-600 font-medium">Attn: ${po.contact_person}</div>` : '')}
+                            <div class="font-extrabold text-sm text-slate-900">${(po.is_vyuceutical_ops === 1 || (po.company_name && po.company_name.toLowerCase().includes('vyuceutical'))) ? `Vyuceutical OPC - ${po.contact_person || po.company_name}` : po.company_name}</div>
+                            ${(po.is_vyuceutical_ops === 1 || (po.company_name && po.company_name.toLowerCase().includes('vyuceutical'))) ? `<div class="text-[11px] text-purple-700 font-bold">Vyuceutical OPC - ${po.contact_person || po.company_name} (${po.company_name})</div>` : (po.contact_person ? `<div class="text-slate-600 font-medium">Attn: ${po.contact_person}</div>` : '')}
                             <div class="text-slate-500 text-[11px] leading-relaxed">${(po.client_address || '').trim() || 'Phils.'}</div>
                             <div class="text-slate-500 text-[11px]">${po.client_email || ''} ${po.client_phone ? '• ' + po.client_phone : ''}</div>
                             ${po.client_tin ? `<div class="text-[11px] font-mono text-slate-500">TIN: ${po.client_tin}</div>` : ''}
@@ -471,35 +472,37 @@ async function openViewPOModal(poId) {
                         </div>
 
                         <!-- Individual Separated Product Cards with Revealed Information -->
-                        <div class="space-y-3.5">
+                        <div class="space-y-3.5 max-h-96 overflow-y-auto pr-1 border border-slate-100 rounded-2xl p-2 bg-slate-50/50">
                             ${productCardsHtml}
                         </div>
 
                         <!-- Consolidated Overview Summary Table -->
-                        <div class="border border-slate-200 rounded-2xl overflow-x-auto bg-white shadow-sm mt-4">
+                        <div class="border border-slate-200 rounded-2xl overflow-hidden shadow-sm mt-4">
                             <div class="px-4 py-2.5 bg-slate-50 border-b border-slate-200 font-bold text-slate-700 text-xs uppercase tracking-wider flex items-center justify-between">
                                 <span>📋 Consolidated Line Item Overview</span>
                                 <span class="text-[11px] font-mono text-slate-500 font-normal">±${po.tolerance_percent}% Manufacturing Tolerance</span>
                             </div>
-                            <table class="w-full text-left">
-                                <thead class="bg-slate-100 text-slate-700 font-bold uppercase text-[10px]">
-                                    <tr>
-                                        <th class="py-2.5 px-3 text-center w-10">#</th>
-                                        <th class="py-2.5 px-3">Product Name & SKU</th>
-                                        <th class="py-2.5 px-3 text-center">Formula Code</th>
-                                        <th class="py-2.5 px-3 text-center">Shelf Life</th>
-                                        <th class="py-2.5 px-3 text-center">Target Qty</th>
-                                        <th class="py-2.5 px-3 text-center">Tolerance Range</th>
-                                        <th class="py-2.5 px-3 text-right">Fixed Price</th>
-                                        <th class="py-2.5 px-3 text-right">Line Total</th>
-                                        <th class="py-2.5 px-3 text-center">Delivered</th>
-                                        <th class="py-2.5 px-3 text-center">JO Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-slate-100 font-medium text-xs">
-                                    ${itemsRows}
-                                </tbody>
-                            </table>
+                            <div class="max-h-72 overflow-y-auto overflow-x-auto">
+                                <table class="w-full text-left">
+                                    <thead class="bg-slate-100 text-slate-700 font-bold uppercase text-[10px] sticky top-0 z-10 shadow-sm">
+                                        <tr>
+                                            <th class="py-2.5 px-3 text-center w-10">#</th>
+                                            <th class="py-2.5 px-3">Product Name & SKU</th>
+                                            <th class="py-2.5 px-3 text-center">Formula Code</th>
+                                            <th class="py-2.5 px-3 text-center">Shelf Life</th>
+                                            <th class="py-2.5 px-3 text-center">Target Qty</th>
+                                            <th class="py-2.5 px-3 text-center">Tolerance Range</th>
+                                            <th class="py-2.5 px-3 text-right">Fixed Price</th>
+                                            <th class="py-2.5 px-3 text-right">Line Total</th>
+                                            <th class="py-2.5 px-3 text-center">Delivered</th>
+                                            <th class="py-2.5 px-3 text-center">JO Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100 font-medium text-xs">
+                                        ${itemsRows}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
 
@@ -529,7 +532,7 @@ async function openViewPOModal(poId) {
                                 <div>
                                     <span class="font-bold text-slate-700 block mb-1">Job Orders (${jobOrders.length}):</span>
                                     ${jobOrders.length > 0 ? `
-                                        <ul class="space-y-1">
+                                        <ul class="space-y-1 max-h-40 overflow-y-auto pr-1">
                                             ${jobOrders.map(j => `<li class="font-mono bg-white p-2 rounded-lg border border-slate-200 flex justify-between items-center"><div><strong>${j.jo_number}</strong><br><span class="text-[10px] text-slate-500">${NKB.formatNumber(j.target_quantity)} pcs • ${j.status}</span></div><a href="/print-jo.html?id=${j.id}" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-bold transition inline-flex items-center gap-1" title="Print this Job Order">🖨️ Print</a></li>`).join('')}
                                         </ul>
                                     ` : '<span class="text-slate-400">None yet</span>'}
@@ -537,7 +540,7 @@ async function openViewPOModal(poId) {
                                 <div>
                                     <span class="font-bold text-slate-700 block mb-1">Delivery Receipts (${deliveries.length}):</span>
                                     ${deliveries.length > 0 ? `
-                                        <ul class="space-y-1">
+                                        <ul class="space-y-1 max-h-40 overflow-y-auto pr-1">
                                             ${deliveries.map(d => `<li class="font-mono bg-white p-2 rounded-lg border border-slate-200"><strong>${d.dr_number}</strong><br><span class="text-[10px] text-slate-500">${NKB.formatNumber(d.total_delivered || 0)} pcs • ${d.status}</span></li>`).join('')}
                                         </ul>
                                     ` : '<span class="text-slate-400">None yet</span>'}
@@ -545,7 +548,7 @@ async function openViewPOModal(poId) {
                                 <div>
                                     <span class="font-bold text-slate-700 block mb-1">Sales Invoices (${invoices.length}):</span>
                                     ${invoices.length > 0 ? `
-                                        <ul class="space-y-1">
+                                        <ul class="space-y-1 max-h-40 overflow-y-auto pr-1">
                                             ${invoices.map(i => `<li class="font-mono bg-white p-2 rounded-lg border border-slate-200"><strong>${i.invoice_number}</strong><br><span class="text-[10px] text-slate-500">${NKB.formatCurrency(i.total_amount)} • ${i.payment_status}</span></li>`).join('')}
                                         </ul>
                                     ` : '<span class="text-slate-400">None yet</span>'}
@@ -556,8 +559,8 @@ async function openViewPOModal(poId) {
                 </div>
 
                 <!-- Footer Actions -->
-                <div class="flex justify-between items-center pt-3 border-t border-slate-100 flex-shrink-0">
-                    <div class="flex items-center gap-2">
+                <div class="flex flex-wrap justify-between items-center gap-2 pt-3 border-t border-slate-100 flex-shrink-0">
+                    <div class="flex flex-wrap items-center gap-2">
                         ${(jobOrders.length === 0 && (!po.status || po.status === 'PENDING_APPROVAL' || po.status === 'APPROVED' || po.status === 'DRAFT')) ? `
                             <button onclick="closeModal(); openEditPOModal('${po.id}');" class="px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-300 rounded-xl font-bold text-xs shadow-sm transition inline-flex items-center gap-1.5" title="Edit PO before entering JO">
                                 <span>✏️ Edit PO</span>
@@ -586,6 +589,11 @@ async function openViewPOModal(poId) {
                                     <span>✓ Dispatched</span>
                                 </span>
                             `}
+                        ` : ''}
+                        ${(NKB.user && (NKB.user.role === 'ADMIN' || NKB.user.role === 'SUPER_ADMIN') && po.status !== 'VOIDED' && po.status !== 'CANCELLED' && po.status !== 'COMPLETED') ? `
+                            <button onclick="voidPO('${po.id}', '${po.po_number}')" class="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 rounded-xl font-bold text-xs shadow-sm transition inline-flex items-center gap-1.5" title="Void this Purchase Order">
+                                <span>🚫 Void Order</span>
+                            </button>
                         ` : ''}
                     </div>
                     <div class="flex items-center gap-2">
@@ -809,8 +817,8 @@ async function openEditPOModal(poId) {
     const deliveryDateFormatted = po.expected_delivery_date ? (po.expected_delivery_date.includes('T') ? po.expected_delivery_date.split('T')[0] : po.expected_delivery_date) : '';
 
     root.innerHTML = `
-        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
-            <div class="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50 overflow-y-auto">
+            <div class="bg-white rounded-2xl max-w-4xl w-full p-6 sm:p-7 shadow-2xl space-y-4 max-h-[92vh] flex flex-col my-auto">
                 <div class="flex justify-between items-center border-b border-slate-100 pb-3 flex-shrink-0">
                     <div>
                         <div class="flex items-center gap-2">
@@ -828,7 +836,7 @@ async function openEditPOModal(poId) {
                         <div>
                             <label class="block text-slate-600 mb-1">Client / Buyer</label>
                             <div class="px-3 py-2 border rounded-xl bg-slate-100 text-slate-800 font-bold">
-                                ${(po.is_vyuceutical_ops === 1 || (po.company_name && po.company_name.toLowerCase().includes('vyuceutical'))) ? `Vyuceutical OPS - ${po.contact_person || po.company_name}` : po.company_name}
+                                ${(po.is_vyuceutical_ops === 1 || (po.company_name && po.company_name.toLowerCase().includes('vyuceutical'))) ? `Vyuceutical OPC - ${po.contact_person || po.company_name}` : po.company_name}
                             </div>
                         </div>
                         <div>
@@ -917,21 +925,23 @@ async function openEditPOModal(poId) {
                             </button>
                         </div>
 
-                        <div class="overflow-x-auto border border-slate-200 rounded-xl">
-                            <table class="w-full text-left text-xs">
-                                <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase">
-                                    <tr>
-                                        <th class="py-2.5 px-3">Product</th>
-                                        <th class="py-2.5 px-3 w-32">Target Qty (pcs)</th>
-                                        <th class="py-2.5 px-3 w-36">Fixed Unit Price (₱)</th>
-                                        <th class="py-2.5 px-3 w-32">Subtotal (₱)</th>
-                                        <th class="py-2.5 px-2 w-12 text-center">Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="edit-po-lines-body" class="divide-y divide-slate-100 font-medium">
-                                    <!-- Dynamic Rows -->
-                                </tbody>
-                            </table>
+                        <div class="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                            <div class="max-h-72 sm:max-h-80 overflow-y-auto overflow-x-auto">
+                                <table class="w-full text-left text-xs">
+                                    <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase sticky top-0 z-10 shadow-sm">
+                                        <tr>
+                                            <th class="py-2.5 px-3">Product</th>
+                                            <th class="py-2.5 px-3 w-32">Target Qty (pcs)</th>
+                                            <th class="py-2.5 px-3 w-36">Fixed Unit Price (₱)</th>
+                                            <th class="py-2.5 px-3 w-32">Subtotal (₱)</th>
+                                            <th class="py-2.5 px-2 w-12 text-center">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="edit-po-lines-body" class="divide-y divide-slate-100 font-medium">
+                                        <!-- Dynamic Rows -->
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
 
@@ -1360,5 +1370,29 @@ window.openViewPOModal = openViewPOModal;
 window.openEditPOModal = openEditPOModal;
 window.closeModal = closeModal;
 window.NKB = NKB;
+
+if (!window.voidPO) {
+    window.voidPO = async function(id, poNumber) {
+        if (!confirm(`Are you sure you want to VOID Purchase Order "${poNumber}"?\n\nThis will mark the order as VOIDED and automatically cancel any open Job Orders. This action cannot be undone.`)) {
+            return;
+        }
+        const res = await NKB.api(`/api/orders/${id}/void`, {
+            method: 'POST',
+            body: JSON.stringify({ reason: 'Voided by user' })
+        });
+        if (res.success) {
+            NKB.showToast(`Purchase Order ${poNumber} has been voided.`, 'success');
+            if (typeof loadOrders === 'function') loadOrders();
+            if (typeof loadDashboard === 'function') loadDashboard();
+            if (typeof loadClientOrders === 'function') loadClientOrders();
+            const root = document.getElementById('modals-root') || document.getElementById('client-modals-root');
+            if (root && root.innerHTML.includes(poNumber) && typeof openViewPOModal === 'function') {
+                await openViewPOModal(id);
+            }
+        } else {
+            NKB.showToast(res.error || 'Failed to void Purchase Order.', 'error');
+        }
+    };
+}
 
 

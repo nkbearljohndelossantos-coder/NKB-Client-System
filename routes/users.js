@@ -87,12 +87,12 @@ router.post('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN)
         });
     }
 
-    // Only SUPER_ADMIN can create another SUPER_ADMIN or ADMIN
-    if ((cleanRole === ROLES.SUPER_ADMIN || cleanRole === ROLES.ADMIN) && req.user.role !== ROLES.SUPER_ADMIN) {
+    // Only SUPER_ADMIN or IT_ADMIN can create another SUPER_ADMIN, IT_ADMIN, or ADMIN
+    if ((cleanRole === ROLES.SUPER_ADMIN || cleanRole === ROLES.IT_ADMIN || cleanRole === ROLES.ADMIN) && req.user.role !== ROLES.SUPER_ADMIN && req.user.role !== ROLES.IT_ADMIN) {
         return res.status(403).json({
             success: false,
             error: 'FORBIDDEN',
-            message: 'Only Super Administrators can create Admin accounts.'
+            message: 'Only Super Administrators or IT Administrators can create Admin accounts.'
         });
     }
 
@@ -168,12 +168,12 @@ router.put('/:id', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMI
         return res.status(404).json({ success: false, error: 'NOT_FOUND', message: 'User not found.' });
     }
 
-    // Protect Super Admin accounts from being modified by ordinary Admin
-    if (targetUser.role === ROLES.SUPER_ADMIN && req.user.role !== ROLES.SUPER_ADMIN) {
+    // Protect Super Admin and IT Admin accounts from being modified by ordinary Admin
+    if ((targetUser.role === ROLES.SUPER_ADMIN || targetUser.role === ROLES.IT_ADMIN) && req.user.role !== ROLES.SUPER_ADMIN && req.user.role !== ROLES.IT_ADMIN) {
         return res.status(403).json({
             success: false,
             error: 'FORBIDDEN',
-            message: 'Only Super Administrators can modify Super Admin accounts.'
+            message: 'Only Super Administrators or IT Administrators can modify Administrative accounts.'
         });
     }
 
@@ -200,8 +200,8 @@ router.put('/:id', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMI
         if (!Object.values(ROLES).includes(cleanRole)) {
             return res.status(400).json({ success: false, error: 'INVALID_ROLE', message: 'Invalid role.' });
         }
-        if (cleanRole === ROLES.SUPER_ADMIN && req.user.role !== ROLES.SUPER_ADMIN) {
-            return res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Cannot promote to Super Admin.' });
+        if ((cleanRole === ROLES.SUPER_ADMIN || cleanRole === ROLES.IT_ADMIN) && req.user.role !== ROLES.SUPER_ADMIN && req.user.role !== ROLES.IT_ADMIN) {
+            return res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Cannot promote to Super Admin or IT Admin.' });
         }
         updatedRole = cleanRole;
     }
@@ -300,8 +300,8 @@ router.post('/:id/reset-password', authenticateToken, requireRoles(ROLES.SUPER_A
         return res.status(404).json({ success: false, error: 'NOT_FOUND', message: 'User not found.' });
     }
 
-    if (targetUser.role === ROLES.SUPER_ADMIN && req.user.role !== ROLES.SUPER_ADMIN) {
-        return res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Cannot reset Super Admin password.' });
+    if ((targetUser.role === ROLES.SUPER_ADMIN || targetUser.role === ROLES.IT_ADMIN) && req.user.role !== ROLES.SUPER_ADMIN && req.user.role !== ROLES.IT_ADMIN) {
+        return res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Cannot reset Super Admin or IT Admin passwords.' });
     }
 
     const passwordHash = bcrypt.hashSync(new_password, 12);

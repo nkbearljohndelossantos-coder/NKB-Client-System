@@ -202,7 +202,7 @@
 
     </div>
 
-    <script src="/js/app.js?v=2.0.8"></script>
+    <script src="/js/app.js?v=2.1.7"></script>
     <script>
         document.addEventListener('DOMContentLoaded', async () => {
             await NKB.init();
@@ -222,14 +222,25 @@
                 document.getElementById('po-delivery-display').textContent = po.expected_delivery_date ? NKB.formatDate(po.expected_delivery_date) : 'As Scheduled';
                 document.getElementById('po-status-badge').innerHTML = NKB.renderStatusBadge(po.status);
 
+                if (po.status === 'VOIDED') {
+                    const watermark = document.createElement('div');
+                    watermark.className = 'absolute inset-0 flex items-center justify-center pointer-events-none select-none z-20';
+                    watermark.innerHTML = '<span class="text-red-500/20 font-black text-7xl uppercase tracking-widest rotate-[-25deg] border-8 border-red-500/20 px-8 py-2 rounded-3xl">VOIDED</span>';
+                    const sheet = document.getElementById('po-printable-sheet');
+                    if (sheet) {
+                        sheet.classList.add('relative');
+                        sheet.appendChild(watermark);
+                    }
+                }
+
                 const isVyuceutical = po.is_vyuceutical_ops === 1 || (po.company_name && po.company_name.toLowerCase().includes('vyuceutical'));
 
                 if (isVyuceutical) {
                     const clientName = po.contact_person || po.company_name || 'Client';
-                    document.getElementById('po-company-name-hdr').textContent = `VYUCEUTICAL OPS - ${clientName.toUpperCase()}`;
+                    document.getElementById('po-company-name-hdr').textContent = `VYUCEUTICAL OPC - ${clientName.toUpperCase()}`;
                     const sub = document.getElementById('po-signatory-sub');
-                    if (sub) sub.textContent = `VYUCEUTICAL OPS - ${clientName.toUpperCase()}`;
-                    document.getElementById('po-client-name').textContent = `Vyuceutical OPS - ${clientName}`;
+                    if (sub) sub.textContent = `VYUCEUTICAL OPC - ${clientName.toUpperCase()}`;
+                    document.getElementById('po-client-name').textContent = `Vyuceutical OPC - ${clientName}`;
                     document.getElementById('po-client-contact').textContent = `Company: ${po.company_name}`;
                 } else {
                     document.getElementById('po-company-name-hdr').textContent = 'NKB MANUFACTURING CORPORATION';

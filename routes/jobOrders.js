@@ -13,7 +13,7 @@ router.get('/', authenticateToken, (req, res) => {
     const { poId, status } = req.query;
 
     let query = `
-        SELECT jo.*, po.po_number, po.client_id, c.company_name, c.contact_person, c.is_vyuceutical_ops,
+        SELECT jo.*, po.po_number, po.so_number, po.po_date, po.created_at as po_created_at, po.client_id, c.company_name, c.contact_person, c.is_vyuceutical_ops,
                COALESCE((SELECT poi.item_name FROM purchase_order_items poi WHERE poi.po_id = jo.po_id AND poi.product_id = jo.product_id LIMIT 1), p.name) as product_name, 
                p.sku, p.unit,
                (SELECT COUNT(*) FROM production_batches WHERE jo_id = jo.id) as batch_count,
@@ -46,7 +46,8 @@ router.get('/', authenticateToken, (req, res) => {
         params.push(status);
     }
 
-    query += ' ORDER BY jo.created_at DESC';
+    // Sort by date encoded (PO created_at descending: newest first, then JO created_at)
+    query += ' ORDER BY po.created_at DESC, jo.created_at ASC';
     const jobOrders = db.prepare(query).all(...params);
 
     return res.json({ success: true, data: jobOrders });
@@ -154,10 +155,10 @@ function getClientConsolidatedJOData(clientId, specificPoId = null, specificJoId
     const primaryPO = pos.length > 0 ? pos[0] : null;
     const uniquePONumbers = Array.from(new Set(pos.map(p => p.po_number).filter(Boolean)));
 
-    // Client-level SO number and JO number (strictly per client, never per individual product!)
-    const clientSO = (primaryPO && primaryPO.so_number)
-        ? primaryPO.so_number
-        : (primaryPO ? primaryPO.po_number.replace('PO-', 'SO-') : (jos.length > 0 ? jos[0].jo_number.replace('JO-', 'SO-') : `SO-2026-${String(client.id).slice(-6)}`));
+    // Client-level SO number and JO number (strictly tallied to PO number)
+    const clientSO = (primaryPO && primaryPO.po_number)
+        ? primaryPO.po_number.replace('PO-', 'SO-')
+        : ((primaryPO && primaryPO.so_number) ? primaryPO.so_number : (jos.length > 0 ? jos[0].jo_number.replace('JO-', 'SO-') : `SO-2026-${String(client.id).slice(-6)}`));
     const clientJO = (primaryPO && primaryPO.po_number)
         ? primaryPO.po_number.replace('PO-', 'JO-')
         : (jos.length > 0 ? jos[0].jo_number : `JO-2026-${String(client.id).slice(-6)}`);
@@ -166,6 +167,8 @@ function getClientConsolidatedJOData(clientId, specificPoId = null, specificJoId
         id: targetJO ? targetJO.id : (primaryPO ? primaryPO.id : client.id),
         client_id: client.id,
         company_name: client.company_name,
+        contact_person: client.contact_person,
+        is_vyuceutical_ops: client.is_vyuceutical_ops,
         client_address: client.address || '-',
         client_phone: client.phone || '',
         client_email: client.email || '',
@@ -174,6 +177,7 @@ function getClientConsolidatedJOData(clientId, specificPoId = null, specificJoId
         jo_number: clientJO,
         po_number: uniquePONumbers.length > 0 ? uniquePONumbers.join(', ') : (primaryPO ? primaryPO.po_number : ''),
         po_date: (primaryPO && primaryPO.po_date) ? primaryPO.po_date : (targetJO ? targetJO.scheduled_start_date : new Date().toISOString().split('T')[0]),
+        created_at: primaryPO ? primaryPO.created_at : (targetJO ? targetJO.created_at : null),
         expected_delivery_date: primaryPO ? primaryPO.expected_delivery_date : null,
         notes: (primaryPO && primaryPO.notes) || (targetJO && targetJO.notes) || '',
         items: items
@@ -182,27 +186,25 @@ function getClientConsolidatedJOData(clientId, specificPoId = null, specificJoId
 
 /**
  * GET /api/job-orders/print/all
- * Fetch print data for all clients with active job orders or approved POs
+ * Fetch print data separated per PO regardless of brand, sorted by date encoded
  */
 router.get('/print/all', authenticateToken, (req, res) => {
-    let clients = [];
+    let poQuery = `
+        SELECT po.id, po.client_id, po.created_at, po.po_date
+        FROM purchase_orders po
+        WHERE po.status IN ('APPROVED', 'IN_PRODUCTION', 'COMPLETED')
+    `;
+    const params = [];
     if (req.user.role === 'CLIENT') {
-        clients = db.prepare('SELECT id, company_name FROM clients WHERE id = ?').all(req.user.client_id);
-    } else {
-        clients = db.prepare(`
-            SELECT DISTINCT c.id, c.company_name 
-            FROM clients c
-            WHERE c.id IN (
-                SELECT po.client_id FROM job_orders jo JOIN purchase_orders po ON jo.po_id = po.id
-                UNION
-                SELECT client_id FROM purchase_orders WHERE status IN ('APPROVED', 'IN_PRODUCTION')
-            )
-            ORDER BY c.company_name ASC
-        `).all();
+        poQuery += ' AND po.client_id = ?';
+        params.push(req.user.client_id);
     }
+    // Separate every order per PO, sorted by date encoded (newest first)
+    poQuery += ' ORDER BY po.created_at DESC';
+    const pos = db.prepare(poQuery).all(...params);
 
-    const results = clients
-        .map(c => getClientConsolidatedJOData(c.id))
+    const results = pos
+        .map(p => getClientConsolidatedJOData(p.client_id, p.id))
         .filter(d => d && d.items && d.items.length > 0);
 
     return res.json({ success: true, data: results });
@@ -210,19 +212,30 @@ router.get('/print/all', authenticateToken, (req, res) => {
 
 /**
  * GET /api/job-orders/client/:clientId
- * Fetch all products in job orders per client for printing
+ * Fetch all purchase orders for this client, separated per PO, sorted by date encoded (newest first)
  */
 router.get('/client/:clientId', authenticateToken, (req, res) => {
     if (req.user.role === 'CLIENT' && req.params.clientId !== req.user.client_id) {
         return res.status(403).json({ success: false, error: 'Access denied.', code: 'FORBIDDEN' });
     }
 
-    const data = getClientConsolidatedJOData(req.params.clientId);
-    if (!data) {
-        return res.status(404).json({ success: false, error: 'Client not found.' });
+    const pos = db.prepare(`
+        SELECT id, client_id, created_at, po_date 
+        FROM purchase_orders 
+        WHERE client_id = ? AND status IN ('APPROVED', 'IN_PRODUCTION', 'COMPLETED')
+        ORDER BY created_at DESC
+    `).all(req.params.clientId);
+
+    if (pos.length === 0) {
+        const data = getClientConsolidatedJOData(req.params.clientId);
+        return res.json({ success: true, data: data ? [data] : [] });
     }
 
-    return res.json({ success: true, data });
+    const results = pos
+        .map(p => getClientConsolidatedJOData(p.client_id, p.id))
+        .filter(d => d && d.items && d.items.length > 0);
+
+    return res.json({ success: true, data: results });
 });
 
 /**
@@ -317,7 +330,7 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), (req, r
         return res.status(404).json({ success: false, error: 'Purchase Order not found.' });
     }
 
-    if (po.status === 'DRAFT' || po.status === 'CANCELLED') {
+    if (po.status === 'DRAFT' || po.status === 'CANCELLED' || po.status === 'VOIDED') {
         return res.status(400).json({ success: false, error: `Cannot create Job Order for PO in status "${po.status}".` });
     }
 

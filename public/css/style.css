@@ -449,6 +449,11 @@ textarea:focus {
 }
 
 /* Custom Scrollbar */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 #f1f5f9;
+}
+
 ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -462,6 +467,12 @@ textarea:focus {
 }
 ::-webkit-scrollbar-thumb:hover {
     background: #94a3b8;
+}
+
+.po-scroll-container {
+    overflow-y: auto;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 /* Toast Notifications */

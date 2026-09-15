@@ -144,19 +144,19 @@ function renderProductCards() {
         <div class="p-4 rounded-2xl border border-slate-200 hover:border-indigo-200 bg-white hover:bg-slate-50/50 shadow-sm transition flex flex-col justify-between space-y-3">
             <div>
                 <div class="flex justify-between items-start">
-                    <span class="font-mono text-xs text-indigo-600 font-bold">${p.effective_sku || p.sku}</span>
+                    <span class="font-mono text-xs text-indigo-900 font-bold bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded">${p.effective_sku || p.sku}</span>
                     <div class="flex items-center gap-1.5">
                         ${p.has_custom_price ? '<span class="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">Contract Rate</span>' : ''}
                         <span class="badge bg-slate-100 text-slate-700 text-[10px]">${p.category}</span>
                     </div>
                 </div>
-                <h4 class="font-bold text-slate-900 text-sm mt-1">${p.name}</h4>
-                <p class="text-[11px] text-slate-500 line-clamp-2 mt-0.5">${p.description || ''}</p>
+                <h4 class="font-black text-slate-950 text-sm mt-1">${p.name}</h4>
+                <p class="text-[11px] text-slate-700 font-medium line-clamp-2 mt-0.5">${p.description || ''}</p>
             </div>
             <div class="pt-2 border-t border-slate-100 flex items-center justify-between gap-3">
                 <div>
-                    <span class="text-[10px] text-slate-400 uppercase font-semibold">Your Price</span>
-                    <div class="text-base font-extrabold text-indigo-950">₱${Number(p.default_price || 0).toFixed(2)}<span class="text-xs text-slate-400 font-normal"> / ${p.unit || 'pc'}</span></div>
+                    <span class="text-[10px] text-slate-600 uppercase font-bold">Your Price</span>
+                    <div class="text-base font-black text-indigo-950">₱${Number(p.default_price || 0).toFixed(2)}<span class="text-xs text-slate-500 font-normal"> / ${p.unit || 'pc'}</span></div>
                 </div>
                 <div class="flex items-center gap-2">
                     <input type="number" min="50" step="50" value="500" id="catalog-qty-${p.id}" class="w-20 px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 text-center focus:ring-2 focus:ring-indigo-500">
@@ -235,8 +235,8 @@ function renderClientCart() {
             return `
                 <tr class="hover:bg-slate-50 transition">
                     <td class="py-2.5 px-3">
-                        <div class="font-bold text-slate-900">${item.name}</div>
-                        <div class="text-[10px] text-slate-400 font-mono">${item.sku}</div>
+                        <div class="font-black text-slate-950 text-xs">${item.name}</div>
+                        <div class="text-[10px] text-indigo-900 font-bold font-mono bg-indigo-50 border border-indigo-200 px-1 rounded inline-block mt-0.5">${item.sku}</div>
                     </td>
                     <td class="py-2.5 px-2">
                         <input type="number" min="1" step="1" 
@@ -276,29 +276,44 @@ async function submitClientPO(e) {
     const policy = document.querySelector('input[name="client_billing_policy"]:checked')?.value || 'ACTUAL_DELIVERY';
     const notes = document.getElementById('client-order-notes')?.value || '';
 
-    const res = await NKB.api('/api/orders', {
-        method: 'POST',
-        body: JSON.stringify({
-            billing_policy: policy,
-            notes,
-            items: clientCartItems.map(item => ({
-                product_id: item.product_id,
-                target_quantity: item.target_quantity,
-                unit_price: Math.round(Number(item.unit_price || 0) * 100) / 100
-            }))
-        })
-    });
+    const submitBtn = e.target.querySelector('button[type="submit"]') || document.querySelector('#client-order-form button[type="submit"]');
+    if (submitBtn) {
+        if (submitBtn.disabled) return;
+        submitBtn.disabled = true;
+        submitBtn.dataset.origHtml = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Submitting Order...';
+    }
 
-    if (res.success) {
-        NKB.showToast(`🎉 Purchase Order ${res.data.po_number} submitted successfully!`, 'success');
-        clientCartItems = [];
-        renderClientCart();
-        switchClientTab('my-orders');
-        if (res.data && res.data.id) {
-            await openViewPOModal(res.data.id);
+    try {
+        const res = await NKB.api('/api/orders', {
+            method: 'POST',
+            body: JSON.stringify({
+                billing_policy: policy,
+                notes,
+                items: clientCartItems.map(item => ({
+                    product_id: item.product_id,
+                    target_quantity: item.target_quantity,
+                    unit_price: Math.round(Number(item.unit_price || 0) * 100) / 100
+                }))
+            })
+        });
+
+        if (res.success) {
+            NKB.showToast(`🎉 Purchase Order ${res.data.po_number} submitted successfully!`, 'success');
+            clientCartItems = [];
+            renderClientCart();
+            switchClientTab('my-orders');
+            if (res.data && res.data.id) {
+                await openViewPOModal(res.data.id);
+            }
+        } else {
+            NKB.showToast(res.error || 'Failed to submit order.', 'error');
         }
-    } else {
-        NKB.showToast(res.error || 'Failed to submit order.', 'error');
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            if (submitBtn.dataset.origHtml) submitBtn.innerHTML = submitBtn.dataset.origHtml;
+        }
     }
 }
 
@@ -313,14 +328,14 @@ async function loadClientOrders() {
         tbody.innerHTML = res.data.map(po => {
             const itemsList = (po.items && po.items.length > 0)
                 ? po.items.map(it => `
-                    <div class="flex items-center justify-between text-[11px] bg-slate-50 hover:bg-indigo-50/50 p-1.5 rounded-lg border border-slate-200 transition">
+                    <div class="flex items-center justify-between text-[11px] bg-slate-50 hover:bg-indigo-50/50 p-2 rounded-xl border border-slate-200 transition mb-1 last:mb-0">
                         <div class="truncate max-w-[150px]">
-                            <span class="font-bold text-slate-900 block truncate" title="${it.product_name}">${it.product_name}</span>
-                            <span class="text-[10px] text-slate-400 font-mono">${it.sku}</span>
+                            <span class="font-black text-slate-950 text-xs block truncate" title="${it.product_name}">${it.product_name}</span>
+                            <span class="text-[10px] text-indigo-900 font-mono font-bold bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200 inline-block mt-0.5">${it.sku}</span>
                         </div>
                         <div class="text-right font-mono ml-2 flex-shrink-0">
-                            <span class="font-bold text-slate-800 block">${NKB.formatNumber(it.target_quantity)} ${it.unit || 'pcs'}</span>
-                            <span class="text-[10px] text-indigo-700 font-semibold">@ ₱${Number(it.unit_price).toFixed(2)}</span>
+                            <span class="font-black text-slate-950 text-xs block">${NKB.formatNumber(it.target_quantity)} ${it.unit || 'pcs'}</span>
+                            <span class="text-[10px] text-emerald-900 font-bold font-mono">@ ₱${Number(it.unit_price).toFixed(2)}</span>
                         </div>
                     </div>
                 `).join('')

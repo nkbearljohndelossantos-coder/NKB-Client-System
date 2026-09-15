@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS users (
     name TEXT NOT NULL,
     email TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
-    role TEXT NOT NULL CHECK (role IN ('SUPER_ADMIN', 'ADMIN', 'PRODUCTION', 'WAREHOUSE', 'ACCOUNTING', 'CLIENT')),
+    role TEXT NOT NULL CHECK (role IN ('SUPER_ADMIN', 'IT_ADMIN', 'ADMIN', 'PRODUCTION', 'WAREHOUSE', 'ACCOUNTING', 'INVENTORY', 'CLIENT')),
     client_id TEXT,
     phone TEXT,
     is_active INTEGER NOT NULL DEFAULT 1,
@@ -108,12 +108,19 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
     expected_delivery_date TEXT,
     tolerance_percent REAL NOT NULL DEFAULT 10.0,
     billing_policy TEXT NOT NULL DEFAULT 'ACTUAL_DELIVERY' CHECK (billing_policy IN ('ACTUAL_DELIVERY', 'FIXED_PO_BUFFER')),
-    status TEXT NOT NULL DEFAULT 'PENDING_APPROVAL' CHECK (status IN ('DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'IN_PRODUCTION', 'PARTIALLY_DELIVERED', 'COMPLETED', 'CANCELLED')),
+    status TEXT NOT NULL DEFAULT 'PENDING_APPROVAL' CHECK (status IN ('DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'IN_PRODUCTION', 'PARTIALLY_DELIVERED', 'COMPLETED', 'CANCELLED', 'VOIDED')),
     notes TEXT,
     subtotal REAL NOT NULL DEFAULT 0.0,
     tax_percent REAL NOT NULL DEFAULT 0.0,
     tax_amount REAL NOT NULL DEFAULT 0.0,
     grand_total REAL NOT NULL DEFAULT 0.0,
+    accounting_confirmed INTEGER NOT NULL DEFAULT 0,
+    accounting_confirmed_at TEXT,
+    accounting_confirmed_by TEXT,
+    inventory_confirmed INTEGER NOT NULL DEFAULT 0,
+    inventory_confirmed_at TEXT,
+    inventory_confirmed_by TEXT,
+    raw_materials_status TEXT DEFAULT 'PENDING_CHECK',
     created_by TEXT NOT NULL,
     approved_by TEXT,
     approved_at TEXT,
@@ -121,6 +128,23 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE RESTRICT,
     FOREIGN KEY (created_by) REFERENCES users(id)
+);
+
+-- Supply Requisitions for Purchasing Department
+CREATE TABLE IF NOT EXISTS supply_requests (
+    id TEXT PRIMARY KEY,
+    po_id TEXT NOT NULL,
+    requested_by TEXT NOT NULL,
+    department TEXT NOT NULL DEFAULT 'Purchasing Department',
+    materials_needed TEXT NOT NULL,
+    urgency TEXT NOT NULL DEFAULT 'NORMAL',
+    target_date TEXT,
+    notes TEXT,
+    status TEXT NOT NULL DEFAULT 'SUBMITTED',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (po_id) REFERENCES purchase_orders(id) ON DELETE CASCADE,
+    FOREIGN KEY (requested_by) REFERENCES users(id)
 );
 
 -- Purchase Order Items
@@ -406,6 +430,23 @@ CREATE TABLE IF NOT EXISTS inventory_movements (
     FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
     FOREIGN KEY (batch_id) REFERENCES production_batches(id) ON DELETE SET NULL,
     FOREIGN KEY (created_by) REFERENCES users(id)
+);
+
+-- Supply Requests (Purchasing Department requisitions from Inventory)
+CREATE TABLE IF NOT EXISTS supply_requests (
+    id TEXT PRIMARY KEY,
+    po_id TEXT NOT NULL,
+    requested_by TEXT NOT NULL,
+    department TEXT NOT NULL DEFAULT 'Purchasing Department',
+    materials_needed TEXT NOT NULL,
+    urgency TEXT NOT NULL DEFAULT 'NORMAL',
+    target_date TEXT,
+    notes TEXT,
+    status TEXT NOT NULL DEFAULT 'SUBMITTED',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (po_id) REFERENCES purchase_orders(id) ON DELETE CASCADE,
+    FOREIGN KEY (requested_by) REFERENCES users(id) ON DELETE RESTRICT
 );
 
 -- Audit Logs

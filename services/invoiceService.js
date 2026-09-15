@@ -235,7 +235,7 @@ function createInvoiceFromDR({ drId, createdBy, userId, userRole, userName, note
             db.prepare(`
                 UPDATE purchase_orders
                 SET status = 'PARTIALLY_DELIVERED', updated_at = datetime('now')
-                WHERE id = ? AND status != 'COMPLETED'
+                WHERE id = ? AND status NOT IN ('COMPLETED', 'CANCELLED', 'VOIDED')
             `).run(dr.po_id);
         }
 

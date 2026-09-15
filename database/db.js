@@ -37,6 +37,150 @@ function runMigrations(dbInstance, isMysql) {
         try {
             dbInstance.exec(`ALTER TABLE purchase_order_items ADD COLUMN item_name ${textType};`);
         } catch (_) {}
+        if (isMysql) {
+            try {
+                dbInstance.exec("ALTER TABLE purchase_orders MODIFY COLUMN status ENUM('DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'IN_PRODUCTION', 'PARTIALLY_DELIVERED', 'COMPLETED', 'CANCELLED', 'VOIDED') NOT NULL DEFAULT 'PENDING_APPROVAL';");
+            } catch (_) {}
+        } else {
+            try {
+                const tableSql = dbInstance.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'purchase_orders'").get()?.sql || '';
+                if (tableSql && !tableSql.includes('VOIDED')) {
+                    dbInstance.exec(`
+                        PRAGMA foreign_keys = OFF;
+                        CREATE TABLE purchase_orders_new (
+                            id TEXT PRIMARY KEY,
+                            po_number TEXT UNIQUE NOT NULL,
+                            so_number TEXT,
+                            client_id TEXT NOT NULL,
+                            po_date TEXT NOT NULL DEFAULT (date('now')),
+                            expected_delivery_date TEXT,
+                            tolerance_percent REAL NOT NULL DEFAULT 10.0,
+                            billing_policy TEXT NOT NULL DEFAULT 'ACTUAL_DELIVERY' CHECK (billing_policy IN ('ACTUAL_DELIVERY', 'FIXED_PO_BUFFER')),
+                            status TEXT NOT NULL DEFAULT 'PENDING_APPROVAL' CHECK (status IN ('DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'IN_PRODUCTION', 'PARTIALLY_DELIVERED', 'COMPLETED', 'CANCELLED', 'VOIDED')),
+                            notes TEXT,
+                            subtotal REAL NOT NULL DEFAULT 0.0,
+                            tax_percent REAL NOT NULL DEFAULT 0.0,
+                            tax_amount REAL NOT NULL DEFAULT 0.0,
+                            grand_total REAL NOT NULL DEFAULT 0.0,
+                            created_by TEXT NOT NULL,
+                            approved_by TEXT,
+                            approved_at TEXT,
+                            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                            FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE RESTRICT,
+                            FOREIGN KEY (created_by) REFERENCES users(id)
+                        );
+                        INSERT INTO purchase_orders_new (id, po_number, so_number, client_id, po_date, expected_delivery_date, tolerance_percent, billing_policy, status, notes, subtotal, tax_percent, tax_amount, grand_total, created_by, approved_by, approved_at, created_at, updated_at)
+                        SELECT id, po_number, so_number, client_id, po_date, expected_delivery_date, tolerance_percent, billing_policy, status, notes, subtotal, tax_percent, tax_amount, grand_total, created_by, approved_by, approved_at, created_at, updated_at FROM purchase_orders;
+                        DROP TABLE purchase_orders;
+                        ALTER TABLE purchase_orders_new RENAME TO purchase_orders;
+                        CREATE INDEX IF NOT EXISTS idx_po_client ON purchase_orders(client_id);
+                        CREATE INDEX IF NOT EXISTS idx_po_status ON purchase_orders(status);
+                        PRAGMA foreign_keys = ON;
+                    `);
+                }
+            } catch (sqliteMigErr) {
+                console.warn('SQLite purchase_orders status migration note:', sqliteMigErr.message);
+            }
+        }
+
+        // Migrate users table to support IT_ADMIN and INVENTORY roles
+        if (isMysql) {
+            try {
+                dbInstance.exec("ALTER TABLE users MODIFY COLUMN role ENUM('SUPER_ADMIN', 'IT_ADMIN', 'ADMIN', 'PRODUCTION', 'WAREHOUSE', 'ACCOUNTING', 'INVENTORY', 'CLIENT') NOT NULL;");
+            } catch (_) {}
+        } else {
+            try {
+                const userSql = dbInstance.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'users'").get()?.sql || '';
+                if (userSql && (!userSql.includes('IT_ADMIN') || !userSql.includes('INVENTORY'))) {
+                    dbInstance.exec(`
+                        PRAGMA foreign_keys = OFF;
+                        CREATE TABLE users_new (
+                            id TEXT PRIMARY KEY,
+                            name TEXT NOT NULL,
+                            email TEXT UNIQUE NOT NULL,
+                            password_hash TEXT NOT NULL,
+                            role TEXT NOT NULL CHECK (role IN ('SUPER_ADMIN', 'IT_ADMIN', 'ADMIN', 'PRODUCTION', 'WAREHOUSE', 'ACCOUNTING', 'INVENTORY', 'CLIENT')),
+                            client_id TEXT,
+                            phone TEXT,
+                            is_active INTEGER NOT NULL DEFAULT 1,
+                            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                            FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL
+                        );
+                        INSERT INTO users_new (id, name, email, password_hash, role, client_id, phone, is_active, created_at, updated_at)
+                        SELECT id, name, email, password_hash, role, client_id, phone, is_active, created_at, updated_at FROM users;
+                        DROP TABLE users;
+                        ALTER TABLE users_new RENAME TO users;
+                        CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+                        CREATE INDEX IF NOT EXISTS idx_users_client ON users(client_id);
+                        PRAGMA foreign_keys = ON;
+                    `);
+                    console.log('✅ SQLite users table upgraded with IT_ADMIN and INVENTORY check constraints');
+                }
+            } catch (uMigErr) {
+                console.warn('SQLite users table migration note:', uMigErr.message);
+            }
+        }
+
+        // Ensure voided POs are prefixed with VOID- so they do not block sequence numbering
+        try {
+            const voidedWithoutPrefix = dbInstance.prepare("SELECT id, po_number FROM purchase_orders WHERE status = 'VOIDED' AND po_number NOT LIKE 'VOID-%'").all();
+            for (const vpo of voidedWithoutPrefix) {
+                const targetPoNum = `VOID-${vpo.po_number}`;
+                const exists = dbInstance.prepare("SELECT id FROM purchase_orders WHERE po_number = ?").get(targetPoNum);
+                const finalPoNum = exists ? `VOID-${vpo.po_number}-${vpo.id.slice(0, 6)}` : targetPoNum;
+                dbInstance.prepare("UPDATE purchase_orders SET po_number = ? WHERE id = ?").run(finalPoNum, vpo.id);
+            }
+        } catch (_) {}
+
+        // User explicit correction: PO number 18 should be number 5
+        try {
+            const po18 = dbInstance.prepare("SELECT id FROM purchase_orders WHERE po_number = 'PO-2026-000018'").get();
+            const po5Exists = dbInstance.prepare("SELECT id FROM purchase_orders WHERE po_number = 'PO-2026-000005'").get();
+            if (po18 && !po5Exists) {
+                dbInstance.prepare("UPDATE purchase_orders SET po_number = 'PO-2026-000005' WHERE id = ?").run(po18.id);
+                try {
+                    dbInstance.prepare("UPDATE audit_logs SET details = REPLACE(details, 'PO-2026-000018', 'PO-2026-000005') WHERE details LIKE '%PO-2026-000018%'").run();
+                } catch (_) {}
+            }
+        } catch (_) {}
+
+        // Tally SO numbers with PO numbers (specifically ensuring PO-5 has SO-5, not 18)
+        try {
+            dbInstance.prepare(`
+                UPDATE purchase_orders 
+                SET so_number = REPLACE(po_number, 'PO-', 'SO-') 
+                WHERE po_number LIKE 'PO-%' AND (so_number IS NULL OR so_number != REPLACE(po_number, 'PO-', 'SO-'));
+            `).run();
+            try {
+                dbInstance.prepare("UPDATE audit_logs SET details = REPLACE(details, 'SO-2026-000018', 'SO-2026-000005') WHERE details LIKE '%SO-2026-000018%'").run();
+            } catch (_) {}
+        } catch (_) {}
+
+        // Keep document_sequences aligned with max active (non-voided) PO
+        try {
+            const year = new Date().getFullYear();
+            const activeRows = dbInstance.prepare("SELECT po_number FROM purchase_orders WHERE status != 'VOIDED' AND po_number LIKE ?").all(`PO-${year}-%`);
+            let maxSeq = 0;
+            for (const row of activeRows) {
+                const parts = row.po_number.split('-');
+                if (parts.length === 3) {
+                    const seq = parseInt(parts[2], 10);
+                    if (!isNaN(seq) && seq > maxSeq) {
+                        maxSeq = seq;
+                    }
+                }
+            }
+            if (maxSeq > 0) {
+                const existingSeq = dbInstance.prepare("SELECT doc_type FROM document_sequences WHERE doc_type = 'PO'").get();
+                if (existingSeq) {
+                    dbInstance.prepare("UPDATE document_sequences SET current_year = ?, last_sequence = ? WHERE doc_type = 'PO'").run(year, maxSeq);
+                } else {
+                    dbInstance.prepare("INSERT INTO document_sequences (doc_type, current_year, last_sequence) VALUES ('PO', ?, ?)").run(year, maxSeq);
+                }
+            }
+        } catch (_) {}
         // Ensure PO-2026-000004 is under Vyuceutical OPC (Janice Sandoval I)
         try {
             if (isMysql) {
@@ -54,6 +198,18 @@ function runMigrations(dbInstance, isMysql) {
                       AND EXISTS (SELECT 1 FROM clients WHERE contact_person LIKE '%Janice Sandoval%');
                 `);
             }
+        } catch (_) {}
+        // Ensure all references to Vyuceutical OPS in clients, purchase_orders, and audit_logs are updated to Vyuceutical OPC
+        try {
+            dbInstance.exec(`
+                UPDATE clients SET company_name = REPLACE(company_name, 'Vyuceutical OPS', 'Vyuceutical OPC') WHERE company_name LIKE '%Vyuceutical OPS%';
+                UPDATE clients SET company_name = REPLACE(company_name, 'VYUCEUTICAL OPS', 'VYUCEUTICAL OPC') WHERE company_name LIKE '%VYUCEUTICAL OPS%';
+                UPDATE clients SET company_name = REPLACE(company_name, 'OPS', 'OPC') WHERE company_name LIKE '%Vyuceutical%OPS%';
+                UPDATE purchase_orders SET notes = REPLACE(notes, 'Vyuceutical OPS', 'Vyuceutical OPC') WHERE notes LIKE '%Vyuceutical OPS%';
+                UPDATE purchase_orders SET notes = REPLACE(notes, 'VYUCEUTICAL OPS', 'VYUCEUTICAL OPC') WHERE notes LIKE '%VYUCEUTICAL OPS%';
+                UPDATE audit_logs SET details = REPLACE(details, 'Vyuceutical OPS', 'Vyuceutical OPC') WHERE details LIKE '%Vyuceutical OPS%';
+                UPDATE audit_logs SET details = REPLACE(details, 'VYUCEUTICAL OPS', 'VYUCEUTICAL OPC') WHERE details LIKE '%VYUCEUTICAL OPS%';
+            `);
         } catch (_) {}
         // Clean item_name for all Vyuceutical PO items
         try {
@@ -96,6 +252,101 @@ function runMigrations(dbInstance, isMysql) {
             }
         } catch (cleanErr) {
             console.warn('Item name cleaning note:', cleanErr.message);
+        }
+
+        // Schema Upgrades: Purchase Orders Confirmation & Raw Materials Management
+        const poCols = [
+            { name: 'accounting_confirmed', type: `${intType} DEFAULT 0` },
+            { name: 'accounting_confirmed_at', type: textType },
+            { name: 'accounting_confirmed_by', type: textType },
+            { name: 'inventory_confirmed', type: `${intType} DEFAULT 0` },
+            { name: 'inventory_confirmed_at', type: textType },
+            { name: 'inventory_confirmed_by', type: textType },
+            { name: 'raw_materials_status', type: `${textType} DEFAULT 'PENDING_CHECK'` }
+        ];
+        for (const col of poCols) {
+            try {
+                dbInstance.exec(`ALTER TABLE purchase_orders ADD COLUMN ${col.name} ${col.type};`);
+            } catch (_) {}
+        }
+
+        // Create supply_requests table for Purchasing Department requisitions
+        try {
+            if (isMysql) {
+                dbInstance.exec(`
+                    CREATE TABLE IF NOT EXISTS supply_requests (
+                        id VARCHAR(36) PRIMARY KEY,
+                        po_id VARCHAR(36) NOT NULL,
+                        requested_by VARCHAR(36) NOT NULL,
+                        department VARCHAR(100) NOT NULL DEFAULT 'Purchasing Department',
+                        materials_needed TEXT NOT NULL,
+                        urgency VARCHAR(50) NOT NULL DEFAULT 'NORMAL',
+                        target_date VARCHAR(50),
+                        notes TEXT,
+                        status VARCHAR(50) NOT NULL DEFAULT 'SUBMITTED',
+                        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        INDEX idx_sr_po (po_id)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+                `);
+            } else {
+                dbInstance.exec(`
+                    CREATE TABLE IF NOT EXISTS supply_requests (
+                        id TEXT PRIMARY KEY,
+                        po_id TEXT NOT NULL,
+                        requested_by TEXT NOT NULL,
+                        department TEXT NOT NULL DEFAULT 'Purchasing Department',
+                        materials_needed TEXT NOT NULL,
+                        urgency TEXT NOT NULL DEFAULT 'NORMAL',
+                        target_date TEXT,
+                        notes TEXT,
+                        status TEXT NOT NULL DEFAULT 'SUBMITTED',
+                        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+                    );
+                `);
+            }
+        } catch (srErr) {
+            console.warn('Supply requests table init note:', srErr.message);
+        }
+
+        // Existing active orders are marked as confirmed
+        try {
+            dbInstance.exec(`
+                UPDATE purchase_orders 
+                SET accounting_confirmed = 1, inventory_confirmed = 1, raw_materials_status = 'SUFFICIENT' 
+                WHERE status IN ('APPROVED', 'IN_PRODUCTION', 'COMPLETED') 
+                  AND (accounting_confirmed = 0 OR accounting_confirmed IS NULL);
+            `);
+        } catch (_) {}
+
+        // Seed IT Admin & Inventory users if not already present
+        try {
+            const itAdminEmail = 'itadmin@nkbmanufacturing.com';
+            const existingIT = dbInstance.prepare('SELECT id FROM users WHERE LOWER(email) = ?').get(itAdminEmail);
+            if (!existingIT) {
+                const salt = bcrypt.genSaltSync(10);
+                const itHash = bcrypt.hashSync('ITAdminPassword@2026!', salt);
+                dbInstance.prepare(`
+                    INSERT INTO users (id, name, email, password_hash, role, is_active, created_at, updated_at)
+                    VALUES (?, 'IT Administrator', ?, ?, 'IT_ADMIN', 1, datetime('now'), datetime('now'))
+                `).run(uuidv4(), itAdminEmail, itHash);
+                console.log('✅ Created IT Admin user: itadmin@nkbmanufacturing.com');
+            }
+
+            const invEmail = 'inventory@nkbmanufacturing.com';
+            const existingInv = dbInstance.prepare('SELECT id FROM users WHERE LOWER(email) = ?').get(invEmail);
+            if (!existingInv) {
+                const salt = bcrypt.genSaltSync(10);
+                const invHash = bcrypt.hashSync('Inventory123!', salt);
+                dbInstance.prepare(`
+                    INSERT INTO users (id, name, email, password_hash, role, is_active, created_at, updated_at)
+                    VALUES (?, 'Inventory Officer', ?, ?, 'INVENTORY', 1, datetime('now'), datetime('now'))
+                `).run(uuidv4(), invEmail, invHash);
+                console.log('✅ Created Inventory user: inventory@nkbmanufacturing.com');
+            }
+        } catch (userSeedErr) {
+            console.warn('User seed note:', userSeedErr.message);
         }
     } catch (migErr) {
         console.warn('Migration note:', migErr.message);
@@ -249,25 +500,46 @@ if (useMysql) {
         console.error('Client provision error:', err.message);
     }
 
+    // Auto-provision IT Admin on startup (Identical authority as Super Admin)
+    try {
+        const itAdminEmail = (process.env.INITIAL_IT_ADMIN_EMAIL || 'itadmin@nkbmanufacturing.com').trim().toLowerCase();
+        const itAdminUser = db.prepare("SELECT id FROM users WHERE LOWER(email) = ? LIMIT 1").get(itAdminEmail);
+        const itAdminPassHash = '$2b$10$TO5/qyzLQrL4QjoA7wclpOmWIzUDesoSlAsGXIvL4yQo505sW0cZm'; // bcrypt for ITAdminPassword@2026!
+        
+        if (!itAdminUser) {
+            db.prepare(`
+                INSERT INTO users (id, name, email, password_hash, role, is_active)
+                VALUES ('a0000000-0000-0000-0000-000000000002', 'IT Administrator', ?, ?, 'IT_ADMIN', 1)
+            `).run(itAdminEmail, itAdminPassHash);
+            console.log(`💻 Auto-provisioned IT Admin: ${itAdminEmail}`);
+        } else {
+            db.prepare("UPDATE users SET password_hash = ?, role = 'IT_ADMIN', is_active = 1 WHERE id = ?").run(itAdminPassHash, itAdminUser.id);
+        }
+    } catch (err) {
+        console.error('IT Admin provision error:', err.message);
+    }
+
     // Auto-provision Operational Staff Accounts if missing
     try {
         const staffPassHash = '$2b$10$kl1WcRCmVd96aR4ozG/Qk.pkgDmHagy7Kz2ec2rVi9e2xjn338bh.'; // bcrypt for Staff123!
         const defaultStaff = [
-            { id: 'b0000000-0000-0000-0000-000000000001', name: 'Production Supervisor', email: 'production@nkbmanufacturing.com', role: 'PRODUCTION' },
-            { id: 'c0000000-0000-0000-0000-000000000001', name: 'Logistics & Warehouse Officer', email: 'warehouse@nkbmanufacturing.com', role: 'WAREHOUSE' },
-            { id: 'd0000000-0000-0000-0000-000000000001', name: 'Senior Accountant', email: 'accounting@nkbmanufacturing.com', role: 'ACCOUNTING' }
+            { id: 'b0000000-0000-0000-0000-000000000001', name: 'Production Supervisor', email: 'production@nkbmanufacturing.com', role: 'PRODUCTION', hash: staffPassHash },
+            { id: 'c0000000-0000-0000-0000-000000000001', name: 'Logistics & Warehouse Officer', email: 'warehouse@nkbmanufacturing.com', role: 'WAREHOUSE', hash: staffPassHash },
+            { id: 'd0000000-0000-0000-0000-000000000001', name: 'Senior Accountant', email: 'accounting@nkbmanufacturing.com', role: 'ACCOUNTING', hash: staffPassHash },
+            { id: 'e0000000-0000-0000-0000-000000000001', name: 'Inventory Officer', email: 'inventory@nkbmanufacturing.com', role: 'INVENTORY', hash: '$2b$10$4sevv4zs6rfH/jwtBabcPeAFyGSkvf/1tJ5DGlAfVnZkrQsftdKvC' }
         ];
 
         for (const staff of defaultStaff) {
             const existing = db.prepare("SELECT id FROM users WHERE LOWER(email) = ? LIMIT 1").get(staff.email);
+            const useHash = staff.hash || staffPassHash;
             if (!existing) {
                 db.prepare(`
                     INSERT INTO users (id, name, email, password_hash, role, is_active)
                     VALUES (?, ?, ?, ?, ?, 1)
-                `).run(staff.id, staff.name, staff.email, staffPassHash, staff.role);
+                `).run(staff.id, staff.name, staff.email, useHash, staff.role);
                 console.log(`👷 Auto-provisioned Staff: ${staff.name} (${staff.email})`);
             } else {
-                db.prepare("UPDATE users SET password_hash = ?, is_active = 1 WHERE id = ?").run(staffPassHash, existing.id);
+                db.prepare("UPDATE users SET password_hash = ?, role = ?, is_active = 1 WHERE id = ?").run(useHash, staff.role, existing.id);
             }
         }
     } catch (err) {

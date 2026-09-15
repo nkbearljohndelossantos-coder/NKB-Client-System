@@ -92,6 +92,11 @@ app.get('/favicon.ico', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'favicon.svg'));
 });
 
+// Testing Web Portal
+app.get(['/test', '/qa'], (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'test.html'));
+});
+
 app.get('/api/health', (req, res) => {
     res.json({
         status: 'ok',

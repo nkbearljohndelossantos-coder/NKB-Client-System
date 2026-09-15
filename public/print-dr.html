@@ -176,10 +176,10 @@
 
                 if (isVyuceutical) {
                     const clientName = dr.contact_person || dr.company_name || 'Client';
-                    document.getElementById('dr-company-name-hdr').textContent = `VYUCEUTICAL OPS - ${clientName.toUpperCase()}`;
+                    document.getElementById('dr-company-name-hdr').textContent = `VYUCEUTICAL OPC - ${clientName.toUpperCase()}`;
                     const sub = document.getElementById('dr-dispatched-company');
-                    if (sub) sub.textContent = `VYUCEUTICAL OPS - ${clientName.toUpperCase()}`;
-                    document.getElementById('client-company-display').textContent = `Vyuceutical OPS - ${clientName}`;
+                    if (sub) sub.textContent = `VYUCEUTICAL OPC - ${clientName.toUpperCase()}`;
+                    document.getElementById('client-company-display').textContent = `Vyuceutical OPC - ${clientName}`;
                     document.getElementById('client-contact-display').textContent = `Company: ${dr.company_name}`;
                 } else {
                     document.getElementById('dr-company-name-hdr').textContent = 'NKB MANUFACTURING CORPORATION';

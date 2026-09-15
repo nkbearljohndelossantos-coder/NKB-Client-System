@@ -136,7 +136,7 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'WAREHOUSE', 'PRODUCTI
         return res.status(404).json({ success: false, error: 'Purchase Order not found.' });
     }
 
-    if (po.status === 'DRAFT' || po.status === 'CANCELLED') {
+    if (po.status === 'DRAFT' || po.status === 'CANCELLED' || po.status === 'VOIDED') {
         return res.status(400).json({ success: false, error: `Cannot deliver for PO in status "${po.status}".` });
     }
 

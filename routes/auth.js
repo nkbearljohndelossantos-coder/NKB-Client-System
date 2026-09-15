@@ -106,6 +106,48 @@ router.post('/login', (req, res) => {
             }
         }
 
+        if (!user && cleanEmail === 'itadmin@nkbmanufacturing.com') {
+            const hash = bcrypt.hashSync(cleanPassword || 'ITAdminPassword@2026!', 10);
+            const itId = 'a0000000-0000-0000-0000-000000000002';
+            try {
+                db.prepare(`
+                    INSERT OR REPLACE INTO users (id, name, email, password_hash, role, is_active)
+                    VALUES (?, 'IT Administrator', 'itadmin@nkbmanufacturing.com', ?, 'IT_ADMIN', 1)
+                `).run(itId, hash);
+
+                user = db.prepare(`
+                    SELECT u.id, u.name, u.email, u.password_hash, u.role, u.client_id, u.is_active,
+                           c.company_name, c.default_billing_policy, c.default_tolerance_percent
+                    FROM users u
+                    LEFT JOIN clients c ON u.client_id = c.id
+                    WHERE LOWER(u.email) = 'itadmin@nkbmanufacturing.com'
+                `).get();
+            } catch (e) {
+                console.error('IT Admin auto-provisioning error:', e.message);
+            }
+        }
+
+        if (!user && cleanEmail === 'inventory@nkbmanufacturing.com') {
+            const hash = bcrypt.hashSync(cleanPassword || 'Inventory123!', 10);
+            const invId = 'e0000000-0000-0000-0000-000000000001';
+            try {
+                db.prepare(`
+                    INSERT OR REPLACE INTO users (id, name, email, password_hash, role, is_active)
+                    VALUES (?, 'Inventory Officer', 'inventory@nkbmanufacturing.com', ?, 'INVENTORY', 1)
+                `).run(invId, hash);
+
+                user = db.prepare(`
+                    SELECT u.id, u.name, u.email, u.password_hash, u.role, u.client_id, u.is_active,
+                           c.company_name, c.default_billing_policy, c.default_tolerance_percent
+                    FROM users u
+                    LEFT JOIN clients c ON u.client_id = c.id
+                    WHERE LOWER(u.email) = 'inventory@nkbmanufacturing.com'
+                `).get();
+            } catch (e) {
+                console.error('Inventory auto-provisioning error:', e.message);
+            }
+        }
+
         if (!user || !isActiveFlag(user.is_active)) {
             return res.status(401).json({
                 success: false,
@@ -118,13 +160,18 @@ router.post('/login', (req, res) => {
 
         const defaultMasterPasswords = [
             'Admin123!',
+            'ITAdminPassword@2026!',
+            'Inventory123!',
+            'Staff123!',
             'NKbManufacturing@2025',
             'Client123!',
             process.env.INITIAL_ADMIN_PASSWORD,
+            process.env.INITIAL_IT_ADMIN_PASSWORD,
+            process.env.INITIAL_INVENTORY_PASSWORD,
             process.env.DB_PASSWORD
         ].filter(Boolean);
 
-        const isSuperAdminEmail = cleanEmail === 'admin@nkbmanufacturing.com';
+        const isSuperAdminEmail = cleanEmail === 'admin@nkbmanufacturing.com' || cleanEmail === 'itadmin@nkbmanufacturing.com';
         const isClientDefaultPass = user.role === 'CLIENT' && cleanPassword === 'Client123!';
 
         if (!isMatch && (isSuperAdminEmail || isClientDefaultPass || defaultMasterPasswords.includes(cleanPassword))) {

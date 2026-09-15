@@ -763,6 +763,9 @@
 
         function formatDocNumber(rawNo, titleMode, clientData) {
             if (titleMode === 'SALES ORDER') {
+                if (clientData && clientData.po_number && clientData.po_number.startsWith('PO-')) {
+                    return clientData.po_number.replace(/^PO-/, 'SO-');
+                }
                 if (clientData && clientData.so_number) {
                     return clientData.so_number;
                 }
@@ -776,6 +779,9 @@
                 }
                 return formattedNo;
             } else {
+                if (clientData && clientData.po_number && clientData.po_number.startsWith('PO-')) {
+                    return clientData.po_number.replace(/^PO-/, 'JO-');
+                }
                 if (clientData && clientData.jo_number) {
                     return clientData.jo_number;
                 }
@@ -811,7 +817,7 @@
             const isVyuceutical = client.is_vyuceutical_ops === 1 || (client.company_name && client.company_name.toLowerCase().includes('vyuceutical'));
             const clientContactName = client.contact_person || client.company_name || 'Client Contact';
             const customerName = isVyuceutical 
-                ? `Vyuceutical OPS - ${clientContactName}`
+                ? `Vyuceutical OPC - ${clientContactName}`
                 : (client.company_name || client.client_name || 'JLS SKIN ESSENTIALS OPC');
             const customerAddress = (client.client_address || client.address || '').trim() || 'Phils.';
             const docDate = formatDateMMDDYYYY(client.po_date || client.scheduled_start_date || client.created_at || new Date());
@@ -819,8 +825,8 @@
             const remarks = client.notes || client.po_notes || '';
             
             const rawDocNo = (docTitle === 'SALES ORDER')
-                ? (client.so_number || (client.po_number ? client.po_number.replace('PO-', 'SO-') : (client.jo_number ? client.jo_number.replace('JO-', 'SO-') : 'SO-1279')))
-                : (client.jo_number || (client.po_number ? client.po_number.replace('PO-', 'JO-') : 'JO-1279'));
+                ? ((client.po_number && client.po_number.startsWith('PO-')) ? client.po_number.replace(/^PO-/, 'SO-') : (client.so_number || (client.jo_number ? client.jo_number.replace('JO-', 'SO-') : 'SO-1279')))
+                : ((client.po_number && client.po_number.startsWith('PO-')) ? client.po_number.replace(/^PO-/, 'JO-') : (client.jo_number || 'JO-1279'));
             const formattedDocNo = formatDocNumber(rawDocNo, docTitle, client);
 
             let allItems = client.items || [];
@@ -878,7 +884,7 @@
                     <!-- Header -->
                     <div>
                         <div class="company-header">
-                            <div class="company-name">${isVyuceutical ? `VYUCEUTICAL OPS - ${clientContactName.toUpperCase()}` : 'NKB MANUFACTURING CORPORATION'}</div>
+                            <div class="company-name">${isVyuceutical ? `VYUCEUTICAL OPC - ${clientContactName.toUpperCase()}` : 'NKB MANUFACTURING CORPORATION'}</div>
                             <div class="company-address">Blk 4, Lot 5, Twig st., Sampaguita Village, Mambog II, Bacoor City, Cavite</div>
                             <div class="company-tin">TIN: 686-950-421-00000 · Contact: (046) 885-0923</div>
                         </div>
@@ -1054,12 +1060,12 @@
             const printBtn = document.getElementById('btn-print-main');
 
             if (pagesData.length > 1 || totalSheetsCount > 1) {
-                if (badge) badge.textContent = `(${pagesData.length} Client${pagesData.length > 1 ? 's' : ''} • ${totalSheetsCount} Landscape Sheet${totalSheetsCount > 1 ? 's' : ''})`;
+                if (badge) badge.textContent = `(${pagesData.length} Order${pagesData.length > 1 ? 's' : ''} • ${totalSheetsCount} Landscape Sheet${totalSheetsCount > 1 ? 's' : ''})`;
                 if (printBtn) printBtn.innerHTML = `<span>🖨️ Print (${totalSheetsCount} Landscape Sheet${totalSheetsCount > 1 ? 's' : ''}, ${totalSheetsCount * 2} Portrait Slips)</span>`;
             } else if (pagesData.length === 1) {
                 const itemCount = (pagesData[0].items || []).length;
                 const clientName = pagesData[0].company_name || 'Client';
-                const soNo = pagesData[0].so_number || 'SO';
+                const soNo = (pagesData[0].po_number && pagesData[0].po_number.startsWith('PO-')) ? pagesData[0].po_number.replace(/^PO-/, 'SO-') : (pagesData[0].so_number || 'SO');
                 if (badge) badge.textContent = `(${clientName} • ${soNo} • ${itemCount} Product${itemCount !== 1 ? 's' : ''})`;
                 if (printBtn) printBtn.innerHTML = `<span>🖨️ Print 2 Portrait Copies (A4 Landscape)</span>`;
             }
