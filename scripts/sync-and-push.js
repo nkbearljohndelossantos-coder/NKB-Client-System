@@ -96,7 +96,7 @@ function connectSSH() {
                 'git add -A',
                 `git commit -m "${safeMsg}" || echo "No new git changes to commit"`,
                 'git push origin main',
-                'docker compose restart nkb_client || pm2 restart nkb-client-app'
+                'docker compose restart nkb_client || docker restart nkb_client_app || pm2 restart nkb-client-app'
             ].join(' && ');
 
             conn.exec(gitCommands, (err, stream) => {

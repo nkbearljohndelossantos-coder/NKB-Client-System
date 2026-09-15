@@ -1,19 +1,21 @@
 const fs = require('fs');
 const path = require('path');
 
-const files = [
-    path.resolve(__dirname, '../database/nkb_test.sqlite'),
-    path.resolve(__dirname, '../database/nkb_test.sqlite-wal'),
-    path.resolve(__dirname, '../database/nkb_test.sqlite-shm')
-];
+const dbDir = path.resolve(__dirname, '../database');
 
-files.forEach(f => {
-    if (fs.existsSync(f)) {
-        try {
-            fs.unlinkSync(f);
-            console.log('🧹 Deleted decoy test file:', path.basename(f));
-        } catch (err) {
-            console.warn('Could not delete', path.basename(f), err.message);
+if (fs.existsSync(dbDir)) {
+    const allFiles = fs.readdirSync(dbDir);
+    allFiles.forEach(f => {
+        if (f.startsWith('test_') || f.includes('test')) {
+            if (f.endsWith('.sqlite') || f.endsWith('.sqlite-wal') || f.endsWith('.sqlite-shm')) {
+                const target = path.join(dbDir, f);
+                try {
+                    fs.unlinkSync(target);
+                    console.log('🧹 Cleaned test db artifact:', f);
+                } catch (e) {
+                    console.warn('Could not remove test artifact:', f, e.message);
+                }
+            }
         }
-    }
-});
+    });
+}

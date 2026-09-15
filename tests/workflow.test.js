@@ -799,6 +799,201 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         db.prepare('DELETE FROM purchase_orders WHERE id = ?').run(testPO.id);
     });
 
+    test('18. Purchasing Department: Supply Requisition Lifecycle (SUBMITTED -> DELIVERED -> PO Materials SUFFICIENT)', async () => {
+        const purchToken = getAuthToken('PURCHASING');
+        assert.ok(purchToken, 'Purchasing token generated successfully');
+
+        // Create a test PO requiring supplies
+        const poRes = await request(app)
+            .post('/api/orders')
+            .set('Authorization', `Bearer ${clientToken}`)
+            .send({
+                client_id: demoClient.id,
+                tolerance_percent: 10.0,
+                billing_policy: 'ACTUAL_DELIVERY',
+                items: [{ product_id: lotionProduct.id, target_quantity: 400, unit_price: 120.0 }]
+            });
+        assert.strictEqual(poRes.status, 201);
+        const poId = poRes.body.data.id;
+
+        // Inventory submits a supply requisition
+        const reqRes = await request(app)
+            .post(`/api/orders/${poId}/request-supplies`)
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                materials_needed: '50kg Cetearyl Alcohol, 20kg Glycerin, 500 HDPE Bottles',
+                urgency: 'HIGH',
+                target_date: '2026-10-01'
+            });
+        assert.strictEqual(reqRes.status, 201);
+        const reqId = reqRes.body.data.id;
+
+        // Check PO status is SUPPLIES_REQUESTED
+        let poCheck = db.prepare('SELECT raw_materials_status FROM purchase_orders WHERE id = ?').get(poId);
+        assert.strictEqual(poCheck.raw_materials_status, 'SUPPLIES_REQUESTED');
+
+        // Purchasing Officer views all supply requests
+        const listRes = await request(app)
+            .get('/api/supply-requests')
+            .set('Authorization', `Bearer ${purchToken}`);
+        assert.strictEqual(listRes.status, 200);
+        assert.ok(listRes.body.data.some(r => r.id === reqId));
+
+        // Purchasing marks as ORDERED
+        const orderRes = await request(app)
+            .put(`/api/supply-requests/${reqId}`)
+            .set('Authorization', `Bearer ${purchToken}`)
+            .send({
+                status: 'ORDERED',
+                supplier_details: 'Purchased from ChemSupply Inc. PO# 99482'
+            });
+        assert.strictEqual(orderRes.status, 200);
+        assert.strictEqual(orderRes.body.data.status, 'ORDERED');
+
+        // Purchasing marks as DELIVERED
+        const delivRes = await request(app)
+            .put(`/api/supply-requests/${reqId}`)
+            .set('Authorization', `Bearer ${purchToken}`)
+            .send({ status: 'DELIVERED' });
+        assert.strictEqual(delivRes.status, 200);
+        assert.strictEqual(delivRes.body.data.status, 'DELIVERED');
+
+        // PO raw_materials_status should now automatically be SUFFICIENT
+        poCheck = db.prepare('SELECT raw_materials_status FROM purchase_orders WHERE id = ?').get(poId);
+        assert.strictEqual(poCheck.raw_materials_status, 'SUFFICIENT');
+
+        // Clean up
+        db.prepare('DELETE FROM supply_requests WHERE id = ?').run(reqId);
+        db.prepare('DELETE FROM purchase_order_items WHERE po_id = ?').run(poId);
+        db.prepare('DELETE FROM purchase_orders WHERE id = ?').run(poId);
+    });
+
+    test('19. Admin Password Visibility & User Management', async () => {
+        // Admin gets all users including plain_password
+        const res = await request(app)
+            .get('/api/users')
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(res.status, 200);
+        assert.ok(Array.isArray(res.body.data));
+        const adminUser = res.body.data.find(u => u.role === 'SUPER_ADMIN');
+        assert.ok(adminUser);
+        assert.strictEqual(adminUser.plain_password, 'Admin123!');
+
+        // Create a new staff user
+        const createRes = await request(app)
+            .post('/api/users')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                name: 'Test Purchasing Assistant',
+                email: 'assistant.purchasing@nkbmanufacturing.com',
+                password: 'TestingPassword123!',
+                role: 'PURCHASING'
+            });
+        assert.strictEqual(createRes.status, 201);
+        const newUserId = createRes.body.data.id;
+        assert.strictEqual(createRes.body.data.plain_password, 'TestingPassword123!');
+
+        // Reset password
+        const resetRes = await request(app)
+            .post(`/api/users/${newUserId}/reset-password`)
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({ new_password: 'UpdatedPassword2026!' });
+        assert.strictEqual(resetRes.status, 200);
+
+        // Verify updated plain_password
+        const checkUser = db.prepare('SELECT plain_password FROM users WHERE id = ?').get(newUserId);
+        assert.strictEqual(checkUser.plain_password, 'UpdatedPassword2026!');
+
+        // Clean up test user
+        db.prepare('DELETE FROM users WHERE id = ?').run(newUserId);
+    });
+
+    test('20. Action Notification Agent API (Pending Confirmation & Tasks)', async () => {
+        // Accounting role gets pending notifications
+        const acctToken = getAuthToken('ACCOUNTING');
+        const acctRes = await request(app)
+            .get('/api/notifications/pending')
+            .set('Authorization', `Bearer ${acctToken}`);
+        assert.strictEqual(acctRes.status, 200);
+        assert.strictEqual(acctRes.body.success, true);
+        assert.strictEqual(acctRes.body.role, 'ACCOUNTING');
+        assert.ok(Array.isArray(acctRes.body.items));
+
+        // Client role gets pending notifications
+        const cliRes = await request(app)
+            .get('/api/notifications/pending')
+            .set('Authorization', `Bearer ${clientToken}`);
+        assert.strictEqual(cliRes.status, 200);
+        assert.strictEqual(cliRes.body.role, 'CLIENT');
+        assert.ok(Array.isArray(cliRes.body.items));
+    });
+
+    test('21. Enterprise Chat System: Client Restrictions & Staff Inter-Communication', async () => {
+        // Client can message Contact Support
+        const supportMsg = await request(app)
+            .post('/api/chat/messages')
+            .set('Authorization', `Bearer ${clientToken}`)
+            .send({
+                message: 'Hello IT, I need assistance with portal access.',
+                channelType: 'SUPPORT'
+            });
+        assert.strictEqual(supportMsg.status, 201);
+        assert.strictEqual(supportMsg.body.data.is_support, 1);
+
+        // Client can message Accounting
+        const acctMsg = await request(app)
+            .post('/api/chat/messages')
+            .set('Authorization', `Bearer ${clientToken}`)
+            .send({
+                message: 'Inquiring regarding payment verification for my recent order.',
+                channelType: 'ROLE',
+                targetRole: 'ACCOUNTING'
+            });
+        assert.strictEqual(acctMsg.status, 201);
+        assert.strictEqual(acctMsg.body.data.target_role, 'ACCOUNTING');
+
+        // Client is BLOCKED from messaging Production
+        const blockedMsg = await request(app)
+            .post('/api/chat/messages')
+            .set('Authorization', `Bearer ${clientToken}`)
+            .send({
+                message: 'Can you speed up production?',
+                channelType: 'ROLE',
+                targetRole: 'PRODUCTION'
+            });
+        assert.strictEqual(blockedMsg.status, 403);
+        assert.strictEqual(blockedMsg.body.error, 'FORBIDDEN');
+
+        // Staff can message any role freely
+        const staffMsg = await request(app)
+            .post('/api/chat/messages')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                message: 'Production team: please prioritize rush formulas.',
+                channelType: 'ROLE',
+                targetRole: 'PRODUCTION'
+            });
+        assert.strictEqual(staffMsg.status, 201);
+
+        // Check contacts list for client: must ONLY contain Support and Accounting
+        const clientContactsRes = await request(app)
+            .get('/api/chat/contacts')
+            .set('Authorization', `Bearer ${clientToken}`);
+        assert.strictEqual(clientContactsRes.status, 200);
+        const contactRoles = clientContactsRes.body.contacts.map(c => c.channelType === 'SUPPORT' ? 'SUPPORT' : c.targetRole);
+        assert.ok(contactRoles.includes('SUPPORT') || contactRoles.includes('IT_ADMIN'));
+        assert.ok(contactRoles.includes('ACCOUNTING'));
+        assert.strictEqual(contactRoles.includes('PRODUCTION'), false);
+        assert.strictEqual(contactRoles.includes('WAREHOUSE'), false);
+
+        // Clean up chat messages created during test
+        db.prepare('DELETE FROM chat_messages WHERE id IN (?, ?, ?)').run(
+            supportMsg.body.data.id,
+            acctMsg.body.data.id,
+            staffMsg.body.data.id
+        );
+    });
+
     after(() => {
         // Automatically delete all test decoys and temporary test database
         try {

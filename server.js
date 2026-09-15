@@ -133,6 +133,9 @@ function mountApiRoutes() {
     app.use('/api/audit-logs', require('./routes/auditLogs'));
     app.use('/api/users', require('./routes/users'));
     app.use('/api/employees', require('./routes/employees'));
+    app.use('/api/supply-requests', require('./routes/supplyRequests'));
+    app.use('/api/notifications', require('./routes/notifications'));
+    app.use('/api/chat', require('./routes/chat'));
 }
 
 function loadDatabaseAndRoutes() {

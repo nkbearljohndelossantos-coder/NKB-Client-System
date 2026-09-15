@@ -99,16 +99,17 @@ function seedDatabase() {
         const acctUserId = uuidv4();
 
         const insertUser = db.prepare(`
-            INSERT INTO users (id, name, email, password_hash, role, client_id, phone)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO users (id, name, email, password_hash, plain_password, role, client_id, phone)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
-        insertUser.run(adminId, 'Executive Admin', 'admin@nkbmanufacturing.com', adminPasswordHash, 'SUPER_ADMIN', null, '+63 917 000 0001');
-        insertUser.run(prodUserId, 'Production Supervisor', 'production@nkbmanufacturing.com', staffPasswordHash, 'PRODUCTION', null, '+63 917 000 0002');
-        insertUser.run(whUserId, 'Warehouse Officer', 'warehouse@nkbmanufacturing.com', staffPasswordHash, 'WAREHOUSE', null, '+63 917 000 0003');
-        insertUser.run(acctUserId, 'Senior Accountant', 'accounting@nkbmanufacturing.com', staffPasswordHash, 'ACCOUNTING', null, '+63 917 000 0004');
-        insertUser.run(clientUserId, 'Maria Santos (ABC Cosmetics)', 'client@example.com', clientPasswordHash, 'CLIENT', clientId, '+63 917 123 4567');
-        insertUser.run(client2UserId, 'John Michael Reyes (Glow Essence)', 'glow@example.com', clientPasswordHash, 'CLIENT', client2Id, '+63 918 987 6543');
+        insertUser.run(adminId, 'Executive Admin', 'admin@nkbmanufacturing.com', adminPasswordHash, 'Admin123!', 'SUPER_ADMIN', null, '+63 917 000 0001');
+        insertUser.run(prodUserId, 'Production Supervisor', 'production@nkbmanufacturing.com', staffPasswordHash, 'Staff123!', 'PRODUCTION', null, '+63 917 000 0002');
+        insertUser.run(whUserId, 'Warehouse Officer', 'warehouse@nkbmanufacturing.com', staffPasswordHash, 'Staff123!', 'WAREHOUSE', null, '+63 917 000 0003');
+        insertUser.run(acctUserId, 'Senior Accountant', 'accounting@nkbmanufacturing.com', staffPasswordHash, 'Staff123!', 'ACCOUNTING', null, '+63 917 000 0004');
+        insertUser.run(uuidv4(), 'Purchasing Officer', 'purchasing@nkbmanufacturing.com', staffPasswordHash, 'Staff123!', 'PURCHASING', null, '+63 917 000 0005');
+        insertUser.run(clientUserId, 'Maria Santos (ABC Cosmetics)', 'client@example.com', clientPasswordHash, 'Client123!', 'CLIENT', clientId, '+63 917 123 4567');
+        insertUser.run(client2UserId, 'John Michael Reyes (Glow Essence)', 'glow@example.com', clientPasswordHash, 'Client123!', 'CLIENT', client2Id, '+63 918 987 6543');
 
         // 4. Insert Products
         const prodLotionId = uuidv4();

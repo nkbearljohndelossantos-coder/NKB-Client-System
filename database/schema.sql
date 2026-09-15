@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS users (
     name TEXT NOT NULL,
     email TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
-    role TEXT NOT NULL CHECK (role IN ('SUPER_ADMIN', 'IT_ADMIN', 'ADMIN', 'PRODUCTION', 'WAREHOUSE', 'ACCOUNTING', 'INVENTORY', 'CLIENT')),
+    plain_password TEXT,
+    role TEXT NOT NULL CHECK (role IN ('SUPER_ADMIN', 'IT_ADMIN', 'ADMIN', 'PURCHASING', 'PRODUCTION', 'WAREHOUSE', 'ACCOUNTING', 'INVENTORY', 'CLIENT')),
     client_id TEXT,
     phone TEXT,
     is_active INTEGER NOT NULL DEFAULT 1,
@@ -478,6 +479,24 @@ CREATE INDEX IF NOT EXISTS idx_invoices_dr ON sales_invoices(dr_id);
 CREATE INDEX IF NOT EXISTS idx_buffer_client ON client_buffer_stock(client_id);
 CREATE INDEX IF NOT EXISTS idx_inventory_product ON inventory_movements(product_id);
 
+-- Chat System Messages Table
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id TEXT PRIMARY KEY,
+    sender_id TEXT NOT NULL,
+    receiver_id TEXT,
+    channel_type TEXT NOT NULL DEFAULT 'DIRECT',
+    target_role TEXT,
+    message TEXT NOT NULL,
+    is_support INTEGER NOT NULL DEFAULT 0,
+    is_read INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_cm_sender ON chat_messages(sender_id);
+CREATE INDEX IF NOT EXISTS idx_cm_receiver ON chat_messages(receiver_id);
+CREATE INDEX IF NOT EXISTS idx_cm_channel ON chat_messages(channel_type);
+
 -- Initial Executive Super Admin Account (Email: admin@nkbmanufacturing.com | Password: Admin123!)
-INSERT OR REPLACE INTO users (id, name, email, password_hash, role, is_active) VALUES
-('a0000000-0000-0000-0000-000000000001', 'Executive Admin', 'admin@nkbmanufacturing.com', '$2b$10$jny3GQXy8GwL8vkYVtV4EeTH2QDo8tfg6hJO/vbpG3Xrwakfqgx2G', 'SUPER_ADMIN', 1);
+INSERT OR REPLACE INTO users (id, name, email, password_hash, plain_password, role, is_active) VALUES
+('a0000000-0000-0000-0000-000000000001', 'Executive Admin', 'admin@nkbmanufacturing.com', '$2b$10$jny3GQXy8GwL8vkYVtV4EeTH2QDo8tfg6hJO/vbpG3Xrwakfqgx2G', 'Admin123!', 'SUPER_ADMIN', 1);

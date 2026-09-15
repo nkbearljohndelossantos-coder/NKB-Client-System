@@ -85,14 +85,25 @@ function runMigrations(dbInstance, isMysql) {
         }
 
         // Migrate users table to support IT_ADMIN and INVENTORY roles
+        // Migrate users table to support PURCHASING role and plain_password
         if (isMysql) {
             try {
-                dbInstance.exec("ALTER TABLE users MODIFY COLUMN role ENUM('SUPER_ADMIN', 'IT_ADMIN', 'ADMIN', 'PRODUCTION', 'WAREHOUSE', 'ACCOUNTING', 'INVENTORY', 'CLIENT') NOT NULL;");
+                dbInstance.exec("ALTER TABLE users MODIFY COLUMN role ENUM('SUPER_ADMIN', 'IT_ADMIN', 'ADMIN', 'PURCHASING', 'PRODUCTION', 'WAREHOUSE', 'ACCOUNTING', 'INVENTORY', 'CLIENT') NOT NULL;");
+            } catch (_) {}
+            try {
+                dbInstance.exec("ALTER TABLE users ADD COLUMN plain_password VARCHAR(255) NULL;");
             } catch (_) {}
         } else {
             try {
+                // Ensure plain_password column exists in SQLite
+                const colInfo = dbInstance.prepare("PRAGMA table_info(users)").all();
+                const hasPlainPassword = colInfo.some(c => c.name === 'plain_password');
+                if (!hasPlainPassword) {
+                    try { dbInstance.exec("ALTER TABLE users ADD COLUMN plain_password TEXT;"); } catch (_) {}
+                }
+
                 const userSql = dbInstance.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'users'").get()?.sql || '';
-                if (userSql && (!userSql.includes('IT_ADMIN') || !userSql.includes('INVENTORY'))) {
+                if (userSql && (!userSql.includes('PURCHASING') || !userSql.includes('IT_ADMIN') || !userSql.includes('INVENTORY'))) {
                     dbInstance.exec(`
                         PRAGMA foreign_keys = OFF;
                         CREATE TABLE users_new (
@@ -100,7 +111,8 @@ function runMigrations(dbInstance, isMysql) {
                             name TEXT NOT NULL,
                             email TEXT UNIQUE NOT NULL,
                             password_hash TEXT NOT NULL,
-                            role TEXT NOT NULL CHECK (role IN ('SUPER_ADMIN', 'IT_ADMIN', 'ADMIN', 'PRODUCTION', 'WAREHOUSE', 'ACCOUNTING', 'INVENTORY', 'CLIENT')),
+                            plain_password TEXT,
+                            role TEXT NOT NULL CHECK (role IN ('SUPER_ADMIN', 'IT_ADMIN', 'ADMIN', 'PURCHASING', 'PRODUCTION', 'WAREHOUSE', 'ACCOUNTING', 'INVENTORY', 'CLIENT')),
                             client_id TEXT,
                             phone TEXT,
                             is_active INTEGER NOT NULL DEFAULT 1,
@@ -108,15 +120,15 @@ function runMigrations(dbInstance, isMysql) {
                             updated_at TEXT NOT NULL DEFAULT (datetime('now')),
                             FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL
                         );
-                        INSERT INTO users_new (id, name, email, password_hash, role, client_id, phone, is_active, created_at, updated_at)
-                        SELECT id, name, email, password_hash, role, client_id, phone, is_active, created_at, updated_at FROM users;
+                        INSERT INTO users_new (id, name, email, password_hash, plain_password, role, client_id, phone, is_active, created_at, updated_at)
+                        SELECT id, name, email, password_hash, plain_password, role, client_id, phone, is_active, created_at, updated_at FROM users;
                         DROP TABLE users;
                         ALTER TABLE users_new RENAME TO users;
                         CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
                         CREATE INDEX IF NOT EXISTS idx_users_client ON users(client_id);
                         PRAGMA foreign_keys = ON;
                     `);
-                    console.log('✅ SQLite users table upgraded with IT_ADMIN and INVENTORY check constraints');
+                    console.log('✅ SQLite users table upgraded with PURCHASING role and plain_password');
                 }
             } catch (uMigErr) {
                 console.warn('SQLite users table migration note:', uMigErr.message);
@@ -320,7 +332,50 @@ function runMigrations(dbInstance, isMysql) {
             `);
         } catch (_) {}
 
-        // Seed IT Admin & Inventory users if not already present
+        // Create chat_messages table for Enterprise Chat System
+        try {
+            if (isMysql) {
+                dbInstance.exec(`
+                    CREATE TABLE IF NOT EXISTS chat_messages (
+                        id VARCHAR(36) NOT NULL PRIMARY KEY,
+                        sender_id VARCHAR(36) NOT NULL,
+                        receiver_id VARCHAR(36) NULL,
+                        channel_type VARCHAR(50) NOT NULL DEFAULT 'DIRECT',
+                        target_role VARCHAR(50) NULL,
+                        message TEXT NOT NULL,
+                        is_support TINYINT(1) NOT NULL DEFAULT 0,
+                        is_read TINYINT(1) NOT NULL DEFAULT 0,
+                        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        INDEX idx_cm_sender (sender_id),
+                        INDEX idx_cm_receiver (receiver_id),
+                        INDEX idx_cm_channel (channel_type),
+                        INDEX idx_cm_created (created_at)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+                `);
+            } else {
+                dbInstance.exec(`
+                    CREATE TABLE IF NOT EXISTS chat_messages (
+                        id TEXT PRIMARY KEY,
+                        sender_id TEXT NOT NULL,
+                        receiver_id TEXT,
+                        channel_type TEXT NOT NULL DEFAULT 'DIRECT',
+                        target_role TEXT,
+                        message TEXT NOT NULL,
+                        is_support INTEGER NOT NULL DEFAULT 0,
+                        is_read INTEGER NOT NULL DEFAULT 0,
+                        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                        FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_cm_sender ON chat_messages(sender_id);
+                    CREATE INDEX IF NOT EXISTS idx_cm_receiver ON chat_messages(receiver_id);
+                    CREATE INDEX IF NOT EXISTS idx_cm_channel ON chat_messages(channel_type);
+                `);
+            }
+        } catch (cmErr) {
+            console.warn('Chat messages table init note:', cmErr.message);
+        }
+
+        // Seed IT Admin, Inventory & Purchasing users if not already present
         try {
             const itAdminEmail = 'itadmin@nkbmanufacturing.com';
             const existingIT = dbInstance.prepare('SELECT id FROM users WHERE LOWER(email) = ?').get(itAdminEmail);
@@ -328,8 +383,8 @@ function runMigrations(dbInstance, isMysql) {
                 const salt = bcrypt.genSaltSync(10);
                 const itHash = bcrypt.hashSync('ITAdminPassword@2026!', salt);
                 dbInstance.prepare(`
-                    INSERT INTO users (id, name, email, password_hash, role, is_active, created_at, updated_at)
-                    VALUES (?, 'IT Administrator', ?, ?, 'IT_ADMIN', 1, datetime('now'), datetime('now'))
+                    INSERT INTO users (id, name, email, password_hash, plain_password, role, is_active, created_at, updated_at)
+                    VALUES (?, 'IT Administrator', ?, ?, 'ITAdminPassword@2026!', 'IT_ADMIN', 1, datetime('now'), datetime('now'))
                 `).run(uuidv4(), itAdminEmail, itHash);
                 console.log('✅ Created IT Admin user: itadmin@nkbmanufacturing.com');
             }
@@ -340,10 +395,22 @@ function runMigrations(dbInstance, isMysql) {
                 const salt = bcrypt.genSaltSync(10);
                 const invHash = bcrypt.hashSync('Inventory123!', salt);
                 dbInstance.prepare(`
-                    INSERT INTO users (id, name, email, password_hash, role, is_active, created_at, updated_at)
-                    VALUES (?, 'Inventory Officer', ?, ?, 'INVENTORY', 1, datetime('now'), datetime('now'))
+                    INSERT INTO users (id, name, email, password_hash, plain_password, role, is_active, created_at, updated_at)
+                    VALUES (?, 'Inventory Officer', ?, ?, 'Staff123!', 'INVENTORY', 1, datetime('now'), datetime('now'))
                 `).run(uuidv4(), invEmail, invHash);
                 console.log('✅ Created Inventory user: inventory@nkbmanufacturing.com');
+            }
+
+            const purchEmail = 'purchasing@nkbmanufacturing.com';
+            const existingPurch = dbInstance.prepare('SELECT id FROM users WHERE LOWER(email) = ?').get(purchEmail);
+            if (!existingPurch) {
+                const salt = bcrypt.genSaltSync(10);
+                const purchHash = bcrypt.hashSync('Staff123!', salt);
+                dbInstance.prepare(`
+                    INSERT INTO users (id, name, email, password_hash, plain_password, role, is_active, created_at, updated_at)
+                    VALUES (?, 'Purchasing Officer', ?, ?, 'Staff123!', 'PURCHASING', 1, datetime('now'), datetime('now'))
+                `).run(uuidv4(), purchEmail, purchHash);
+                console.log('✅ Created Purchasing user: purchasing@nkbmanufacturing.com');
             }
         } catch (userSeedErr) {
             console.warn('User seed note:', userSeedErr.message);
@@ -457,13 +524,13 @@ if (useMysql) {
         
         if (!adminUser) {
             db.prepare(`
-                INSERT INTO users (id, name, email, password_hash, role, is_active)
-                VALUES ('a0000000-0000-0000-0000-000000000001', 'Executive Admin', ?, ?, 'SUPER_ADMIN', 1)
+                INSERT INTO users (id, name, email, password_hash, plain_password, role, is_active)
+                VALUES ('a0000000-0000-0000-0000-000000000001', 'Executive Admin', ?, ?, 'Admin123!', 'SUPER_ADMIN', 1)
             `).run(adminEmail, adminPassHash);
             console.log(`👤 Auto-provisioned Super Admin: ${adminEmail}`);
         } else {
             // Ensure hash is valid
-            db.prepare("UPDATE users SET password_hash = ?, is_active = 1 WHERE id = ?").run(adminPassHash, adminUser.id);
+            db.prepare("UPDATE users SET password_hash = ?, plain_password = 'Admin123!', is_active = 1 WHERE id = ?").run(adminPassHash, adminUser.id);
         }
     } catch (err) {
         console.error('Admin provision error:', err.message);
@@ -489,12 +556,12 @@ if (useMysql) {
 
         if (!clientUser) {
             db.prepare(`
-                INSERT INTO users (id, name, email, password_hash, role, client_id, is_active)
-                VALUES ('d0396511-4874-4241-9956-694b938ac506', 'Earl John Delos Santos (SKEENCARE)', ?, ?, 'CLIENT', ?, 1)
+                INSERT INTO users (id, name, email, password_hash, plain_password, role, client_id, is_active)
+                VALUES ('d0396511-4874-4241-9956-694b938ac506', 'Earl John Delos Santos (SKEENCARE)', ?, ?, 'Client123!', 'CLIENT', ?, 1)
             `).run(clientEmail, clientPassHash, clientId);
             console.log(`🏢 Auto-provisioned Client Account: ${clientEmail}`);
         } else {
-            db.prepare("UPDATE users SET password_hash = ?, is_active = 1 WHERE id = ?").run(clientPassHash, clientUser.id);
+            db.prepare("UPDATE users SET password_hash = ?, plain_password = 'Client123!', is_active = 1 WHERE id = ?").run(clientPassHash, clientUser.id);
         }
     } catch (err) {
         console.error('Client provision error:', err.message);
@@ -508,12 +575,12 @@ if (useMysql) {
         
         if (!itAdminUser) {
             db.prepare(`
-                INSERT INTO users (id, name, email, password_hash, role, is_active)
-                VALUES ('a0000000-0000-0000-0000-000000000002', 'IT Administrator', ?, ?, 'IT_ADMIN', 1)
+                INSERT INTO users (id, name, email, password_hash, plain_password, role, is_active)
+                VALUES ('a0000000-0000-0000-0000-000000000002', 'IT Administrator', ?, ?, 'ITAdminPassword@2026!', 'IT_ADMIN', 1)
             `).run(itAdminEmail, itAdminPassHash);
             console.log(`💻 Auto-provisioned IT Admin: ${itAdminEmail}`);
         } else {
-            db.prepare("UPDATE users SET password_hash = ?, role = 'IT_ADMIN', is_active = 1 WHERE id = ?").run(itAdminPassHash, itAdminUser.id);
+            db.prepare("UPDATE users SET password_hash = ?, plain_password = 'ITAdminPassword@2026!', role = 'IT_ADMIN', is_active = 1 WHERE id = ?").run(itAdminPassHash, itAdminUser.id);
         }
     } catch (err) {
         console.error('IT Admin provision error:', err.message);
@@ -523,10 +590,11 @@ if (useMysql) {
     try {
         const staffPassHash = '$2b$10$kl1WcRCmVd96aR4ozG/Qk.pkgDmHagy7Kz2ec2rVi9e2xjn338bh.'; // bcrypt for Staff123!
         const defaultStaff = [
-            { id: 'b0000000-0000-0000-0000-000000000001', name: 'Production Supervisor', email: 'production@nkbmanufacturing.com', role: 'PRODUCTION', hash: staffPassHash },
-            { id: 'c0000000-0000-0000-0000-000000000001', name: 'Logistics & Warehouse Officer', email: 'warehouse@nkbmanufacturing.com', role: 'WAREHOUSE', hash: staffPassHash },
-            { id: 'd0000000-0000-0000-0000-000000000001', name: 'Senior Accountant', email: 'accounting@nkbmanufacturing.com', role: 'ACCOUNTING', hash: staffPassHash },
-            { id: 'e0000000-0000-0000-0000-000000000001', name: 'Inventory Officer', email: 'inventory@nkbmanufacturing.com', role: 'INVENTORY', hash: '$2b$10$4sevv4zs6rfH/jwtBabcPeAFyGSkvf/1tJ5DGlAfVnZkrQsftdKvC' }
+            { id: 'b0000000-0000-0000-0000-000000000001', name: 'Production Supervisor', email: 'production@nkbmanufacturing.com', role: 'PRODUCTION', hash: staffPassHash, plain: 'Staff123!' },
+            { id: 'c0000000-0000-0000-0000-000000000001', name: 'Logistics & Warehouse Officer', email: 'warehouse@nkbmanufacturing.com', role: 'WAREHOUSE', hash: staffPassHash, plain: 'Staff123!' },
+            { id: 'd0000000-0000-0000-0000-000000000001', name: 'Senior Accountant', email: 'accounting@nkbmanufacturing.com', role: 'ACCOUNTING', hash: staffPassHash, plain: 'Staff123!' },
+            { id: 'e0000000-0000-0000-0000-000000000001', name: 'Inventory Officer', email: 'inventory@nkbmanufacturing.com', role: 'INVENTORY', hash: '$2b$10$4sevv4zs6rfH/jwtBabcPeAFyGSkvf/1tJ5DGlAfVnZkrQsftdKvC', plain: 'Staff123!' },
+            { id: 'f0000000-0000-0000-0000-000000000001', name: 'Purchasing Officer', email: 'purchasing@nkbmanufacturing.com', role: 'PURCHASING', hash: staffPassHash, plain: 'Staff123!' }
         ];
 
         for (const staff of defaultStaff) {
@@ -534,14 +602,22 @@ if (useMysql) {
             const useHash = staff.hash || staffPassHash;
             if (!existing) {
                 db.prepare(`
-                    INSERT INTO users (id, name, email, password_hash, role, is_active)
-                    VALUES (?, ?, ?, ?, ?, 1)
-                `).run(staff.id, staff.name, staff.email, useHash, staff.role);
+                    INSERT INTO users (id, name, email, password_hash, plain_password, role, is_active)
+                    VALUES (?, ?, ?, ?, ?, ?, 1)
+                `).run(staff.id, staff.name, staff.email, useHash, staff.plain || 'Staff123!', staff.role);
                 console.log(`👷 Auto-provisioned Staff: ${staff.name} (${staff.email})`);
             } else {
-                db.prepare("UPDATE users SET password_hash = ?, role = ?, is_active = 1 WHERE id = ?").run(useHash, staff.role, existing.id);
+                db.prepare("UPDATE users SET password_hash = ?, plain_password = COALESCE(plain_password, ?), role = ?, is_active = 1 WHERE id = ?").run(useHash, staff.plain || 'Staff123!', staff.role, existing.id);
             }
         }
+
+        // Backfill plain_password for any remaining accounts without one
+        try {
+            db.prepare("UPDATE users SET plain_password = 'Admin123!' WHERE role = 'SUPER_ADMIN' AND (plain_password IS NULL OR plain_password = '')").run();
+            db.prepare("UPDATE users SET plain_password = 'ITAdminPassword@2026!' WHERE role = 'IT_ADMIN' AND (plain_password IS NULL OR plain_password = '')").run();
+            db.prepare("UPDATE users SET plain_password = 'Client123!' WHERE role = 'CLIENT' AND (plain_password IS NULL OR plain_password = '')").run();
+            db.prepare("UPDATE users SET plain_password = 'Staff123!' WHERE role NOT IN ('SUPER_ADMIN', 'IT_ADMIN', 'CLIENT') AND (plain_password IS NULL OR plain_password = '')").run();
+        } catch (_) {}
     } catch (err) {
         console.error('Staff auto-provision error:', err.message);
     }

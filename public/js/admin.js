@@ -282,6 +282,7 @@ function switchTab(tabId) {
     else if (tabId === 'clients') loadClients();
     else if (tabId === 'products') loadProducts();
     else if (tabId === 'users') loadUsers();
+    else if (tabId === 'purchasing') loadPurchasingRequisitions();
     else if (tabId === 'reports') loadReports();
     else if (tabId === 'audit') loadAuditLogs();
 }
@@ -4973,16 +4974,65 @@ async function ensureClientsLoaded() {
     return cachedClients || [];
 }
 
+let currentUsersSubTab = 'staff';
+
+function switchUsersSubTab(tab) {
+    currentUsersSubTab = tab;
+    const staffView = document.getElementById('subtab-staff-view');
+    const clientsView = document.getElementById('subtab-clients-view');
+    const staffBtn = document.getElementById('subtab-staff-btn');
+    const clientsBtn = document.getElementById('subtab-clients-btn');
+
+    if (tab === 'staff') {
+        if (staffView) staffView.classList.remove('hidden');
+        if (clientsView) clientsView.classList.add('hidden');
+        if (staffBtn) staffBtn.className = 'px-4 py-2 rounded-xl text-xs font-bold transition bg-white text-indigo-700 shadow-sm';
+        if (clientsBtn) clientsBtn.className = 'px-4 py-2 rounded-xl text-xs font-bold transition text-slate-600 hover:text-slate-900';
+    } else {
+        if (staffView) staffView.classList.add('hidden');
+        if (clientsView) clientsView.classList.remove('hidden');
+        if (clientsBtn) clientsBtn.className = 'px-4 py-2 rounded-xl text-xs font-bold transition bg-white text-indigo-700 shadow-sm';
+        if (staffBtn) staffBtn.className = 'px-4 py-2 rounded-xl text-xs font-bold transition text-slate-600 hover:text-slate-900';
+    }
+}
+
+function togglePasswordVisibility(userId, pwd) {
+    const span = document.getElementById(`pwd-disp-${userId}`);
+    const eye = document.getElementById(`pwd-eye-${userId}`);
+    if (!span) return;
+    if (span.innerText === '••••••••') {
+        span.innerText = pwd || '(No Password)';
+        span.classList.add('text-indigo-600', 'font-bold');
+        if (eye) eye.innerText = '🙈';
+    } else {
+        span.innerText = '••••••••';
+        span.classList.remove('text-indigo-600', 'font-bold');
+        if (eye) eye.innerText = '👁️';
+    }
+}
+
+function copyPassword(pwd) {
+    if (!pwd) {
+        NKB.showToast('No password set to copy.', 'error');
+        return;
+    }
+    navigator.clipboard.writeText(pwd);
+    NKB.showToast('Password copied to clipboard! 📋', 'success');
+}
+
 async function loadUsers() {
     const search = document.getElementById('filter-users-search')?.value || '';
-    const tbody = document.getElementById('table-users-body');
-    if (!tbody) return;
+    const staffTbody = document.getElementById('table-staff-body');
+    const clientsTbody = document.getElementById('table-clients-body');
+    const fallbackTbody = document.getElementById('table-users-body');
 
-    tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-slate-400">Loading users directory...</td></tr>';
+    if (staffTbody) staffTbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-slate-400">Loading staff directory...</td></tr>';
+    if (clientsTbody) clientsTbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-slate-400">Loading client accounts...</td></tr>';
 
     const res = await NKB.api(`/api/users?search=${encodeURIComponent(search)}`);
-    if (!res.success || !res.data || res.data.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-slate-400">No users found.</td></tr>';
+    if (!res.success || !res.data) {
+        if (staffTbody) staffTbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-slate-400">No staff found.</td></tr>';
+        if (clientsTbody) clientsTbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-slate-400">No clients found.</td></tr>';
         return;
     }
 
@@ -4990,6 +5040,7 @@ async function loadUsers() {
         'SUPER_ADMIN': 'bg-red-100 text-red-800 border-red-200',
         'IT_ADMIN': 'bg-cyan-100 text-cyan-800 border-cyan-200',
         'ADMIN': 'bg-indigo-100 text-indigo-800 border-indigo-200',
+        'PURCHASING': 'bg-teal-100 text-teal-800 border-teal-200',
         'PRODUCTION': 'bg-amber-100 text-amber-800 border-amber-200',
         'WAREHOUSE': 'bg-purple-100 text-purple-800 border-purple-200',
         'ACCOUNTING': 'bg-emerald-100 text-emerald-800 border-emerald-200',
@@ -5001,6 +5052,7 @@ async function loadUsers() {
         'SUPER_ADMIN': '🛡️',
         'IT_ADMIN': '💻',
         'ADMIN': '👑',
+        'PURCHASING': '🛒',
         'PRODUCTION': '🧪',
         'WAREHOUSE': '🚚',
         'ACCOUNTING': '💰',
@@ -5008,42 +5060,154 @@ async function loadUsers() {
         'CLIENT': '🏢'
     };
 
-    tbody.innerHTML = res.data.map(u => `
-        <tr class="hover:bg-slate-50 transition">
-            <td class="py-3 px-4">
-                <div class="font-bold text-slate-900">${u.name}</div>
-                <div class="text-[11px] text-slate-400 font-mono">${u.email}</div>
-            </td>
-            <td class="py-3 px-4">
-                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold border ${roleBadges[u.role] || 'bg-slate-100 text-slate-800 border-slate-200'}">
-                    <span>${roleIcons[u.role] || '👤'}</span>
-                    <span>${u.role}</span>
-                </span>
-            </td>
-            <td class="py-3 px-4 font-medium text-slate-700">
-                ${u.company_name ? `🏢 ${u.company_name}` : '🏭 NKB Internal'}
-            </td>
-            <td class="py-3 px-4">
-                <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold ${u.is_active ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}">
-                    ${u.is_active ? '● Active' : '○ Deactivated'}
-                </span>
-            </td>
-            <td class="py-3 px-4 text-slate-500 font-mono text-[11px]">
-                ${NKB.formatDate(u.created_at)}
-            </td>
-            <td class="py-3 px-4 text-right space-x-1 whitespace-nowrap">
-                <button onclick="openEditUserModal('${u.id}')" class="px-2.5 py-1 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-semibold shadow-sm transition inline-flex items-center gap-1">
-                    <span>✏️</span> Edit
-                </button>
-                <button onclick="promptResetUserPassword('${u.id}', '${u.email}')" class="px-2.5 py-1 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold shadow-sm transition inline-flex items-center gap-1">
-                    <span>🔑</span> Reset
-                </button>
-                <button onclick="toggleUserStatus('${u.id}', ${u.is_active})" class="px-2.5 py-1 ${u.is_active ? 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100' : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'} border rounded-lg text-xs font-semibold transition">
-                    ${u.is_active ? 'Deactivate' : 'Activate'}
-                </button>
-            </td>
-        </tr>
-    `).join('');
+    const staffUsers = res.data.filter(u => u.role !== 'CLIENT');
+    const clientUsers = res.data.filter(u => u.role === 'CLIENT');
+
+    const staffCountEl = document.getElementById('staff-count');
+    const clientCountEl = document.getElementById('client-count');
+    if (staffCountEl) staffCountEl.innerText = staffUsers.length;
+    if (clientCountEl) clientCountEl.innerText = clientUsers.length;
+
+    // Render Staff Table
+    if (staffTbody) {
+        if (staffUsers.length === 0) {
+            staffTbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-slate-400">No staff members found matching search.</td></tr>';
+        } else {
+            staffTbody.innerHTML = staffUsers.map(u => `
+                <tr class="hover:bg-slate-50 transition">
+                    <td class="py-3 px-4">
+                        <div class="font-bold text-slate-900">${u.name}</div>
+                        <div class="text-[11px] text-slate-400 font-mono">${u.email}</div>
+                    </td>
+                    <td class="py-3 px-4">
+                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold border ${roleBadges[u.role] || 'bg-slate-100 text-slate-800 border-slate-200'}">
+                            <span>${roleIcons[u.role] || '👤'}</span>
+                            <span>${u.role}</span>
+                        </span>
+                    </td>
+                    <td class="py-3 px-4">
+                        <div class="inline-flex items-center gap-1.5 bg-slate-100 px-2.5 py-1 rounded-xl border border-slate-200 text-xs">
+                            <span id="pwd-disp-${u.id}" class="font-mono text-slate-600 select-all tracking-wider">••••••••</span>
+                            <button type="button" onclick="togglePasswordVisibility('${u.id}', '${(u.plain_password || '').replace(/'/g, "\\'")}')" title="Show / Hide Password" class="text-slate-400 hover:text-slate-700 ml-1">
+                                <span id="pwd-eye-${u.id}">👁️</span>
+                            </button>
+                            <button type="button" onclick="copyPassword('${(u.plain_password || '').replace(/'/g, "\\'")}')" title="Copy Password" class="text-slate-400 hover:text-slate-700">
+                                📋
+                            </button>
+                        </div>
+                    </td>
+                    <td class="py-3 px-4">
+                        <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold ${u.is_active ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}">
+                            ${u.is_active ? '● Active' : '○ Deactivated'}
+                        </span>
+                    </td>
+                    <td class="py-3 px-4 text-slate-500 font-mono text-[11px]">
+                        ${NKB.formatDate(u.created_at)}
+                    </td>
+                    <td class="py-3 px-4 text-right space-x-1 whitespace-nowrap">
+                        <button onclick="openEditUserModal('${u.id}')" class="px-2.5 py-1 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-semibold shadow-sm transition inline-flex items-center gap-1">
+                            <span>✏️</span> Edit
+                        </button>
+                        <button onclick="promptResetUserPassword('${u.id}', '${u.email}')" class="px-2.5 py-1 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold shadow-sm transition inline-flex items-center gap-1">
+                            <span>🔑</span> Reset
+                        </button>
+                        <button onclick="toggleUserStatus('${u.id}', ${u.is_active})" class="px-2.5 py-1 ${u.is_active ? 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100' : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'} border rounded-lg text-xs font-semibold transition">
+                            ${u.is_active ? 'Deactivate' : 'Activate'}
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+    }
+
+    // Render Clients Table
+    if (clientsTbody) {
+        if (clientUsers.length === 0) {
+            clientsTbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-slate-400">No client accounts found matching search.</td></tr>';
+        } else {
+            clientsTbody.innerHTML = clientUsers.map(u => `
+                <tr class="hover:bg-slate-50 transition">
+                    <td class="py-3 px-4">
+                        <div class="font-bold text-slate-900">${u.name}</div>
+                        <div class="text-[11px] text-slate-400 font-mono">${u.email}</div>
+                    </td>
+                    <td class="py-3 px-4 font-semibold text-slate-800">
+                        ${u.company_name ? `🏢 ${u.company_name}` : 'Unassigned Client'}
+                    </td>
+                    <td class="py-3 px-4">
+                        <div class="inline-flex items-center gap-1.5 bg-slate-100 px-2.5 py-1 rounded-xl border border-slate-200 text-xs">
+                            <span id="pwd-disp-${u.id}" class="font-mono text-slate-600 select-all tracking-wider">••••••••</span>
+                            <button type="button" onclick="togglePasswordVisibility('${u.id}', '${(u.plain_password || '').replace(/'/g, "\\'")}')" title="Show / Hide Password" class="text-slate-400 hover:text-slate-700 ml-1">
+                                <span id="pwd-eye-${u.id}">👁️</span>
+                            </button>
+                            <button type="button" onclick="copyPassword('${(u.plain_password || '').replace(/'/g, "\\'")}')" title="Copy Password" class="text-slate-400 hover:text-slate-700">
+                                📋
+                            </button>
+                        </div>
+                    </td>
+                    <td class="py-3 px-4">
+                        <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold ${u.is_active ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}">
+                            ${u.is_active ? '● Active' : '○ Deactivated'}
+                        </span>
+                    </td>
+                    <td class="py-3 px-4 text-slate-500 font-mono text-[11px]">
+                        ${NKB.formatDate(u.created_at)}
+                    </td>
+                    <td class="py-3 px-4 text-right space-x-1 whitespace-nowrap">
+                        <button onclick="openEditUserModal('${u.id}')" class="px-2.5 py-1 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-semibold shadow-sm transition inline-flex items-center gap-1">
+                            <span>✏️</span> Edit
+                        </button>
+                        <button onclick="promptResetUserPassword('${u.id}', '${u.email}')" class="px-2.5 py-1 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold shadow-sm transition inline-flex items-center gap-1">
+                            <span>🔑</span> Reset
+                        </button>
+                        <button onclick="toggleUserStatus('${u.id}', ${u.is_active})" class="px-2.5 py-1 ${u.is_active ? 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100' : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'} border rounded-lg text-xs font-semibold transition">
+                            ${u.is_active ? 'Deactivate' : 'Activate'}
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+    }
+
+    // Support fallback table if present
+    if (fallbackTbody && !staffTbody) {
+        fallbackTbody.innerHTML = res.data.map(u => `
+            <tr class="hover:bg-slate-50 transition">
+                <td class="py-3 px-4">
+                    <div class="font-bold text-slate-900">${u.name}</div>
+                    <div class="text-[11px] text-slate-400 font-mono">${u.email}</div>
+                </td>
+                <td class="py-3 px-4">
+                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold border ${roleBadges[u.role] || 'bg-slate-100 text-slate-800 border-slate-200'}">
+                        <span>${roleIcons[u.role] || '👤'}</span>
+                        <span>${u.role}</span>
+                    </span>
+                </td>
+                <td class="py-3 px-4 font-medium text-slate-700">
+                    ${u.company_name ? `🏢 ${u.company_name}` : '🏭 NKB Internal'}
+                </td>
+                <td class="py-3 px-4">
+                    <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold ${u.is_active ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}">
+                        ${u.is_active ? '● Active' : '○ Deactivated'}
+                    </span>
+                </td>
+                <td class="py-3 px-4 text-slate-500 font-mono text-[11px]">
+                    ${NKB.formatDate(u.created_at)}
+                </td>
+                <td class="py-3 px-4 text-right space-x-1 whitespace-nowrap">
+                    <button onclick="openEditUserModal('${u.id}')" class="px-2.5 py-1 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-semibold shadow-sm transition inline-flex items-center gap-1">
+                        <span>✏️</span> Edit
+                    </button>
+                    <button onclick="promptResetUserPassword('${u.id}', '${u.email}')" class="px-2.5 py-1 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold shadow-sm transition inline-flex items-center gap-1">
+                        <span>🔑</span> Reset
+                    </button>
+                    <button onclick="toggleUserStatus('${u.id}', ${u.is_active})" class="px-2.5 py-1 ${u.is_active ? 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100' : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'} border rounded-lg text-xs font-semibold transition">
+                        ${u.is_active ? 'Deactivate' : 'Activate'}
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    }
 }
 
 function toggleClientDropdown(role, containerId = 'client-select-container') {
@@ -5091,6 +5255,7 @@ async function openCreateUserModal() {
                     <div>
                         <label class="block text-slate-700 mb-1 font-bold">Assigned Enterprise Role <span class="text-rose-500">*</span></label>
                         <select id="usr-role" onchange="toggleClientDropdown(this.value, 'client-select-container')" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 transition">
+                            <option value="PURCHASING">🛒 Purchasing Department (Raw Materials & Requisitions)</option>
                             <option value="PRODUCTION">🧪 Production Supervisor (Formulas & Batches)</option>
                             <option value="WAREHOUSE">🚚 Logistics & Warehouse (Inventory & DR)</option>
                             <option value="ACCOUNTING">💰 Senior Accountant (Invoices & AR)</option>
@@ -5232,6 +5397,7 @@ async function openEditUserModal(userId) {
                         <div>
                             <label class="block text-slate-700 mb-1 font-bold">Assigned Role <span class="text-rose-500">*</span></label>
                             <select id="usr-edit-role" onchange="toggleClientDropdown(this.value, 'usr-edit-client-container')" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 transition">
+                                <option value="PURCHASING" ${u.role === 'PURCHASING' ? 'selected' : ''}>🛒 Purchasing Department</option>
                                 <option value="PRODUCTION" ${u.role === 'PRODUCTION' ? 'selected' : ''}>🧪 Production Supervisor</option>
                                 <option value="WAREHOUSE" ${u.role === 'WAREHOUSE' ? 'selected' : ''}>🚚 Logistics & Warehouse</option>
                                 <option value="ACCOUNTING" ${u.role === 'ACCOUNTING' ? 'selected' : ''}>💰 Senior Accountant</option>
@@ -5383,3 +5549,188 @@ document.addEventListener('click', (e) => {
         }
     }
 });
+
+// -------------------------------------------------------------
+// PURCHASING & RAW MATERIALS REQUISITIONS
+// -------------------------------------------------------------
+async function loadPurchasingRequisitions() {
+    const status = document.getElementById('filter-purchasing-status')?.value || '';
+    const urgency = document.getElementById('filter-purchasing-urgency')?.value || '';
+    const search = document.getElementById('filter-purchasing-search')?.value || '';
+    const tbody = document.getElementById('table-purchasing-body');
+    if (!tbody) return;
+
+    tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-slate-400">Loading supply requisitions...</td></tr>';
+
+    let url = `/api/supply-requests?search=${encodeURIComponent(search)}`;
+    if (status) url += `&status=${encodeURIComponent(status)}`;
+    if (urgency) url += `&urgency=${encodeURIComponent(urgency)}`;
+
+    const res = await NKB.api(url);
+    if (!res.success || !res.data || res.data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-slate-400">No supply requisitions found.</td></tr>';
+        return;
+    }
+
+    const statusBadges = {
+        'SUBMITTED': 'bg-amber-100 text-amber-800 border-amber-200',
+        'ORDERED': 'bg-blue-100 text-blue-800 border-blue-200',
+        'IN_TRANSIT': 'bg-purple-100 text-purple-800 border-purple-200',
+        'DELIVERED': 'bg-emerald-100 text-emerald-800 border-emerald-200',
+        'CANCELLED': 'bg-rose-100 text-rose-800 border-rose-200'
+    };
+
+    const urgencyBadges = {
+        'CRITICAL': 'bg-rose-100 text-rose-800 border-rose-200 font-black',
+        'HIGH': 'bg-amber-100 text-amber-800 border-amber-200 font-bold',
+        'NORMAL': 'bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold'
+    };
+
+    tbody.innerHTML = res.data.map(r => `
+        <tr class="hover:bg-slate-50 transition">
+            <td class="py-3 px-4">
+                <div class="font-black text-indigo-700 font-mono">${r.po_number}</div>
+                <div class="text-[11px] text-slate-500 font-medium">${r.client_name}</div>
+            </td>
+            <td class="py-3 px-4 max-w-xs">
+                <div class="text-xs font-bold text-slate-800 line-clamp-2">${r.materials_needed}</div>
+                ${r.notes ? `<div class="text-[10px] text-slate-400 truncate mt-0.5">${r.notes}</div>` : ''}
+            </td>
+            <td class="py-3 px-4">
+                <span class="inline-block px-2.5 py-0.5 rounded-full text-[10px] border ${urgencyBadges[r.urgency] || 'bg-slate-100 text-slate-700'}">
+                    ${r.urgency}
+                </span>
+            </td>
+            <td class="py-3 px-4 font-mono text-slate-600 text-xs">
+                ${r.target_date || 'ASAP'}
+            </td>
+            <td class="py-3 px-4">
+                <span class="inline-block px-2.5 py-0.5 rounded-lg text-[10px] font-bold border ${statusBadges[r.status] || 'bg-slate-100 text-slate-700'}">
+                    ${r.status}
+                </span>
+            </td>
+            <td class="py-3 px-4 text-slate-500 text-xs">
+                <div>${r.requested_by_name}</div>
+                <div class="text-[10px] text-slate-400 font-mono">${NKB.formatDate(r.created_at)}</div>
+            </td>
+            <td class="py-3 px-4 text-right whitespace-nowrap">
+                <button onclick="openUpdateRequisitionModal('${r.id}')" class="px-2.5 py-1 bg-teal-50 border border-teal-200 hover:bg-teal-100 text-teal-700 rounded-lg text-xs font-bold shadow-sm transition inline-flex items-center gap-1">
+                    <span>✏️</span> Manage
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function openUpdateRequisitionModal(reqId) {
+    const res = await NKB.api(`/api/supply-requests/${reqId}`);
+    if (!res.success || !res.data) {
+        NKB.showToast('Failed to load requisition details.', 'error');
+        return;
+    }
+
+    const r = res.data;
+    const root = document.getElementById('modals-root');
+    if (!root) return;
+
+    root.innerHTML = `
+        <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 rounded-xl bg-teal-50 border border-teal-100 flex items-center justify-center text-teal-600 text-base font-bold">🛒</div>
+                        <div>
+                            <h3 class="text-base font-extrabold text-slate-900">Manage Supply Requisition</h3>
+                            <p class="text-[11px] text-slate-500">${r.po_number} • ${r.client_name}</p>
+                        </div>
+                    </div>
+                    <button onclick="closeModal()" class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 font-bold flex items-center justify-center transition">✕</button>
+                </div>
+
+                <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-1">
+                    <div class="font-bold text-slate-700">Materials Needed:</div>
+                    <div class="text-slate-900 font-medium">${r.materials_needed}</div>
+                    <div class="text-[11px] text-slate-500 pt-1">Requested by: <b>${r.requested_by_name}</b> | Urgency: <b class="text-rose-600">${r.urgency}</b></div>
+                </div>
+
+                <form onsubmit="submitUpdateRequisition(event, '${r.id}')" class="space-y-3.5 text-xs">
+                    <div>
+                        <label class="block text-slate-700 mb-1 font-bold">Procurement Status <span class="text-rose-500">*</span></label>
+                        <select id="req-update-status" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white font-bold text-slate-800 focus:ring-2 focus:ring-teal-500 transition">
+                            <option value="SUBMITTED" ${r.status === 'SUBMITTED' ? 'selected' : ''}>⚠️ SUBMITTED (Sourcing Supplier)</option>
+                            <option value="ORDERED" ${r.status === 'ORDERED' ? 'selected' : ''}>📦 ORDERED (PO Issued to Vendor)</option>
+                            <option value="IN_TRANSIT" ${r.status === 'IN_TRANSIT' ? 'selected' : ''}>🚚 IN TRANSIT (Shipped by Vendor)</option>
+                            <option value="DELIVERED" ${r.status === 'DELIVERED' ? 'selected' : ''}>✅ DELIVERED (Received at Warehouse & Fulfilled)</option>
+                            <option value="CANCELLED" ${r.status === 'CANCELLED' ? 'selected' : ''}>❌ CANCELLED</option>
+                        </select>
+                        <p class="text-[10px] text-slate-400 mt-1">Marking as DELIVERED unblocks production and updates PO raw materials to SUFFICIENT.</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-slate-700 mb-1 font-bold">Supplier / Order Tracking Details</label>
+                        <input type="text" id="req-update-supplier" placeholder="e.g., Croda Chemicals / PO# 88492 / ETA Friday" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-500 transition">
+                    </div>
+
+                    <div>
+                        <label class="block text-slate-700 mb-1 font-bold">Expected Arrival Date</label>
+                        <input type="date" id="req-update-target-date" value="${r.target_date || ''}" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-500 transition">
+                    </div>
+
+                    <div>
+                        <label class="block text-slate-700 mb-1 font-bold">Procurement Notes / Instructions</label>
+                        <textarea id="req-update-notes" rows="2" placeholder="Additional vendor or quality inspection notes..." class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-500 transition"></textarea>
+                    </div>
+
+                    <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition">Cancel</button>
+                        <button type="submit" id="btn-update-req-submit" class="px-5 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-xl font-bold shadow-lg shadow-teal-600/20 transition">Save Status Update</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+}
+
+async function submitUpdateRequisition(e, reqId) {
+    e.preventDefault();
+    const status = document.getElementById('req-update-status')?.value;
+    const supplier_details = document.getElementById('req-update-supplier')?.value.trim();
+    const target_date = document.getElementById('req-update-target-date')?.value || null;
+    const notes = document.getElementById('req-update-notes')?.value.trim();
+
+    const submitBtn = document.getElementById('btn-update-req-submit');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerText = 'Updating...';
+    }
+
+    try {
+        const res = await NKB.api(`/api/supply-requests/${reqId}`, {
+            method: 'PUT',
+            body: JSON.stringify({ status, supplier_details, target_date, notes })
+        });
+
+        if (res.success) {
+            NKB.showToast(res.message || 'Requisition status updated successfully!', 'success');
+            closeModal();
+            loadPurchasingRequisitions();
+            if (typeof loadOrders === 'function') loadOrders();
+            if (window.NKB_Agents && window.NKB_Agents.refreshPendingNotifications) {
+                window.NKB_Agents.refreshPendingNotifications();
+            }
+        } else {
+            NKB.showToast(res.message || res.error || 'Failed to update requisition.', 'error');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerText = 'Save Status Update';
+            }
+        }
+    } catch (err) {
+        NKB.showToast('Network error updating requisition.', 'error');
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerText = 'Save Status Update';
+        }
+    }
+}
+

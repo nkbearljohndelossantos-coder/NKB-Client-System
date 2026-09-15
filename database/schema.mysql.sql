@@ -37,7 +37,8 @@ CREATE TABLE IF NOT EXISTS users (
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
-    role ENUM('SUPER_ADMIN', 'IT_ADMIN', 'ADMIN', 'PRODUCTION', 'WAREHOUSE', 'ACCOUNTING', 'INVENTORY', 'CLIENT') NOT NULL,
+    plain_password VARCHAR(255) NULL,
+    role ENUM('SUPER_ADMIN', 'IT_ADMIN', 'ADMIN', 'PURCHASING', 'PRODUCTION', 'WAREHOUSE', 'ACCOUNTING', 'INVENTORY', 'CLIENT') NOT NULL,
     client_id VARCHAR(36) NULL,
     phone VARCHAR(50) NULL,
     is_active TINYINT(1) NOT NULL DEFAULT 1,
@@ -429,7 +430,25 @@ CREATE TABLE IF NOT EXISTS supply_requests (
     CONSTRAINT fk_sr_user FOREIGN KEY (requested_by) REFERENCES users(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 22. Audit Logs
+-- 22. Chat System Messages Table
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id VARCHAR(36) NOT NULL PRIMARY KEY,
+    sender_id VARCHAR(36) NOT NULL,
+    receiver_id VARCHAR(36) NULL,
+    channel_type VARCHAR(50) NOT NULL DEFAULT 'DIRECT',
+    target_role VARCHAR(50) NULL,
+    message TEXT NOT NULL,
+    is_support TINYINT(1) NOT NULL DEFAULT 0,
+    is_read TINYINT(1) NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_cm_sender (sender_id),
+    INDEX idx_cm_receiver (receiver_id),
+    INDEX idx_cm_channel (channel_type),
+    INDEX idx_cm_created (created_at),
+    CONSTRAINT fk_cm_sender FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 23. Audit Logs
 CREATE TABLE IF NOT EXISTS audit_logs (
     id VARCHAR(36) NOT NULL PRIMARY KEY,
     user_id VARCHAR(36) NULL,
@@ -443,7 +462,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 22. Insert Document Sequences
+-- 24. Insert Document Sequences
 INSERT INTO document_sequences (doc_type, current_year, last_sequence) VALUES 
 ('PO', YEAR(CURRENT_DATE), 0),
 ('JO', YEAR(CURRENT_DATE), 0),
@@ -453,9 +472,9 @@ INSERT INTO document_sequences (doc_type, current_year, last_sequence) VALUES
 ('PAY', YEAR(CURRENT_DATE), 0)
 ON DUPLICATE KEY UPDATE current_year = VALUES(current_year);
 
--- 23. Insert Initial Root Super Admin Account (Password: Admin123!)
-INSERT INTO users (id, name, email, password_hash, role, is_active) VALUES
-('a0000000-0000-0000-0000-000000000001', 'Executive Admin', 'admin@nkbmanufacturing.com', '$2b$10$jny3GQXy8GwL8vkYVtV4EeTH2QDo8tfg6hJO/vbpG3Xrwakfqgx2G', 'SUPER_ADMIN', 1)
-ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash), updated_at = CURRENT_TIMESTAMP;
+-- 25. Insert Initial Root Super Admin Account (Password: Admin123!)
+INSERT INTO users (id, name, email, password_hash, plain_password, role, is_active) VALUES
+('a0000000-0000-0000-0000-000000000001', 'Executive Admin', 'admin@nkbmanufacturing.com', '$2b$10$jny3GQXy8GwL8vkYVtV4EeTH2QDo8tfg6hJO/vbpG3Xrwakfqgx2G', 'Admin123!', 'SUPER_ADMIN', 1)
+ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash), plain_password = VALUES(plain_password), updated_at = CURRENT_TIMESTAMP;
 
 SET FOREIGN_KEY_CHECKS = 1;

@@ -14,7 +14,7 @@ router.get('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
     const { role, status, search } = req.query;
 
     let query = `
-        SELECT u.id, u.name, u.email, u.role, u.is_active, u.created_at, u.updated_at,
+        SELECT u.id, u.name, u.email, u.role, u.is_active, u.plain_password, u.created_at, u.updated_at,
                c.id as client_id, c.company_name
         FROM users u
         LEFT JOIN clients c ON u.client_id = c.id
@@ -49,7 +49,7 @@ router.get('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
  */
 router.get('/:id', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN), (req, res) => {
     const user = db.prepare(`
-        SELECT u.id, u.name, u.email, u.role, u.is_active, u.created_at, u.updated_at,
+        SELECT u.id, u.name, u.email, u.role, u.is_active, u.plain_password, u.created_at, u.updated_at,
                c.id as client_id, c.company_name
         FROM users u
         LEFT JOIN clients c ON u.client_id = c.id
@@ -126,9 +126,9 @@ router.post('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN)
     const passwordHash = bcrypt.hashSync(password, 12);
 
     db.prepare(`
-        INSERT INTO users (id, name, email, password_hash, role, client_id, is_active)
-        VALUES (?, ?, ?, ?, ?, ?, 1)
-    `).run(id, name.trim(), cleanEmail, passwordHash, cleanRole, cleanRole === ROLES.CLIENT ? client_id : null);
+        INSERT INTO users (id, name, email, password_hash, plain_password, role, client_id, is_active)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+    `).run(id, name.trim(), cleanEmail, passwordHash, password, cleanRole, cleanRole === ROLES.CLIENT ? client_id : null);
 
     logAudit({
         userId: req.user.id,
@@ -142,7 +142,7 @@ router.post('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN)
     });
 
     const created = db.prepare(`
-        SELECT u.id, u.name, u.email, u.role, u.is_active, u.created_at, c.company_name
+        SELECT u.id, u.name, u.email, u.role, u.is_active, u.plain_password, u.created_at, c.company_name
         FROM users u
         LEFT JOIN clients c ON u.client_id = c.id
         WHERE u.id = ?
@@ -231,6 +231,7 @@ router.put('/:id', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMI
 
     // Optional password update
     let updatedPasswordHash = targetUser.password_hash;
+    let updatedPlainPassword = targetUser.plain_password;
     let passwordChanged = false;
     if (password && password.trim().length > 0) {
         if (password.trim().length < 8) {
@@ -241,14 +242,15 @@ router.put('/:id', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMI
             });
         }
         updatedPasswordHash = bcrypt.hashSync(password.trim(), 12);
+        updatedPlainPassword = password.trim();
         passwordChanged = true;
     }
 
     db.prepare(`
         UPDATE users
-        SET name = ?, email = ?, password_hash = ?, role = ?, is_active = ?, client_id = ?, updated_at = datetime('now')
+        SET name = ?, email = ?, password_hash = ?, plain_password = ?, role = ?, is_active = ?, client_id = ?, updated_at = datetime('now')
         WHERE id = ?
-    `).run(updatedName, updatedEmail, updatedPasswordHash, updatedRole, updatedStatus, updatedClientId, id);
+    `).run(updatedName, updatedEmail, updatedPasswordHash, updatedPlainPassword, updatedRole, updatedStatus, updatedClientId, id);
 
     logAudit({
         userId: req.user.id,
@@ -265,7 +267,7 @@ router.put('/:id', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMI
     });
 
     const updated = db.prepare(`
-        SELECT u.id, u.name, u.email, u.role, u.is_active, u.created_at, u.updated_at,
+        SELECT u.id, u.name, u.email, u.role, u.is_active, u.plain_password, u.created_at, u.updated_at,
                c.id as client_id, c.company_name
         FROM users u
         LEFT JOIN clients c ON u.client_id = c.id
@@ -304,8 +306,8 @@ router.post('/:id/reset-password', authenticateToken, requireRoles(ROLES.SUPER_A
         return res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Cannot reset Super Admin or IT Admin passwords.' });
     }
 
-    const passwordHash = bcrypt.hashSync(new_password, 12);
-    db.prepare("UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?").run(passwordHash, id);
+    const passwordHash = bcrypt.hashSync(new_password.trim(), 12);
+    db.prepare("UPDATE users SET password_hash = ?, plain_password = ?, updated_at = datetime('now') WHERE id = ?").run(passwordHash, new_password.trim(), id);
 
     logAudit({
         userId: req.user.id,
@@ -320,7 +322,8 @@ router.post('/:id/reset-password', authenticateToken, requireRoles(ROLES.SUPER_A
 
     return res.json({
         success: true,
-        message: `Password reset successfully for ${targetUser.email}.`
+        message: `Password reset successfully for ${targetUser.email}.`,
+        plain_password: new_password.trim()
     });
 });
 
