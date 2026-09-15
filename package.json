@@ -16,7 +16,7 @@
     "wipe:mysql": "node database/wipe-mysql.js",
     "push": "node scripts/sync-and-push.js",
     "deploy": "node scripts/sync-and-push.js",
-    "test": "node --test tests/**/*.test.js"
+    "test": "node --test tests/**/*.test.js && node scripts/cleanup-test-db.js"
   },
   "keywords": [
     "manufacturing",

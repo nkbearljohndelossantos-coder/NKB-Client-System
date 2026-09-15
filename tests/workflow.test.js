@@ -1,8 +1,9 @@
 const path = require('path');
+const fs = require('fs');
 process.env.NODE_ENV = 'test';
 process.env.DATABASE_PATH = path.join(__dirname, '../database/nkb_test.sqlite');
 
-const { test, describe, before } = require('node:test');
+const { test, describe, before, after } = require('node:test');
 const assert = require('node:assert');
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
@@ -796,6 +797,22 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         db.prepare('DELETE FROM job_orders WHERE id = ?').run(createdJO.id);
         db.prepare('DELETE FROM purchase_order_items WHERE po_id = ?').run(testPO.id);
         db.prepare('DELETE FROM purchase_orders WHERE id = ?').run(testPO.id);
+    });
+
+    after(() => {
+        // Automatically delete all test decoys and temporary test database
+        try {
+            db.close();
+        } catch (_) {}
+        const testDbPath = path.join(__dirname, '../database/nkb_test.sqlite');
+        const walPath = path.join(__dirname, '../database/nkb_test.sqlite-wal');
+        const shmPath = path.join(__dirname, '../database/nkb_test.sqlite-shm');
+        [testDbPath, walPath, shmPath].forEach(f => {
+            if (fs.existsSync(f)) {
+                try { fs.unlinkSync(f); } catch (_) {}
+            }
+        });
+        console.log('🧹 Cleaned up test database and decoys successfully');
     });
 });
 
