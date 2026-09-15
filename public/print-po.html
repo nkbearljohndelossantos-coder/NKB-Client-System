@@ -432,12 +432,43 @@
             font-weight: bold;
         }
 
+        /* Order Notes / Description Section (Under Products, Above Form of Payment) */
+        .po-notes-section {
+            font-size: 8.5pt;
+            color: #000000;
+            line-height: 1.45;
+            margin-top: 12px;
+            margin-bottom: 8px;
+        }
+
+        .notes-heading {
+            font-weight: bold;
+            font-size: 8.5pt;
+            color: #000000;
+            margin-bottom: 2px;
+        }
+
+        .notes-body {
+            font-size: 8.5pt;
+            color: #000000;
+            white-space: pre-wrap;
+            line-height: 1.45;
+            padding: 3px 0;
+            min-height: 16px;
+        }
+
+        body.edit-mode-active .notes-body:empty:before {
+            content: "Click to add order notes or description...";
+            color: #94a3b8;
+            font-style: italic;
+        }
+
         /* Bank Details Footer (Outside/Below the Bordered Box) */
         .bank-details-section {
             font-size: 8.5pt;
             color: #000000;
             line-height: 1.45;
-            margin-top: 12px;
+            margin-top: 10px;
         }
 
         .bank-intro {
@@ -592,6 +623,12 @@
             </div>
         </div>
 
+        <!-- Note / Description Section (Under Products, Above Form of Payment) -->
+        <div id="po-notes-section" class="po-notes-section avoid-break" style="display: none;">
+            <div class="notes-heading">Description / Instructions:</div>
+            <div id="disp-po-notes" class="notes-body cell-editable" contenteditable="false"></div>
+        </div>
+
         <!-- Bank Details Section (Outside/Below the Bordered Box at Bottom Left) -->
         <div class="bank-details-section avoid-break">
             <div class="bank-intro">Please deposit payment to the following bank account/s:</div>
@@ -702,6 +739,18 @@
 
             // Bank lines
             document.getElementById('disp-bank-details').contentEditable = val;
+
+            // Description / Notes section
+            const notesEl = document.getElementById('disp-po-notes');
+            const notesSection = document.getElementById('po-notes-section');
+            if (notesEl) {
+                notesEl.contentEditable = val;
+                if (editable) {
+                    notesSection.style.display = 'block';
+                } else if (!notesEl.textContent.trim()) {
+                    notesSection.style.display = 'none';
+                }
+            }
 
             // Table cells
             document.querySelectorAll('#po-items-tbody td.cell-editable').forEach(td => {
@@ -836,6 +885,7 @@
             } else {
                 itemsHtml = items.map(item => {
                     const desc = item.product_name || item.name || '-';
+                    const itemNote = (item.notes || '').trim();
                     const qty = item.target_quantity || item.quantity || 0;
                     const rawUnit = (item.unit || 'PC').toUpperCase().trim();
                     const uom = (rawUnit === 'PCS' || rawUnit === 'PIECE' || rawUnit === 'PIECES') ? 'PC' : rawUnit;
@@ -845,7 +895,10 @@
 
                     return `
                         <tr>
-                            <td class="td-desc cell-editable" contenteditable="false">${escapeHtml(desc)}</td>
+                            <td class="td-desc cell-editable" contenteditable="false">
+                                <div>${escapeHtml(desc)}</div>
+                                ${itemNote ? `<div style="font-size: 7.8pt; color: #4b5563; font-style: italic; margin-top: 1px;">Note: ${escapeHtml(itemNote)}</div>` : ''}
+                            </td>
                             <td class="td-qty cell-editable" contenteditable="false" onblur="onRowInput(this.parentElement)">${formatNumber2(qty)}</td>
                             <td class="td-uom cell-editable" contenteditable="false">${escapeHtml(uom)}</td>
                             <td class="td-price cell-editable" contenteditable="false" onblur="onRowInput(this.parentElement)">${formatNumber2(price)}</td>
@@ -870,6 +923,22 @@
             document.getElementById('disp-vat').textContent = formatNumber2(finalVat);
             document.getElementById('disp-discount').textContent = formatNumber2(finalDiscount);
             document.getElementById('disp-total').textContent = formatNumber2(finalTotal);
+
+            // Note / Description Logic (Under Products, Above Form of Payment)
+            const notesEl = document.getElementById('disp-po-notes');
+            const notesSection = document.getElementById('po-notes-section');
+            const poNotes = (po.notes || '').trim();
+            if (poNotes) {
+                notesEl.textContent = poNotes;
+                notesSection.style.display = 'block';
+            } else {
+                notesEl.textContent = '';
+                if (isEditMode) {
+                    notesSection.style.display = 'block';
+                } else {
+                    notesSection.style.display = 'none';
+                }
+            }
 
             // Bank Details Logic
             const bankEl = document.getElementById('disp-bank-details');
@@ -911,6 +980,7 @@
                     po_date: '2026-08-20',
                     expected_delivery_date: '2026-08-20',
                     terms: 'COD',
+                    notes: 'Deliver strictly with complete COA (Certificate of Analysis) and tamper-evident packaging seal.',
                     subtotal: 1330.00,
                     tax_amount: 0.00,
                     discount_amount: 0.00,

@@ -560,10 +560,9 @@ async function openViewPOModal(poId) {
 
                 <!-- Footer Actions -->
                 <div class="flex flex-wrap justify-between items-center gap-2 pt-3 border-t border-slate-100 flex-shrink-0">
-                    <div class="flex flex-wrap items-center gap-2">
-                        ${(jobOrders.length === 0 && (!po.status || po.status === 'PENDING_APPROVAL' || po.status === 'APPROVED' || po.status === 'DRAFT')) ? `
-                            <button onclick="closeModal(); openEditPOModal('${po.id}');" class="px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-300 rounded-xl font-bold text-xs shadow-sm transition inline-flex items-center gap-1.5" title="Edit PO before entering JO">
-                                <span>✏️ Edit PO</span>
+                        ${((!NKB.user || NKB.user.role === 'ADMIN' || NKB.user.role === 'SUPER_ADMIN') && po.status !== 'COMPLETED' && po.status !== 'CANCELLED' && po.status !== 'VOIDED' && (!po.deliveries || po.deliveries.length === 0)) ? `
+                            <button onclick="closeModal(); openEditPOModal('${po.id}');" class="px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-300 rounded-xl font-bold text-xs shadow-sm transition inline-flex items-center gap-1.5" title="Update products and details of this order">
+                                <span>✏️ Update Order</span>
                             </button>
                         ` : ''}
                         ${(NKB.user && (NKB.user.role === 'ADMIN' || NKB.user.role === 'SUPER_ADMIN') && po.status === 'PENDING_APPROVAL') ? `
@@ -754,9 +753,10 @@ async function openEditPOModal(poId) {
 
     const po = res.data;
 
-    // Verify before entering JO
-    if (po.jobOrders && po.jobOrders.length > 0) {
-        NKB.showToast('Cannot edit Purchase Order: A Job Order (JO) has already been created for this order.', 'error');
+    // Verify order hasn't been delivered or dispatched
+    const hasDeliveries = (po.deliveries && po.deliveries.length > 0) || (po.dr_count && po.dr_count > 0);
+    if (po.status === 'COMPLETED' || hasDeliveries) {
+        NKB.showToast('Cannot update Purchase Order: Order has already been delivered or delivery receipts have been created.', 'error');
         closeModal();
         return;
     }
@@ -822,11 +822,11 @@ async function openEditPOModal(poId) {
                 <div class="flex justify-between items-center border-b border-slate-100 pb-3 flex-shrink-0">
                     <div>
                         <div class="flex items-center gap-2">
-                            <h3 class="text-lg font-bold text-slate-900">Edit Purchase Order</h3>
+                            <h3 class="text-lg font-bold text-slate-900">Update Purchase Order</h3>
                             <span class="px-2.5 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 font-mono font-bold text-xs">${po.po_number}</span>
-                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">Pre-JO State</span>
+                            <span class="px-2.5 py-0.5 rounded text-[10px] font-bold ${po.status === 'IN_PRODUCTION' ? 'bg-purple-100 text-purple-800 border border-purple-300' : 'bg-amber-50 text-amber-800 border border-amber-200'}">${po.status ? po.status.replace(/_/g, ' ') : 'ACTIVE'}</span>
                         </div>
-                        <p class="text-xs text-slate-500 mt-0.5">Modify line items, quantities, and delivery date before entering Job Order</p>
+                        <p class="text-xs text-slate-500 mt-0.5">Modify line items, quantities, pricing, delivery date, or special instructions</p>
                     </div>
                     <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
                 </div>
@@ -948,8 +948,8 @@ async function openEditPOModal(poId) {
                     <!-- Summary & Totals -->
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-200">
                         <div>
-                            <label class="block text-slate-600 mb-1">Packaging / Batch Notes</label>
-                            <textarea id="edit-po-notes" rows="2" placeholder="Formulation variants, packaging specifics..." class="w-full px-3 py-2 border rounded-xl bg-white">${po.notes || ''}</textarea>
+                            <label class="block text-slate-600 mb-1">Special Notes / Description (Appears on Printed Order above payment)</label>
+                            <textarea id="edit-po-notes" rows="2" placeholder="Special formulation notes, packaging variants, delivery instructions..." class="w-full px-3 py-2 border rounded-xl bg-white">${po.notes || ''}</textarea>
                         </div>
                         <div class="space-y-1.5 text-right flex flex-col justify-center">
                             <div class="text-slate-500">Total Items: <strong id="edit-po-total-items" class="text-slate-900">0</strong></div>
@@ -960,7 +960,7 @@ async function openEditPOModal(poId) {
 
                     <div class="flex justify-end gap-2 pt-2 border-t border-slate-100 flex-shrink-0">
                         <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold">Cancel</button>
-                        <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-md shadow-indigo-600/30">Save Changes</button>
+                        <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-md shadow-indigo-600/30">Update Order</button>
                     </div>
                 </form>
             </div>

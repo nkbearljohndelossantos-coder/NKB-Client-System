@@ -388,19 +388,19 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
         }
     }
 
-    if (po.status === 'IN_PRODUCTION' || po.status === 'COMPLETED' || po.status === 'CANCELLED' || po.status === 'VOIDED') {
+    if (po.status === 'COMPLETED' || po.status === 'CANCELLED' || po.status === 'VOIDED') {
         return res.status(400).json({
             success: false,
-            error: `Cannot edit Purchase Order with status "${po.status}".`
+            error: `Cannot update Purchase Order with status "${po.status}".`
         });
     }
 
-    // Crucial rule: Check if a Job Order (JO) has already been created for this PO
-    const joCheck = db.prepare('SELECT COUNT(*) as count FROM job_orders WHERE po_id = ?').get(id);
-    if (joCheck && joCheck.count > 0) {
+    // Check if order has already been delivered or dispatched on active Delivery Receipts
+    const activeDrCheck = db.prepare("SELECT COUNT(*) as count FROM delivery_receipts WHERE po_id = ? AND status NOT IN ('CANCELLED')").get(id);
+    if (activeDrCheck && activeDrCheck.count > 0) {
         return res.status(400).json({
             success: false,
-            error: 'Cannot edit Purchase Order: A Job Order (JO) has already been created for this order.'
+            error: 'Cannot update Purchase Order: Delivery Receipts have already been generated or dispatched for this order.'
         });
     }
 
@@ -495,6 +495,35 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
                     it.unitPrice || it.unit_price,
                     it.subtotal
                 );
+
+                // Synchronize existing Job Orders for this product if any exist
+                const existingJO = db.prepare('SELECT id FROM job_orders WHERE po_id = ? AND product_id = ?').get(id, it.productId);
+                if (existingJO) {
+                    db.prepare(`
+                        UPDATE job_orders
+                        SET target_quantity = ?, updated_at = datetime('now')
+                        WHERE id = ?
+                    `).run(it.targetQuantity || it.target_quantity, existingJO.id);
+
+                    // Sync target_quantity on active production batches
+                    db.prepare(`
+                        UPDATE production_batches
+                        SET target_quantity = ?, updated_at = datetime('now')
+                        WHERE jo_id = ? AND status IN ('PLANNED', 'MIXING')
+                    `).run(it.targetQuantity || it.target_quantity, existingJO.id);
+                }
+            }
+
+            // Clean up any job orders for products that were removed from the PO during update (if no DRs exist)
+            const updatedProductIds = processedItems.map(p => p.productId);
+            const orphanedJOs = db.prepare(`
+                SELECT id FROM job_orders 
+                WHERE po_id = ? AND product_id NOT IN (${updatedProductIds.map(() => '?').join(',')})
+            `).all(id, ...updatedProductIds);
+
+            for (const ojo of orphanedJOs) {
+                db.prepare('DELETE FROM production_batches WHERE jo_id = ?').run(ojo.id);
+                db.prepare('DELETE FROM job_orders WHERE id = ?').run(ojo.id);
             }
         }
 

@@ -732,6 +732,71 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         const checkClient = db.prepare('SELECT * FROM clients WHERE id = ?').get(tempClientId);
         assert.strictEqual(checkClient, undefined);
     });
+
+    test('17. Undelivered Order Update Workflow: Admin updates order products and notes even with active Job Orders', async () => {
+        // Ensure product is assigned to client
+        await request(app)
+            .post(`/api/clients/${demoClient.id}/pricing`)
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({ product_id: lotionProduct.id, custom_price: 120.0 });
+
+        // A. Create PO with 500 pcs
+        const poRes = await request(app)
+            .post('/api/orders')
+            .set('Authorization', `Bearer ${clientToken}`)
+            .send({
+                client_id: demoClient.id,
+                tolerance_percent: 10.0,
+                billing_policy: 'ACTUAL_DELIVERY',
+                notes: 'Initial production run notes',
+                items: [{ product_id: lotionProduct.id, target_quantity: 500, unit_price: 120.0 }]
+            });
+        assert.strictEqual(poRes.status, 201);
+        const testPO = poRes.body.data;
+
+        // B. Approve PO
+        const approveRes = await request(app)
+            .post(`/api/orders/${testPO.id}/approve`)
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(approveRes.status, 200);
+
+        // C. Start Job Order for this PO
+        const joRes = await request(app)
+            .post('/api/job-orders')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                po_id: testPO.id,
+                product_id: lotionProduct.id,
+                target_quantity: 500,
+                assigned_team: 'Formulation Team Beta',
+                notes: 'Start compounding'
+            });
+        assert.strictEqual(joRes.status, 201);
+        const createdJO = joRes.body.data;
+        assert.strictEqual(createdJO.target_quantity, 500);
+
+        // D. Admin updates the undelivered order to 800 pcs with updated notes
+        const updateRes = await request(app)
+            .put(`/api/orders/${testPO.id}`)
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                notes: 'Updated: Rush order - Shrink wrap packaging',
+                items: [{ product_id: lotionProduct.id, target_quantity: 800 }]
+            });
+        assert.strictEqual(updateRes.status, 200);
+        assert.strictEqual(updateRes.body.success, true);
+        assert.strictEqual(updateRes.body.data.notes, 'Updated: Rush order - Shrink wrap packaging');
+        assert.strictEqual(updateRes.body.data.total_target_quantity, 800);
+
+        // E. Verify the linked Job Order's target_quantity was synchronized to 800
+        const updatedJO = db.prepare('SELECT * FROM job_orders WHERE id = ?').get(createdJO.id);
+        assert.strictEqual(updatedJO.target_quantity, 800);
+
+        // F. Clean up test order
+        db.prepare('DELETE FROM job_orders WHERE id = ?').run(createdJO.id);
+        db.prepare('DELETE FROM purchase_order_items WHERE po_id = ?').run(testPO.id);
+        db.prepare('DELETE FROM purchase_orders WHERE id = ?').run(testPO.id);
+    });
 });
 
 

@@ -529,9 +529,9 @@ async function loadOrders() {
                             <span>📜 View Requisitions (${po.supply_requests_count})</span>
                         </button>
                     ` : ''}
-                    ${(isExecAdmin && po.jo_count === 0 && po.status !== 'CANCELLED' && po.status !== 'VOIDED') ? `
-                        <button onclick="openEditPOModal('${po.id}')" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Edit Purchase Order (before entering JO)">
-                            <span>✏️ Edit</span>
+                    ${(isExecAdmin && po.status !== 'COMPLETED' && po.status !== 'CANCELLED' && po.status !== 'VOIDED' && (!po.dr_count || po.dr_count === 0)) ? `
+                        <button onclick="openEditPOModal('${po.id}')" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1 shadow-sm" title="Update Purchase Order products and details">
+                            <span>✏️ Update</span>
                         </button>
                     ` : ''}
                     ${(isExecAdmin && po.status === 'PENDING_APPROVAL') ? `
