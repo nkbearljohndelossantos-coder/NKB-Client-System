@@ -20,6 +20,10 @@ services:
       - ./database:/app/database
       - ./uploads:/app/uploads
       - ./public:/app/public
+      - ./routes:/app/routes
+      - ./services:/app/services
+      - ./middleware:/app/middleware
+      - ./server.js:/app/server.js
     networks:
       - nkb_client_net
 

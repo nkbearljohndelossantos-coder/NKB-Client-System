@@ -936,7 +936,6 @@ router.post('/:id/void', authenticateToken, (req, res) => {
 // DELETE /api/orders/:id - Permanently delete a voided (or draft/cancelled) order
 router.delete('/:id', authenticateToken, (req, res) => {
     const { id } = req.params;
-    const db = getDb();
 
     if (req.user.role !== 'ADMIN' && req.user.role !== 'SUPER_ADMIN' && req.user.role !== 'IT_ADMIN') {
         return res.status(403).json({ success: false, error: 'Access denied.', code: 'FORBIDDEN' });
