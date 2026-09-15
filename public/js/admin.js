@@ -221,7 +221,6 @@ function applyRoleBasedUI() {
         hideTab('invoices');
         hideTab('payments');
         hideTab('buffer');
-        hideTab('clients');
         hideTab('users');
         hideTab('audit');
     } else if (role === 'WAREHOUSE') {
@@ -230,14 +229,12 @@ function applyRoleBasedUI() {
         hideTab('production');
         hideTab('invoices');
         hideTab('payments');
-        hideTab('clients');
         hideTab('users');
         hideTab('audit');
     } else if (role === 'ACCOUNTING') {
         hideTab('job-orders');
         hideTab('production');
         hideTab('deliveries');
-        hideTab('clients');
         hideTab('users');
         hideTab('audit');
     } else if (role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'IT_ADMIN') {

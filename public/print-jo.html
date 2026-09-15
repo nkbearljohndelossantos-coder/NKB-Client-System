@@ -688,6 +688,109 @@
             align-items: center;
             justify-content: center;
         }
+
+            .toolbar-btn-edit {
+                background: #f0fdf4;
+                color: #15803d;
+                border-color: #bbf7d0;
+            }
+            .toolbar-btn-edit:hover {
+                background: #dcfce7;
+            }
+            .toolbar-btn-edit.active {
+                background: #15803d;
+                color: #ffffff;
+                border-color: #15803d;
+            }
+
+            .toolbar-btn-reset {
+                background: #fff1f2;
+                color: #be123c;
+                border-color: #fecdd3;
+            }
+            .toolbar-btn-reset:hover {
+                background: #ffe4e6;
+            }
+
+            /* Edit Mode Indicator Styles */
+            body.edit-mode-active [contenteditable="true"] {
+                outline: 1px dashed #3b82f6;
+                outline-offset: 1px;
+                background-color: rgba(239, 246, 255, 0.6);
+                border-radius: 2px;
+                transition: background-color 0.15s ease;
+            }
+            body.edit-mode-active [contenteditable="true"]:hover {
+                background-color: rgba(219, 234, 254, 0.85);
+            }
+            body.edit-mode-active [contenteditable="true"]:focus {
+                outline: 2px solid #2563eb;
+                background-color: #ffffff;
+            }
+
+            .edit-mode-banner {
+                display: none;
+                width: 100%;
+                max-width: 1160px;
+                background: #eff6ff;
+                border: 1px solid #bfdbfe;
+                color: #1e40af;
+                padding: 8px 14px;
+                border-radius: 8px;
+                font-size: 12px;
+                font-weight: 600;
+                align-items: center;
+                justify-content: space-between;
+                box-sizing: border-box;
+            }
+            body.edit-mode-active .edit-mode-banner {
+                display: flex;
+            }
+
+            .edit-only {
+                display: none;
+            }
+            body.edit-mode-active .edit-only {
+                display: table-cell;
+            }
+            body.edit-mode-active div.edit-only,
+            body.edit-mode-active button.edit-only {
+                display: inline-flex;
+            }
+
+            .row-del-btn {
+                background: #fee2e2;
+                color: #ef4444;
+                border: 1px solid #fca5a5;
+                border-radius: 4px;
+                font-size: 10px;
+                padding: 1px 5px;
+                cursor: pointer;
+                font-weight: bold;
+                line-height: 1;
+            }
+            .row-del-btn:hover {
+                background: #ef4444;
+                color: #ffffff;
+            }
+
+            .btn-add-item-row {
+                padding: 3px 8px;
+                background: #f8fafc;
+                border: 1px dashed #94a3b8;
+                border-radius: 4px;
+                font-size: 10px;
+                font-weight: 600;
+                color: #334155;
+                cursor: pointer;
+                transition: all 0.15s;
+                margin-top: 4px;
+            }
+            .btn-add-item-row:hover {
+                background: #e2e8f0;
+                color: #0f172a;
+            }
+
     </style>
 </head>
 <body>
@@ -705,6 +808,12 @@
                     <option value="JOB ORDER">JOB ORDER</option>
                 </select>
             </div>
+            <button type="button" onclick="toggleEditMode()" id="btn-toggle-edit" class="toolbar-btn toolbar-btn-edit">
+                <span>✏️ Edit Mode</span>
+            </button>
+            <button type="button" onclick="resetToOriginal()" class="toolbar-btn toolbar-btn-reset">
+                <span>🔄 Reset</span>
+            </button>
             <span id="page-summary-badge" style="font-size: 11px; color: #64748b; font-weight: 600;"></span>
         </div>
 
@@ -721,6 +830,13 @@
                 <span>🖨️ Print 2 Portrait Copies (A4 Landscape)</span>
             </button>
         </div>
+    </div>
+
+
+    <!-- Edit Mode Active Notification Banner -->
+    <div class="edit-mode-banner no-print" id="edit-banner">
+        <span>✏️ <strong>Edit Mode Active:</strong> Click any text, quantity, UOM, or customer information to edit. Edits automatically sync across both Copy 1 & Copy 2 slips.</span>
+        <button type="button" onclick="toggleEditMode()" style="background: none; border: none; font-size: 11px; color: #1e40af; text-decoration: underline; cursor: pointer; font-weight: bold;">Done Editing</button>
     </div>
 
     <!-- Wrapper for 1 or More Client Sheets (Each Sheet is Exactly 1 A4 Landscape with 2 Side-by-Side Portrait Copies) -->
@@ -797,6 +913,153 @@
             }
         }
 
+
+        let isEditMode = false;
+
+        function toggleEditMode() {
+            isEditMode = !isEditMode;
+            const btn = document.getElementById('btn-toggle-edit');
+            if (isEditMode) {
+                document.body.classList.add('edit-mode-active');
+                if (btn) {
+                    btn.classList.add('active');
+                    btn.innerHTML = '<span>💾 Done Editing</span>';
+                }
+                enableJoContentEditable(true);
+            } else {
+                document.body.classList.remove('edit-mode-active');
+                if (btn) {
+                    btn.classList.remove('active');
+                    btn.innerHTML = '<span>✏️ Edit Mode</span>';
+                }
+                enableJoContentEditable(false);
+            }
+        }
+
+        function enableJoContentEditable(editable) {
+            const val = editable ? 'true' : 'false';
+            
+            // Editable text fields
+            const selectors = [
+                '.company-name', '.company-address', '.company-tin',
+                '.cust-name-display', '.cust-addr-display',
+                '.doc-no-display', '.doc-date-display', '.doc-duedate-display',
+                '.product-name-txt', '.product-sku-txt', '.td-qty', '.td-uom',
+                '.remarks-display'
+            ];
+
+            selectors.forEach(sel => {
+                document.querySelectorAll(sel).forEach(el => {
+                    el.contentEditable = val;
+                    if (editable) {
+                        el.oninput = () => syncSlips(el);
+                    }
+                });
+            });
+        }
+
+        function syncSlips(changedEl) {
+            // Find parent portrait-slip
+            const slip = changedEl.closest('.portrait-slip');
+            if (!slip) return;
+
+            const slipId = slip.id; // e.g. slip-0-1-p1 or slip-0-2-p1
+            const pageContainer = slip.closest('.page-container');
+            if (!pageContainer) return;
+
+            // Determine if Copy 1 or Copy 2
+            const isCopy1 = slipId.includes('-1-');
+            const targetSlipId = isCopy1 ? slipId.replace('-1-', '-2-') : slipId.replace('-2-', '-1-');
+            const targetSlip = document.getElementById(targetSlipId);
+            if (!targetSlip) return;
+
+            // Find matching element class in target slip
+            for (let cls of changedEl.classList) {
+                if (cls.endsWith('-display') || cls.startsWith('product-') || cls.startsWith('company-') || cls === 'td-qty' || cls === 'td-uom') {
+                    const allInSource = Array.from(slip.querySelectorAll('.' + cls));
+                    const idx = allInSource.indexOf(changedEl);
+                    if (idx !== -1) {
+                        const allInTarget = Array.from(targetSlip.querySelectorAll('.' + cls));
+                        if (allInTarget[idx]) {
+                            allInTarget[idx].textContent = changedEl.textContent;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        function addJoRow(btn) {
+            const slip = btn.closest('.portrait-slip');
+            if (!slip) return;
+            const tbody = slip.querySelector('.items-tbody');
+            if (!tbody) return;
+
+            const tr = document.createElement('tr');
+            tr.className = 'item-row';
+            tr.innerHTML = `
+                <td class="td-desc cell-editable">
+                    <span class="product-name-txt" contenteditable="true">NEW PRODUCT</span>
+                </td>
+                <td class="td-qty cell-editable" contenteditable="true">1.00</td>
+                <td class="td-uom cell-editable" contenteditable="true">PC</td>
+                <td class="edit-only no-print" style="text-align: center; vertical-align: middle;">
+                    <button type="button" class="row-del-btn" onclick="deleteJoRow(this)" title="Delete line item">✕</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+
+            // Also mirror to other copy
+            const slipId = slip.id;
+            const isCopy1 = slipId.includes('-1-');
+            const targetSlipId = isCopy1 ? slipId.replace('-1-', '-2-') : slipId.replace('-2-', '-1-');
+            const targetSlip = document.getElementById(targetSlipId);
+            if (targetSlip) {
+                const targetTbody = targetSlip.querySelector('.items-tbody');
+                if (targetTbody) {
+                    const trClone = tr.cloneNode(true);
+                    targetTbody.appendChild(trClone);
+                }
+            }
+
+            enableJoContentEditable(true);
+        }
+
+        function deleteJoRow(btn) {
+            const tr = btn.closest('tr');
+            if (!tr) return;
+            const slip = tr.closest('.portrait-slip');
+            if (!slip) return;
+
+            const allRows = Array.from(slip.querySelectorAll('.items-tbody tr'));
+            const rowIndex = allRows.indexOf(tr);
+
+            tr.remove();
+
+            // Mirror removal in the other copy
+            const slipId = slip.id;
+            const isCopy1 = slipId.includes('-1-');
+            const targetSlipId = isCopy1 ? slipId.replace('-1-', '-2-') : slipId.replace('-2-', '-1-');
+            const targetSlip = document.getElementById(targetSlipId);
+            if (targetSlip) {
+                const targetRows = Array.from(targetSlip.querySelectorAll('.items-tbody tr'));
+                if (targetRows[rowIndex]) {
+                    targetRows[rowIndex].remove();
+                }
+            }
+        }
+
+        function resetToOriginal() {
+            if (currentLoadedData && currentLoadedData.length > 0) {
+                renderPages(currentLoadedData);
+                if (isEditMode) {
+                    enableJoContentEditable(true);
+                }
+            } else {
+                location.reload();
+            }
+        }
+
         function updateDocTitle() {
             const select = document.getElementById('doc-title-select');
             const chosen = select ? select.value : 'SALES ORDER';
@@ -868,13 +1131,16 @@
                 const uom = (rawUom === 'PCS' || rawUom === 'PIECE' || rawUom === 'PIECES') ? 'PC' : rawUom;
 
                 return `
-                    <tr>
-                        <td class="td-desc">
+                    <tr class="item-row">
+                        <td class="td-desc cell-editable">
                             <span class="product-name-txt">${escapeHtml(name)}</span>
                             ${sku ? `<span class="product-sku-txt">(${escapeHtml(sku)})</span>` : ''}
                         </td>
-                        <td class="td-qty">${escapeHtml(qty)}</td>
-                        <td class="td-uom">${escapeHtml(uom)}</td>
+                        <td class="td-qty cell-editable">${escapeHtml(qty)}</td>
+                        <td class="td-uom cell-editable">${escapeHtml(uom)}</td>
+                        <td class="edit-only no-print" style="text-align: center; vertical-align: middle;">
+                            <button type="button" class="row-del-btn" onclick="deleteJoRow(this)" title="Delete line item">✕</button>
+                        </td>
                     </tr>
                 `;
             }).join('');
@@ -917,12 +1183,16 @@
                                     <th class="th-desc">Description</th>
                                     <th class="th-qty">Quantity</th>
                                     <th class="th-uom">UOM</th>
+                                    <th class="edit-only no-print" style="width: 28px; text-align: center;">✕</th>
                                 </tr>
                             </thead>
                             <tbody class="items-tbody">
                                 ${itemsRows || '<tr><td colspan="3" style="text-align: center; color: #888;">No items listed</td></tr>'}
                             </tbody>
                         </table>
+                        <div class="edit-only no-print" style="margin-top: 4px;">
+                            <button type="button" class="btn-add-item-row" onclick="addJoRow(this)">➕ Add Product Row</button>
+                        </div>
                     </div>
 
                     <!-- Footer (Remarks & Signatures) -->

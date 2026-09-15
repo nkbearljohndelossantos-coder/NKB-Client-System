@@ -54,38 +54,137 @@
                 box-sizing: border-box;
             }
         }
+
+            .toolbar-btn-edit {
+                background: #f0fdf4;
+                color: #15803d;
+                border-color: #bbf7d0;
+            }
+            .toolbar-btn-edit:hover {
+                background: #dcfce7;
+            }
+            .toolbar-btn-edit.active {
+                background: #15803d;
+                color: #ffffff;
+                border-color: #15803d;
+            }
+
+            .toolbar-btn-reset {
+                background: #fff1f2;
+                color: #be123c;
+                border-color: #fecdd3;
+            }
+            .toolbar-btn-reset:hover {
+                background: #ffe4e6;
+            }
+
+            /* Edit Mode Indicator Styles */
+            body.edit-mode-active [contenteditable="true"] {
+                outline: 1px dashed #3b82f6;
+                outline-offset: 1px;
+                background-color: rgba(239, 246, 255, 0.6);
+                border-radius: 2px;
+                transition: background-color 0.15s ease;
+            }
+            body.edit-mode-active [contenteditable="true"]:hover {
+                background-color: rgba(219, 234, 254, 0.85);
+            }
+            body.edit-mode-active [contenteditable="true"]:focus {
+                outline: 2px solid #2563eb;
+                background-color: #ffffff;
+            }
+
+            .edit-mode-banner {
+                display: none;
+                width: 100%;
+                max-width: 210mm;
+                background: #eff6ff;
+                border: 1px solid #bfdbfe;
+                color: #1e40af;
+                padding: 8px 14px;
+                border-radius: 8px;
+                font-size: 12px;
+                font-weight: 600;
+                align-items: center;
+                justify-content: space-between;
+                box-sizing: border-box;
+                margin-bottom: 12px;
+            }
+            body.edit-mode-active .edit-mode-banner {
+                display: flex;
+            }
+
+            .edit-only {
+                display: none;
+            }
+            body.edit-mode-active .edit-only {
+                display: table-cell;
+            }
+            body.edit-mode-active div.edit-only,
+            body.edit-mode-active button.edit-only {
+                display: inline-flex;
+            }
+
+            .row-del-btn {
+                background: #fee2e2;
+                color: #ef4444;
+                border: 1px solid #fca5a5;
+                border-radius: 4px;
+                font-size: 10px;
+                padding: 1px 5px;
+                cursor: pointer;
+                font-weight: bold;
+                line-height: 1;
+            }
+            .row-del-btn:hover {
+                background: #ef4444;
+                color: #ffffff;
+            }
+
+            .btn-add-item-row {
+                padding: 4px 10px;
+                background: #f8fafc;
+                border: 1px dashed #94a3b8;
+                border-radius: 4px;
+                font-size: 11px;
+                font-weight: 600;
+                color: #334155;
+                cursor: pointer;
+                transition: all 0.15s;
+                margin-top: 6px;
+            }
+            .btn-add-item-row:hover {
+                background: #e2e8f0;
+                color: #0f172a;
+            }
+
     </style>
 </head>
 <body class="text-slate-900 antialiased font-sans">
 
     <!-- Action Bar (Hidden on Print) -->
     <div class="w-full max-w-[210mm] mb-4 flex justify-between items-center no-print">
-        <a href="javascript:window.history.back()" class="px-3 py-1.5 bg-white border border-slate-300 rounded text-xs font-semibold text-slate-700 hover:bg-slate-50 transition shadow-sm">
-            ← Back to Invoices
-        </a>
+        <div class="flex items-center gap-2">
+            <a href="javascript:window.history.back()" class="px-3 py-1.5 bg-white border border-slate-300 rounded text-xs font-semibold text-slate-700 hover:bg-slate-50 transition shadow-sm">
+                ← Back to Invoices
+            </a>
+            <button type="button" onclick="toggleSiEditMode()" id="btn-toggle-edit" class="px-3 py-1.5 rounded text-xs font-semibold shadow-sm transition border toolbar-btn-edit">
+                <span>✏️ Edit Mode</span>
+            </button>
+            <button type="button" onclick="resetSiToOriginal()" class="px-3 py-1.5 rounded text-xs font-semibold shadow-sm transition border toolbar-btn-reset">
+                <span>🔄 Reset</span>
+            </button>
+        </div>
         <button onclick="window.print()" class="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded text-xs font-semibold shadow transition flex items-center gap-1.5">
             <span>🖨️ Print Sales Invoice (A4)</span>
         </button>
     </div>
 
-    <!-- A4 Printable Sheet -->
-    <div class="print-sheet space-y-4 text-slate-800" id="invoice-printable-sheet">
-        
-        <!-- Header -->
-        <div class="flex justify-between items-start border-b border-slate-300 pb-3">
-            <div>
-                <h1 id="si-company-name-hdr" class="text-xl font-extrabold text-slate-900 tracking-tight">NKB MANUFACTURING CORPORATION</h1>
-                <p class="text-[11px] text-slate-500 font-medium">Cosmetics & Personal Care Formulation Laboratory</p>
-                <p id="si-tin-hdr" class="text-[10px] text-slate-500">TIN: 686-950-421-00000 · VAT Registered</p>
-                <p id="si-address-hdr" class="text-[10px] text-slate-500">Blk 4, Lot 5, Twig st., Sampaguita Village, Mambog II, Bacoor City, Cavite</p>
-                <p id="si-contact-hdr" class="text-[10px] text-slate-500">Billing Dept: accounting@nkbmanufacturing.com · Contact: (046) 885-0923</p>
-            </div>
-            <div class="text-right space-y-0.5">
-                <h2 class="text-lg font-bold tracking-wider text-slate-900 uppercase">SALES INVOICE</h2>
-                <div id="si-number-display" class="text-sm font-bold text-slate-800 font-mono">SI-XXXX-XXXXXX</div>
-                <div class="text-[11px] text-slate-500">Invoice Date: <span id="si-date-display" class="font-semibold text-slate-800">-</span></div>
-                <div class="text-[11px] text-slate-600">Payment Due: <span id="si-due-display" class="font-semibold text-slate-900 font-mono">-</span></div>
-            </div>
+    <!-- Edit Mode Active Notification Banner -->
+    <div class="edit-mode-banner no-print" id="edit-banner">
+        <span>✏️ <strong>Edit Mode Active:</strong> Click any text, billable quantity, rate, tax, payment, or bank info to edit. Subtotals and balance due recalculate automatically.</span>
+        <button type="button" onclick="toggleSiEditMode()" style="background: none; border: none; font-size: 11px; color: #1e40af; text-decoration: underline; cursor: pointer; font-weight: bold;">Done Editing</button>
+    </div>
         </div>
 
         <!-- Billed To & References Grid -->
@@ -117,12 +216,16 @@
                         <th class="py-2 px-2.5 text-center">Billable Qty</th>
                         <th class="py-2 px-2.5 text-right">Unit Rate</th>
                         <th class="py-2 px-2.5 text-right">Total Amount</th>
+                        <th class="py-2 px-2 text-center edit-only no-print" style="width: 28px;">✕</th>
                     </tr>
                 </thead>
                 <tbody id="si-items-tbody" class="divide-y divide-slate-200 font-normal">
                     <tr><td colspan="6" class="py-4 text-center text-slate-400">Loading invoice line items...</td></tr>
                 </tbody>
             </table>
+            <div class="edit-only no-print p-2 bg-slate-50 border-t border-slate-200">
+                <button type="button" onclick="addNewSiRow()" class="btn-add-item-row">➕ Add Invoiced Item</button>
+            </div>
         </div>
 
         <!-- Calculation Breakdown & Settlement Grid -->
@@ -130,10 +233,10 @@
             <!-- Bank & Remittance Details -->
             <div class="p-3 rounded border border-slate-200 bg-slate-50/50 space-y-1.5">
                 <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Payment Instructions & Remittance:</span>
-                <div class="space-y-1 font-mono text-[11px] text-slate-700">
-                    <div>Bank: <strong class="text-slate-900">BDO Unibank (Ortigas Branch)</strong></div>
+                <div id="si-bank-details-box" class="space-y-1 font-mono text-[11px] text-slate-700">
+                    <div>Bank: <strong class="text-slate-900">BDO UNIBANK, INC.</strong></div>
                     <div>Account Name: <strong id="si-bank-acct-name" class="text-slate-900">NKB MANUFACTURING CORPORATION</strong></div>
-                    <div>Account Number: <strong class="text-slate-900">0012-3456-7890</strong></div>
+                    <div>Account Number: <strong id="si-bank-acct-num" class="text-slate-900">0080-5801-0547</strong></div>
                     <div class="pt-1 text-[10px] font-sans text-slate-500">Please email remittance proof to: accounting@nkbmanufacturing.com</div>
                 </div>
             </div>
@@ -189,6 +292,216 @@
 
     <script src="/js/app.js"></script>
     <script>
+
+        let rawSiData = null;
+        let isSiEditMode = false;
+
+        function parseCleanNumber(str) {
+            if (!str) return 0;
+            const cleaned = String(str).replace(/,/g, '').replace(/[^\d.-]/g, '');
+            const num = parseFloat(cleaned);
+            return isNaN(num) ? 0 : num;
+        }
+
+        function formatCurrency(val) {
+            const num = parseFloat(val) || 0;
+            return '₱' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function toggleSiEditMode() {
+            isSiEditMode = !isSiEditMode;
+            const btn = document.getElementById('btn-toggle-edit');
+            if (isSiEditMode) {
+                document.body.classList.add('edit-mode-active');
+                if (btn) {
+                    btn.classList.add('active');
+                    btn.innerHTML = '<span>💾 Done Editing</span>';
+                }
+                enableSiContentEditable(true);
+            } else {
+                document.body.classList.remove('edit-mode-active');
+                if (btn) {
+                    btn.classList.remove('active');
+                    btn.innerHTML = '<span>✏️ Edit Mode</span>';
+                }
+                enableSiContentEditable(false);
+                recalculateSiTotals();
+            }
+        }
+
+        function enableSiContentEditable(editable) {
+            const val = editable ? 'true' : 'false';
+            const ids = [
+                'si-company-name-hdr', 'si-tin-hdr', 'si-address-hdr', 'si-contact-hdr',
+                'si-number-display', 'si-date-display', 'si-due-display',
+                'si-client-name', 'si-client-contact', 'si-client-address', 'si-client-tin',
+                'si-dr-ref', 'si-dr-date', 'si-po-ref', 'si-policy-ref',
+                'si-bank-acct-name', 'si-bank-acct-num',
+                'si-tax-amount', 'si-paid-amount', 'si-cert-company'
+            ];
+            ids.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.contentEditable = val;
+            });
+
+            document.querySelectorAll('#si-items-tbody td.cell-editable').forEach(td => {
+                td.contentEditable = val;
+            });
+        }
+
+        function onSiRowInput(rowEl) {
+            const qtyTd = rowEl.querySelector('.si-billable-qty');
+            const rateTd = rowEl.querySelector('.si-unit-rate');
+            const totalTd = rowEl.querySelector('.si-line-total');
+
+            const qty = parseCleanNumber(qtyTd ? qtyTd.textContent : 0);
+            const rate = parseCleanNumber(rateTd ? rateTd.textContent : 0);
+            const lineTotal = qty * rate;
+
+            if (totalTd) {
+                totalTd.textContent = formatCurrency(lineTotal);
+            }
+
+            recalculateSiTotals();
+        }
+
+        function recalculateSiTotals() {
+            let runningSubtotal = 0;
+            document.querySelectorAll('#si-items-tbody tr.si-row').forEach(row => {
+                const totalTd = row.querySelector('.si-line-total');
+                if (totalTd) {
+                    runningSubtotal += parseCleanNumber(totalTd.textContent);
+                }
+            });
+
+            const taxEl = document.getElementById('si-tax-amount');
+            const paidEl = document.getElementById('si-paid-amount');
+            const taxAmount = parseCleanNumber(taxEl ? taxEl.textContent : 0);
+            const paidAmount = parseCleanNumber(paidEl ? paidEl.textContent : 0);
+
+            const grandTotal = runningSubtotal + taxAmount;
+            const balanceDue = Math.max(0, grandTotal - paidAmount);
+
+            document.getElementById('si-subtotal').textContent = formatCurrency(runningSubtotal);
+            document.getElementById('si-grand-total').textContent = formatCurrency(grandTotal);
+            document.getElementById('si-balance-due').textContent = formatCurrency(balanceDue);
+        }
+
+        function addNewSiRow() {
+            const tbody = document.getElementById('si-items-tbody');
+            const tr = document.createElement('tr');
+            tr.className = 'si-row';
+            tr.innerHTML = `
+                <td class="py-2 px-2.5 cell-editable" contenteditable="true">
+                    <div class="font-semibold text-slate-900 text-xs">NEW INVOICED ITEM</div>
+                    <div class="text-[10px] text-slate-400 font-mono">SKU: NKB-NEW</div>
+                </td>
+                <td class="py-2 px-2.5 text-center text-slate-600 font-mono text-xs cell-editable" contenteditable="true">100</td>
+                <td class="py-2 px-2.5 text-center text-slate-900 font-mono font-semibold text-xs cell-editable" contenteditable="true">100</td>
+                <td class="py-2 px-2.5 text-center font-bold text-slate-900 font-mono text-xs cell-editable si-billable-qty" contenteditable="true" onblur="onSiRowInput(this.parentElement)">100</td>
+                <td class="py-2 px-2.5 text-right font-mono text-slate-700 text-xs cell-editable si-unit-rate" contenteditable="true" onblur="onSiRowInput(this.parentElement)">₱50.00</td>
+                <td class="py-2 px-2.5 text-right font-bold text-slate-900 font-mono text-xs cell-editable si-line-total" contenteditable="true" onblur="recalculateSiTotals()">₱5,000.00</td>
+                <td class="py-2 px-2 text-center edit-only no-print">
+                    <button type="button" class="row-del-btn" onclick="deleteSiRow(this)">✕</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+            recalculateSiTotals();
+        }
+
+        function deleteSiRow(btn) {
+            const tr = btn.closest('tr');
+            if (tr) {
+                tr.remove();
+                recalculateSiTotals();
+            }
+        }
+
+        function resetSiToOriginal() {
+            if (rawSiData) {
+                renderSiView(rawSiData);
+                if (isSiEditMode) {
+                    enableSiContentEditable(true);
+                }
+            } else {
+                location.reload();
+            }
+        }
+
+        function renderSiRows(items) {
+            const tbody = document.getElementById('si-items-tbody');
+            if (!items || items.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="py-4 text-center text-slate-400">No invoice line items.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = items.map(item => `
+                <tr class="si-row">
+                    <td class="py-2 px-2.5 cell-editable" contenteditable="${isSiEditMode ? 'true' : 'false'}">
+                        <div class="font-semibold text-slate-900 text-xs">${item.product_name || '-'}</div>
+                        <div class="text-[10px] text-slate-400 font-mono">SKU: ${item.sku || '-'} ${item.batch_number ? '| Batch: ' + item.batch_number : ''}</div>
+                        ${item.is_overrun ? `<div class="text-[10px] text-slate-600 italic mt-0.5">Over-run Yield: +${NKB.formatNumber(item.overrun_quantity)} pcs billed</div>` : ''}
+                    </td>
+                    <td class="py-2 px-2.5 text-center text-slate-600 font-mono text-xs cell-editable" contenteditable="${isSiEditMode ? 'true' : 'false'}">${NKB.formatNumber(item.po_quantity)}</td>
+                    <td class="py-2 px-2.5 text-center text-slate-900 font-mono font-semibold text-xs cell-editable" contenteditable="${isSiEditMode ? 'true' : 'false'}">${NKB.formatNumber(item.accepted_quantity)}</td>
+                    <td class="py-2 px-2.5 text-center font-bold text-slate-900 font-mono text-xs cell-editable si-billable-qty" contenteditable="${isSiEditMode ? 'true' : 'false'}" onblur="onSiRowInput(this.parentElement)">${NKB.formatNumber(item.billable_quantity)}</td>
+                    <td class="py-2 px-2.5 text-right font-mono text-slate-700 text-xs cell-editable si-unit-rate" contenteditable="${isSiEditMode ? 'true' : 'false'}" onblur="onSiRowInput(this.parentElement)">${NKB.formatCurrency(item.unit_price)}</td>
+                    <td class="py-2 px-2.5 text-right font-bold text-slate-900 font-mono text-xs cell-editable si-line-total" contenteditable="${isSiEditMode ? 'true' : 'false'}" onblur="recalculateSiTotals()">${NKB.formatCurrency(item.line_total)}</td>
+                    <td class="py-2 px-2 text-center edit-only no-print">
+                        <button type="button" class="row-del-btn" onclick="deleteSiRow(this)">✕</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function renderSiView(si) {
+            rawSiData = si;
+            document.getElementById('si-number-display').textContent = si.invoice_number;
+            document.getElementById('si-date-display').textContent = NKB.formatDate(si.invoice_date);
+            document.getElementById('si-due-display').textContent = NKB.formatDate(si.due_date);
+
+            const isVyuceutical = si.is_vyuceutical_ops === 1 || (si.company_name && si.company_name.toLowerCase().includes('vyuceutical'));
+
+            if (isVyuceutical) {
+                const clientName = si.contact_person || si.company_name || 'Client';
+                document.getElementById('si-company-name-hdr').textContent = `VYUCEUTICAL OPC - ${clientName.toUpperCase()}`;
+                const acct = document.getElementById('si-bank-acct-name');
+                if (acct) acct.textContent = 'Vyuceutical Beauty Products Trading';
+                const num = document.getElementById('si-bank-acct-num');
+                if (num) num.textContent = '0080-5801-0717';
+                const sub = document.getElementById('si-cert-company');
+                if (sub) sub.textContent = `VYUCEUTICAL OPC - ${clientName.toUpperCase()}`;
+                document.getElementById('si-client-name').textContent = `Vyuceutical OPC - ${clientName}`;
+                document.getElementById('si-client-contact').textContent = `Company: ${si.company_name}`;
+            } else {
+                document.getElementById('si-company-name-hdr').textContent = 'NKB MANUFACTURING CORPORATION';
+                const acct = document.getElementById('si-bank-acct-name');
+                if (acct) acct.textContent = 'NKB MANUFACTURING CORPORATION';
+                const num = document.getElementById('si-bank-acct-num');
+                if (num) num.textContent = '0080-5801-0547';
+                const sub = document.getElementById('si-cert-company');
+                if (sub) sub.textContent = 'NKB MANUFACTURING CORPORATION';
+                document.getElementById('si-client-name').textContent = si.company_name;
+                document.getElementById('si-client-contact').textContent = `Attn: ${si.contact_person || 'Client'}`;
+            }
+
+            document.getElementById('si-client-address').textContent = (si.client_address || '').trim() || 'Phils.';
+            document.getElementById('si-client-tin').textContent = `TIN: ${si.client_tin || 'Non-VAT'}`;
+
+            document.getElementById('si-dr-ref').textContent = si.dr_number;
+            document.getElementById('si-dr-date').textContent = NKB.formatDate(si.delivery_date);
+            document.getElementById('si-po-ref').textContent = si.po_number;
+            document.getElementById('si-policy-ref').textContent = si.billing_policy;
+
+            renderSiRows(si.items);
+
+            document.getElementById('si-subtotal').textContent = NKB.formatCurrency(si.subtotal);
+            document.getElementById('si-tax-amount').textContent = NKB.formatCurrency(si.tax_amount || 0);
+            document.getElementById('si-grand-total').textContent = NKB.formatCurrency(si.total_amount);
+            document.getElementById('si-paid-amount').textContent = NKB.formatCurrency(si.paid_amount);
+            document.getElementById('si-balance-due').textContent = NKB.formatCurrency(si.balance_due);
+        }
+
         document.addEventListener('DOMContentLoaded', async () => {
             await NKB.init();
             const urlParams = new URLSearchParams(window.location.search);
@@ -201,6 +514,8 @@
 
             const res = await NKB.api(`/api/invoices/${invoiceId}`);
             if (res.success && res.data) {
+                renderSiView(res.data);
+                return;
                 const si = res.data;
                 document.getElementById('si-number-display').textContent = si.invoice_number;
                 document.getElementById('si-date-display').textContent = NKB.formatDate(si.invoice_date);

@@ -54,37 +54,137 @@
                 box-sizing: border-box;
             }
         }
+
+            .toolbar-btn-edit {
+                background: #f0fdf4;
+                color: #15803d;
+                border-color: #bbf7d0;
+            }
+            .toolbar-btn-edit:hover {
+                background: #dcfce7;
+            }
+            .toolbar-btn-edit.active {
+                background: #15803d;
+                color: #ffffff;
+                border-color: #15803d;
+            }
+
+            .toolbar-btn-reset {
+                background: #fff1f2;
+                color: #be123c;
+                border-color: #fecdd3;
+            }
+            .toolbar-btn-reset:hover {
+                background: #ffe4e6;
+            }
+
+            /* Edit Mode Indicator Styles */
+            body.edit-mode-active [contenteditable="true"] {
+                outline: 1px dashed #3b82f6;
+                outline-offset: 1px;
+                background-color: rgba(239, 246, 255, 0.6);
+                border-radius: 2px;
+                transition: background-color 0.15s ease;
+            }
+            body.edit-mode-active [contenteditable="true"]:hover {
+                background-color: rgba(219, 234, 254, 0.85);
+            }
+            body.edit-mode-active [contenteditable="true"]:focus {
+                outline: 2px solid #2563eb;
+                background-color: #ffffff;
+            }
+
+            .edit-mode-banner {
+                display: none;
+                width: 100%;
+                max-width: 210mm;
+                background: #eff6ff;
+                border: 1px solid #bfdbfe;
+                color: #1e40af;
+                padding: 8px 14px;
+                border-radius: 8px;
+                font-size: 12px;
+                font-weight: 600;
+                align-items: center;
+                justify-content: space-between;
+                box-sizing: border-box;
+                margin-bottom: 12px;
+            }
+            body.edit-mode-active .edit-mode-banner {
+                display: flex;
+            }
+
+            .edit-only {
+                display: none;
+            }
+            body.edit-mode-active .edit-only {
+                display: table-cell;
+            }
+            body.edit-mode-active div.edit-only,
+            body.edit-mode-active button.edit-only {
+                display: inline-flex;
+            }
+
+            .row-del-btn {
+                background: #fee2e2;
+                color: #ef4444;
+                border: 1px solid #fca5a5;
+                border-radius: 4px;
+                font-size: 10px;
+                padding: 1px 5px;
+                cursor: pointer;
+                font-weight: bold;
+                line-height: 1;
+            }
+            .row-del-btn:hover {
+                background: #ef4444;
+                color: #ffffff;
+            }
+
+            .btn-add-item-row {
+                padding: 4px 10px;
+                background: #f8fafc;
+                border: 1px dashed #94a3b8;
+                border-radius: 4px;
+                font-size: 11px;
+                font-weight: 600;
+                color: #334155;
+                cursor: pointer;
+                transition: all 0.15s;
+                margin-top: 6px;
+            }
+            .btn-add-item-row:hover {
+                background: #e2e8f0;
+                color: #0f172a;
+            }
+
     </style>
 </head>
 <body class="text-slate-900 antialiased font-sans">
 
     <!-- Action Bar (Hidden on Print) -->
     <div class="w-full max-w-[210mm] mb-4 flex justify-between items-center no-print">
-        <a href="javascript:window.history.back()" class="px-3 py-1.5 bg-white border border-slate-300 rounded text-xs font-semibold text-slate-700 hover:bg-slate-50 transition shadow-sm">
-            ← Back to Deliveries
-        </a>
+        <div class="flex items-center gap-2">
+            <a href="javascript:window.history.back()" class="px-3 py-1.5 bg-white border border-slate-300 rounded text-xs font-semibold text-slate-700 hover:bg-slate-50 transition shadow-sm">
+                ← Back to Deliveries
+            </a>
+            <button type="button" onclick="toggleDrEditMode()" id="btn-toggle-edit" class="px-3 py-1.5 rounded text-xs font-semibold shadow-sm transition border toolbar-btn-edit">
+                <span>✏️ Edit Mode</span>
+            </button>
+            <button type="button" onclick="resetDrToOriginal()" class="px-3 py-1.5 rounded text-xs font-semibold shadow-sm transition border toolbar-btn-reset">
+                <span>🔄 Reset</span>
+            </button>
+        </div>
         <button onclick="window.print()" class="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded text-xs font-semibold shadow transition flex items-center gap-1.5">
             <span>🖨️ Print Delivery Receipt (A4)</span>
         </button>
     </div>
 
-    <!-- A4 Printable Sheet -->
-    <div class="print-sheet space-y-4 text-slate-800" id="dr-printable-sheet">
-        
-        <!-- Header -->
-        <div class="flex justify-between items-start border-b border-slate-300 pb-3">
-            <div>
-                <h1 id="dr-company-name-hdr" class="text-xl font-extrabold text-slate-900 tracking-tight">NKB MANUFACTURING CORPORATION</h1>
-                <p class="text-[11px] text-slate-500 font-medium">Cosmetics & Personal Care Formulation Laboratory</p>
-                <p id="dr-tin-hdr" class="text-[10px] text-slate-500">TIN: 686-950-421-00000 · FDA Certified Facility</p>
-                <p id="dr-address-hdr" class="text-[10px] text-slate-500">Blk 4, Lot 5, Twig st., Sampaguita Village, Mambog II, Bacoor City, Cavite</p>
-                <p id="dr-contact-hdr" class="text-[10px] text-slate-500">Contact: (046) 885-0923 · Email: dispatch@nkbmanufacturing.com</p>
-            </div>
-            <div class="text-right space-y-0.5">
-                <h2 class="text-lg font-bold tracking-wider text-slate-900 uppercase">DELIVERY RECEIPT</h2>
-                <div id="dr-number-display" class="text-sm font-bold text-slate-800 font-mono">DR-XXXX-XXXXXX</div>
-                <div class="text-[11px] text-slate-500">Date: <span id="dr-date-display" class="font-semibold text-slate-800">-</span></div>
-            </div>
+    <!-- Edit Mode Active Notification Banner -->
+    <div class="edit-mode-banner no-print" id="edit-banner">
+        <span>✏️ <strong>Edit Mode Active:</strong> Click any text, delivery quantity, batch, driver, or vehicle plate to edit. Total dispatched units recalculate automatically.</span>
+        <button type="button" onclick="toggleDrEditMode()" style="background: none; border: none; font-size: 11px; color: #1e40af; text-decoration: underline; cursor: pointer; font-weight: bold;">Done Editing</button>
+    </div>
         </div>
 
         <!-- Client & PO Reference Info Grid -->
@@ -115,12 +215,16 @@
                         <th class="py-2 px-2.5">Mfg / Exp Date</th>
                         <th class="py-2 px-2.5 text-right">Delivered Quantity</th>
                         <th class="py-2 px-2.5 text-right">Accepted Qty</th>
+                        <th class="py-2 px-2 text-center edit-only no-print" style="width: 28px;">✕</th>
                     </tr>
                 </thead>
                 <tbody id="dr-items-tbody" class="divide-y divide-slate-200 font-normal">
                     <tr><td colspan="5" class="py-4 text-center text-slate-400">Loading delivery details...</td></tr>
                 </tbody>
             </table>
+            <div class="edit-only no-print p-2 bg-slate-50 border-t border-slate-200">
+                <button type="button" onclick="addNewDrRow()" class="btn-add-item-row">➕ Add Delivered Item</button>
+            </div>
         </div>
 
         <!-- Total Count -->
@@ -156,6 +260,184 @@
 
     <script src="/js/app.js"></script>
     <script>
+
+        let rawDrData = null;
+        let isDrEditMode = false;
+
+        function toggleDrEditMode() {
+            isDrEditMode = !isDrEditMode;
+            const btn = document.getElementById('btn-toggle-edit');
+            if (isDrEditMode) {
+                document.body.classList.add('edit-mode-active');
+                if (btn) {
+                    btn.classList.add('active');
+                    btn.innerHTML = '<span>💾 Done Editing</span>';
+                }
+                enableDrContentEditable(true);
+            } else {
+                document.body.classList.remove('edit-mode-active');
+                if (btn) {
+                    btn.classList.remove('active');
+                    btn.innerHTML = '<span>✏️ Edit Mode</span>';
+                }
+                enableDrContentEditable(false);
+                recalculateDrTotals();
+            }
+        }
+
+        function enableDrContentEditable(editable) {
+            const val = editable ? 'true' : 'false';
+            const ids = [
+                'dr-company-name-hdr', 'dr-tin-hdr', 'dr-address-hdr', 'dr-contact-hdr',
+                'dr-number-display', 'dr-date-display',
+                'client-company-display', 'client-contact-display', 'client-address-display', 'client-phone-display',
+                'po-ref-display', 'policy-display', 'driver-display', 'plate-display',
+                'signer-name-display', 'signer-title-display', 'dr-dispatched-company'
+            ];
+            ids.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.contentEditable = val;
+            });
+
+            document.querySelectorAll('#dr-items-tbody td.cell-editable').forEach(td => {
+                td.contentEditable = val;
+            });
+        }
+
+        function renderDrRows(items) {
+            let totalQty = 0;
+            const tbody = document.getElementById('dr-items-tbody');
+            if (!items || items.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="py-4 text-center text-slate-400">No items listed.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = items.map(item => {
+                const delivered = parseFloat(item.delivered_quantity) || 0;
+                totalQty += delivered;
+                const unit = item.unit || 'pcs';
+                return `
+                    <tr class="dr-row">
+                        <td class="py-2 px-2.5 cell-editable" contenteditable="${isDrEditMode ? 'true' : 'false'}">
+                            <div class="font-semibold text-slate-900 text-xs dr-prod-name">${item.product_name || '-'}</div>
+                            <div class="text-[10px] text-slate-400 font-mono dr-prod-sku">SKU: ${item.sku || '-'}</div>
+                        </td>
+                        <td class="py-2 px-2.5 font-mono font-semibold text-slate-700 text-xs cell-editable dr-prod-batch" contenteditable="${isDrEditMode ? 'true' : 'false'}">${item.batch_number || '-'}</td>
+                        <td class="py-2 px-2.5 text-slate-600 text-xs cell-editable dr-prod-dates" contenteditable="${isDrEditMode ? 'true' : 'false'}">${NKB.formatDate(item.production_date)} / ${NKB.formatDate(item.expiry_date)}</td>
+                        <td class="py-2 px-2.5 text-right font-semibold text-slate-900 font-mono text-xs cell-editable dr-delivered-qty" contenteditable="${isDrEditMode ? 'true' : 'false'}" onblur="recalculateDrTotals()">${NKB.formatNumber(delivered)} ${unit}</td>
+                        <td class="py-2 px-2.5 text-right font-bold text-slate-900 font-mono text-xs cell-editable dr-accepted-qty" contenteditable="${isDrEditMode ? 'true' : 'false'}">${item.accepted_quantity > 0 ? NKB.formatNumber(item.accepted_quantity) + ' ' + unit : '-'}</td>
+                        <td class="py-2 px-2 text-center edit-only no-print">
+                            <button type="button" class="row-del-btn" onclick="deleteDrRow(this)">✕</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            document.getElementById('dr-total-units').textContent = `${NKB.formatNumber(totalQty)} pcs`;
+        }
+
+        function recalculateDrTotals() {
+            let total = 0;
+            document.querySelectorAll('#dr-items-tbody tr.dr-row').forEach(row => {
+                const qtyTd = row.querySelector('.dr-delivered-qty');
+                if (qtyTd) {
+                    const raw = qtyTd.textContent.replace(/[^0-9.-]/g, '');
+                    const val = parseFloat(raw) || 0;
+                    total += val;
+                }
+            });
+            document.getElementById('dr-total-units').textContent = `${NKB.formatNumber(total)} pcs`;
+        }
+
+        function addNewDrRow() {
+            const tbody = document.getElementById('dr-items-tbody');
+            const tr = document.createElement('tr');
+            tr.className = 'dr-row';
+            tr.innerHTML = `
+                <td class="py-2 px-2.5 cell-editable" contenteditable="true">
+                    <div class="font-semibold text-slate-900 text-xs dr-prod-name">NEW PRODUCT NAME</div>
+                    <div class="text-[10px] text-slate-400 font-mono dr-prod-sku">SKU: NKB-NEW</div>
+                </td>
+                <td class="py-2 px-2.5 font-mono font-semibold text-slate-700 text-xs cell-editable dr-prod-batch" contenteditable="true">BATCH-001</td>
+                <td class="py-2 px-2.5 text-slate-600 text-xs cell-editable dr-prod-dates" contenteditable="true">09/15/2026 / 09/15/2028</td>
+                <td class="py-2 px-2.5 text-right font-semibold text-slate-900 font-mono text-xs cell-editable dr-delivered-qty" contenteditable="true" onblur="recalculateDrTotals()">100 pcs</td>
+                <td class="py-2 px-2.5 text-right font-bold text-slate-900 font-mono text-xs cell-editable dr-accepted-qty" contenteditable="true">100 pcs</td>
+                <td class="py-2 px-2 text-center edit-only no-print">
+                    <button type="button" class="row-del-btn" onclick="deleteDrRow(this)">✕</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+            recalculateDrTotals();
+        }
+
+        function deleteDrRow(btn) {
+            const tr = btn.closest('tr');
+            if (tr) {
+                tr.remove();
+                recalculateDrTotals();
+            }
+        }
+
+        function resetDrToOriginal() {
+            if (rawDrData) {
+                renderDrView(rawDrData);
+                if (isDrEditMode) {
+                    enableDrContentEditable(true);
+                }
+            } else {
+                location.reload();
+            }
+        }
+
+        function renderDrView(dr) {
+            rawDrData = dr;
+            document.getElementById('dr-number-display').textContent = dr.dr_number;
+            document.getElementById('dr-date-display').textContent = NKB.formatDate(dr.delivery_date);
+
+            const isVyuceutical = dr.is_vyuceutical_ops === 1 || (dr.company_name && dr.company_name.toLowerCase().includes('vyuceutical'));
+
+            if (isVyuceutical) {
+                const clientName = dr.contact_person || dr.company_name || 'Client';
+                document.getElementById('dr-company-name-hdr').textContent = `VYUCEUTICAL OPC - ${clientName.toUpperCase()}`;
+                const sub = document.getElementById('dr-dispatched-company');
+                if (sub) sub.textContent = `VYUCEUTICAL OPC - ${clientName.toUpperCase()}`;
+                document.getElementById('client-company-display').textContent = `Vyuceutical OPC - ${clientName}`;
+                document.getElementById('client-contact-display').textContent = `Company: ${dr.company_name}`;
+            } else {
+                document.getElementById('dr-company-name-hdr').textContent = 'NKB MANUFACTURING CORPORATION';
+                const sub = document.getElementById('dr-dispatched-company');
+                if (sub) sub.textContent = 'NKB MANUFACTURING CORPORATION';
+                document.getElementById('client-company-display').textContent = dr.company_name;
+                document.getElementById('client-contact-display').textContent = `Attn: ${dr.contact_person || 'Client'}`;
+            }
+
+            document.getElementById('client-address-display').textContent = (dr.client_address || '').trim() || 'Phils.';
+            document.getElementById('client-phone-display').textContent = dr.client_phone || '-';
+
+            document.getElementById('po-ref-display').textContent = dr.po_number;
+            document.getElementById('policy-display').textContent = dr.billing_policy;
+            document.getElementById('driver-display').textContent = dr.driver_name || 'In-house Logistics';
+            document.getElementById('plate-display').textContent = dr.vehicle_plate || 'NKB-8899';
+
+            renderDrRows(dr.items);
+
+            if (dr.acceptance) {
+                const box = document.getElementById('signature-display-box');
+                if (dr.acceptance.signature_data && dr.acceptance.signature_data.startsWith('data:image')) {
+                    box.innerHTML = `
+                        <img src="${dr.acceptance.signature_data}" alt="Digital Signature" class="max-h-12 mb-1">
+                        <div class="font-bold text-slate-900 text-xs">${dr.acceptance.signer_name}</div>
+                        <div class="text-[10px] text-slate-500">${dr.acceptance.signer_title} • Signed on ${NKB.formatDateTime(dr.acceptance.accepted_at)}</div>
+                    `;
+                } else {
+                    box.innerHTML = `
+                        <div class="font-mono text-xs text-slate-700 font-bold mb-0.5">[DIGITALLY SIGNED]</div>
+                        <div class="font-bold text-slate-900 text-xs">${dr.acceptance.signer_name}</div>
+                        <div class="text-[10px] text-slate-500">${dr.acceptance.signer_title} • Signed on ${NKB.formatDateTime(dr.acceptance.accepted_at)}</div>
+                    `;
+                }
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', async () => {
             await NKB.init();
             const urlParams = new URLSearchParams(window.location.search);
@@ -168,6 +450,8 @@
 
             const res = await NKB.api(`/api/deliveries/${drId}`);
             if (res.success && res.data) {
+                renderDrView(res.data);
+                return;
                 const dr = res.data;
                 document.getElementById('dr-number-display').textContent = dr.dr_number;
                 document.getElementById('dr-date-display').textContent = NKB.formatDate(dr.delivery_date);
@@ -198,21 +482,7 @@
                 document.getElementById('plate-display').textContent = dr.vehicle_plate || 'NKB-8899';
 
                 let totalQty = 0;
-                document.getElementById('dr-items-tbody').innerHTML = dr.items.map(item => {
-                    totalQty += item.delivered_quantity;
-                    return `
-                        <tr>
-                            <td class="py-2 px-2.5">
-                                <div class="font-semibold text-slate-900 text-xs">${item.product_name}</div>
-                                <div class="text-[10px] text-slate-400 font-mono">SKU: ${item.sku}</div>
-                            </td>
-                            <td class="py-2 px-2.5 font-mono font-semibold text-slate-700 text-xs">${item.batch_number}</td>
-                            <td class="py-2 px-2.5 text-slate-600 text-xs">${NKB.formatDate(item.production_date)} / ${NKB.formatDate(item.expiry_date)}</td>
-                            <td class="py-2 px-2.5 text-right font-semibold text-slate-900 font-mono text-xs">${NKB.formatNumber(item.delivered_quantity)} ${item.unit}</td>
-                            <td class="py-2 px-2.5 text-right font-bold text-slate-900 font-mono text-xs">${item.accepted_quantity > 0 ? NKB.formatNumber(item.accepted_quantity) + ' ' + item.unit : '-'}</td>
-                        </tr>
-                    `;
-                }).join('');
+                renderDrRows(dr.items);
 
                 document.getElementById('dr-total-units').textContent = `${NKB.formatNumber(totalQty)} pcs`;
 
