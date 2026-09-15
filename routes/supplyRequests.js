@@ -8,7 +8,7 @@ const { logAudit } = require('../services/auditService');
  * GET /api/supply-requests
  * Retrieve all supply requisitions submitted by Inventory for Purchasing Department
  */
-router.get('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.PURCHASING, ROLES.INVENTORY), (req, res) => {
+router.get('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.PURCHASING, ROLES.INVENTORY, ROLES.CEO), (req, res) => {
     try {
         const { status, urgency, search } = req.query;
 
@@ -55,7 +55,7 @@ router.get('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_ADMI
  * GET /api/supply-requests/:id
  * Retrieve a single supply request by ID
  */
-router.get('/:id', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.PURCHASING, ROLES.INVENTORY), (req, res) => {
+router.get('/:id', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.PURCHASING, ROLES.INVENTORY, ROLES.CEO), (req, res) => {
     const { id } = req.params;
     const reqItem = db.prepare(`
         SELECT sr.*, 

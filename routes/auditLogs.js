@@ -7,7 +7,7 @@ const { authenticateToken, requireRoles } = require('../middleware/auth');
  * GET /api/audit-logs
  * Admin only
  */
-router.get('/', authenticateToken, requireRoles('ADMIN', 'SUPER_ADMIN'), (req, res) => {
+router.get('/', authenticateToken, requireRoles('ADMIN', 'SUPER_ADMIN', 'CEO'), (req, res) => {
     const { action, entityType, search, limit } = req.query;
 
     let query = 'SELECT * FROM audit_logs WHERE 1=1';

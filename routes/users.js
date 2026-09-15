@@ -10,7 +10,7 @@ const { logAudit } = require('../services/auditService');
  * GET /api/users
  * List all users with their roles, client mapping, and status
  */
-router.get('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN), (req, res) => {
+router.get('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.CEO), (req, res) => {
     const { role, status, search } = req.query;
 
     let query = `
@@ -47,7 +47,7 @@ router.get('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
 /**
  * GET /api/users/:id
  */
-router.get('/:id', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN), (req, res) => {
+router.get('/:id', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.CEO), (req, res) => {
     const user = db.prepare(`
         SELECT u.id, u.name, u.email, u.role, u.is_active, u.plain_password, u.created_at, u.updated_at,
                c.id as client_id, c.company_name

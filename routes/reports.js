@@ -234,7 +234,7 @@ router.get('/ar', authenticateToken, (req, res) => {
  * GET /api/reports/unbilled-drs
  * List of Accepted DRs ready to be invoiced
  */
-router.get('/unbilled-drs', authenticateToken, requireRoles('ADMIN', 'ACCOUNTING'), (req, res) => {
+router.get('/unbilled-drs', authenticateToken, requireRoles('ADMIN', 'ACCOUNTING', 'CEO'), (req, res) => {
     const unbilled = db.prepare(`
         SELECT dr.*, c.company_name, po.po_number, po.billing_policy,
                (SELECT SUM(delivered_quantity) FROM delivery_items WHERE dr_id = dr.id) as total_delivered,

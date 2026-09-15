@@ -464,7 +464,7 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
  * POST /api/production/batches/:id/yield
  * Log actual finished output & calculate Yield Variance
  */
-router.post('/batches/:id/yield', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), (req, res) => {
+router.post('/batches/:id/yield', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'QC'), (req, res) => {
     const { id } = req.params;
     const { actual_yield, qc_notes } = req.body;
 

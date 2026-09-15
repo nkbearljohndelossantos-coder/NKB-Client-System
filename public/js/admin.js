@@ -178,7 +178,10 @@ function applyRoleBasedUI() {
     const roleMap = {
         'SUPER_ADMIN': { title: 'Executive Admin', badge: 'bg-red-900/80 text-red-300 border-red-700/50' },
         'IT_ADMIN': { title: 'IT Administrator', badge: 'bg-cyan-900/80 text-cyan-300 border-cyan-700/50' },
+        'CEO': { title: 'Chief Executive Officer', badge: 'bg-purple-900/80 text-purple-300 border-purple-700/50' },
+        'QC': { title: 'Quality Control Inspector', badge: 'bg-teal-900/80 text-teal-300 border-teal-700/50' },
         'ADMIN': { title: 'Operations Manager', badge: 'bg-indigo-900/80 text-indigo-300 border-indigo-700/50' },
+        'PURCHASING': { title: 'Purchasing Department', badge: 'bg-emerald-900/80 text-emerald-300 border-emerald-700/50' },
         'PRODUCTION': { title: 'Production Supervisor', badge: 'bg-amber-900/80 text-amber-300 border-amber-700/50' },
         'WAREHOUSE': { title: 'Logistics & Warehouse', badge: 'bg-purple-900/80 text-purple-300 border-purple-700/50' },
         'ACCOUNTING': { title: 'Senior Accountant', badge: 'bg-emerald-900/80 text-emerald-300 border-emerald-700/50' },
@@ -216,6 +219,28 @@ function applyRoleBasedUI() {
         hideTab('reports');
         hideTab('audit');
         switchTab('orders');
+    } else if (role === 'PURCHASING') {
+        hideTab('dashboard');
+        hideTab('job-orders');
+        hideTab('production');
+        hideTab('deliveries');
+        hideTab('invoices');
+        hideTab('payments');
+        hideTab('buffer');
+        hideTab('clients');
+        hideTab('products');
+        hideTab('users');
+        hideTab('reports');
+        hideTab('audit');
+        switchTab('purchasing');
+    } else if (role === 'QC') {
+        hideTab('invoices');
+        hideTab('payments');
+        hideTab('clients');
+        hideTab('users');
+        hideTab('audit');
+        hideTab('purchasing');
+        switchTab('production');
     } else if (role === 'PRODUCTION') {
         // PRODUCTION role now manages deliveries alongside ADMIN and WAREHOUSE
         hideTab('invoices');
@@ -237,8 +262,8 @@ function applyRoleBasedUI() {
         hideTab('deliveries');
         hideTab('users');
         hideTab('audit');
-    } else if (role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'IT_ADMIN') {
-        // IT Admin has identical universal authority as Super Admin
+    } else if (role === 'CEO' || role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'IT_ADMIN') {
+        // Full oversight
     }
 }
 
@@ -253,8 +278,25 @@ async function loadInitialData() {
     if (categoriesRes && categoriesRes.success) cachedCategories = categoriesRes.data;
 }
 
+// Mobile Sidebar Toggle
+function toggleMobileSidebar(show) {
+    const sidebar = document.getElementById('admin-sidebar');
+    const backdrop = document.getElementById('sidebar-backdrop');
+    if (!sidebar) return;
+    const shouldOpen = (show !== undefined) ? !!show : !sidebar.classList.contains('sidebar-open');
+    if (shouldOpen) {
+        sidebar.classList.add('sidebar-open');
+        if (backdrop) backdrop.classList.remove('hidden');
+    } else {
+        sidebar.classList.remove('sidebar-open');
+        if (backdrop) backdrop.classList.add('hidden');
+    }
+}
+window.toggleMobileSidebar = toggleMobileSidebar;
+
 // Tab Switching
 function switchTab(tabId) {
+    toggleMobileSidebar(false);
     document.querySelectorAll('main > section').forEach(sec => sec.classList.add('hidden'));
     document.querySelectorAll('.sidebar-btn').forEach(btn => {
         btn.classList.remove('bg-indigo-600', 'text-white', 'font-bold', 'shadow-md', 'shadow-indigo-600/30', 'bg-slate-800');
@@ -5039,6 +5081,8 @@ async function loadUsers() {
     const roleBadges = {
         'SUPER_ADMIN': 'bg-red-100 text-red-800 border-red-200',
         'IT_ADMIN': 'bg-cyan-100 text-cyan-800 border-cyan-200',
+        'CEO': 'bg-purple-100 text-purple-800 border-purple-200',
+        'QC': 'bg-teal-100 text-teal-800 border-teal-200',
         'ADMIN': 'bg-indigo-100 text-indigo-800 border-indigo-200',
         'PURCHASING': 'bg-teal-100 text-teal-800 border-teal-200',
         'PRODUCTION': 'bg-amber-100 text-amber-800 border-amber-200',
@@ -5051,6 +5095,8 @@ async function loadUsers() {
     const roleIcons = {
         'SUPER_ADMIN': '🛡️',
         'IT_ADMIN': '💻',
+        'CEO': '👔',
+        'QC': '🔬',
         'ADMIN': '👑',
         'PURCHASING': '🛒',
         'PRODUCTION': '🧪',
@@ -5257,11 +5303,13 @@ async function openCreateUserModal() {
                         <select id="usr-role" onchange="toggleClientDropdown(this.value, 'client-select-container')" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 transition">
                             <option value="PURCHASING">🛒 Purchasing Department (Raw Materials & Requisitions)</option>
                             <option value="PRODUCTION">🧪 Production Supervisor (Formulas & Batches)</option>
+                            <option value="QC">🔬 Quality Control Inspector (QC)</option>
                             <option value="WAREHOUSE">🚚 Logistics & Warehouse (Inventory & DR)</option>
                             <option value="ACCOUNTING">💰 Senior Accountant (Invoices & AR)</option>
                             <option value="INVENTORY">📦 Inventory Officer (Raw Materials & Supplies)</option>
                             <option value="ADMIN">👑 Operations Manager (Admin)</option>
                             ${isSuperAdmin ? `
+                                <option value="CEO">👔 Chief Executive Officer (CEO)</option>
                                 <option value="IT_ADMIN">💻 IT Administrator (Universal Control)</option>
                                 <option value="SUPER_ADMIN">🛡️ Executive Super Admin (Full Control)</option>
                             ` : ''}
@@ -5399,11 +5447,13 @@ async function openEditUserModal(userId) {
                             <select id="usr-edit-role" onchange="toggleClientDropdown(this.value, 'usr-edit-client-container')" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 transition">
                                 <option value="PURCHASING" ${u.role === 'PURCHASING' ? 'selected' : ''}>🛒 Purchasing Department</option>
                                 <option value="PRODUCTION" ${u.role === 'PRODUCTION' ? 'selected' : ''}>🧪 Production Supervisor</option>
+                                <option value="QC" ${u.role === 'QC' ? 'selected' : ''}>🔬 Quality Control Inspector</option>
                                 <option value="WAREHOUSE" ${u.role === 'WAREHOUSE' ? 'selected' : ''}>🚚 Logistics & Warehouse</option>
                                 <option value="ACCOUNTING" ${u.role === 'ACCOUNTING' ? 'selected' : ''}>💰 Senior Accountant</option>
                                 <option value="INVENTORY" ${u.role === 'INVENTORY' ? 'selected' : ''}>📦 Inventory Officer</option>
                                 <option value="ADMIN" ${u.role === 'ADMIN' ? 'selected' : ''}>👑 Operations Manager</option>
                                 ${isCurrentUserSuperAdmin ? `
+                                    <option value="CEO" ${u.role === 'CEO' ? 'selected' : ''}>👔 Chief Executive Officer</option>
                                     <option value="IT_ADMIN" ${u.role === 'IT_ADMIN' ? 'selected' : ''}>💻 IT Administrator</option>
                                     <option value="SUPER_ADMIN" ${u.role === 'SUPER_ADMIN' ? 'selected' : ''}>🛡️ Executive Super Admin</option>
                                 ` : ''}

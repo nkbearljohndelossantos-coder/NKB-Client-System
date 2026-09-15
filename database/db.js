@@ -88,7 +88,7 @@ function runMigrations(dbInstance, isMysql) {
         // Migrate users table to support PURCHASING role and plain_password
         if (isMysql) {
             try {
-                dbInstance.exec("ALTER TABLE users MODIFY COLUMN role ENUM('SUPER_ADMIN', 'IT_ADMIN', 'ADMIN', 'PURCHASING', 'PRODUCTION', 'WAREHOUSE', 'ACCOUNTING', 'INVENTORY', 'CLIENT') NOT NULL;");
+                dbInstance.exec("ALTER TABLE users MODIFY COLUMN role ENUM('SUPER_ADMIN', 'IT_ADMIN', 'ADMIN', 'CEO', 'QC', 'PURCHASING', 'PRODUCTION', 'WAREHOUSE', 'ACCOUNTING', 'INVENTORY', 'CLIENT') NOT NULL;");
             } catch (_) {}
             try {
                 dbInstance.exec("ALTER TABLE users ADD COLUMN plain_password VARCHAR(255) NULL;");
@@ -103,7 +103,7 @@ function runMigrations(dbInstance, isMysql) {
                 }
 
                 const userSql = dbInstance.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'users'").get()?.sql || '';
-                if (userSql && (!userSql.includes('PURCHASING') || !userSql.includes('IT_ADMIN') || !userSql.includes('INVENTORY'))) {
+                if (userSql && (!userSql.includes('CEO') || !userSql.includes('QC') || !userSql.includes('PURCHASING') || !userSql.includes('IT_ADMIN') || !userSql.includes('INVENTORY'))) {
                     dbInstance.exec(`
                         PRAGMA foreign_keys = OFF;
                         CREATE TABLE users_new (
@@ -112,7 +112,7 @@ function runMigrations(dbInstance, isMysql) {
                             email TEXT UNIQUE NOT NULL,
                             password_hash TEXT NOT NULL,
                             plain_password TEXT,
-                            role TEXT NOT NULL CHECK (role IN ('SUPER_ADMIN', 'IT_ADMIN', 'ADMIN', 'PURCHASING', 'PRODUCTION', 'WAREHOUSE', 'ACCOUNTING', 'INVENTORY', 'CLIENT')),
+                            role TEXT NOT NULL CHECK (role IN ('SUPER_ADMIN', 'IT_ADMIN', 'ADMIN', 'CEO', 'QC', 'PURCHASING', 'PRODUCTION', 'WAREHOUSE', 'ACCOUNTING', 'INVENTORY', 'CLIENT')),
                             client_id TEXT,
                             phone TEXT,
                             is_active INTEGER NOT NULL DEFAULT 1,
@@ -128,7 +128,7 @@ function runMigrations(dbInstance, isMysql) {
                         CREATE INDEX IF NOT EXISTS idx_users_client ON users(client_id);
                         PRAGMA foreign_keys = ON;
                     `);
-                    console.log('✅ SQLite users table upgraded with PURCHASING role and plain_password');
+                    console.log('✅ SQLite users table upgraded with CEO, QC, PURCHASING roles and plain_password');
                 }
             } catch (uMigErr) {
                 console.warn('SQLite users table migration note:', uMigErr.message);
@@ -411,6 +411,30 @@ function runMigrations(dbInstance, isMysql) {
                     VALUES (?, 'Purchasing Officer', ?, ?, 'Staff123!', 'PURCHASING', 1, datetime('now'), datetime('now'))
                 `).run(uuidv4(), purchEmail, purchHash);
                 console.log('✅ Created Purchasing user: purchasing@nkbmanufacturing.com');
+            }
+
+            const ceoEmail = 'ceo@nkbmanufacturing.com';
+            const existingCeo = dbInstance.prepare('SELECT id FROM users WHERE LOWER(email) = ?').get(ceoEmail);
+            if (!existingCeo) {
+                const salt = bcrypt.genSaltSync(10);
+                const ceoHash = bcrypt.hashSync('Executive123!', salt);
+                dbInstance.prepare(`
+                    INSERT INTO users (id, name, email, password_hash, plain_password, role, is_active, created_at, updated_at)
+                    VALUES (?, 'Chief Executive Officer', ?, ?, 'Executive123!', 'CEO', 1, datetime('now'), datetime('now'))
+                `).run(uuidv4(), ceoEmail, ceoHash);
+                console.log('✅ Created CEO user: ceo@nkbmanufacturing.com');
+            }
+
+            const qcEmail = 'qc@nkbmanufacturing.com';
+            const existingQc = dbInstance.prepare('SELECT id FROM users WHERE LOWER(email) = ?').get(qcEmail);
+            if (!existingQc) {
+                const salt = bcrypt.genSaltSync(10);
+                const qcHash = bcrypt.hashSync('Staff123!', salt);
+                dbInstance.prepare(`
+                    INSERT INTO users (id, name, email, password_hash, plain_password, role, is_active, created_at, updated_at)
+                    VALUES (?, 'Quality Control Inspector', ?, ?, 'Staff123!', 'QC', 1, datetime('now'), datetime('now'))
+                `).run(uuidv4(), qcEmail, qcHash);
+                console.log('✅ Created QC user: qc@nkbmanufacturing.com');
             }
         } catch (userSeedErr) {
             console.warn('User seed note:', userSeedErr.message);

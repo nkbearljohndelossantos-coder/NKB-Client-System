@@ -994,6 +994,133 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         );
     });
 
+    test('22. CEO Omniscient Oversight & View-Only Integrity Test', async () => {
+        const ceoToken = getAuthToken('CEO');
+        assert.ok(ceoToken);
+
+        // A. CEO can view Orders
+        const ordersRes = await request(app)
+            .get('/api/orders')
+            .set('Authorization', `Bearer ${ceoToken}`);
+        assert.strictEqual(ordersRes.status, 200);
+        assert.strictEqual(ordersRes.body.success, true);
+
+        // B. CEO can view Batches
+        const batchesRes = await request(app)
+            .get('/api/production/batches')
+            .set('Authorization', `Bearer ${ceoToken}`);
+        assert.strictEqual(batchesRes.status, 200);
+
+        // C. CEO can view Deliveries
+        const deliveriesRes = await request(app)
+            .get('/api/deliveries')
+            .set('Authorization', `Bearer ${ceoToken}`);
+        assert.strictEqual(deliveriesRes.status, 200);
+
+        // D. CEO can view Invoices
+        const invoicesRes = await request(app)
+            .get('/api/invoices')
+            .set('Authorization', `Bearer ${ceoToken}`);
+        assert.strictEqual(invoicesRes.status, 200);
+
+        // E. CEO can view Reports & Executive Overview
+        const overviewRes = await request(app)
+            .get('/api/reports/overview')
+            .set('Authorization', `Bearer ${ceoToken}`);
+        assert.strictEqual(overviewRes.status, 200);
+
+        const unbilledRes = await request(app)
+            .get('/api/reports/unbilled-drs')
+            .set('Authorization', `Bearer ${ceoToken}`);
+        assert.strictEqual(unbilledRes.status, 200);
+
+        // F. CEO can view Audit Logs
+        const auditRes = await request(app)
+            .get('/api/audit-logs')
+            .set('Authorization', `Bearer ${ceoToken}`);
+        assert.strictEqual(auditRes.status, 200);
+
+        // G. CEO can view Staff & User Directory
+        const usersRes = await request(app)
+            .get('/api/users')
+            .set('Authorization', `Bearer ${ceoToken}`);
+        assert.strictEqual(usersRes.status, 200);
+
+        // H. CEO is blocked from destructive admin operations (e.g. creating users, voiding)
+        const blockCreateUser = await request(app)
+            .post('/api/users')
+            .set('Authorization', `Bearer ${ceoToken}`)
+            .send({
+                name: 'Unauthorized User',
+                email: 'unauth@example.com',
+                password: 'Password123!',
+                role: 'STAFF'
+            });
+        assert.strictEqual(blockCreateUser.status, 403);
+    });
+
+    test('23. Quality Control (QC) Inspector Yield Clearance & Isolation Test', async () => {
+        const qcToken = getAuthToken('QC');
+        assert.ok(qcToken);
+
+        // Create a test batch for QC inspection
+        const poRes = await request(app)
+            .post('/api/orders')
+            .set('Authorization', `Bearer ${clientToken}`)
+            .send({
+                client_id: demoClient.id,
+                tolerance_percent: 10.0,
+                billing_policy: 'ACTUAL_DELIVERY',
+                items: [{ product_id: lotionProduct.id, target_quantity: 500, unit_price: 120.0 }]
+            });
+        const po = poRes.body.data;
+        await request(app).post(`/api/orders/${po.id}/approve`).set('Authorization', `Bearer ${adminToken}`);
+
+        const joRes = await request(app)
+            .post('/api/job-orders')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({ po_id: po.id, product_id: lotionProduct.id, target_quantity: 500 });
+        const jo = joRes.body.data;
+
+        const batchRes = await request(app)
+            .post('/api/production/batches')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({ jo_id: jo.id, target_quantity: 500 });
+        const batch = batchRes.body.data;
+
+        // A. QC Inspector logs batch yield and certificate of analysis (COA)
+        const qcYieldRes = await request(app)
+            .post(`/api/production/batches/${batch.id}/yield`)
+            .set('Authorization', `Bearer ${qcToken}`)
+            .send({
+                actual_yield: 520,
+                qc_notes: 'QC-PASSED: Viscosity, pH 5.5, and microbial testing cleared.'
+            });
+        assert.strictEqual(qcYieldRes.status, 200);
+        assert.strictEqual(qcYieldRes.body.data.actual_yield, 520);
+        assert.strictEqual(qcYieldRes.body.data.variance_quantity, 20);
+        assert.strictEqual(qcYieldRes.body.data.status, 'APPROVED_FOR_DISPATCH');
+
+        // B. QC Inspector can inspect pending notifications
+        const qcNotifRes = await request(app)
+            .get('/api/notifications/pending')
+            .set('Authorization', `Bearer ${qcToken}`);
+        assert.strictEqual(qcNotifRes.status, 200);
+        assert.strictEqual(qcNotifRes.body.role, 'QC');
+
+        // C. QC Inspector is blocked from accounting invoicing
+        const blockInvoice = await request(app)
+            .post('/api/invoices/from-dr/dummy-id')
+            .set('Authorization', `Bearer ${qcToken}`);
+        assert.strictEqual(blockInvoice.status, 403);
+
+        // Clean up test records
+        db.prepare('DELETE FROM production_batches WHERE id = ?').run(batch.id);
+        db.prepare('DELETE FROM job_orders WHERE id = ?').run(jo.id);
+        db.prepare('DELETE FROM purchase_order_items WHERE po_id = ?').run(po.id);
+        db.prepare('DELETE FROM purchase_orders WHERE id = ?').run(po.id);
+    });
+
     after(() => {
         // Automatically delete all test decoys and temporary test database
         try {

@@ -14,8 +14,8 @@ router.get('/pending', authenticateToken, (req, res) => {
         const clientId = user.client_id;
         const items = [];
 
-        // 1. POs pending Administrative Approval
-        if (role === ROLES.SUPER_ADMIN || role === ROLES.IT_ADMIN || role === ROLES.ADMIN) {
+        // 1. POs pending Administrative / Executive Approval
+        if (role === ROLES.SUPER_ADMIN || role === ROLES.IT_ADMIN || role === ROLES.ADMIN || role === ROLES.CEO) {
             const pendingApprovalPOs = db.prepare(`
                 SELECT po.id, po.po_number, po.grand_total as total_amount, c.company_name
                 FROM purchase_orders po
@@ -186,6 +186,63 @@ router.get('/pending', authenticateToken, (req, res) => {
                         batchId: ov.id,
                         batchNumber: ov.batch_number,
                         action: 'APPROVE_OVERRUN'
+                    }
+                });
+            }
+        }
+
+        // 5b. Quality Control (QC) Inspector Queue: Batches awaiting QC Inspection / Yield Clearance
+        if (role === ROLES.SUPER_ADMIN || role === ROLES.IT_ADMIN || role === ROLES.ADMIN || role === ROLES.QC) {
+            const batchesForInspection = db.prepare(`
+                SELECT pb.id, pb.batch_number, pb.target_quantity, pb.status, p.name as product_name, c.company_name
+                FROM production_batches pb
+                JOIN job_orders jo ON pb.jo_id = jo.id
+                JOIN purchase_orders po ON jo.po_id = po.id
+                JOIN clients c ON po.client_id = c.id
+                JOIN products p ON pb.product_id = p.id
+                WHERE pb.status IN ('PLANNED', 'MIXING', 'BOTTLING')
+                ORDER BY pb.created_at DESC
+                LIMIT 8
+            `).all();
+
+            for (const b of batchesForInspection) {
+                items.push({
+                    id: `qc-batch-${b.id}`,
+                    category: 'QUALITY_CONTROL',
+                    title: `QC Inspection: ${b.batch_number}`,
+                    description: `${b.product_name} (${b.company_name}) - Stage: ${b.status}. Awaiting yield logging & CoA clearance.`,
+                    urgency: 'HIGH',
+                    icon: '🔬',
+                    target: {
+                        tab: 'production',
+                        batchId: b.id,
+                        batchNumber: b.batch_number,
+                        action: 'LOG_YIELD'
+                    }
+                });
+            }
+        }
+
+        // 5c. CEO Executive Oversight Queue: Unbilled Completed Deliveries & Global Alerts
+        if (role === ROLES.CEO) {
+            const unbilledCount = db.prepare(`
+                SELECT COUNT(*) as count
+                FROM delivery_receipts dr
+                WHERE dr.status = 'ACCEPTED'
+                  AND dr.id NOT IN (SELECT dr_id FROM sales_invoices WHERE dr_id IS NOT NULL)
+            `).get().count;
+
+            if (unbilledCount > 0) {
+                items.push({
+                    id: 'ceo-unbilled-drs',
+                    category: 'EXECUTIVE',
+                    title: `${unbilledCount} Accepted Delivery Receipts Unbilled`,
+                    description: 'Client accepted shipments awaiting Sales Invoice generation.',
+                    urgency: 'MEDIUM',
+                    icon: '👑',
+                    target: {
+                        tab: 'invoices',
+                        action: 'VIEW_UNBILLED'
                     }
                 });
             }
