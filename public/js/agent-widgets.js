@@ -31,16 +31,30 @@
     }
 
     async function loadCurrentUser() {
+        if (window.NKB && window.NKB.user) {
+            activeUser = window.NKB.user;
+            return activeUser;
+        }
+        const cachedUser = localStorage.getItem('nkb_user');
+        if (cachedUser) {
+            try {
+                const parsed = JSON.parse(cachedUser);
+                if (parsed && (parsed.id || parsed.role)) {
+                    activeUser = parsed;
+                }
+            } catch (_) {}
+        }
         try {
             const token = getAuthToken();
-            if (!token) return null;
+            if (!token) return activeUser;
             const res = await fetchApi('/api/auth/me');
-            if (res && res.success && res.data) {
-                activeUser = res.data;
+            if (res && res.success) {
+                const fetched = res.user || res.data;
+                if (fetched) activeUser = fetched;
                 return activeUser;
             }
         } catch (_) {}
-        return null;
+        return activeUser;
     }
 
     // ==========================================
@@ -431,12 +445,13 @@
         container.id = 'nkb-agent-widgets-container';
         container.innerHTML = `
             <!-- FLOATING BUTTONS CONTAINER -->
-            <div class="fixed bottom-6 right-6 z-[99999] flex items-center gap-3 select-none">
+            <div id="agent-floating-actions-bar" class="fixed bottom-6 right-6 z-[99999] flex items-center gap-3 select-none" style="position: fixed !important; bottom: 24px !important; right: 24px !important; z-index: 99999 !important; display: flex !important; align-items: center !important; gap: 12px !important;">
                 
                 <!-- CHAT AGENT BUTTON -->
                 <button id="agent-chat-btn" onclick="window.NKB_Agents.toggleChatFlyout()" 
                         title="NKB Enterprise Messenger"
-                        class="w-14 h-14 rounded-full bg-gradient-to-tr from-indigo-600 via-indigo-700 to-purple-600 text-white shadow-xl hover:shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center cursor-pointer relative border-2 border-white/60">
+                        class="w-14 h-14 rounded-full bg-gradient-to-tr from-indigo-600 via-indigo-700 to-purple-600 text-white shadow-xl hover:shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center cursor-pointer relative border-2 border-white/60"
+                        style="width: 56px !important; height: 56px !important; border-radius: 9999px !important; display: flex !important; align-items: center !important; justify-content: center !important; position: relative !important; cursor: pointer !important; z-index: 99999 !important;">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
                               d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
@@ -450,7 +465,8 @@
                 <!-- NOTIFICATION AGENT BUTTON (BELL) -->
                 <button id="agent-bell-btn" onclick="window.NKB_Agents.toggleBellFlyout()" 
                         title="Pending Tasks & Confirmations"
-                        class="w-14 h-14 rounded-full bg-gradient-to-tr from-amber-500 via-orange-500 to-red-500 text-white shadow-xl hover:shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center cursor-pointer relative border-2 border-white/60">
+                        class="w-14 h-14 rounded-full bg-gradient-to-tr from-amber-500 via-orange-500 to-red-500 text-white shadow-xl hover:shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center cursor-pointer relative border-2 border-white/60"
+                        style="width: 56px !important; height: 56px !important; border-radius: 9999px !important; display: flex !important; align-items: center !important; justify-content: center !important; position: relative !important; cursor: pointer !important; z-index: 99999 !important;">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
                               d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
@@ -463,7 +479,7 @@
             </div>
 
             <!-- NOTIFICATIONS FLYOUT PANEL -->
-            <div id="agent-bell-flyout" class="hidden fixed bottom-24 right-6 z-[99999] w-96 max-w-[92vw] bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-fade-in" style="max-height: 520px;">
+            <div id="agent-bell-flyout" class="hidden fixed bottom-24 right-6 z-[99999] w-96 max-w-[92vw] bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-fade-in" style="position: fixed !important; bottom: 92px !important; right: 24px !important; z-index: 99999 !important; max-height: 520px;">
                 <div class="px-5 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
                     <div class="flex items-center gap-2">
                         <span class="text-lg">🔔</span>
@@ -492,7 +508,7 @@
             </div>
 
             <!-- CHAT SYSTEM FLYOUT PANEL -->
-            <div id="agent-chat-flyout" class="hidden fixed bottom-24 right-6 z-[99999] w-[420px] max-w-[94vw] h-[580px] max-h-[85vh] bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-fade-in">
+            <div id="agent-chat-flyout" class="hidden fixed bottom-24 right-6 z-[99999] w-[420px] max-w-[94vw] h-[580px] max-h-[85vh] bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-fade-in" style="position: fixed !important; bottom: 92px !important; right: 24px !important; z-index: 99999 !important;">
                 
                 <!-- DIRECTORY VIEW -->
                 <div id="agent-chat-directory" class="flex flex-col h-full">
@@ -567,17 +583,32 @@
 
     // Auto-init on page load
     async function init() {
-        await loadCurrentUser();
-        if (!activeUser) return;
+        const token = getAuthToken();
+        const cachedUser = localStorage.getItem('nkb_user');
+        // Only run if user is logged into portal (token or nkb_user in localStorage)
+        if (!token && !cachedUser) return;
 
+        // Mount widgets immediately so the buttons appear without any network delay!
         mountWidgets();
+
+        // Resolve active user (from window.NKB.user, localStorage, or /api/auth/me)
+        await loadCurrentUser();
         refreshPendingNotifications();
         refreshUnreadCount();
 
         // Periodic background poll for badge updates (every 30 seconds)
         setInterval(() => {
-            refreshPendingNotifications();
-            refreshUnreadCount();
+            if (activeUser) {
+                refreshPendingNotifications();
+                refreshUnreadCount();
+            } else {
+                loadCurrentUser().then(u => {
+                    if (u) {
+                        refreshPendingNotifications();
+                        refreshUnreadCount();
+                    }
+                });
+            }
         }, 30000);
     }
 

@@ -267,18 +267,20 @@ router.post('/logout', (req, res) => {
  * GET /api/auth/me
  */
 router.get('/me', authenticateToken, (req, res) => {
+    const userData = {
+        id: req.user.id,
+        name: req.user.name,
+        email: req.user.email,
+        role: req.user.role,
+        clientId: req.user.client_id,
+        companyName: req.user.company_name,
+        defaultBillingPolicy: req.user.default_billing_policy,
+        defaultTolerancePercent: req.user.default_tolerance_percent
+    };
     return res.json({
         success: true,
-        user: {
-            id: req.user.id,
-            name: req.user.name,
-            email: req.user.email,
-            role: req.user.role,
-            clientId: req.user.client_id,
-            companyName: req.user.company_name,
-            defaultBillingPolicy: req.user.default_billing_policy,
-            defaultTolerancePercent: req.user.default_tolerance_percent
-        }
+        user: userData,
+        data: userData
     });
 });
 
