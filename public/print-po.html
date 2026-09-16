@@ -26,10 +26,15 @@
            ------------------------------------------------------------- */
         @page {
             size: A4 portrait;
-            margin: 12mm 14mm;
+            margin: 0;
         }
 
         @media print {
+            @page {
+                size: A4 portrait;
+                margin: 0;
+            }
+
             html, body {
                 width: 210mm !important;
                 margin: 0 !important;
@@ -44,10 +49,12 @@
             }
 
             .print-sheet {
-                width: 100% !important;
-                max-width: 100% !important;
-                margin: 0 !important;
-                padding: 0 !important;
+                width: 210mm !important;
+                max-width: 210mm !important;
+                min-height: 297mm !important;
+                margin: 0 auto !important;
+                padding: 12mm 14mm !important;
+                box-sizing: border-box !important;
                 border: none !important;
                 box-shadow: none !important;
                 background: transparent !important;
@@ -545,7 +552,7 @@
         </div>
 
         <div style="display: flex; align-items: center; gap: 8px;">
-            <button onclick="window.print()" class="toolbar-btn toolbar-btn-print">
+            <button onclick="printReceipt()" class="toolbar-btn toolbar-btn-print">
                 <span>🖨️ Print Document (A4)</span>
             </button>
         </div>
@@ -1122,9 +1129,26 @@
                 console.error('Error fetching PO:', err);
                 alert('Connection error loading purchase order.');
             }
-        }
-
         window.addEventListener('DOMContentLoaded', loadOrder);
+
+        // Suppress browser default header and footer (date and title)
+        let _docTitle = document.title;
+        window.addEventListener('beforeprint', () => {
+            _docTitle = document.title;
+            document.title = '';
+        });
+        window.addEventListener('afterprint', () => {
+            document.title = _docTitle || 'Purchase Order / Sales Order - NKB Client System';
+        });
+
+        function printReceipt() {
+            _docTitle = document.title;
+            document.title = '';
+            window.print();
+            setTimeout(() => {
+                document.title = _docTitle || 'Purchase Order / Sales Order - NKB Client System';
+            }, 800);
+        }
     </script>
 </body>
 </html>

@@ -1619,7 +1619,11 @@ function printPaymentsReport() {
             <meta charset="UTF-8">
             <title>NKB Payments & Collections Report</title>
             <style>
-                @page { size: landscape; margin: 12mm; }
+                @page { size: landscape; margin: 0; }
+                @media print {
+                    @page { size: landscape; margin: 0; }
+                    body { margin: 0 !important; padding: 12mm !important; }
+                }
                 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; margin: 20px; color: #0f172a; font-size: 11px; }
                 .header-container { border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: flex-end; }
                 h1 { font-size: 18px; font-weight: 900; margin: 0 0 4px; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -1710,7 +1714,12 @@ function printPaymentsReport() {
                 <div>Confidential - Internal Accounting & Audit Document</div>
             </div>
             <script>
-                window.onload = function() { window.focus(); window.print(); };
+                window.onload = function() {
+                    window.addEventListener('beforeprint', function() { document.title = ''; });
+                    window.addEventListener('afterprint', function() { document.title = 'NKB Payments & Collections Report'; });
+                    window.focus();
+                    window.print();
+                };
             </script>
         </body>
         </html>

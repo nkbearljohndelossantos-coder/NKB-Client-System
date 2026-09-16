@@ -10,9 +10,13 @@
     <style>
         @page {
             size: A4 portrait;
-            margin: 10mm 12mm;
+            margin: 0;
         }
         @media print {
+            @page {
+                size: A4 portrait;
+                margin: 0;
+            }
             html, body {
                 width: 210mm !important;
                 margin: 0 !important;
@@ -26,10 +30,11 @@
             }
             .no-print { display: none !important; }
             .print-sheet {
-                width: 100% !important;
-                max-width: 100% !important;
-                margin: 0 !important;
-                padding: 0 !important;
+                width: 210mm !important;
+                max-width: 210mm !important;
+                margin: 0 auto !important;
+                padding: 10mm 12mm !important;
+                box-sizing: border-box !important;
                 border: none !important;
             }
             .avoid-break { break-inside: avoid !important; page-break-inside: avoid !important; }
@@ -175,7 +180,7 @@
                 <span>🔄 Reset</span>
             </button>
         </div>
-        <button onclick="window.print()" class="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded text-xs font-semibold shadow transition flex items-center gap-1.5">
+        <button onclick="printReceipt()" class="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded text-xs font-semibold shadow transition flex items-center gap-1.5">
             <span>🖨️ Print Delivery Receipt (A4)</span>
         </button>
     </div>
@@ -504,6 +509,25 @@
                 }
             }
         });
+
+        // Suppress browser default header and footer (date and title)
+        let _docTitle = document.title;
+        window.addEventListener('beforeprint', () => {
+            _docTitle = document.title;
+            document.title = '';
+        });
+        window.addEventListener('afterprint', () => {
+            document.title = _docTitle || 'Delivery Receipt - NKB MANUFACTURING CORPORATION';
+        });
+
+        function printReceipt() {
+            _docTitle = document.title;
+            document.title = '';
+            window.print();
+            setTimeout(() => {
+                document.title = _docTitle || 'Delivery Receipt - NKB MANUFACTURING CORPORATION';
+            }, 800);
+        }
     </script>
 </body>
 </html>

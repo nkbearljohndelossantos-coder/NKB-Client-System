@@ -26,10 +26,15 @@
            ------------------------------------------------------------- */
         @page {
             size: A4 landscape;
-            margin: 6mm 8mm;
+            margin: 0;
         }
 
         @media print {
+            @page {
+                size: A4 landscape;
+                margin: 0;
+            }
+
             html, body {
                 width: 297mm !important;
                 height: auto !important;
@@ -44,9 +49,10 @@
             }
 
             .pages-wrapper {
-                width: 100% !important;
-                margin: 0 !important;
-                padding: 0 !important;
+                width: 297mm !important;
+                margin: 0 auto !important;
+                padding: 6mm 8mm !important;
+                box-sizing: border-box !important;
             }
 
             .page-container {
@@ -826,7 +832,7 @@
                 <button type="button" onclick="setZoom('fit')" class="zoom-btn" id="zoom-fit">Fit Screen</button>
             </div>
 
-            <button onclick="window.print()" class="toolbar-btn toolbar-btn-print" id="btn-print-main">
+            <button onclick="printReceipt()" class="toolbar-btn toolbar-btn-print" id="btn-print-main">
                 <span>🖨️ Print 2 Portrait Copies (A4 Landscape)</span>
             </button>
         </div>
@@ -1435,9 +1441,26 @@
                     { product_name: 'JLS - POLO RED', target_quantity: 144, unit: 'PC' }
                 ]
             }]);
-        }
-
         window.addEventListener('DOMContentLoaded', loadData);
+
+        // Suppress browser default header and footer (date and title)
+        let _docTitle = document.title;
+        window.addEventListener('beforeprint', () => {
+            _docTitle = document.title;
+            document.title = '';
+        });
+        window.addEventListener('afterprint', () => {
+            document.title = _docTitle || 'Sales Order / Job Order - NKB MANUFACTURING CORPORATION';
+        });
+
+        function printReceipt() {
+            _docTitle = document.title;
+            document.title = '';
+            window.print();
+            setTimeout(() => {
+                document.title = _docTitle || 'Sales Order / Job Order - NKB MANUFACTURING CORPORATION';
+            }, 800);
+        }
     </script>
 </body>
 </html>

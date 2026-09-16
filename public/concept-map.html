@@ -483,7 +483,7 @@
         @media print {
             @page {
                 size: A4 landscape;
-                margin: 8mm;
+                margin: 0;
             }
 
             body {
@@ -499,7 +499,8 @@
             .document-container {
                 max-width: 100% !important;
                 margin: 0 !important;
-                padding: 0 !important;
+                padding: 8mm !important;
+                box-sizing: border-box !important;
             }
 
             .concept-sheet {
@@ -575,7 +576,7 @@
             <span class="badge-pill">ISO 22716 / GMP Certified</span>
         </div>
         <div class="action-buttons">
-            <button class="btn btn-primary" onclick="window.print()">
+            <button class="btn btn-primary" onclick="printReceipt()">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="6 9 6 2 18 2 18 9"></polyline>
                     <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
@@ -943,5 +944,25 @@
 
     </div>
 
+    <script>
+        // Suppress browser default header and footer (date and title)
+        let _docTitle = document.title;
+        window.addEventListener('beforeprint', () => {
+            _docTitle = document.title;
+            document.title = '';
+        });
+        window.addEventListener('afterprint', () => {
+            document.title = _docTitle || 'NKB Manufacturing - Operational Concept Map & System Architecture';
+        });
+
+        function printReceipt() {
+            _docTitle = document.title;
+            document.title = '';
+            window.print();
+            setTimeout(() => {
+                document.title = _docTitle || 'NKB Manufacturing - Operational Concept Map & System Architecture';
+            }, 800);
+        }
+    </script>
 </body>
 </html>
