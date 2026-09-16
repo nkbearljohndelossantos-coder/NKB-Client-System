@@ -503,7 +503,14 @@ async function loadOrders() {
                     </div>
                 </td>
                 <td class="py-3 px-4 whitespace-nowrap"><span class="badge bg-slate-100 text-slate-700">±${po.tolerance_percent}%</span></td>
-                <td class="py-3 px-4 whitespace-nowrap"><span class="badge ${po.billing_policy === 'ACTUAL_DELIVERY' ? 'bg-indigo-50 text-indigo-700' : 'bg-purple-50 text-purple-700'}">${po.billing_policy}</span></td>
+                <td class="py-3 px-4 whitespace-nowrap">
+                    <div><span class="badge ${po.billing_policy === 'ACTUAL_DELIVERY' ? 'bg-indigo-50 text-indigo-700' : 'bg-purple-50 text-purple-700'}">${po.billing_policy}</span></div>
+                    <div class="mt-1">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-black bg-blue-50 text-blue-800 border border-blue-200 inline-flex items-center gap-1" title="Term of Payment: ${po.form_of_payment || 'COD'}">
+                            💳 ${po.form_of_payment || 'COD'}
+                        </span>
+                    </div>
+                </td>
                 <td class="py-3 px-4 font-black text-slate-950 whitespace-nowrap font-mono">${NKB.formatNumber(po.total_target_quantity)} pcs</td>
                 <td class="py-3 px-4 font-extrabold text-slate-900 whitespace-nowrap font-mono">${canViewPrices && po.grand_total !== null && po.grand_total !== undefined ? NKB.formatCurrency(po.grand_total) : '—'}</td>
                 <td class="py-3 px-4 whitespace-nowrap">
@@ -637,14 +644,138 @@ async function approvePO(id, poNumber) {
 }
 
 async function confirmAccountingPO(id, poNumber) {
-    if (!confirm(`Confirm Purchase Order ${poNumber} for Accounting Department?\n\nThis certifies that payment terms, client ledger, and order financing are confirmed.`)) return;
-    const res = await NKB.api(`/api/orders/${id}/accounting-confirm`, { method: 'POST' });
+    const root = document.getElementById('modals-root');
+    if (!root) return;
+
+    // Fetch PO details to get current payment terms and client info
+    const res = await NKB.api(`/api/orders/${id}`);
+    const po = (res.success && res.data) ? res.data : null;
+    const rawTerm = (po?.form_of_payment || po?.terms || 'COD').trim();
+    const lowerRaw = rawTerm.toLowerCase();
+    let selectedTerm = 'COD';
+    let isCustom = false;
+    if (lowerRaw === 'cod' || lowerRaw === 'cash on delivery' || lowerRaw === 'cod / bank transfer') {
+        selectedTerm = 'COD';
+    } else if (lowerRaw === '7d' || lowerRaw === '7 days' || lowerRaw === 'net 7' || lowerRaw === '7day') {
+        selectedTerm = '7d';
+    } else if (lowerRaw === '15d' || lowerRaw === '15 days' || lowerRaw === 'net 15' || lowerRaw === '15day') {
+        selectedTerm = '15d';
+    } else if (lowerRaw === '30d' || lowerRaw === '30 days' || lowerRaw === 'net 30' || lowerRaw === '30day') {
+        selectedTerm = '30d';
+    } else {
+        selectedTerm = 'CUSTOM';
+        isCustom = true;
+    }
+
+    const clientName = po ? (po.company_name || 'Client') : 'Client';
+    const totalDisplay = (po && po.grand_total !== null && po.grand_total !== undefined) ? NKB.formatCurrency(po.grand_total) : '—';
+
+    root.innerHTML = `
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50 overflow-y-auto">
+            <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 my-auto">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="p-2 bg-emerald-100 text-emerald-700 rounded-xl text-lg">💳</span>
+                        <div>
+                            <h3 class="text-base font-bold text-slate-900">Confirm Order Financing</h3>
+                            <p class="text-xs text-slate-500">Accounting Department Certification</p>
+                        </div>
+                    </div>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
+                </div>
+
+                <div class="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-2">
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">PO Number:</span>
+                        <span class="font-bold text-slate-900 font-mono">${poNumber}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Client:</span>
+                        <span class="font-bold text-slate-900">${clientName}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Order Total:</span>
+                        <span class="font-black text-emerald-700 font-mono">${totalDisplay}</span>
+                    </div>
+                </div>
+
+                <form onsubmit="submitAccountingConfirm(event, '${id}', '${poNumber}')" class="space-y-4 text-xs font-semibold">
+                    <div>
+                        <label class="block text-slate-700 mb-1 font-bold">Term of Payment *</label>
+                        <select id="acct-confirm-po-form-of-payment" onchange="toggleCustomPOTerm('acct-confirm')" class="w-full px-3 py-2 border rounded-xl bg-white font-bold text-slate-900 focus:ring-2 focus:ring-emerald-500">
+                            <option value="COD" ${selectedTerm === 'COD' ? 'selected' : ''}>COD (Cash on Delivery)</option>
+                            <option value="7d" ${selectedTerm === '7d' ? 'selected' : ''}>7d (7 Days)</option>
+                            <option value="15d" ${selectedTerm === '15d' ? 'selected' : ''}>15d (15 Days)</option>
+                            <option value="30d" ${selectedTerm === '30d' ? 'selected' : ''}>30d (30 Days)</option>
+                            <option value="CUSTOM" ${isCustom ? 'selected' : ''}>Custom Term...</option>
+                        </select>
+                        <input type="text" id="acct-confirm-po-form-of-payment-custom" value="${isCustom ? rawTerm.replace(/"/g, '&quot;') : ''}" placeholder="e.g. 50% DP, 50% upon delivery..." class="${isCustom ? '' : 'hidden'} mt-1.5 w-full px-3 py-1.5 border rounded-lg bg-white text-xs font-medium text-slate-900">
+                    </div>
+
+                    <p class="text-[11px] text-slate-500 leading-relaxed">
+                        By confirming, you certify that client credit, payment terms, and order financing are verified. This authorizes raw materials confirmation and factory manufacturing.
+                    </p>
+
+                    <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                        <button type="button" onclick="closeModal()" class="px-4 py-2 border rounded-xl text-slate-600 hover:bg-slate-50">Cancel</button>
+                        <button type="submit" id="btn-submit-acct-confirm" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-md shadow-emerald-600/20 transition flex items-center gap-1.5">
+                            <span>💳 Confirm Financing</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+}
+
+async function submitAccountingConfirm(e, id, poNumber) {
+    e.preventDefault();
+    const termSelect = document.getElementById('acct-confirm-po-form-of-payment');
+    let formOfPayment = termSelect ? termSelect.value : 'COD';
+    if (formOfPayment === 'CUSTOM') {
+        const customInput = document.getElementById('acct-confirm-po-form-of-payment-custom');
+        formOfPayment = customInput ? (customInput.value.trim() || 'COD') : 'COD';
+    }
+
+    const btn = document.getElementById('btn-submit-acct-confirm');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Confirming...';
+    }
+
+    const res = await NKB.api(`/api/orders/${id}/accounting-confirm`, {
+        method: 'POST',
+        body: JSON.stringify({ form_of_payment: formOfPayment })
+    });
+
     if (res.success) {
-        NKB.showToast(`Purchase Order ${poNumber} confirmed by Accounting Department!`, 'success');
+        NKB.showToast(`Purchase Order ${poNumber} confirmed by Accounting (${formOfPayment})!`, 'success');
+        closeModal();
         loadOrders();
     } else {
         NKB.showToast(res.error || 'Failed to confirm order for Accounting.', 'error');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<span>💳 Confirm Financing</span>';
+        }
     }
+}
+window.confirmAccountingPO = confirmAccountingPO;
+window.submitAccountingConfirm = submitAccountingConfirm;
+
+if (!window.toggleCustomPOTerm) {
+    window.toggleCustomPOTerm = function(prefix = 'edit') {
+        const selectEl = document.getElementById(`${prefix}-po-form-of-payment`) || document.getElementById(`${prefix}-form-of-payment`);
+        const customEl = document.getElementById(`${prefix}-po-form-of-payment-custom`) || document.getElementById(`${prefix}-form-of-payment-custom`);
+        if (selectEl && customEl) {
+            if (selectEl.value === 'CUSTOM') {
+                customEl.classList.remove('hidden');
+                customEl.focus();
+            } else {
+                customEl.classList.add('hidden');
+            }
+        }
+    };
 }
 
 async function confirmInventoryPO(id, poNumber) {
@@ -2873,7 +3004,7 @@ async function openCreatePOModal() {
                     <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
                 </div>
                 <form id="form-create-po" onsubmit="submitCreatePO(event)" class="space-y-4 text-xs font-semibold flex-1 overflow-y-auto pr-1">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div>
                             <label class="block text-slate-600 mb-1">Select Client *</label>
                             <select id="po-client-id" onchange="onAdminPOClientChanged()" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-900">
@@ -2890,6 +3021,17 @@ async function openCreatePOModal() {
                                 <option value="ACTUAL_DELIVERY">Option A: Bill Actual Delivered</option>
                                 <option value="FIXED_PO_BUFFER">Option B: Fixed PO + Buffer Stock</option>
                             </select>
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 mb-1 font-bold">Term of Payment *</label>
+                            <select id="create-po-form-of-payment" onchange="toggleCustomPOTerm('create')" class="w-full px-3 py-2 border rounded-xl bg-white font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500">
+                                <option value="COD" selected>COD (Cash on Delivery)</option>
+                                <option value="7d">7d (7 Days)</option>
+                                <option value="15d">15d (15 Days)</option>
+                                <option value="30d">30d (30 Days)</option>
+                                <option value="CUSTOM">Custom Term...</option>
+                            </select>
+                            <input type="text" id="create-po-form-of-payment-custom" placeholder="e.g. 50% DP, 50% upon delivery..." class="hidden mt-1.5 w-full px-3 py-1.5 border rounded-lg bg-white text-xs font-medium text-slate-900">
                         </div>
                     </div>
 
@@ -3397,6 +3539,12 @@ async function submitCreatePO(e) {
     const toleranceEl = document.getElementById('po-tolerance');
     const tolerance = toleranceEl ? parseFloat(toleranceEl.value) : undefined;
     const policy = document.getElementById('po-billing-policy').value;
+    const termSelect = document.getElementById('create-po-form-of-payment') || document.getElementById('po-form-of-payment');
+    let formOfPayment = termSelect ? termSelect.value : 'COD';
+    if (formOfPayment === 'CUSTOM') {
+        const customInput = document.getElementById('create-po-form-of-payment-custom') || document.getElementById('po-form-of-payment-custom');
+        formOfPayment = customInput ? (customInput.value.trim() || 'COD') : 'COD';
+    }
     const notes = document.getElementById('po-notes').value;
 
     if (!adminPOLineItems || adminPOLineItems.length === 0) {
@@ -3426,6 +3574,7 @@ async function submitCreatePO(e) {
                 client_id: clientId,
                 tolerance_percent: tolerance,
                 billing_policy: policy,
+                form_of_payment: formOfPayment,
                 notes,
                 items: adminPOLineItems.map(item => {
                     const prod = adminPOCatalog.find(p => p.id === item.product_id);

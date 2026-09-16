@@ -884,7 +884,7 @@
             }
             document.getElementById('meta-doc-number').textContent = docNumber;
             document.getElementById('meta-doc-date').textContent = formatDateMMDDYYYY(po.po_date || po.created_at || new Date());
-            document.getElementById('meta-doc-terms').textContent = po.terms || 'COD';
+            document.getElementById('meta-doc-terms').textContent = po.form_of_payment || po.terms || 'COD';
             document.getElementById('meta-doc-due-date').textContent = formatDateMMDDYYYY(po.expected_delivery_date || po.po_date || po.created_at || new Date());
 
             // Items Table
@@ -1003,6 +1003,7 @@
                 };
                 if (termsVal) {
                     payload.terms = termsVal;
+                    payload.form_of_payment = termsVal;
                 }
 
                 // Gather updated table items if available

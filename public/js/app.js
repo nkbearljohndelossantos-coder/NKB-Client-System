@@ -452,7 +452,7 @@ async function openViewPOModal(poId) {
                         <div class="space-y-1">
                             <span class="text-[10px] uppercase font-bold text-slate-400">Contract & Payment Terms</span>
                             <div>Tolerance Limit: <strong class="text-indigo-700 font-bold">±${po.tolerance_percent}%</strong></div>
-                            <div>Form of Payment: <strong class="text-slate-800">${po.form_of_payment || po.terms || 'COD / Bank Transfer'}</strong></div>
+                            <div>Term of Payment: <strong class="text-slate-800">${po.form_of_payment || po.terms || 'COD'}</strong></div>
                             <div>Billing Policy: <span class="badge ${po.billing_policy === 'ACTUAL_DELIVERY' ? 'bg-indigo-50 text-indigo-700' : 'bg-purple-50 text-purple-700'}">${po.billing_policy}</span></div>
                             <div class="text-[10px] text-slate-500 mt-1 leading-normal">
                                 ${po.billing_policy === 'ACTUAL_DELIVERY' ? 'Over/under runs within tolerance are billed based on actual accepted units.' : 'Fixed PO quantity is billed; overruns reserved as buffer stock.'}
@@ -830,6 +830,23 @@ async function openEditPOModal(poId) {
     const poDateFormatted = po.po_date ? (po.po_date.includes('T') ? po.po_date.split('T')[0] : po.po_date) : '';
     const deliveryDateFormatted = po.expected_delivery_date ? (po.expected_delivery_date.includes('T') ? po.expected_delivery_date.split('T')[0] : po.expected_delivery_date) : '';
 
+    const rawTerm = (po.form_of_payment || po.terms || 'COD').trim();
+    const lowerRaw = rawTerm.toLowerCase();
+    let selectedTerm = 'COD';
+    let isCustom = false;
+    if (lowerRaw === 'cod' || lowerRaw === 'cash on delivery' || lowerRaw === 'cod / bank transfer') {
+        selectedTerm = 'COD';
+    } else if (lowerRaw === '7d' || lowerRaw === '7 days' || lowerRaw === 'net 7' || lowerRaw === '7day') {
+        selectedTerm = '7d';
+    } else if (lowerRaw === '15d' || lowerRaw === '15 days' || lowerRaw === 'net 15' || lowerRaw === '15day') {
+        selectedTerm = '15d';
+    } else if (lowerRaw === '30d' || lowerRaw === '30 days' || lowerRaw === 'net 30' || lowerRaw === '30day') {
+        selectedTerm = '30d';
+    } else {
+        selectedTerm = 'CUSTOM';
+        isCustom = true;
+    }
+
     root.innerHTML = `
         <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50 overflow-y-auto">
             <div class="bg-white rounded-2xl max-w-4xl w-full p-6 sm:p-7 shadow-2xl space-y-4 max-h-[92vh] flex flex-col my-auto">
@@ -878,8 +895,15 @@ async function openEditPOModal(poId) {
                             </select>
                         </div>
                         <div>
-                            <label class="block text-slate-600 mb-1">Form of Payment</label>
-                            <input type="text" id="edit-po-form-of-payment" value="${po.form_of_payment || po.terms || 'COD / Bank Transfer'}" placeholder="e.g. COD / Bank Transfer, 50% DP..." class="w-full px-3 py-2 border rounded-xl bg-white font-medium text-slate-900">
+                            <label class="block text-slate-600 mb-1 font-bold">Term of Payment *</label>
+                            <select id="edit-po-form-of-payment" onchange="toggleCustomPOTerm('edit')" class="w-full px-3 py-2 border rounded-xl bg-white font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500">
+                                <option value="COD" ${selectedTerm === 'COD' ? 'selected' : ''}>COD (Cash on Delivery)</option>
+                                <option value="7d" ${selectedTerm === '7d' ? 'selected' : ''}>7d (7 Days)</option>
+                                <option value="15d" ${selectedTerm === '15d' ? 'selected' : ''}>15d (15 Days)</option>
+                                <option value="30d" ${selectedTerm === '30d' ? 'selected' : ''}>30d (30 Days)</option>
+                                <option value="CUSTOM" ${isCustom ? 'selected' : ''}>Custom Term...</option>
+                            </select>
+                            <input type="text" id="edit-po-form-of-payment-custom" value="${isCustom ? rawTerm.replace(/"/g, '&quot;') : ''}" placeholder="e.g. 50% DP, 50% upon delivery..." class="${isCustom ? '' : 'hidden'} mt-1.5 w-full px-3 py-1.5 border rounded-lg bg-white text-xs font-medium text-slate-900">
                         </div>
                     </div>
 
@@ -1340,7 +1364,11 @@ async function submitEditPO(e) {
     const deliveryDate = document.getElementById('edit-po-delivery-date').value;
     const policy = document.getElementById('edit-po-billing-policy').value;
     const formOfPaymentEl = document.getElementById('edit-po-form-of-payment');
-    const formOfPayment = formOfPaymentEl ? formOfPaymentEl.value : undefined;
+    let formOfPayment = formOfPaymentEl ? formOfPaymentEl.value : undefined;
+    if (formOfPayment === 'CUSTOM') {
+        const customInput = document.getElementById('edit-po-form-of-payment-custom');
+        formOfPayment = customInput ? (customInput.value.trim() || 'COD') : 'COD';
+    }
     const notes = document.getElementById('edit-po-notes').value;
 
     const res = await NKB.api(`/api/orders/${editingPOId}`, {
@@ -1433,11 +1461,25 @@ if (!window.deletePO) {
             if (typeof loadOrders === 'function') loadOrders();
             if (typeof loadDashboard === 'function') loadDashboard();
             if (typeof loadClientOrders === 'function') loadClientOrders();
-            if (typeof closeModal === 'function') closeModal();
         } else {
             NKB.showToast(res.error || 'Failed to delete Purchase Order.', 'error');
         }
     };
 }
+
+function toggleCustomPOTerm(prefix = 'edit') {
+    const selectEl = document.getElementById(`${prefix}-po-form-of-payment`);
+    const customEl = document.getElementById(`${prefix}-po-form-of-payment-custom`);
+    if (selectEl && customEl) {
+        if (selectEl.value === 'CUSTOM') {
+            customEl.classList.remove('hidden');
+            customEl.focus();
+        } else {
+            customEl.classList.add('hidden');
+        }
+    }
+}
+window.toggleCustomPOTerm = toggleCustomPOTerm;
+
 
 

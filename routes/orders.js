@@ -236,6 +236,9 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
  */
 router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
     let { client_id, expected_delivery_date, tolerance_percent, billing_policy, notes, form_of_payment, items, tax_percent } = req.body;
+    if (form_of_payment === undefined && req.body.terms !== undefined) {
+        form_of_payment = req.body.terms;
+    }
 
     if (req.user.role === 'CLIENT') {
         client_id = req.clientId;
@@ -337,7 +340,7 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
             policy,
             initialStatus,
             notes || null,
-            form_of_payment || 'COD / Bank Transfer',
+            form_of_payment || 'COD',
             subtotal,
             taxRate,
             taxAmount,
@@ -405,6 +408,9 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
 router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
     const { id } = req.params;
     let { po_date, expected_delivery_date, tolerance_percent, billing_policy, notes, form_of_payment, items, tax_percent } = req.body;
+    if (form_of_payment === undefined && req.body.terms !== undefined) {
+        form_of_payment = req.body.terms;
+    }
 
     const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
     if (!po) {
@@ -584,7 +590,7 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
             tolerance,
             policy,
             notes !== undefined ? (notes || null) : po.notes,
-            form_of_payment !== undefined ? (form_of_payment || null) : (po.form_of_payment || 'COD / Bank Transfer'),
+            form_of_payment !== undefined ? (form_of_payment || null) : (po.form_of_payment || 'COD'),
             subtotal,
             taxRate,
             taxAmount,
@@ -684,6 +690,12 @@ router.post('/:id/approve', authenticateToken, requireRoles('ADMIN'), (req, res)
  */
 router.post('/:id/accounting-confirm', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'IT_ADMIN', 'SUPER_ADMIN'), (req, res) => {
     const { id } = req.params;
+    const body = req.body || {};
+    const paymentTerm = (body.form_of_payment !== undefined && body.form_of_payment !== null && String(body.form_of_payment).trim() !== '')
+        ? String(body.form_of_payment).trim()
+        : (body.terms !== undefined && body.terms !== null && String(body.terms).trim() !== '')
+            ? String(body.terms).trim()
+            : null;
 
     const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
     if (!po) {
@@ -694,14 +706,26 @@ router.post('/:id/accounting-confirm', authenticateToken, requireRoles('ACCOUNTI
         return res.status(400).json({ success: false, error: `Cannot confirm an order with status "${po.status}".` });
     }
 
-    db.prepare(`
-        UPDATE purchase_orders
-        SET accounting_confirmed = 1,
-            accounting_confirmed_at = datetime('now'),
-            accounting_confirmed_by = ?,
-            updated_at = datetime('now')
-        WHERE id = ?
-    `).run(req.user.id, id);
+    if (paymentTerm) {
+        db.prepare(`
+            UPDATE purchase_orders
+            SET accounting_confirmed = 1,
+                accounting_confirmed_at = datetime('now'),
+                accounting_confirmed_by = ?,
+                form_of_payment = ?,
+                updated_at = datetime('now')
+            WHERE id = ?
+        `).run(req.user.id, paymentTerm, id);
+    } else {
+        db.prepare(`
+            UPDATE purchase_orders
+            SET accounting_confirmed = 1,
+                accounting_confirmed_at = datetime('now'),
+                accounting_confirmed_by = ?,
+                updated_at = datetime('now')
+            WHERE id = ?
+        `).run(req.user.id, id);
+    }
 
     logAudit({
         userId: req.user.id,
@@ -710,7 +734,12 @@ router.post('/:id/accounting-confirm', authenticateToken, requireRoles('ACCOUNTI
         action: 'ACCOUNTING_CONFIRM_PO',
         entityType: 'PURCHASE_ORDER',
         entityId: po.po_number,
-        details: { poId: id, confirmedBy: req.user.name, confirmedRole: req.user.role }
+        details: {
+            poId: id,
+            confirmedBy: req.user.name,
+            confirmedRole: req.user.role,
+            form_of_payment: paymentTerm || po.form_of_payment
+        }
     });
 
     const updated = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
