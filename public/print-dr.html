@@ -407,7 +407,7 @@
                 const sub = document.getElementById('dr-dispatched-company');
                 if (sub) sub.textContent = 'NKB MANUFACTURING CORPORATION';
                 document.getElementById('client-company-display').textContent = dr.company_name;
-                document.getElementById('client-contact-display').textContent = `Attn: ${dr.contact_person || 'Client'}`;
+                document.getElementById('client-contact-display').textContent = '';
             }
 
             document.getElementById('client-address-display').textContent = (dr.client_address || '').trim() || 'Phils.';
@@ -470,7 +470,7 @@
                     const sub = document.getElementById('dr-dispatched-company');
                     if (sub) sub.textContent = 'NKB MANUFACTURING CORPORATION';
                     document.getElementById('client-company-display').textContent = dr.company_name;
-                    document.getElementById('client-contact-display').textContent = `Attn: ${dr.contact_person}`;
+                    document.getElementById('client-contact-display').textContent = '';
                 }
 
                 document.getElementById('client-address-display').textContent = (dr.client_address || '').trim() || 'Phils.';

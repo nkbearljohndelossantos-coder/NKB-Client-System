@@ -846,8 +846,8 @@
                 document.getElementById('hdr-company-tin').textContent = 'TIN: 800-189-847-00000';
             } else {
                 document.getElementById('hdr-company-name').textContent = 'NKB MANUFACTURING CORPORATION';
-                document.getElementById('hdr-company-address').textContent = 'Blk 4, Lot 5, Twig st., Sampaguita Village, Mambog II, Bacoor City, Cavite';
-                document.getElementById('hdr-company-tin').textContent = 'TIN: 686-950-421-00000 · FDA Certified Facility';
+                document.getElementById('hdr-company-address').textContent = 'Blk 4, Lot 5, Twig St., Sampaguita Village, Mambog II, Bacoor City, Cavite';
+                document.getElementById('hdr-company-tin').textContent = 'TIN: 686-950-421-00000';
             }
 
             // Document Title
@@ -867,9 +867,6 @@
                 }
             } else {
                 clientDisplayName = po.company_name || 'CLIENT';
-                if (po.contact_person) {
-                    clientDisplayName += ` - ${po.contact_person}`;
-                }
             }
 
             document.getElementById('meta-client-name').textContent = clientDisplayName;

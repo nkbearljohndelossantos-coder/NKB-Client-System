@@ -1334,12 +1334,18 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
             assert.strictEqual(blockEdit.status, 403, `${op.name} must be forbidden from updating orders`);
         }
 
-        // E. Verify print-po.html template contents: Bank details updated, and Form of Payment section removed
+        // E. Verify receipt template contents: Bank details, Twig St. casing, FDA removal, and contact person removal
         const printPoHtml = fs.readFileSync(path.join(__dirname, '../public/print-po.html'), 'utf8');
+        const printJoHtml = fs.readFileSync(path.join(__dirname, '../public/print-jo.html'), 'utf8');
         assert.ok(printPoHtml.includes('BDO UNIBANK, INC.<br>NKB MANUFACTURING CORPORATION<br>0080-5801-0547'), 'print-po.html must include NKB MANUFACTURING CORPORATION under BDO UNIBANK, INC.');
         assert.strictEqual(printPoHtml.includes('id="po-payment-section"'), false, 'print-po.html must NOT have #po-payment-section');
         assert.strictEqual(printPoHtml.includes('id="disp-po-payment"'), false, 'print-po.html must NOT have #disp-po-payment');
         assert.strictEqual(printPoHtml.includes('Form of Payment:'), false, 'print-po.html must NOT have "Form of Payment:" in receipt');
+        assert.strictEqual(printPoHtml.includes('FDA'), false, 'print-po.html must NOT have FDA reference in receipt');
+        assert.ok(printPoHtml.includes('Twig St.'), 'print-po.html must use capitalized Twig St.');
+        assert.strictEqual(printPoHtml.includes('Twig st.'), false, 'print-po.html must NOT have lowercase Twig st.');
+        assert.ok(printJoHtml.includes('Twig St.'), 'print-jo.html must use capitalized Twig St.');
+        assert.strictEqual(printJoHtml.includes('Twig st.'), false, 'print-jo.html must NOT have lowercase Twig st.');
         assert.ok(printPoHtml.includes('body.hide-prices'), 'print-po.html must contain hide-prices style for non-price viewers');
 
         // Clean up test records
