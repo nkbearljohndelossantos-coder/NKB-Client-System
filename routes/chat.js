@@ -289,7 +289,7 @@ router.post('/messages', authenticateToken, (req, res) => {
 
         db.prepare(`
             INSERT INTO chat_messages (id, sender_id, receiver_id, channel_type, target_role, message, is_support, is_read, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 0, datetime('now'))
+            VALUES (?, ?, ?, ?, ?, ?, ?, 0, datetime('now', 'localtime'))
         `).run(msgId, user.id, finalReceiverId, finalChannelType, finalTargetRole, cleanMessage, isSupport);
 
         const createdMessage = db.prepare(`

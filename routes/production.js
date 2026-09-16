@@ -6,6 +6,7 @@ const { authenticateToken, requireRoles } = require('../middleware/auth');
 const { getNextDocumentNumber } = require('../services/documentNumberService');
 const { recordMovement } = require('../services/inventoryService');
 const { logAudit } = require('../services/auditService');
+const { getManilaDate, getManilaDateTime } = require('../helpers/timezone');
 
 /**
  * GET /api/production/batches
@@ -215,7 +216,7 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
                 if (!expDate) {
                     const prodDate = production_date ? new Date(production_date) : new Date();
                     prodDate.setMonth(prodDate.getMonth() + (jo.shelf_life_months || 24));
-                    expDate = prodDate.toISOString().split('T')[0];
+                    expDate = getManilaDate(prodDate);
                 }
 
                 // Batching after product is made: calculate actual yield and check tolerance
@@ -244,7 +245,7 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
                     jo.id,
                     jo.product_id,
                     jo.custom_formula_code || jo.default_formula || formula_code || 'FORM-2026-V1',
-                    production_date || new Date().toISOString().split('T')[0],
+                    production_date || getManilaDate(),
                     expDate,
                     targetQty,
                     actualYield,
@@ -256,7 +257,7 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
                     qc_inspector || null,
                     line_assignment || 'Cleanroom Line 1 (Alpha)',
                     !isException ? req.user.id : null,
-                    !isException ? new Date().toISOString() : null,
+                    !isException ? getManilaDateTime() : null,
                     req.user.id
                 );
 
@@ -264,7 +265,7 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
                 db.prepare(`
                     INSERT INTO batch_yields
                     (id, batch_id, recorded_at, target_quantity, actual_yield, variance_quantity, variance_percent, logged_by, notes)
-                    VALUES (?, ?, datetime('now'), ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, datetime('now', 'localtime'), ?, ?, ?, ?, ?, ?)
                 `).run(
                     uuidv4(),
                     batchId,
@@ -291,7 +292,7 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
                 }
 
                 // Complete Job Order since product is made and batched
-                db.prepare("UPDATE job_orders SET status = 'COMPLETED', updated_at = datetime('now') WHERE id = ?").run(jo.id);
+                db.prepare("UPDATE job_orders SET status = 'COMPLETED', updated_at = datetime('now', 'localtime') WHERE id = ?").run(jo.id);
                 if (jo.po_id) affectedPOIds.add(jo.po_id);
 
                 createdBatches.push({
@@ -364,7 +365,7 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
     if (!expDate) {
         const prodDate = production_date ? new Date(production_date) : new Date();
         prodDate.setMonth(prodDate.getMonth() + (jo.shelf_life_months || 24));
-        expDate = prodDate.toISOString().split('T')[0];
+        expDate = getManilaDate(prodDate);
     }
 
     const targetQty = parseInt(target_quantity);
@@ -394,7 +395,7 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
         jo_id,
         jo.product_id,
         formula_code || jo.default_formula || 'FORM-2026-V1',
-        production_date || new Date().toISOString().split('T')[0],
+        production_date || getManilaDate(),
         expDate,
         targetQty,
         actualYield,
@@ -406,7 +407,7 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
         qc_inspector || null,
         line_assignment || 'Line 1 (Alpha)',
         !isException ? req.user.id : null,
-        !isException ? new Date().toISOString() : null,
+        !isException ? getManilaDateTime() : null,
         req.user.id
     );
 
@@ -414,7 +415,7 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
     db.prepare(`
         INSERT INTO batch_yields
         (id, batch_id, recorded_at, target_quantity, actual_yield, variance_quantity, variance_percent, logged_by, notes)
-        VALUES (?, ?, datetime('now'), ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, datetime('now', 'localtime'), ?, ?, ?, ?, ?, ?)
     `).run(
         uuidv4(),
         batchId,
@@ -441,7 +442,7 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
     }
 
     // Complete Job Order since product is made and batched
-    db.prepare("UPDATE job_orders SET status = 'COMPLETED', updated_at = datetime('now') WHERE id = ?").run(jo_id);
+    db.prepare("UPDATE job_orders SET status = 'COMPLETED', updated_at = datetime('now', 'localtime') WHERE id = ?").run(jo_id);
     if (jo.po_id) {
         db.prepare("UPDATE purchase_orders SET status = 'IN_PRODUCTION' WHERE id = ? AND status != 'COMPLETED'").run(jo.po_id);
     }
@@ -516,8 +517,8 @@ router.post('/batches/:id/yield', authenticateToken, requireRoles('ADMIN', 'PROD
                 status = ?,
                 qc_notes = ?,
                 qc_passed_by = ?,
-                qc_passed_at = datetime('now'),
-                updated_at = datetime('now')
+                qc_passed_at = datetime('now', 'localtime'),
+                updated_at = datetime('now', 'localtime')
             WHERE id = ?
         `).run(
             actualQty,
@@ -533,7 +534,7 @@ router.post('/batches/:id/yield', authenticateToken, requireRoles('ADMIN', 'PROD
         db.prepare(`
             INSERT INTO batch_yields
             (id, batch_id, recorded_at, target_quantity, actual_yield, variance_quantity, variance_percent, logged_by, notes)
-            VALUES (?, ?, datetime('now'), ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, datetime('now', 'localtime'), ?, ?, ?, ?, ?, ?)
         `).run(
             uuidv4(),
             id,
@@ -647,7 +648,7 @@ router.post('/batches/:id/approve-overrun', authenticateToken, requireRoles('ADM
         // Update batch status to APPROVED_FOR_DISPATCH
         db.prepare(`
             UPDATE production_batches
-            SET status = 'APPROVED_FOR_DISPATCH', updated_at = datetime('now')
+            SET status = 'APPROVED_FOR_DISPATCH', updated_at = datetime('now', 'localtime')
             WHERE id = ?
         `).run(id);
 

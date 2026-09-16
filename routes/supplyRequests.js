@@ -112,7 +112,7 @@ router.put('/:id', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_A
 
     db.prepare(`
         UPDATE supply_requests
-        SET status = ?, notes = ?, target_date = ?, updated_at = datetime('now')
+        SET status = ?, notes = ?, target_date = ?, updated_at = datetime('now', 'localtime')
         WHERE id = ?
     `).run(updatedStatus, updatedNotes, updatedTargetDate, id);
 
@@ -129,7 +129,7 @@ router.put('/:id', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_A
             db.prepare(`
                 UPDATE purchase_orders
                 SET raw_materials_status = 'SUFFICIENT',
-                    updated_at = datetime('now')
+                    updated_at = datetime('now', 'localtime')
                 WHERE id = ?
             `).run(existing.po_id);
             poRawMaterialsUpdated = true;

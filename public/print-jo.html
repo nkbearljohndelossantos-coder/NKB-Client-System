@@ -861,11 +861,20 @@
         function formatDateMMDDYYYY(val) {
             if (!val) return '';
             if (/^\d{2}\/\d{2}\/\d{4}$/.test(val)) return val;
-            const d = new Date(val);
+            if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) {
+                const parts = val.split('-');
+                return `${parts[1]}/${parts[2]}/${parts[0]}`;
+            }
+            let cleanStr = typeof val === 'string' && !val.includes('T') ? val.replace(' ', 'T') : val;
+            if (typeof cleanStr === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(cleanStr) && !cleanStr.includes('+') && !cleanStr.endsWith('Z')) {
+                cleanStr += '+08:00';
+            }
+            const d = new Date(cleanStr);
             if (isNaN(d.getTime())) return val;
-            const mm = String(d.getMonth() + 1).padStart(2, '0');
-            const dd = String(d.getDate()).padStart(2, '0');
-            const yyyy = d.getFullYear();
+            const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Manila', month: '2-digit', day: '2-digit', year: 'numeric' }).formatToParts(d);
+            const mm = parts.find(p => p.type === 'month')?.value || String(d.getMonth() + 1).padStart(2, '0');
+            const dd = parts.find(p => p.type === 'day')?.value || String(d.getDate()).padStart(2, '0');
+            const yyyy = parts.find(p => p.type === 'year')?.value || d.getFullYear();
             return `${mm}/${dd}/${yyyy}`;
         }
 

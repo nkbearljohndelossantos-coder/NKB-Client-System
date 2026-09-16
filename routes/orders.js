@@ -6,6 +6,7 @@ const { authenticateToken, requireRoles, enforceClientIsolation } = require('../
 const { canViewOrderPrices } = require('../middleware/rbac');
 const { getNextDocumentNumber } = require('../services/documentNumberService');
 const { logAudit } = require('../services/auditService');
+const { getManilaDate, getManilaDateTime, getManilaYear } = require('../helpers/timezone');
 
 const KNOWN_PO_BRANDS = [
     'HER CHOICE PH', 'HER CHOICE', 'BELLA SKIN', 'K BELLA SKIN', 'SKEENCARE',
@@ -329,7 +330,7 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
         db.prepare(`
             INSERT INTO purchase_orders
             (id, po_number, so_number, client_id, po_date, expected_delivery_date, tolerance_percent, billing_policy, status, notes, form_of_payment, subtotal, tax_percent, tax_amount, grand_total, created_by, approved_by, approved_at)
-            VALUES (?, ?, ?, ?, date('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, date('now', 'localtime'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
             poId,
             poNumber,
@@ -347,7 +348,7 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
             grandTotal,
             req.user.id,
             initialStatus === 'APPROVED' ? req.user.id : null,
-            initialStatus === 'APPROVED' ? new Date().toISOString() : null
+            initialStatus === 'APPROVED' ? getManilaDateTime() : null
         );
 
         const insertItemStmt = db.prepare(`
@@ -544,14 +545,14 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
                 if (existingJO) {
                     db.prepare(`
                         UPDATE job_orders
-                        SET target_quantity = ?, updated_at = datetime('now')
+                        SET target_quantity = ?, updated_at = datetime('now', 'localtime')
                         WHERE id = ?
                     `).run(it.targetQuantity || it.target_quantity, existingJO.id);
 
                     // Sync target_quantity on active production batches
                     db.prepare(`
                         UPDATE production_batches
-                        SET target_quantity = ?, updated_at = datetime('now')
+                        SET target_quantity = ?, updated_at = datetime('now', 'localtime')
                         WHERE jo_id = ? AND status IN ('PLANNED', 'MIXING')
                     `).run(it.targetQuantity || it.target_quantity, existingJO.id);
                 }
@@ -582,7 +583,7 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
                 tax_percent = ?,
                 tax_amount = ?,
                 grand_total = ?,
-                updated_at = datetime('now')
+                updated_at = datetime('now', 'localtime')
             WHERE id = ?
         `).run(
             po_date !== undefined && po_date ? po_date : po.po_date,
@@ -666,7 +667,7 @@ router.post('/:id/approve', authenticateToken, requireRoles('ADMIN'), (req, res)
 
     db.prepare(`
         UPDATE purchase_orders
-        SET status = 'APPROVED', approved_by = ?, approved_at = datetime('now'), updated_at = datetime('now')
+        SET status = 'APPROVED', approved_by = ?, approved_at = datetime('now', 'localtime'), updated_at = datetime('now', 'localtime')
         WHERE id = ?
     `).run(req.user.id, id);
 
@@ -710,19 +711,19 @@ router.post('/:id/accounting-confirm', authenticateToken, requireRoles('ACCOUNTI
         db.prepare(`
             UPDATE purchase_orders
             SET accounting_confirmed = 1,
-                accounting_confirmed_at = datetime('now'),
+                accounting_confirmed_at = datetime('now', 'localtime'),
                 accounting_confirmed_by = ?,
                 form_of_payment = ?,
-                updated_at = datetime('now')
+                updated_at = datetime('now', 'localtime')
             WHERE id = ?
         `).run(req.user.id, paymentTerm, id);
     } else {
         db.prepare(`
             UPDATE purchase_orders
             SET accounting_confirmed = 1,
-                accounting_confirmed_at = datetime('now'),
+                accounting_confirmed_at = datetime('now', 'localtime'),
                 accounting_confirmed_by = ?,
-                updated_at = datetime('now')
+                updated_at = datetime('now', 'localtime')
             WHERE id = ?
         `).run(req.user.id, id);
     }
@@ -783,13 +784,13 @@ router.post('/:id/inventory-confirm', authenticateToken, requireRoles('INVENTORY
     db.prepare(`
         UPDATE purchase_orders
         SET inventory_confirmed = 1,
-            inventory_confirmed_at = datetime('now'),
+            inventory_confirmed_at = datetime('now', 'localtime'),
             inventory_confirmed_by = ?,
             raw_materials_status = 'SUFFICIENT',
             status = ?,
             approved_by = COALESCE(approved_by, ?),
-            approved_at = COALESCE(approved_at, datetime('now')),
-            updated_at = datetime('now')
+            approved_at = COALESCE(approved_at, datetime('now', 'localtime')),
+            updated_at = datetime('now', 'localtime')
         WHERE id = ?
     `).run(req.user.id, newStatus, req.user.id, id);
 
@@ -837,7 +838,7 @@ router.post('/:id/request-supplies', authenticateToken, requireRoles('INVENTORY'
     db.prepare(`
         INSERT INTO supply_requests
         (id, po_id, requested_by, department, materials_needed, urgency, target_date, notes, status, created_at, updated_at)
-        VALUES (?, ?, ?, 'Purchasing Department', ?, ?, ?, ?, 'SUBMITTED', datetime('now'), datetime('now'))
+        VALUES (?, ?, ?, 'Purchasing Department', ?, ?, ?, ?, 'SUBMITTED', datetime('now', 'localtime'), datetime('now', 'localtime'))
     `).run(
         reqId,
         id,
@@ -852,7 +853,7 @@ router.post('/:id/request-supplies', authenticateToken, requireRoles('INVENTORY'
     db.prepare(`
         UPDATE purchase_orders
         SET raw_materials_status = 'SUPPLIES_REQUESTED',
-            updated_at = datetime('now')
+            updated_at = datetime('now', 'localtime')
         WHERE id = ?
     `).run(id);
 
@@ -958,7 +959,7 @@ router.post('/:id/void', authenticateToken, (req, res) => {
     }
 
     const voidOrderTx = db.transaction(() => {
-        const voidStamp = `[VOIDED on ${new Date().toISOString().slice(0, 10)}${reason ? ': ' + reason.trim() : ''}]`;
+        const voidStamp = `[VOIDED on ${getManilaDate()}${reason ? ': ' + reason.trim() : ''}]`;
         const updatedNotes = po.notes ? (po.notes + ' ' + voidStamp) : voidStamp;
 
         // Release the PO number so voids do not consume or block sequence numbering
@@ -976,7 +977,7 @@ router.post('/:id/void', authenticateToken, (req, res) => {
             SET status = 'VOIDED',
                 po_number = ?,
                 notes = ?,
-                updated_at = datetime('now')
+                updated_at = datetime('now', 'localtime')
             WHERE id = ?
         `).run(newPoNumber, updatedNotes, id);
 
@@ -989,7 +990,7 @@ router.post('/:id/void', authenticateToken, (req, res) => {
         `).run(id);
 
         // Synchronize document_sequences so last_sequence reflects the highest active (non-voided) PO
-        const year = new Date().getFullYear();
+        const year = getManilaYear();
         const activeRows = db.prepare(`
             SELECT po_number FROM purchase_orders 
             WHERE status != 'VOIDED' AND po_number LIKE ?
@@ -1119,7 +1120,7 @@ router.delete('/:id', authenticateToken, (req, res) => {
         db.prepare('DELETE FROM purchase_orders WHERE id = ?').run(id);
 
         // Synchronize sequence numbers
-        const year = new Date().getFullYear();
+        const year = getManilaYear();
         const activeRows = db.prepare(`
             SELECT po_number FROM purchase_orders 
             WHERE status != 'VOIDED' AND po_number LIKE ?

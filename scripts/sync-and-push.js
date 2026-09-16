@@ -56,15 +56,28 @@ function connectSSH() {
 
     conn.on('ready', () => {
         console.log('✅ Connected to VPS via SSH');
-        conn.sftp(async (err, sftp) => {
+
+        // Ensure all remote subdirectories exist
+        const dirs = [...new Set(files.map(f => path.dirname(f)).filter(d => d !== '.'))];
+        const mkdirCmd = dirs.map(d => `mkdir -p "${REMOTE_DIR}/${d.replace(/\\/g, '/')}"`).join(' && ');
+
+        conn.exec(mkdirCmd, (err, mkdirStream) => {
             if (err) {
-                console.error('❌ SFTP initialization failed:', err);
+                console.error('❌ Failed to prepare directories:', err);
                 conn.end();
                 return;
             }
+            mkdirStream.resume();
+            mkdirStream.on('close', () => {
+                conn.sftp(async (err, sftp) => {
+                    if (err) {
+                        console.error('❌ SFTP initialization failed:', err);
+                        conn.end();
+                        return;
+                    }
 
-            let errors = 0;
-            console.log(`📤 Uploading ${files.length} project files...`);
+                    let errors = 0;
+                    console.log(`📤 Uploading ${files.length} project files...`);
 
             // Upload in controlled batches of 5 to preserve socket stability
             const BATCH_SIZE = 5;
@@ -96,7 +109,7 @@ function connectSSH() {
                 'git add -A',
                 `git commit -m "${safeMsg}" || echo "No new git changes to commit"`,
                 'git push origin main',
-                'docker compose restart nkb_client || docker restart nkb_client_app || pm2 restart nkb-client-app'
+                'docker compose up -d --build || docker compose restart nkb_client || docker restart nkb_client_app || pm2 restart nkb-client-app'
             ].join(' && ');
 
             conn.exec(gitCommands, (err, stream) => {
@@ -114,7 +127,10 @@ function connectSSH() {
                   .stderr.on('data', (data) => process.stderr.write(data));
             });
         });
-    }).on('error', (err) => {
+    });
+    });
+    });
+    conn.on('error', (err) => {
         console.error(`❌ SSH connection error (attempt ${attempts}):`, err.message);
         conn.end();
         if (attempts < MAX_ATTEMPTS) {

@@ -12,6 +12,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
+      - TZ=Asia/Manila
       - DB_DRIVER=sqlite
       - DATABASE_PATH=/app/database/nkb.sqlite
       - JWT_SECRET=nkb-manufacturing-production-jwt-secure-key-2026-b2b-portal
@@ -22,8 +23,11 @@ services:
       - ./public:/app/public
       - ./routes:/app/routes
       - ./services:/app/services
+      - ./helpers:/app/helpers
       - ./middleware:/app/middleware
       - ./server.js:/app/server.js
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
     networks:
       - nkb_client_net
 

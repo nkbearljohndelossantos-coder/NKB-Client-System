@@ -331,7 +331,9 @@
 
         container.innerHTML = activeChatMessages.map(m => {
             const isMe = m.sender_id === myId;
-            const timeStr = m.created_at ? new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+            let cleanTime = typeof m.created_at === 'string' && !m.created_at.includes('T') ? m.created_at.replace(' ', 'T') : m.created_at;
+            if (typeof cleanTime === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(cleanTime) && !cleanTime.includes('+') && !cleanTime.endsWith('Z')) cleanTime += '+08:00';
+            const timeStr = m.created_at ? new Date(cleanTime).toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit', hour12: true }) : '';
 
             if (isMe) {
                 return `

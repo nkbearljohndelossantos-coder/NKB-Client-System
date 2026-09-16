@@ -1,4 +1,5 @@
 const db = require('../database/db');
+const { getManilaYear } = require('../helpers/timezone');
 
 /**
  * Generate a sequential, human-readable document number
@@ -8,7 +9,7 @@ const db = require('../database/db');
  * @returns {string} The next formatted document number
  */
 function getNextDocumentNumber(docType) {
-    const year = new Date().getFullYear();
+    const year = getManilaYear();
     
     if (docType === 'PO') {
         // Voided POs must not affect PO numbering. Sequence is determined by the highest active (non-voided) PO for the year.

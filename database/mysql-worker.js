@@ -52,7 +52,7 @@ async function createPoolWithFallback() {
                 waitForConnections: true,
                 connectionLimit: 10,
                 queueLimit: 0,
-                timezone: '+00:00',
+                timezone: '+08:00',
                 connectTimeout: 10000,
                 multipleStatements: true
             });

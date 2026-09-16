@@ -3,6 +3,7 @@ const { v4: uuidv4 } = require('uuid');
 const { getNextDocumentNumber } = require('./documentNumberService');
 const { logAudit } = require('./auditService');
 const { recordMovement } = require('./inventoryService');
+const { getManilaDate } = require('../helpers/timezone');
 
 /**
  * Generate Sales Invoice from an ACCEPTED Delivery Receipt
@@ -73,7 +74,7 @@ function createInvoiceFromDR({ drId, createdBy, userId, userRole, userName, note
         if (!invoiceDueDate) {
             const d = new Date();
             d.setDate(d.getDate() + 30);
-            invoiceDueDate = d.toISOString().split('T')[0];
+            invoiceDueDate = getManilaDate(d);
         }
 
         let totalSubtotal = 0.0;
@@ -164,7 +165,7 @@ function createInvoiceFromDR({ drId, createdBy, userId, userRole, userName, note
         db.prepare(`
             INSERT INTO sales_invoices
             (id, invoice_number, client_id, dr_id, po_id, invoice_date, due_date, billing_policy, subtotal, tax_percent, tax_amount, discount_amount, total_amount, paid_amount, balance_due, status, notes, created_by)
-            VALUES (?, ?, ?, ?, ?, date('now'), ?, ?, ?, 0.0, 0.0, 0.0, ?, 0.0, ?, 'UNPAID', ?, ?)
+            VALUES (?, ?, ?, ?, ?, date('now', 'localtime'), ?, ?, ?, 0.0, 0.0, 0.0, ?, 0.0, ?, 'UNPAID', ?, ?)
         `).run(
             invoiceId,
             invoiceNumber,
@@ -207,7 +208,7 @@ function createInvoiceFromDR({ drId, createdBy, userId, userRole, userName, note
         // Update DR status to INVOICED
         db.prepare(`
             UPDATE delivery_receipts 
-            SET status = 'INVOICED', updated_at = datetime('now') 
+            SET status = 'INVOICED', updated_at = datetime('now', 'localtime') 
             WHERE id = ?
         `).run(drId);
 
@@ -228,13 +229,13 @@ function createInvoiceFromDR({ drId, createdBy, userId, userRole, userName, note
         if (totalDeliveredForPO && totalPOTarget && totalDeliveredForPO.total_accepted >= totalPOTarget.total_target) {
             db.prepare(`
                 UPDATE purchase_orders
-                SET status = 'COMPLETED', updated_at = datetime('now')
+                SET status = 'COMPLETED', updated_at = datetime('now', 'localtime')
                 WHERE id = ?
             `).run(dr.po_id);
         } else {
             db.prepare(`
                 UPDATE purchase_orders
-                SET status = 'PARTIALLY_DELIVERED', updated_at = datetime('now')
+                SET status = 'PARTIALLY_DELIVERED', updated_at = datetime('now', 'localtime')
                 WHERE id = ? AND status NOT IN ('COMPLETED', 'CANCELLED', 'VOIDED')
             `).run(dr.po_id);
         }

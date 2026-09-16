@@ -197,7 +197,7 @@ router.post('/:id/credentials/reset', authenticateToken, requireRoles('ADMIN', '
     const existingUser = db.prepare('SELECT * FROM users WHERE client_id = ? OR LOWER(email) = LOWER(?)').get(id, client.email);
 
     if (existingUser) {
-        db.prepare("UPDATE users SET password_hash = ?, is_active = 1, updated_at = datetime('now') WHERE id = ?").run(passwordHash, existingUser.id);
+        db.prepare("UPDATE users SET password_hash = ?, is_active = 1, updated_at = datetime('now', 'localtime') WHERE id = ?").run(passwordHash, existingUser.id);
         logAudit({
             userId: req.user.id,
             userName: req.user.name,
@@ -290,7 +290,7 @@ router.put('/:id', authenticateToken, requireRoles('ADMIN', 'SUPER_ADMIN'), (req
                 credit_limit = COALESCE(?, credit_limit),
                 is_active = COALESCE(?, is_active),
                 is_vyuceutical_ops = COALESCE(?, is_vyuceutical_ops),
-                updated_at = datetime('now')
+                updated_at = datetime('now', 'localtime')
             WHERE id = ?
         `).run(
             company_name ? company_name.trim() : null,
@@ -490,7 +490,7 @@ router.post('/:id/pricing', authenticateToken, requireRoles('ADMIN', 'SUPER_ADMI
     if (existing) {
         db.prepare(`
             UPDATE client_product_prices
-            SET custom_name = ?, custom_price = ?, custom_sku = ?, custom_formula_code = ?, is_active = ?, updated_at = datetime('now')
+            SET custom_name = ?, custom_price = ?, custom_sku = ?, custom_formula_code = ?, is_active = ?, updated_at = datetime('now', 'localtime')
             WHERE id = ?
         `).run(custom_name || null, parsedPrice, custom_sku || null, custom_formula_code || null, activeFlag, existing.id);
     } else {
@@ -553,7 +553,7 @@ router.post('/:id/pricing/batch', authenticateToken, requireRoles('ADMIN', 'SUPE
             if (existing) {
                 db.prepare(`
                     UPDATE client_product_prices
-                    SET custom_name = ?, custom_price = ?, custom_sku = ?, custom_formula_code = ?, is_active = ?, updated_at = datetime('now')
+                    SET custom_name = ?, custom_price = ?, custom_sku = ?, custom_formula_code = ?, is_active = ?, updated_at = datetime('now', 'localtime')
                     WHERE id = ?
                 `).run(item.custom_name || null, parsedPrice, item.custom_sku || null, item.custom_formula_code || null, isAssigned, existing.id);
             } else {

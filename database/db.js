@@ -1,3 +1,4 @@
+process.env.TZ = 'Asia/Manila';
 require('dotenv').config();
 const path = require('path');
 const fs = require('fs');
@@ -55,7 +56,7 @@ function runMigrations(dbInstance, isMysql) {
                             po_number TEXT UNIQUE NOT NULL,
                             so_number TEXT,
                             client_id TEXT NOT NULL,
-                            po_date TEXT NOT NULL DEFAULT (date('now')),
+                            po_date TEXT NOT NULL DEFAULT (date('now', 'localtime')),
                             expected_delivery_date TEXT,
                             tolerance_percent REAL NOT NULL DEFAULT 10.0,
                             billing_policy TEXT NOT NULL DEFAULT 'ACTUAL_DELIVERY' CHECK (billing_policy IN ('ACTUAL_DELIVERY', 'FIXED_PO_BUFFER')),
@@ -68,8 +69,8 @@ function runMigrations(dbInstance, isMysql) {
                             created_by TEXT NOT NULL,
                             approved_by TEXT,
                             approved_at TEXT,
-                            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                            created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                            updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
                             FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE RESTRICT,
                             FOREIGN KEY (created_by) REFERENCES users(id)
                         );
@@ -119,8 +120,8 @@ function runMigrations(dbInstance, isMysql) {
                             client_id TEXT,
                             phone TEXT,
                             is_active INTEGER NOT NULL DEFAULT 1,
-                            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                            created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                            updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
                             FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL
                         );
                         INSERT INTO users_new (id, name, email, password_hash, plain_password, role, client_id, phone, is_active, created_at, updated_at)
@@ -316,8 +317,8 @@ function runMigrations(dbInstance, isMysql) {
                         target_date TEXT,
                         notes TEXT,
                         status TEXT NOT NULL DEFAULT 'SUBMITTED',
-                        created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+                        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                        updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
                     );
                 `);
             }
@@ -331,7 +332,7 @@ function runMigrations(dbInstance, isMysql) {
                 UPDATE purchase_orders 
                 SET accounting_confirmed = 1, inventory_confirmed = 1, raw_materials_status = 'SUFFICIENT' 
                 WHERE status IN ('APPROVED', 'IN_PRODUCTION', 'COMPLETED') 
-                  AND (accounting_confirmed = 0 OR accounting_confirmed IS NULL);
+                AND (accounting_confirmed = 0 OR accounting_confirmed IS NULL);
             `);
         } catch (_) {}
 
@@ -366,7 +367,7 @@ function runMigrations(dbInstance, isMysql) {
                         message TEXT NOT NULL,
                         is_support INTEGER NOT NULL DEFAULT 0,
                         is_read INTEGER NOT NULL DEFAULT 0,
-                        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
                         FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE
                     );
                     CREATE INDEX IF NOT EXISTS idx_cm_sender ON chat_messages(sender_id);
@@ -387,7 +388,7 @@ function runMigrations(dbInstance, isMysql) {
                 const itHash = bcrypt.hashSync('ITAdminPassword@2026!', salt);
                 dbInstance.prepare(`
                     INSERT INTO users (id, name, email, password_hash, plain_password, role, is_active, created_at, updated_at)
-                    VALUES (?, 'IT Administrator', ?, ?, 'ITAdminPassword@2026!', 'IT_ADMIN', 1, datetime('now'), datetime('now'))
+                    VALUES (?, 'IT Administrator', ?, ?, 'ITAdminPassword@2026!', 'IT_ADMIN', 1, datetime('now', 'localtime'), datetime('now', 'localtime'))
                 `).run(uuidv4(), itAdminEmail, itHash);
                 console.log('✅ Created IT Admin user: itadmin@nkbmanufacturing.com');
             }
@@ -399,7 +400,7 @@ function runMigrations(dbInstance, isMysql) {
                 const invHash = bcrypt.hashSync('Inventory123!', salt);
                 dbInstance.prepare(`
                     INSERT INTO users (id, name, email, password_hash, plain_password, role, is_active, created_at, updated_at)
-                    VALUES (?, 'Inventory Officer', ?, ?, 'Staff123!', 'INVENTORY', 1, datetime('now'), datetime('now'))
+                    VALUES (?, 'Inventory Officer', ?, ?, 'Staff123!', 'INVENTORY', 1, datetime('now', 'localtime'), datetime('now', 'localtime'))
                 `).run(uuidv4(), invEmail, invHash);
                 console.log('✅ Created Inventory user: inventory@nkbmanufacturing.com');
             }
@@ -411,7 +412,7 @@ function runMigrations(dbInstance, isMysql) {
                 const purchHash = bcrypt.hashSync('Staff123!', salt);
                 dbInstance.prepare(`
                     INSERT INTO users (id, name, email, password_hash, plain_password, role, is_active, created_at, updated_at)
-                    VALUES (?, 'Purchasing Officer', ?, ?, 'Staff123!', 'PURCHASING', 1, datetime('now'), datetime('now'))
+                    VALUES (?, 'Purchasing Officer', ?, ?, 'Staff123!', 'PURCHASING', 1, datetime('now', 'localtime'), datetime('now', 'localtime'))
                 `).run(uuidv4(), purchEmail, purchHash);
                 console.log('✅ Created Purchasing user: purchasing@nkbmanufacturing.com');
             }
@@ -423,7 +424,7 @@ function runMigrations(dbInstance, isMysql) {
                 const ceoHash = bcrypt.hashSync('Executive123!', salt);
                 dbInstance.prepare(`
                     INSERT INTO users (id, name, email, password_hash, plain_password, role, is_active, created_at, updated_at)
-                    VALUES (?, 'Chief Executive Officer', ?, ?, 'Executive123!', 'CEO', 1, datetime('now'), datetime('now'))
+                    VALUES (?, 'Chief Executive Officer', ?, ?, 'Executive123!', 'CEO', 1, datetime('now', 'localtime'), datetime('now', 'localtime'))
                 `).run(uuidv4(), ceoEmail, ceoHash);
                 console.log('✅ Created CEO user: ceo@nkbmanufacturing.com');
             }
@@ -435,12 +436,56 @@ function runMigrations(dbInstance, isMysql) {
                 const qcHash = bcrypt.hashSync('Staff123!', salt);
                 dbInstance.prepare(`
                     INSERT INTO users (id, name, email, password_hash, plain_password, role, is_active, created_at, updated_at)
-                    VALUES (?, 'Quality Control Inspector', ?, ?, 'Staff123!', 'QC', 1, datetime('now'), datetime('now'))
+                    VALUES (?, 'Quality Control Inspector', ?, ?, 'Staff123!', 'QC', 1, datetime('now', 'localtime'), datetime('now', 'localtime'))
                 `).run(uuidv4(), qcEmail, qcHash);
                 console.log('✅ Created QC user: qc@nkbmanufacturing.com');
             }
         } catch (userSeedErr) {
             console.warn('User seed note:', userSeedErr.message);
+        }
+
+        // Idempotent migration: Shift historical UTC timestamps in SQLite to Philippine Time (Asia/Manila, UTC+8)
+        if (!isMysql) {
+            try {
+                dbInstance.exec("CREATE TABLE IF NOT EXISTS _meta_migrations (key TEXT PRIMARY KEY, applied_at TEXT);");
+                const alreadyMigrated = dbInstance.prepare("SELECT key FROM _meta_migrations WHERE key = 'tz_manila_utc8_v1'").get();
+                if (!alreadyMigrated) {
+                    console.log('🔄 Migrating historical SQLite timestamps to Asia/Manila (UTC+8)...');
+                    const tablesToShift = [
+                        { table: 'audit_logs', cols: ['timestamp'] },
+                        { table: 'purchase_orders', cols: ['created_at', 'updated_at', 'approved_at', 'accounting_confirmed_at', 'inventory_confirmed_at'] },
+                        { table: 'job_orders', cols: ['created_at', 'updated_at'] },
+                        { table: 'production_batches', cols: ['created_at', 'updated_at', 'qc_passed_at'] },
+                        { table: 'delivery_receipts', cols: ['created_at', 'updated_at'] },
+                        { table: 'sales_invoices', cols: ['created_at', 'updated_at'] },
+                        { table: 'payments', cols: ['created_at'] },
+                        { table: 'users', cols: ['created_at', 'updated_at'] },
+                        { table: 'chat_messages', cols: ['created_at'] },
+                        { table: 'supply_requests', cols: ['created_at', 'updated_at'] },
+                        { table: 'client_buffer_stock', cols: ['created_at', 'updated_at'] },
+                        { table: 'inventory_movements', cols: ['created_at'] }
+                    ];
+
+                    for (const item of tablesToShift) {
+                        try {
+                            const tblInfo = dbInstance.prepare(`PRAGMA table_info(${item.table})`).all();
+                            const existingColNames = new Set(tblInfo.map(c => c.name));
+                            for (const col of item.cols) {
+                                if (existingColNames.has(col)) {
+                                    dbInstance.exec(`UPDATE ${item.table} SET ${col} = datetime(${col}, '+8 hours') WHERE ${col} IS NOT NULL AND ${col} != '' AND ${col} NOT LIKE '%+%';`);
+                                }
+                            }
+                        } catch (tblErr) {
+                            console.warn(`Timezone shift note for ${item.table}:`, tblErr.message);
+                        }
+                    }
+
+                    dbInstance.prepare("INSERT INTO _meta_migrations (key, applied_at) VALUES ('tz_manila_utc8_v1', datetime('now', 'localtime'))").run();
+                    console.log('✅ Historical timestamps successfully adjusted to Philippine Time (+8h).');
+                }
+            } catch (tzErr) {
+                console.warn('Timezone historical migration note:', tzErr.message);
+            }
         }
     } catch (migErr) {
         console.warn('Migration note:', migErr.message);
@@ -494,7 +539,7 @@ if (useMysql) {
             CREATE TABLE IF NOT EXISTS product_categories (
                 id TEXT PRIMARY KEY,
                 name TEXT UNIQUE NOT NULL,
-                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+                created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
             );
         `);
         const catCount = db.prepare('SELECT COUNT(*) as count FROM product_categories').get().count;

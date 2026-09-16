@@ -16,7 +16,7 @@ function recordMovement({ productId, batchId = null, movementType, quantity, ref
     const newStock = currentStock + quantity;
     
     // Update product stock
-    db.prepare('UPDATE products SET current_stock = ?, updated_at = datetime(\'now\') WHERE id = ?').run(newStock, productId);
+    db.prepare("UPDATE products SET current_stock = ?, updated_at = datetime('now', 'localtime') WHERE id = ?").run(newStock, productId);
     
     // Insert movement record
     const movementId = uuidv4();

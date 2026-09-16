@@ -6,6 +6,7 @@ const { authenticateToken, requireRoles, enforceClientIsolation } = require('../
 const { getNextDocumentNumber } = require('../services/documentNumberService');
 const { recordMovement } = require('../services/inventoryService');
 const { logAudit } = require('../services/auditService');
+const { getManilaDate } = require('../helpers/timezone');
 
 /**
  * GET /api/deliveries
@@ -147,14 +148,14 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'WAREHOUSE', 'PRODUCTI
         db.prepare(`
             INSERT INTO delivery_receipts
             (id, dr_number, client_id, po_id, jo_id, delivery_date, driver_name, vehicle_plate, status, notes, dispatched_by, dispatched_at, created_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING_CLIENT_ACCEPTANCE', ?, ?, datetime('now'), ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING_CLIENT_ACCEPTANCE', ?, ?, datetime('now', 'localtime'), ?)
         `).run(
             drId,
             drNumber,
             po.client_id,
             po_id,
             jo_id || null,
-            delivery_date || new Date().toISOString().split('T')[0],
+            delivery_date || getManilaDate(),
             driver_name || null,
             vehicle_plate || null,
             notes || null,
@@ -246,7 +247,7 @@ router.put('/:id', authenticateToken, requireRoles('ADMIN', 'WAREHOUSE', 'PRODUC
 
     db.prepare(`
         UPDATE delivery_receipts
-        SET delivery_date = ?, driver_name = ?, vehicle_plate = ?, notes = ?, updated_at = datetime('now')
+        SET delivery_date = ?, driver_name = ?, vehicle_plate = ?, notes = ?, updated_at = datetime('now', 'localtime')
         WHERE id = ?
     `).run(newDate, newDriver, newPlate, newNotes, id);
 
@@ -381,7 +382,7 @@ router.post('/:id/accept', authenticateToken, enforceClientIsolation, (req, res)
         // Update DR Status to ACCEPTED
         db.prepare(`
             UPDATE delivery_receipts
-            SET status = 'ACCEPTED', updated_at = datetime('now')
+            SET status = 'ACCEPTED', updated_at = datetime('now', 'localtime')
             WHERE id = ?
         `).run(id);
 

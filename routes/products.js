@@ -404,7 +404,7 @@ router.put('/:id', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'SUPER
                 formula_code = COALESCE(?, formula_code),
                 shelf_life_months = COALESCE(?, shelf_life_months),
                 is_active = COALESCE(?, is_active),
-                updated_at = datetime('now')
+                updated_at = datetime('now', 'localtime')
             WHERE id = ?
         `).run(
             name !== undefined ? name.trim() : null,

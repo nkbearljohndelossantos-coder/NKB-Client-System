@@ -7,8 +7,8 @@ const { v4: uuidv4 } = require('uuid');
 function logAudit({ userId, userName, userRole, action, entityType, entityId, details, ipAddress }) {
     try {
         const stmt = db.prepare(`
-            INSERT INTO audit_logs (id, user_id, user_name, user_role, action, entity_type, entity_id, details, ip_address)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO audit_logs (id, user_id, user_name, user_role, action, entity_type, entity_id, details, ip_address, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
         `);
         stmt.run(
             uuidv4(),

@@ -190,10 +190,10 @@ router.post('/:id/void', authenticateToken, requireRoles('ADMIN', 'ACCOUNTING'),
 
     const voidTx = db.transaction(() => {
         // Set invoice status to VOID
-        db.prepare("UPDATE sales_invoices SET status = 'VOID', notes = notes || ' [VOIDED: ' || ? || ']', updated_at = datetime('now') WHERE id = ?").run(reason.trim(), id);
+        db.prepare("UPDATE sales_invoices SET status = 'VOID', notes = notes || ' [VOIDED: ' || ? || ']', updated_at = datetime('now', 'localtime') WHERE id = ?").run(reason.trim(), id);
 
         // Revert DR status to ACCEPTED so it can be re-processed if appropriate
-        db.prepare("UPDATE delivery_receipts SET status = 'ACCEPTED', updated_at = datetime('now') WHERE id = ?").run(invoice.dr_id);
+        db.prepare("UPDATE delivery_receipts SET status = 'ACCEPTED', updated_at = datetime('now', 'localtime') WHERE id = ?").run(invoice.dr_id);
 
         logAudit({
             userId: req.user.id,

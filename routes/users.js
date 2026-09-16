@@ -248,7 +248,7 @@ router.put('/:id', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMI
 
     db.prepare(`
         UPDATE users
-        SET name = ?, email = ?, password_hash = ?, plain_password = ?, role = ?, is_active = ?, client_id = ?, updated_at = datetime('now')
+        SET name = ?, email = ?, password_hash = ?, plain_password = ?, role = ?, is_active = ?, client_id = ?, updated_at = datetime('now', 'localtime')
         WHERE id = ?
     `).run(updatedName, updatedEmail, updatedPasswordHash, updatedPlainPassword, updatedRole, updatedStatus, updatedClientId, id);
 
@@ -307,7 +307,7 @@ router.post('/:id/reset-password', authenticateToken, requireRoles(ROLES.SUPER_A
     }
 
     const passwordHash = bcrypt.hashSync(new_password.trim(), 12);
-    db.prepare("UPDATE users SET password_hash = ?, plain_password = ?, updated_at = datetime('now') WHERE id = ?").run(passwordHash, new_password.trim(), id);
+    db.prepare("UPDATE users SET password_hash = ?, plain_password = ?, updated_at = datetime('now', 'localtime') WHERE id = ?").run(passwordHash, new_password.trim(), id);
 
     logAudit({
         userId: req.user.id,

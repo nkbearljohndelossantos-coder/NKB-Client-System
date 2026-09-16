@@ -1,9 +1,13 @@
-﻿FROM node:22-alpine
+FROM node:22-alpine
 
 WORKDIR /app
 
-# Install curl for container health check
-RUN apk add --no-cache curl
+# Install curl and tzdata for container health check and Philippine Time
+RUN apk add --no-cache curl tzdata \
+    && cp /usr/share/zoneinfo/Asia/Manila /etc/localtime \
+    && echo "Asia/Manila" > /etc/timezone
+
+ENV TZ=Asia/Manila
 
 # Copy package files
 COPY package*.json ./

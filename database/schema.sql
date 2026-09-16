@@ -21,8 +21,8 @@ CREATE TABLE IF NOT EXISTS users (
     client_id TEXT,
     phone TEXT,
     is_active INTEGER NOT NULL DEFAULT 1,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL
 );
 
@@ -36,8 +36,8 @@ CREATE TABLE IF NOT EXISTS employees (
     current_balance REAL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'active',
     barcode_number TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 
 -- Clients Table
@@ -54,8 +54,8 @@ CREATE TABLE IF NOT EXISTS clients (
     default_tolerance_percent REAL NOT NULL DEFAULT 10.0,
     credit_limit REAL NOT NULL DEFAULT 500000.0,
     is_active INTEGER NOT NULL DEFAULT 1,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 
 -- Products Table
@@ -71,15 +71,15 @@ CREATE TABLE IF NOT EXISTS products (
     shelf_life_months INTEGER NOT NULL DEFAULT 24,
     current_stock INTEGER NOT NULL DEFAULT 0,
     is_active INTEGER NOT NULL DEFAULT 1,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 
 -- Product Categories Table
 CREATE TABLE IF NOT EXISTS product_categories (
     id TEXT PRIMARY KEY,
     name TEXT UNIQUE NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 
 -- Client-Specific Product Catalog & Custom Pricing Table
@@ -92,8 +92,8 @@ CREATE TABLE IF NOT EXISTS client_product_prices (
     custom_sku TEXT,
     custom_formula_code TEXT,
     is_active INTEGER NOT NULL DEFAULT 1,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
     FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
     UNIQUE(client_id, product_id)
@@ -105,7 +105,7 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
     po_number TEXT UNIQUE NOT NULL,
     so_number TEXT,
     client_id TEXT NOT NULL,
-    po_date TEXT NOT NULL DEFAULT (date('now')),
+    po_date TEXT NOT NULL DEFAULT (date('now', 'localtime')),
     expected_delivery_date TEXT,
     tolerance_percent REAL NOT NULL DEFAULT 10.0,
     billing_policy TEXT NOT NULL DEFAULT 'ACTUAL_DELIVERY' CHECK (billing_policy IN ('ACTUAL_DELIVERY', 'FIXED_PO_BUFFER')),
@@ -126,8 +126,8 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
     created_by TEXT NOT NULL,
     approved_by TEXT,
     approved_at TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE RESTRICT,
     FOREIGN KEY (created_by) REFERENCES users(id)
 );
@@ -143,8 +143,8 @@ CREATE TABLE IF NOT EXISTS supply_requests (
     target_date TEXT,
     notes TEXT,
     status TEXT NOT NULL DEFAULT 'SUBMITTED',
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     FOREIGN KEY (po_id) REFERENCES purchase_orders(id) ON DELETE CASCADE,
     FOREIGN KEY (requested_by) REFERENCES users(id)
 );
@@ -161,7 +161,7 @@ CREATE TABLE IF NOT EXISTS purchase_order_items (
     unit_price REAL NOT NULL CHECK (unit_price >= 0),
     subtotal REAL NOT NULL,
     delivered_quantity INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     FOREIGN KEY (po_id) REFERENCES purchase_orders(id) ON DELETE CASCADE,
     FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT
 );
@@ -179,8 +179,8 @@ CREATE TABLE IF NOT EXISTS job_orders (
     status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'IN_PRODUCTION', 'COMPLETED', 'CANCELLED')),
     notes TEXT,
     created_by TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     FOREIGN KEY (po_id) REFERENCES purchase_orders(id) ON DELETE RESTRICT,
     FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
     FOREIGN KEY (created_by) REFERENCES users(id)
@@ -193,7 +193,7 @@ CREATE TABLE IF NOT EXISTS production_batches (
     jo_id TEXT NOT NULL,
     product_id TEXT NOT NULL,
     formula_code TEXT,
-    production_date TEXT NOT NULL DEFAULT (date('now')),
+    production_date TEXT NOT NULL DEFAULT (date('now', 'localtime')),
     expiry_date TEXT NOT NULL,
     target_quantity INTEGER NOT NULL CHECK (target_quantity > 0),
     actual_yield INTEGER NOT NULL DEFAULT 0,
@@ -208,8 +208,8 @@ CREATE TABLE IF NOT EXISTS production_batches (
     qc_passed_by TEXT,
     qc_passed_at TEXT,
     created_by TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     FOREIGN KEY (jo_id) REFERENCES job_orders(id) ON DELETE RESTRICT,
     FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
     FOREIGN KEY (created_by) REFERENCES users(id)
@@ -219,7 +219,7 @@ CREATE TABLE IF NOT EXISTS production_batches (
 CREATE TABLE IF NOT EXISTS batch_yields (
     id TEXT PRIMARY KEY,
     batch_id TEXT NOT NULL,
-    recorded_at TEXT NOT NULL DEFAULT (datetime('now')),
+    recorded_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     target_quantity INTEGER NOT NULL,
     actual_yield INTEGER NOT NULL,
     variance_quantity INTEGER NOT NULL,
@@ -244,7 +244,7 @@ CREATE TABLE IF NOT EXISTS overrun_approvals (
     notes TEXT,
     status TEXT NOT NULL DEFAULT 'APPROVED' CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED')),
     approved_by TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     FOREIGN KEY (batch_id) REFERENCES production_batches(id) ON DELETE CASCADE,
     FOREIGN KEY (po_id) REFERENCES purchase_orders(id) ON DELETE CASCADE,
     FOREIGN KEY (approved_by) REFERENCES users(id)
@@ -257,7 +257,7 @@ CREATE TABLE IF NOT EXISTS delivery_receipts (
     client_id TEXT NOT NULL,
     po_id TEXT NOT NULL,
     jo_id TEXT,
-    delivery_date TEXT NOT NULL DEFAULT (date('now')),
+    delivery_date TEXT NOT NULL DEFAULT (date('now', 'localtime')),
     driver_name TEXT,
     vehicle_plate TEXT,
     status TEXT NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'DISPATCHED', 'PENDING_CLIENT_ACCEPTANCE', 'ACCEPTED', 'INVOICED', 'REJECTED', 'CANCELLED')),
@@ -265,8 +265,8 @@ CREATE TABLE IF NOT EXISTS delivery_receipts (
     dispatched_by TEXT,
     dispatched_at TEXT,
     created_by TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE RESTRICT,
     FOREIGN KEY (po_id) REFERENCES purchase_orders(id) ON DELETE RESTRICT,
     FOREIGN KEY (jo_id) REFERENCES job_orders(id) ON DELETE SET NULL,
@@ -283,7 +283,7 @@ CREATE TABLE IF NOT EXISTS delivery_items (
     accepted_quantity INTEGER NOT NULL DEFAULT 0,
     rejected_quantity INTEGER NOT NULL DEFAULT 0,
     unit_price REAL NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     FOREIGN KEY (dr_id) REFERENCES delivery_receipts(id) ON DELETE CASCADE,
     FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
     FOREIGN KEY (batch_id) REFERENCES production_batches(id) ON DELETE RESTRICT
@@ -304,7 +304,7 @@ CREATE TABLE IF NOT EXISTS dr_acceptances (
     acceptance_notes TEXT,
     ip_address TEXT,
     user_agent TEXT,
-    accepted_at TEXT NOT NULL DEFAULT (datetime('now')),
+    accepted_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     FOREIGN KEY (dr_id) REFERENCES delivery_receipts(id) ON DELETE CASCADE,
     FOREIGN KEY (client_user_id) REFERENCES users(id)
 );
@@ -320,7 +320,7 @@ CREATE TABLE IF NOT EXISTS returns (
     notes TEXT,
     status TEXT NOT NULL DEFAULT 'LOGGED' CHECK (status IN ('LOGGED', 'REPLACED', 'CREDITED', 'DISPOSED')),
     created_by TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     FOREIGN KEY (dr_id) REFERENCES delivery_receipts(id) ON DELETE CASCADE,
     FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
     FOREIGN KEY (batch_id) REFERENCES production_batches(id) ON DELETE RESTRICT,
@@ -334,7 +334,7 @@ CREATE TABLE IF NOT EXISTS sales_invoices (
     client_id TEXT NOT NULL,
     dr_id TEXT UNIQUE NOT NULL,
     po_id TEXT NOT NULL,
-    invoice_date TEXT NOT NULL DEFAULT (date('now')),
+    invoice_date TEXT NOT NULL DEFAULT (date('now', 'localtime')),
     due_date TEXT NOT NULL,
     billing_policy TEXT NOT NULL DEFAULT 'ACTUAL_DELIVERY' CHECK (billing_policy IN ('ACTUAL_DELIVERY', 'FIXED_PO_BUFFER')),
     subtotal REAL NOT NULL,
@@ -347,8 +347,8 @@ CREATE TABLE IF NOT EXISTS sales_invoices (
     status TEXT NOT NULL DEFAULT 'UNPAID' CHECK (status IN ('UNPAID', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'VOID')),
     notes TEXT,
     created_by TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE RESTRICT,
     FOREIGN KEY (dr_id) REFERENCES delivery_receipts(id) ON DELETE RESTRICT,
     FOREIGN KEY (po_id) REFERENCES purchase_orders(id) ON DELETE RESTRICT,
@@ -369,7 +369,7 @@ CREATE TABLE IF NOT EXISTS invoice_items (
     line_total REAL NOT NULL,
     is_overrun INTEGER NOT NULL DEFAULT 0,
     overrun_quantity INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     FOREIGN KEY (invoice_id) REFERENCES sales_invoices(id) ON DELETE CASCADE,
     FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
     FOREIGN KEY (batch_id) REFERENCES production_batches(id) ON DELETE SET NULL
@@ -381,13 +381,13 @@ CREATE TABLE IF NOT EXISTS payments (
     payment_number TEXT UNIQUE NOT NULL,
     invoice_id TEXT NOT NULL,
     client_id TEXT NOT NULL,
-    payment_date TEXT NOT NULL DEFAULT (date('now')),
+    payment_date TEXT NOT NULL DEFAULT (date('now', 'localtime')),
     amount REAL NOT NULL CHECK (amount > 0),
     payment_method TEXT NOT NULL CHECK (payment_method IN ('BANK_TRANSFER', 'CHECK', 'CASH', 'GCASH', 'ONLINE_BANKING')),
     reference_number TEXT NOT NULL,
     notes TEXT,
     recorded_by TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     FOREIGN KEY (invoice_id) REFERENCES sales_invoices(id) ON DELETE RESTRICT,
     FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE RESTRICT,
     FOREIGN KEY (recorded_by) REFERENCES users(id)
@@ -404,12 +404,12 @@ CREATE TABLE IF NOT EXISTS client_buffer_stock (
     initial_quantity INTEGER NOT NULL CHECK (initial_quantity > 0),
     quantity_released INTEGER NOT NULL DEFAULT 0,
     quantity_remaining INTEGER NOT NULL CHECK (quantity_remaining >= 0),
-    date_reserved TEXT NOT NULL DEFAULT (date('now')),
+    date_reserved TEXT NOT NULL DEFAULT (date('now', 'localtime')),
     expiry_date TEXT,
     status TEXT NOT NULL DEFAULT 'AVAILABLE' CHECK (status IN ('AVAILABLE', 'RESERVED', 'PARTIALLY_RELEASED', 'RELEASED', 'CONSUMED', 'EXPIRED')),
     notes TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE RESTRICT,
     FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
     FOREIGN KEY (source_batch_id) REFERENCES production_batches(id) ON DELETE RESTRICT,
@@ -428,7 +428,7 @@ CREATE TABLE IF NOT EXISTS inventory_movements (
     reference_id TEXT NOT NULL,
     notes TEXT,
     created_by TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
     FOREIGN KEY (batch_id) REFERENCES production_batches(id) ON DELETE SET NULL,
     FOREIGN KEY (created_by) REFERENCES users(id)
@@ -445,8 +445,8 @@ CREATE TABLE IF NOT EXISTS supply_requests (
     target_date TEXT,
     notes TEXT,
     status TEXT NOT NULL DEFAULT 'SUBMITTED',
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     FOREIGN KEY (po_id) REFERENCES purchase_orders(id) ON DELETE CASCADE,
     FOREIGN KEY (requested_by) REFERENCES users(id) ON DELETE RESTRICT
 );
@@ -462,7 +462,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     entity_id TEXT NOT NULL,
     details TEXT,
     ip_address TEXT,
-    timestamp TEXT NOT NULL DEFAULT (datetime('now'))
+    timestamp TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 
 -- Create Indexes for High Performance
@@ -490,7 +490,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     message TEXT NOT NULL,
     is_support INTEGER NOT NULL DEFAULT 0,
     is_read INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE
 );
 

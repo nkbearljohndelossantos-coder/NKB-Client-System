@@ -5,6 +5,7 @@ const db = require('../database/db');
 const { authenticateToken, requireRoles, enforceClientIsolation } = require('../middleware/auth');
 const { getNextDocumentNumber } = require('../services/documentNumberService');
 const { logAudit } = require('../services/auditService');
+const { getManilaDate } = require('../helpers/timezone');
 
 /**
  * GET /api/payments
@@ -164,7 +165,7 @@ router.get('/export-csv', authenticateToken, enforceClientIsolation, (req, res) 
 
     const csvContent = '\uFEFF' + rows.join('\r\n');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="NKB_Payments_Report_${new Date().toISOString().split('T')[0]}.csv"`);
+    res.setHeader('Content-Disposition', `attachment; filename="NKB_Payments_Report_${getManilaDate()}.csv"`);
     return res.send(csvContent);
 });
 
@@ -222,7 +223,7 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
             paymentNumber,
             invoice_id,
             invoice.client_id,
-            payment_date || new Date().toISOString().split('T')[0],
+            payment_date || getManilaDate(),
             payAmount,
             payment_method,
             finalReferenceNumber,
@@ -233,7 +234,7 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
         // Update Invoice
         db.prepare(`
             UPDATE sales_invoices
-            SET paid_amount = ?, balance_due = ?, status = ?, updated_at = datetime('now')
+            SET paid_amount = ?, balance_due = ?, status = ?, updated_at = datetime('now', 'localtime')
             WHERE id = ?
         `).run(newPaidAmount, newBalanceDue, newStatus, invoice_id);
 

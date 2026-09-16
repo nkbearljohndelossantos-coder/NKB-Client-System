@@ -1569,14 +1569,14 @@ function exportPaymentsToExcel() {
     }
 
     const totalPaid = cachedPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
-    const currentDate = new Date().toISOString().split('T')[0];
+    const currentDate = NKB.getManilaDate();
 
     // Verify SheetJS is available
     if (typeof XLSX !== 'undefined') {
         const rows = [
             ['NKB MANUFACTURING CORPORATION'],
             ['B2B PAYMENTS & ACCOUNTS RECEIVABLE (AR) COLLECTION REPORT'],
-            [`Export Date: ${new Date().toLocaleString()}`, '', `Total Records: ${cachedPayments.length}`, '', `Total Amount Paid: PHP ${totalPaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
+            [`Export Date: ${NKB.getManilaDateTime()}`, '', `Total Records: ${cachedPayments.length}`, '', `Total Amount Paid: PHP ${totalPaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
             [], // spacer row
             [
                 '#',
@@ -1682,7 +1682,7 @@ function exportPaymentsToCSV() {
     }
 
     const totalPaid = cachedPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
-    const currentDate = new Date().toISOString().split('T')[0];
+    const currentDate = NKB.getManilaDate();
 
     const headers = [
         '#', 'Payment Number', 'Payment Date', 'Invoice Number', 'PO Number', 'DR Number',
@@ -3688,7 +3688,7 @@ async function openCreateJOModal(poId, poNumber, clientName, preselectedProductI
                         </div>
                         <div>
                             <label class="block text-slate-600 mb-1 font-bold">Scheduled Start Date *</label>
-                            <input type="date" id="jo-start-date" value="${new Date().toISOString().split('T')[0]}" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-900 text-xs">
+                            <input type="date" id="jo-start-date" value="${NKB.getManilaDate()}" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-900 text-xs">
                         </div>
                     </div>
 
@@ -4484,7 +4484,7 @@ async function openCreateAllDRModal(clientId, poId, companyName) {
                             </div>
                             <div>
                                 <label class="block text-slate-600 mb-1">Dispatch Date *</label>
-                                <input type="date" id="dr-all-delivery-date" value="${new Date().toISOString().split('T')[0]}" required class="w-full px-3 py-2 border rounded-xl bg-white font-medium text-slate-900">
+                                <input type="date" id="dr-all-delivery-date" value="${NKB.getManilaDate()}" required class="w-full px-3 py-2 border rounded-xl bg-white font-medium text-slate-900">
                             </div>
                         </div>
                         <div>
@@ -5108,7 +5108,7 @@ function openGenerateInvoiceModal(drId, drNumber, clientName, totalAccepted) {
     // Set default due date to 30 days from today
     const d = new Date();
     d.setDate(d.getDate() + 30);
-    document.getElementById('inv-due-date').value = d.toISOString().split('T')[0];
+    document.getElementById('inv-due-date').value = NKB.getManilaDate(d);
 }
 
 async function submitGenerateInvoice(e, drId) {

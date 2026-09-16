@@ -109,38 +109,60 @@ const NKB = {
         return Number(val).toLocaleString('en-PH');
     },
 
-    // Date Formatter
+    // Date Formatter (Asia/Manila)
     formatDate: function(dateStr) {
         if (!dateStr) return '-';
         if (typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
             const parts = dateStr.split('-');
             const d = new Date(parts[0], parts[1] - 1, parts[2]);
-            return d.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
+            return d.toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', year: 'numeric', month: 'short', day: 'numeric' });
         }
-        const cleanStr = typeof dateStr === 'string' && !dateStr.includes('T') ? dateStr.replace(' ', 'T') : dateStr;
+        let cleanStr = typeof dateStr === 'string' && !dateStr.includes('T') ? dateStr.replace(' ', 'T') : dateStr;
+        if (typeof cleanStr === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d+)?$/.test(cleanStr)) {
+            cleanStr += '+08:00';
+        }
         const d = new Date(cleanStr);
         if (isNaN(d.getTime())) return dateStr;
-        return d.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
+        return d.toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', year: 'numeric', month: 'short', day: 'numeric' });
     },
 
-    // Format Time (e.g. 05:17:00 PM)
+    // Format Time (e.g. 05:17:00 PM) (Asia/Manila)
     formatTime: function(dateStr) {
         if (!dateStr) return '';
-        const cleanStr = typeof dateStr === 'string' && !dateStr.includes('T') ? dateStr.replace(' ', 'T') : dateStr;
+        let cleanStr = typeof dateStr === 'string' && !dateStr.includes('T') ? dateStr.replace(' ', 'T') : dateStr;
+        if (typeof cleanStr === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d+)?$/.test(cleanStr)) {
+            cleanStr += '+08:00';
+        }
         const d = new Date(cleanStr);
         if (isNaN(d.getTime())) return '';
-        return d.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+        return d.toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
     },
 
-    // Format Date and Time (e.g. Sep 11, 2026, 05:17:00 PM)
+    // Format Date and Time (e.g. Sep 11, 2026, 05:17:00 PM) (Asia/Manila)
     formatDateTime: function(dateStr, includeSeconds = true) {
         if (!dateStr) return '-';
-        const cleanStr = typeof dateStr === 'string' && !dateStr.includes('T') ? dateStr.replace(' ', 'T') : dateStr;
+        let cleanStr = typeof dateStr === 'string' && !dateStr.includes('T') ? dateStr.replace(' ', 'T') : dateStr;
+        if (typeof cleanStr === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d+)?$/.test(cleanStr)) {
+            cleanStr += '+08:00';
+        }
         const d = new Date(cleanStr);
         if (isNaN(d.getTime())) return dateStr;
-        const opts = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true };
+        const opts = { timeZone: 'Asia/Manila', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true };
         if (includeSeconds) opts.second = '2-digit';
-        return d.toLocaleDateString('en-PH', opts);
+        return d.toLocaleString('en-PH', opts);
+    },
+
+    // Get current calendar date in Asia/Manila (YYYY-MM-DD)
+    getManilaDate: function(d = new Date()) {
+        const dateObj = d instanceof Date ? d : new Date(d);
+        if (isNaN(dateObj.getTime())) return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+        return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(dateObj);
+    },
+
+    // Get current date and time string in Asia/Manila
+    getManilaDateTime: function(d = new Date()) {
+        const dateObj = d instanceof Date ? d : new Date(d);
+        return dateObj.toLocaleString('en-PH', { timeZone: 'Asia/Manila' });
     },
 
     // Status Badge Helper

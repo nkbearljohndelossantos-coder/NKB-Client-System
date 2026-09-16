@@ -321,7 +321,7 @@ router.post('/change-password', authenticateToken, (req, res) => {
     }
 
     const newHash = bcrypt.hashSync(new_password, 12);
-    db.prepare("UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?").run(newHash, req.user.id);
+    db.prepare("UPDATE users SET password_hash = ?, updated_at = datetime('now', 'localtime') WHERE id = ?").run(newHash, req.user.id);
 
     logAudit({
         userId: req.user.id,

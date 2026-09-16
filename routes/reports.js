@@ -76,7 +76,7 @@ router.get('/overview', authenticateToken, enforceClientIsolation, (req, res) =>
     const overdueAR = db.prepare(`
         SELECT COALESCE(SUM(balance_due), 0) as total 
         FROM sales_invoices 
-        WHERE status IN ('UNPAID', 'PARTIALLY_PAID', 'OVERDUE') AND date(due_date) < date('now')
+        WHERE status IN ('UNPAID', 'PARTIALLY_PAID', 'OVERDUE') AND date(due_date) < date('now', 'localtime')
     `).get().total;
 
     const totalBufferUnits = db.prepare("SELECT COALESCE(SUM(quantity_remaining), 0) as total FROM client_buffer_stock WHERE status IN ('AVAILABLE', 'PARTIALLY_RELEASED', 'RESERVED')").get().total;

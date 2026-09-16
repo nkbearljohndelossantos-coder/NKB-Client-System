@@ -72,7 +72,7 @@ router.post('/:id/release', authenticateToken, requireRoles('ADMIN', 'WAREHOUSE'
 
         db.prepare(`
             UPDATE client_buffer_stock
-            SET quantity_released = ?, quantity_remaining = ?, status = ?, updated_at = datetime('now')
+            SET quantity_released = ?, quantity_remaining = ?, status = ?, updated_at = datetime('now', 'localtime')
             WHERE id = ?
         `).run(newReleased, newRemaining, newStatus, id);
 

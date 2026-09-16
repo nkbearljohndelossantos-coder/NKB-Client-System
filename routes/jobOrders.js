@@ -5,6 +5,7 @@ const db = require('../database/db');
 const { authenticateToken, requireRoles } = require('../middleware/auth');
 const { getNextDocumentNumber } = require('../services/documentNumberService');
 const { logAudit } = require('../services/auditService');
+const { getManilaDate } = require('../helpers/timezone');
 
 /**
  * GET /api/job-orders
@@ -176,7 +177,7 @@ function getClientConsolidatedJOData(clientId, specificPoId = null, specificJoId
         so_number: clientSO,
         jo_number: clientJO,
         po_number: uniquePONumbers.length > 0 ? uniquePONumbers.join(', ') : (primaryPO ? primaryPO.po_number : ''),
-        po_date: (primaryPO && primaryPO.po_date) ? primaryPO.po_date : (targetJO ? targetJO.scheduled_start_date : new Date().toISOString().split('T')[0]),
+        po_date: (primaryPO && primaryPO.po_date) ? primaryPO.po_date : (targetJO ? targetJO.scheduled_start_date : getManilaDate()),
         created_at: primaryPO ? primaryPO.created_at : (targetJO ? targetJO.created_at : null),
         expected_delivery_date: primaryPO ? primaryPO.expected_delivery_date : null,
         notes: (primaryPO && primaryPO.notes) || (targetJO && targetJO.notes) || '',
@@ -380,7 +381,7 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), (req, r
                     po_id,
                     item.product_id,
                     item.target_quantity,
-                    scheduled_start_date || new Date().toISOString().split('T')[0],
+                    scheduled_start_date || getManilaDate(),
                     scheduled_end_date || null,
                     assigned_team || 'Formulation & Bottling Team Alpha',
                     notes || null,
@@ -400,7 +401,7 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), (req, r
             // Update PO status to IN_PRODUCTION if not already
             db.prepare(`
                 UPDATE purchase_orders
-                SET status = 'IN_PRODUCTION', updated_at = datetime('now')
+                SET status = 'IN_PRODUCTION', updated_at = datetime('now', 'localtime')
                 WHERE id = ? AND status = 'APPROVED'
             `).run(po_id);
 
@@ -450,7 +451,7 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), (req, r
             po_id,
             product_id,
             parseInt(target_quantity),
-            scheduled_start_date || new Date().toISOString().split('T')[0],
+            scheduled_start_date || getManilaDate(),
             scheduled_end_date || null,
             assigned_team || 'Formulation & Bottling Team Alpha',
             notes || null,
@@ -460,7 +461,7 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), (req, r
         // Update PO status to IN_PRODUCTION if not already
         db.prepare(`
             UPDATE purchase_orders
-            SET status = 'IN_PRODUCTION', updated_at = datetime('now')
+            SET status = 'IN_PRODUCTION', updated_at = datetime('now', 'localtime')
             WHERE id = ? AND status = 'APPROVED'
         `).run(po_id);
 
