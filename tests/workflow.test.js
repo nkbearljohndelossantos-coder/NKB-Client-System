@@ -1121,6 +1121,110 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         db.prepare('DELETE FROM purchase_orders WHERE id = ?').run(po.id);
     });
 
+    test('24. Dashboard Ongoing Deliveries KPI & Production DR Handling Workflow Test', async () => {
+        const prodToken = getAuthToken('PRODUCTION');
+        assert.ok(prodToken);
+
+        // A. Overview KPI returns ongoingDeliveries metric
+        const overviewRes = await request(app)
+            .get('/api/reports/overview')
+            .set('Authorization', `Bearer ${prodToken}`);
+        assert.strictEqual(overviewRes.status, 200);
+        assert.strictEqual(typeof overviewRes.body.data.ongoingDeliveries, 'number');
+
+        // B. Setup a fresh test order & batch
+        const poRes = await request(app)
+            .post('/api/orders')
+            .set('Authorization', `Bearer ${clientToken}`)
+            .send({
+                client_id: demoClient.id,
+                tolerance_percent: 10.0,
+                billing_policy: 'ACTUAL_DELIVERY',
+                items: [{ product_id: lotionProduct.id, target_quantity: 400, unit_price: 120.0 }]
+            });
+        assert.strictEqual(poRes.status, 201);
+        const po = poRes.body.data;
+        await request(app).post(`/api/orders/${po.id}/approve`).set('Authorization', `Bearer ${adminToken}`);
+
+        const joRes = await request(app)
+            .post('/api/job-orders')
+            .set('Authorization', `Bearer ${prodToken}`)
+            .send({ po_id: po.id, product_id: lotionProduct.id, target_quantity: 400 });
+        assert.strictEqual(joRes.status, 201);
+        const jo = joRes.body.data;
+
+        const batchRes = await request(app)
+            .post('/api/production/batches')
+            .set('Authorization', `Bearer ${prodToken}`)
+            .send({ jo_id: jo.id, target_quantity: 400 });
+        assert.strictEqual(batchRes.status, 201);
+        const batch = batchRes.body.data;
+
+        await request(app)
+            .post(`/api/production/batches/${batch.id}/yield`)
+            .set('Authorization', `Bearer ${prodToken}`)
+            .send({ actual_yield: 410, qc_notes: 'Yield cleared by Production supervisor' });
+
+        // C. Production receives notification for batch ready for DR dispatch
+        const prodNotifRes = await request(app)
+            .get('/api/notifications/pending')
+            .set('Authorization', `Bearer ${prodToken}`);
+        assert.strictEqual(prodNotifRes.status, 200);
+        const hasDrReadyNotif = prodNotifRes.body.items.some(it => it.target && it.target.batchId === batch.id);
+        assert.strictEqual(hasDrReadyNotif, true);
+
+        // D. Production handles DR creation
+        const initialOngoing = overviewRes.body.data.ongoingDeliveries;
+        const createDrRes = await request(app)
+            .post('/api/deliveries')
+            .set('Authorization', `Bearer ${prodToken}`)
+            .send({
+                po_id: po.id,
+                jo_id: jo.id,
+                delivery_date: '2026-09-16',
+                driver_name: 'Danilo Gomez',
+                vehicle_plate: 'NKB-8899',
+                notes: 'Cleanroom packed and shrinkwrapped',
+                items: [
+                    { product_id: lotionProduct.id, batch_id: batch.id, delivered_quantity: 410 }
+                ]
+            });
+        assert.strictEqual(createDrRes.status, 201);
+        const createdDr = createDrRes.body.data;
+        assert.strictEqual(createdDr.status, 'PENDING_CLIENT_ACCEPTANCE');
+        assert.strictEqual(createdDr.driver_name, 'Danilo Gomez');
+
+        // E. Ongoing deliveries count increments on Dashboard
+        const afterOverviewRes = await request(app)
+            .get('/api/reports/overview')
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(afterOverviewRes.status, 200);
+        assert.strictEqual(afterOverviewRes.body.data.ongoingDeliveries, initialOngoing + 1);
+
+        // F. Production updates DR details (driver, vehicle, notes) via PUT /api/deliveries/:id
+        const updateDrRes = await request(app)
+            .put(`/api/deliveries/${createdDr.id}`)
+            .set('Authorization', `Bearer ${prodToken}`)
+            .send({
+                driver_name: 'Ramon Bautista',
+                vehicle_plate: 'NKB-7711',
+                delivery_date: '2026-09-17',
+                notes: 'Updated dispatch schedule per Production Supervisor instructions.'
+            });
+        assert.strictEqual(updateDrRes.status, 200);
+        assert.strictEqual(updateDrRes.body.data.driver_name, 'Ramon Bautista');
+        assert.strictEqual(updateDrRes.body.data.vehicle_plate, 'NKB-7711');
+        assert.strictEqual(updateDrRes.body.data.notes, 'Updated dispatch schedule per Production Supervisor instructions.');
+
+        // Clean up test records
+        db.prepare('DELETE FROM delivery_items WHERE dr_id = ?').run(createdDr.id);
+        db.prepare('DELETE FROM delivery_receipts WHERE id = ?').run(createdDr.id);
+        db.prepare('DELETE FROM production_batches WHERE id = ?').run(batch.id);
+        db.prepare('DELETE FROM job_orders WHERE id = ?').run(jo.id);
+        db.prepare('DELETE FROM purchase_order_items WHERE po_id = ?').run(po.id);
+        db.prepare('DELETE FROM purchase_orders WHERE id = ?').run(po.id);
+    });
+
     after(() => {
         // Automatically delete all test decoys and temporary test database
         try {

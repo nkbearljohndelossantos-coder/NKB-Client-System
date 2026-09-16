@@ -350,6 +350,7 @@ async function loadDashboard() {
         setElText('kpi-open-pos', NKB.formatNumber(d.openPOs));
         setElText('kpi-active-batches', NKB.formatNumber(d.activeBatches));
         setElText('kpi-pending-approval-batches', `${d.pendingApprovalBatches} over-tolerance requiring approval`);
+        setElText('kpi-ongoing-deliveries', NKB.formatNumber(d.ongoingDeliveries || 0));
         setElText('kpi-unbilled-drs', NKB.formatNumber(d.unbilledAcceptedDRs));
         setElText('kpi-ar-total', NKB.formatCurrency(d.arTotal));
         setElText('kpi-overdue-ar', `${NKB.formatCurrency(d.overdueAR)} overdue`);
@@ -1226,12 +1227,20 @@ async function loadDeliveries() {
                 <td class="py-3 px-4 font-bold text-rose-600">${dr.total_rejected > 0 ? NKB.formatNumber(dr.total_rejected) + ' pcs' : '0'}</td>
                 <td class="py-3 px-4">${NKB.renderStatusBadge(dr.status)}</td>
                 <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                    <button onclick="openViewDRModal('${dr.id}')" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-block" title="View Delivery Receipt Details">
+                        🔍 Details
+                    </button>
                     <button onclick="openViewPOModal('${dr.po_id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-block" title="View Purchase Order Details">
                         👁️ View PO
                     </button>
                     <a href="/print-dr.html?id=${dr.id}" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-block">
-                        🖨️ Print DR
+                        🖨️ Print
                     </a>
+                    ${(dr.status !== 'ACCEPTED' && dr.status !== 'INVOICED' && dr.status !== 'CANCELLED') ? `
+                        <button onclick="openEditDRModal('${dr.id}')" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-xs font-bold transition inline-block" title="Edit Dispatch Details">
+                            ✏️ Edit
+                        </button>
+                    ` : ''}
                     ${dr.status === 'ACCEPTED' ? `
                         <button onclick="openGenerateInvoiceModal('${dr.id}', '${dr.dr_number}', '${dr.company_name}', ${dr.total_accepted})" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition">
                             ⚡ Invoice
@@ -4411,6 +4420,270 @@ async function submitCreateAllDR(e, poId, companyName) {
 
 window.openCreateAllDRModal = openCreateAllDRModal;
 window.submitCreateAllDR = submitCreateAllDR;
+
+// 6c. Select Batch for DR Modal (Direct from Deliveries Tab)
+async function openSelectBatchForDRModal() {
+    const root = document.getElementById('modals-root');
+    if (!root) return;
+    root.innerHTML = `
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
+            <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xl">🚚</span>
+                        <div>
+                            <h3 class="text-lg font-bold text-slate-900">Create Delivery Receipt</h3>
+                            <p class="text-[11px] text-slate-500">Select an approved batch ready for dispatch or client delivery.</p>
+                        </div>
+                    </div>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold">&times;</button>
+                </div>
+                <div id="ready-batches-list" class="overflow-y-auto flex-1 space-y-2.5 pr-1 min-h-[150px]">
+                    <div class="p-8 text-center text-slate-400">Loading production batches...</div>
+                </div>
+                <div class="flex justify-end pt-3 border-t border-slate-100">
+                    <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition">Cancel</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    const res = await NKB.api('/api/production/batches');
+    const container = document.getElementById('ready-batches-list');
+    if (!container) return;
+
+    if (!res.success || !res.data || res.data.length === 0) {
+        container.innerHTML = `
+            <div class="p-6 bg-slate-50 border border-slate-200 rounded-xl text-center space-y-2">
+                <div class="text-2xl">🧪</div>
+                <div class="font-bold text-slate-800">No production batches found</div>
+                <p class="text-xs text-slate-500">Create a Job Order and log QC yield to make batches ready for dispatch.</p>
+                <button onclick="closeModal(); switchTab('job-orders')" class="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold">Go to Job Orders</button>
+            </div>
+        `;
+        return;
+    }
+
+    // Filter batches ready for delivery (QC_PASSED, APPROVED_FOR_DISPATCH, or COMPLETED)
+    const readyBatches = res.data.filter(b => b.status === 'APPROVED_FOR_DISPATCH' || b.status === 'QC_PASSED' || b.status === 'COMPLETED');
+    const displayBatches = readyBatches.length > 0 ? readyBatches : res.data;
+
+    container.innerHTML = displayBatches.map(b => `
+        <div class="p-3.5 bg-slate-50 hover:bg-indigo-50/50 border border-slate-200 hover:border-indigo-200 rounded-xl transition flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div class="space-y-1 text-xs">
+                <div class="flex items-center gap-2">
+                    <strong class="text-indigo-600 font-bold">${b.batch_number}</strong>
+                    <span class="badge ${b.status === 'APPROVED_FOR_DISPATCH' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'} font-bold">${b.status}</span>
+                </div>
+                <div class="font-bold text-slate-800">${b.product_name || 'Product'} (${b.sku || 'SKU'})</div>
+                <div class="text-[11px] text-slate-500">
+                    <span>PO: <strong>${b.po_number || 'N/A'}</strong></span>
+                    ${b.company_name ? ` • <span>Client: <strong>${b.company_name}</strong></span>` : ''}
+                    • <span>Yield: <strong class="text-emerald-700">${NKB.formatNumber(b.actual_yield || b.target_quantity)} pcs</strong></span>
+                </div>
+            </div>
+            <button onclick="openCreateDRModal('${b.po_number}', '${b.jo_number}', '${b.id}', '${b.batch_number}', ${b.actual_yield || b.target_quantity}, '${(b.product_name || '').replace(/'/g, "\\'")}', '${b.client_id}')" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow transition whitespace-nowrap flex items-center gap-1">
+                <span>🚚</span><span>Dispatch & Issue DR →</span>
+            </button>
+        </div>
+    `).join('');
+}
+window.openSelectBatchForDRModal = openSelectBatchForDRModal;
+
+// 6d. Edit Delivery Receipt Details Modal
+async function openEditDRModal(drId) {
+    const res = await NKB.api(`/api/deliveries/${drId}`);
+    if (!res.success || !res.data) {
+        NKB.showToast(res.error || 'Failed to load Delivery Receipt.', 'error');
+        return;
+    }
+    const dr = res.data;
+    const root = document.getElementById('modals-root');
+    root.innerHTML = `
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
+            <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xl">✏️</span>
+                        <div>
+                            <h3 class="text-lg font-bold text-slate-900">Edit Delivery Dispatch</h3>
+                            <p class="text-[11px] text-slate-500">${dr.dr_number} • ${dr.company_name}</p>
+                        </div>
+                    </div>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold">&times;</button>
+                </div>
+                <form onsubmit="submitEditDR(event, '${dr.id}')" class="space-y-4 text-xs font-semibold">
+                    <div class="p-3 bg-slate-50 rounded-xl space-y-1 text-slate-700">
+                        <div>Client: <strong class="text-slate-900">${dr.company_name}</strong></div>
+                        <div>PO Reference: <strong class="text-slate-900">${dr.po_number}</strong></div>
+                        <div>Current Status: <strong class="text-amber-600">${dr.status}</strong></div>
+                    </div>
+                    <div>
+                        <label class="block text-slate-600 mb-1">Delivery Date</label>
+                        <input type="date" id="edit-dr-date" value="${dr.delivery_date ? dr.delivery_date.split('T')[0] : ''}" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-900">
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-slate-600 mb-1">Driver Name</label>
+                            <input type="text" id="edit-dr-driver" value="${(dr.driver_name || '').replace(/"/g, '&quot;')}" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 mb-1">Vehicle Plate</label>
+                            <input type="text" id="edit-dr-plate" value="${(dr.vehicle_plate || '').replace(/"/g, '&quot;')}" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-slate-600 mb-1">Dispatch / Logistics Notes</label>
+                        <textarea id="edit-dr-notes" rows="3" class="w-full px-3 py-2 border rounded-xl bg-slate-50">${dr.notes || ''}</textarea>
+                    </div>
+                    <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl">Cancel</button>
+                        <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold">Save Dispatch Updates</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+}
+window.openEditDRModal = openEditDRModal;
+
+async function submitEditDR(e, drId) {
+    e.preventDefault();
+    const delivery_date = document.getElementById('edit-dr-date')?.value;
+    const driver_name = document.getElementById('edit-dr-driver')?.value;
+    const vehicle_plate = document.getElementById('edit-dr-plate')?.value;
+    const notes = document.getElementById('edit-dr-notes')?.value;
+
+    const res = await NKB.api(`/api/deliveries/${drId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ delivery_date, driver_name, vehicle_plate, notes })
+    });
+
+    if (res.success) {
+        NKB.showToast('Delivery Receipt updated successfully!', 'success');
+        closeModal();
+        loadDeliveries();
+    } else {
+        NKB.showToast(res.error || 'Failed to update Delivery Receipt.', 'error');
+    }
+}
+window.submitEditDR = submitEditDR;
+
+// 6e. View Delivery Receipt Details Modal
+async function openViewDRModal(drId) {
+    const res = await NKB.api(`/api/deliveries/${drId}`);
+    if (!res.success || !res.data) {
+        NKB.showToast(res.error || 'Failed to load Delivery Receipt details.', 'error');
+        return;
+    }
+    const dr = res.data;
+    const items = dr.items || [];
+    const acceptance = dr.acceptance;
+    const root = document.getElementById('modals-root');
+
+    root.innerHTML = `
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
+            <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xl">📋</span>
+                        <div>
+                            <h3 class="text-base font-bold text-slate-900">${dr.dr_number}</h3>
+                            <p class="text-[11px] text-slate-500">Issued: ${NKB.formatDate(dr.delivery_date)} • Client: ${dr.company_name}</p>
+                        </div>
+                    </div>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold">&times;</button>
+                </div>
+
+                <div class="overflow-y-auto flex-1 space-y-4 pr-1 text-xs">
+                    <!-- Dispatch Metadata -->
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 bg-slate-50 rounded-xl font-medium text-slate-700">
+                        <div>
+                            <span class="text-[10px] text-slate-400 uppercase block">Status</span>
+                            <span>${NKB.renderStatusBadge(dr.status)}</span>
+                        </div>
+                        <div>
+                            <span class="text-[10px] text-slate-400 uppercase block">PO Number</span>
+                            <span class="font-bold text-slate-900">${dr.po_number || 'N/A'}</span>
+                        </div>
+                        <div>
+                            <span class="text-[10px] text-slate-400 uppercase block">Driver</span>
+                            <span class="font-bold text-slate-900">${dr.driver_name || '—'}</span>
+                        </div>
+                        <div>
+                            <span class="text-[10px] text-slate-400 uppercase block">Plate No.</span>
+                            <span class="font-bold text-slate-900">${dr.vehicle_plate || '—'}</span>
+                        </div>
+                    </div>
+
+                    ${dr.notes ? `
+                        <div class="p-2.5 bg-amber-50/70 border border-amber-200/50 rounded-xl text-amber-900">
+                            <strong>Dispatch Notes:</strong> ${dr.notes}
+                        </div>
+                    ` : ''}
+
+                    <!-- Items Table -->
+                    <div>
+                        <h4 class="font-bold text-slate-800 mb-2">Delivered Products</h4>
+                        <div class="border border-slate-200 rounded-xl overflow-hidden">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
+                                    <tr>
+                                        <th class="py-2.5 px-3">Product</th>
+                                        <th class="py-2.5 px-3">Batch</th>
+                                        <th class="py-2.5 px-3 text-right">Delivered</th>
+                                        <th class="py-2.5 px-3 text-right">Accepted</th>
+                                        <th class="py-2.5 px-3 text-right">Rejected</th>
+                                        <th class="py-2.5 px-3 text-right">Unit Price</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    ${items.map(it => `
+                                        <tr>
+                                            <td class="py-2.5 px-3 font-semibold text-slate-800">${it.product_name || 'Product'}</td>
+                                            <td class="py-2.5 px-3 text-indigo-600 font-bold">${it.batch_number || '—'}</td>
+                                            <td class="py-2.5 px-3 text-right font-bold text-slate-900">${NKB.formatNumber(it.delivered_quantity)} pcs</td>
+                                            <td class="py-2.5 px-3 text-right font-extrabold text-emerald-700">${it.accepted_quantity > 0 ? NKB.formatNumber(it.accepted_quantity) + ' pcs' : '—'}</td>
+                                            <td class="py-2.5 px-3 text-right font-bold text-rose-600">${it.rejected_quantity > 0 ? NKB.formatNumber(it.rejected_quantity) + ' pcs' : '0'}</td>
+                                            <td class="py-2.5 px-3 text-right text-slate-600">${NKB.formatCurrency(it.unit_price)}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Digital Client Acceptance Section -->
+                    ${acceptance ? `
+                        <div class="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl space-y-1.5 text-emerald-950">
+                            <div class="flex items-center gap-2">
+                                <span class="text-base">✍️</span>
+                                <strong class="text-emerald-900 font-bold">Client Digital Acceptance Recorded</strong>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2 text-xs">
+                                <div>Signer: <strong>${acceptance.signer_name}</strong> (${acceptance.signer_title || 'Authorized Signatory'})</div>
+                                <div>Accepted At: <strong>${NKB.formatDate(acceptance.signed_at || acceptance.created_at)}</strong></div>
+                            </div>
+                            ${acceptance.acceptance_notes ? `<div>Notes: <em>${acceptance.acceptance_notes}</em></div>` : ''}
+                        </div>
+                    ` : `
+                        <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-500 text-xs">
+                            ⏳ Awaiting client digital signature & acceptance.
+                        </div>
+                    `}
+                </div>
+
+                <div class="flex justify-between items-center pt-3 border-t border-slate-100">
+                    <a href="/print-dr.html?id=${dr.id}" class="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1">
+                        🖨️ Print DR
+                    </a>
+                    <button type="button" onclick="closeModal()" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition">Close</button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+window.openViewDRModal = openViewDRModal;
 
 // 7. Generate Invoice Modal
 function openGenerateInvoiceModal(drId, drNumber, clientName, totalAccepted) {

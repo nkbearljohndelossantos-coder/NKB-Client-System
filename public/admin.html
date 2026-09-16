@@ -147,7 +147,7 @@
                 </div>
 
                 <!-- KPI Cards Grid -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                     <div class="kpi-card border-t-4 border-indigo-500 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                         <div class="flex items-center justify-between">
                             <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Open Orders (PO)</span>
@@ -163,6 +163,14 @@
                         </div>
                         <div id="kpi-active-batches" class="text-3xl font-black text-blue-600 mt-2">0</div>
                         <div id="kpi-pending-approval-batches" class="text-xs text-amber-600 font-semibold mt-1">0 over-tolerance requiring approval</div>
+                    </div>
+                    <div class="kpi-card border-t-4 border-amber-500 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:shadow-md transition" onclick="switchTab('deliveries')" title="Click to view ongoing deliveries">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Deliveries Ongoing</span>
+                            <span class="p-1.5 rounded-lg bg-amber-50 text-amber-600 text-xs font-bold">🚚 DR</span>
+                        </div>
+                        <div id="kpi-ongoing-deliveries" class="text-3xl font-black text-amber-600 mt-2">0</div>
+                        <div class="text-xs text-amber-700 font-semibold mt-1">Dispatched & in-transit</div>
                     </div>
                     <div class="kpi-card border-t-4 border-emerald-500 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                         <div class="flex items-center justify-between">
@@ -407,6 +415,12 @@
                     <div>
                         <h2 class="text-2xl font-black text-slate-900">Delivery Receipts (DR) & Dispatch</h2>
                         <p class="text-sm text-slate-500">Generate dispatch receipts and monitor digital client acceptance.</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="openSelectBatchForDRModal()" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-600/30 transition flex items-center gap-2">
+                            <span>🚚</span>
+                            <span>Create Delivery Receipt</span>
+                        </button>
                     </div>
                 </div>
 

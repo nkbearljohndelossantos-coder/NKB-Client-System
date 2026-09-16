@@ -42,12 +42,19 @@ router.get('/overview', authenticateToken, enforceClientIsolation, (req, res) =>
             WHERE po.client_id = ? AND jo.status = 'IN_PRODUCTION'
         `).get(clientId);
 
+        const ongoingDeliveries = db.prepare(`
+            SELECT COUNT(*) as count
+            FROM delivery_receipts
+            WHERE client_id = ? AND status IN ('DISPATCHED', 'PENDING_CLIENT_ACCEPTANCE')
+        `).get(clientId).count;
+
         return res.json({
             success: true,
             data: {
                 openPOs: openPOs.count,
                 openPOsValue: openPOs.total_val,
                 pendingDRs: pendingAcceptanceDRs.count,
+                ongoingDeliveries,
                 unpaidInvoices: unpaidInvoices.count,
                 outstandingBalance: unpaidInvoices.total_balance,
                 availableBufferUnits: availableBuffer.total_units,
@@ -62,6 +69,7 @@ router.get('/overview', authenticateToken, enforceClientIsolation, (req, res) =>
     const activeBatches = db.prepare("SELECT COUNT(*) as count FROM production_batches WHERE status IN ('MIXING', 'BOTTLING', 'QC_PASSED', 'EXCEPTION_REQUIRES_APPROVAL')").get().count;
     const pendingApprovalBatches = db.prepare("SELECT COUNT(*) as count FROM production_batches WHERE status = 'EXCEPTION_REQUIRES_APPROVAL'").get().count;
     const pendingAcceptanceDRs = db.prepare("SELECT COUNT(*) as count FROM delivery_receipts WHERE status = 'PENDING_CLIENT_ACCEPTANCE'").get().count;
+    const ongoingDeliveries = db.prepare("SELECT COUNT(*) as count FROM delivery_receipts WHERE status IN ('DISPATCHED', 'PENDING_CLIENT_ACCEPTANCE')").get().count;
     const unbilledAcceptedDRs = db.prepare("SELECT COUNT(*) as count FROM delivery_receipts WHERE status = 'ACCEPTED'").get().count;
 
     const arTotal = db.prepare("SELECT COALESCE(SUM(balance_due), 0) as total FROM sales_invoices WHERE status IN ('UNPAID', 'PARTIALLY_PAID', 'OVERDUE')").get().total;
@@ -81,6 +89,7 @@ router.get('/overview', authenticateToken, enforceClientIsolation, (req, res) =>
             activeBatches,
             pendingApprovalBatches,
             pendingAcceptanceDRs,
+            ongoingDeliveries,
             unbilledAcceptedDRs,
             arTotal,
             overdueAR,

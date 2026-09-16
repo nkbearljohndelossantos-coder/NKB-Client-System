@@ -223,6 +223,48 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'WAREHOUSE', 'PRODUCTI
 });
 
 /**
+ * PUT /api/deliveries/:id
+ * Admin / Warehouse / Production updates an existing Delivery Receipt (driver, vehicle, date, notes)
+ */
+router.put('/:id', authenticateToken, requireRoles('ADMIN', 'WAREHOUSE', 'PRODUCTION'), (req, res) => {
+    const { id } = req.params;
+    const { delivery_date, driver_name, vehicle_plate, notes } = req.body;
+
+    const dr = db.prepare('SELECT * FROM delivery_receipts WHERE id = ?').get(id);
+    if (!dr) {
+        return res.status(404).json({ success: false, error: 'Delivery Receipt not found.' });
+    }
+
+    if (dr.status === 'ACCEPTED' || dr.status === 'INVOICED') {
+        return res.status(400).json({ success: false, error: `Cannot modify Delivery Receipt in status "${dr.status}".` });
+    }
+
+    const newDate = delivery_date || dr.delivery_date;
+    const newDriver = driver_name !== undefined ? driver_name : dr.driver_name;
+    const newPlate = vehicle_plate !== undefined ? vehicle_plate : dr.vehicle_plate;
+    const newNotes = notes !== undefined ? notes : dr.notes;
+
+    db.prepare(`
+        UPDATE delivery_receipts
+        SET delivery_date = ?, driver_name = ?, vehicle_plate = ?, notes = ?, updated_at = datetime('now')
+        WHERE id = ?
+    `).run(newDate, newDriver, newPlate, newNotes, id);
+
+    logAudit({
+        userId: req.user.id,
+        userName: req.user.name,
+        userRole: req.user.role,
+        action: 'UPDATE_DR',
+        entityType: 'DELIVERY_RECEIPT',
+        entityId: dr.dr_number,
+        details: { drId: id, drNumber: dr.dr_number, delivery_date: newDate, driver_name: newDriver, vehicle_plate: newPlate }
+    });
+
+    const updated = db.prepare('SELECT * FROM delivery_receipts WHERE id = ?').get(id);
+    return res.json({ success: true, message: 'Delivery Receipt updated successfully.', data: updated });
+});
+
+/**
  * POST /api/deliveries/:id/accept
  * Client Digital DR Acceptance
  */

@@ -248,15 +248,15 @@ router.get('/pending', authenticateToken, (req, res) => {
             }
         }
 
-        // 6. Logistics & Warehouse: Batches Ready for Dispatch / Delivery Receipt
-        if (role === ROLES.SUPER_ADMIN || role === ROLES.IT_ADMIN || role === ROLES.ADMIN || role === ROLES.WAREHOUSE) {
+        // 6. Logistics, Warehouse & Production: Batches Ready for Dispatch / Delivery Receipt
+        if (role === ROLES.SUPER_ADMIN || role === ROLES.IT_ADMIN || role === ROLES.ADMIN || role === ROLES.WAREHOUSE || role === ROLES.PRODUCTION) {
             const readyBatches = db.prepare(`
                 SELECT pb.id, pb.batch_number, pb.actual_yield, c.company_name, po.po_number
                 FROM production_batches pb
                 JOIN job_orders jo ON pb.jo_id = jo.id
                 JOIN purchase_orders po ON jo.po_id = po.id
                 JOIN clients c ON po.client_id = c.id
-                WHERE pb.status = 'COMPLETED'
+                WHERE pb.status IN ('COMPLETED', 'APPROVED_FOR_DISPATCH', 'QC_PASSED')
                   AND pb.id NOT IN (SELECT batch_id FROM delivery_items WHERE batch_id IS NOT NULL)
                 ORDER BY pb.created_at DESC
                 LIMIT 5
@@ -264,10 +264,10 @@ router.get('/pending', authenticateToken, (req, res) => {
 
             for (const rb of readyBatches) {
                 items.push({
-                    id: `wh-dr-${rb.id}`,
-                    category: 'WAREHOUSE',
+                    id: `dr-ready-${rb.id}`,
+                    category: role === ROLES.PRODUCTION ? 'PRODUCTION' : 'WAREHOUSE',
                     title: `Batch ${rb.batch_number} Ready for DR`,
-                    description: `Finished goods inspected. Generate Delivery Receipt for ${rb.company_name}.`,
+                    description: `Finished goods cleared. Generate Delivery Receipt for ${rb.company_name}.`,
                     urgency: 'MEDIUM',
                     icon: '🚚',
                     target: {
