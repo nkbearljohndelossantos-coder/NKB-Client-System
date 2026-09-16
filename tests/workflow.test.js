@@ -1334,11 +1334,12 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
             assert.strictEqual(blockEdit.status, 403, `${op.name} must be forbidden from updating orders`);
         }
 
-        // E. Verify print-po.html template contents for Bank Details and Form of Payment section
+        // E. Verify print-po.html template contents: Bank details updated, and Form of Payment section removed
         const printPoHtml = fs.readFileSync(path.join(__dirname, '../public/print-po.html'), 'utf8');
         assert.ok(printPoHtml.includes('BDO UNIBANK, INC.<br>NKB MANUFACTURING CORPORATION<br>0080-5801-0547'), 'print-po.html must include NKB MANUFACTURING CORPORATION under BDO UNIBANK, INC.');
-        assert.ok(printPoHtml.includes('id="po-payment-section"'), 'print-po.html must have #po-payment-section');
-        assert.ok(printPoHtml.includes('id="disp-po-payment"'), 'print-po.html must have #disp-po-payment');
+        assert.strictEqual(printPoHtml.includes('id="po-payment-section"'), false, 'print-po.html must NOT have #po-payment-section');
+        assert.strictEqual(printPoHtml.includes('id="disp-po-payment"'), false, 'print-po.html must NOT have #disp-po-payment');
+        assert.strictEqual(printPoHtml.includes('Form of Payment:'), false, 'print-po.html must NOT have "Form of Payment:" in receipt');
         assert.ok(printPoHtml.includes('body.hide-prices'), 'print-po.html must contain hide-prices style for non-price viewers');
 
         // Clean up test records

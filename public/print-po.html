@@ -432,7 +432,7 @@
             font-weight: bold;
         }
 
-        /* Order Notes / Description Section (Under Products, Above Form of Payment) */
+        /* Order Notes / Description Section (Under Products, Above Bank Details) */
         .po-notes-section {
             font-size: 8.5pt;
             color: #000000;
@@ -459,37 +459,6 @@
 
         body.edit-mode-active .notes-body:empty:before {
             content: "Click to add order notes or description...";
-            color: #94a3b8;
-            font-style: italic;
-        }
-
-        /* Form of Payment Section (Under Products & Description, Above Bank Details) */
-        .po-payment-section {
-            font-size: 8.5pt;
-            color: #000000;
-            line-height: 1.45;
-            margin-top: 8px;
-            margin-bottom: 8px;
-        }
-
-        .payment-heading {
-            font-weight: bold;
-            font-size: 8.5pt;
-            color: #000000;
-            margin-bottom: 2px;
-        }
-
-        .payment-body {
-            font-size: 8.5pt;
-            color: #000000;
-            white-space: pre-wrap;
-            line-height: 1.45;
-            padding: 3px 0;
-            min-height: 16px;
-        }
-
-        body.edit-mode-active .payment-body:empty:before {
-            content: "Click to specify form of payment / terms...";
             color: #94a3b8;
             font-style: italic;
         }
@@ -666,16 +635,10 @@
             </div>
         </div>
 
-        <!-- Note / Description Section (Under Products, Above Form of Payment) -->
+        <!-- Note / Description Section (Under Products, Above Bank Details) -->
         <div id="po-notes-section" class="po-notes-section avoid-break" style="display: none;">
             <div class="notes-heading">Description / Instructions:</div>
             <div id="disp-po-notes" class="notes-body cell-editable" contenteditable="false"></div>
-        </div>
-
-        <!-- Form of Payment Section (Under Description, Above Bank Details) -->
-        <div id="po-payment-section" class="po-payment-section avoid-break">
-            <div class="payment-heading">Form of Payment:</div>
-            <div id="disp-po-payment" class="payment-body cell-editable" contenteditable="false">COD / Bank Transfer</div>
         </div>
 
         <!-- Bank Details Section (Outside/Below the Bordered Box at Bottom Left) -->
@@ -791,10 +754,6 @@
 
             // Bank lines
             document.getElementById('disp-bank-details').contentEditable = val;
-
-            // Form of Payment
-            const paymentEl = document.getElementById('disp-po-payment');
-            if (paymentEl) paymentEl.contentEditable = val;
 
             // Description / Notes section
             const notesEl = document.getElementById('disp-po-notes');
@@ -988,7 +947,7 @@
             document.getElementById('disp-discount').textContent = formatNumber2(finalDiscount);
             document.getElementById('disp-total').textContent = formatNumber2(finalTotal);
 
-            // Note / Description Logic (Under Products, Above Form of Payment)
+            // Note / Description Logic (Under Products, Above Bank Details)
             const notesEl = document.getElementById('disp-po-notes');
             const notesSection = document.getElementById('po-notes-section');
             const poNotes = (po.notes || '').trim();
@@ -1002,13 +961,6 @@
                 } else {
                     notesSection.style.display = 'none';
                 }
-            }
-
-            // Form of Payment Logic
-            const paymentEl = document.getElementById('disp-po-payment');
-            const poPayment = (po.form_of_payment || po.terms || 'COD / Bank Transfer').trim();
-            if (paymentEl) {
-                paymentEl.textContent = poPayment;
             }
 
             // Bank Details Logic
@@ -1046,14 +998,15 @@
 
             try {
                 const notesVal = (document.getElementById('disp-po-notes')?.textContent || '').trim();
-                const paymentVal = (document.getElementById('disp-po-payment')?.textContent || '').trim();
                 const termsVal = (document.getElementById('meta-doc-terms')?.textContent || '').trim();
                 const dueDateVal = (document.getElementById('meta-doc-due-date')?.textContent || '').trim();
 
                 const payload = {
-                    notes: notesVal,
-                    form_of_payment: paymentVal || termsVal || 'COD / Bank Transfer'
+                    notes: notesVal
                 };
+                if (termsVal) {
+                    payload.terms = termsVal;
+                }
 
                 // Gather updated table items if available
                 const itemRows = document.querySelectorAll('#po-items-tbody tr');
@@ -1093,7 +1046,7 @@
 
                 const json = await res.json();
                 if (json.success) {
-                    alert('Order receipt and Form of Payment updated successfully!');
+                    alert('Order receipt updated successfully!');
                     if (json.data) rawPoData = json.data;
                     toggleEditMode();
                 } else {
