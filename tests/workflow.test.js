@@ -1366,6 +1366,219 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         db.prepare('DELETE FROM purchase_orders WHERE id = ?').run(po.id);
     });
 
+    test('26. Flexible Payment Reference, Payment Notes, & Delivery Invoicing & Client Receiving Assigned to Accountant', async () => {
+        const acctToken = getAuthToken('ACCOUNTING');
+        const prodToken = getAuthToken('PRODUCTION');
+        const whToken = getAuthToken('WAREHOUSE');
+
+        assert.ok(acctToken, 'Accountant token must be generated');
+        assert.ok(prodToken, 'Production token must be generated');
+        assert.ok(whToken, 'Warehouse token must be generated');
+
+        // --- PART 1: DELIVERY RECEIVING & INVOICING ASSIGNED TO ACCOUNTANT ---
+        // A. Setup test PO, JO, Batch, and DR
+        const poRes = await request(app)
+            .post('/api/orders')
+            .set('Authorization', `Bearer ${clientToken}`)
+            .send({
+                client_id: demoClient.id,
+                tolerance_percent: 10.0,
+                billing_policy: 'ACTUAL_DELIVERY',
+                notes: 'Delivery & Accountant Workflow Test',
+                items: [{ product_id: lotionProduct.id, target_quantity: 300, unit_price: 120.0 }]
+            });
+        assert.strictEqual(poRes.status, 201);
+        const po = poRes.body.data;
+
+        // Admin confirms/approves order
+        await request(app).post(`/api/orders/${po.id}/approve`).set('Authorization', `Bearer ${adminToken}`);
+
+        // Create Job Order
+        const joRes = await request(app)
+            .post('/api/job-orders')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({ po_id: po.id, product_id: lotionProduct.id, target_quantity: 300 });
+        assert.strictEqual(joRes.status, 201);
+        const jo = joRes.body.data;
+
+        // Create Production Batch
+        const batchRes = await request(app)
+            .post('/api/production/batches')
+            .set('Authorization', `Bearer ${prodToken}`)
+            .send({
+                jo_id: jo.id,
+                target_quantity: 300
+            });
+        assert.strictEqual(batchRes.status, 201);
+        const batch = batchRes.body.data;
+
+        // Yield clearance
+        const yieldRes = await request(app)
+            .post(`/api/production/batches/${batch.id}/yield`)
+            .set('Authorization', `Bearer ${prodToken}`)
+            .send({ actual_yield: 300, qc_notes: 'Clear for dispatch' });
+        assert.strictEqual(yieldRes.status, 200);
+
+        // Create Delivery Receipt dispatched by Production
+        const drRes = await request(app)
+            .post('/api/deliveries')
+            .set('Authorization', `Bearer ${prodToken}`)
+            .send({
+                po_id: po.id,
+                jo_id: jo.id,
+                delivery_date: '2026-09-16',
+                driver_name: 'Fast Logistics Driver',
+                vehicle_plate: 'NKB-2026',
+                notes: 'Dispatched for client receiving test',
+                items: [{ product_id: lotionProduct.id, batch_id: batch.id, delivered_quantity: 300, unit_price: 120.0 }]
+            });
+        assert.strictEqual(drRes.status, 201);
+        const dr = drRes.body.data;
+        assert.strictEqual(dr.status, 'PENDING_CLIENT_ACCEPTANCE');
+
+        // B. Operational staff (Production / Warehouse) cannot record client receiving
+        const prodAccept = await request(app)
+            .post(`/api/deliveries/${dr.id}/accept`)
+            .set('Authorization', `Bearer ${prodToken}`)
+            .send({
+                signer_name: 'Production Worker',
+                signer_title: 'Shopfloor',
+                items: [{ product_id: lotionProduct.id, accepted_quantity: 300, rejected_quantity: 0 }]
+            });
+        assert.strictEqual(prodAccept.status, 403, 'Production must be forbidden from accepting client deliveries');
+        assert.ok(prodAccept.body.error.includes('assigned to Accounting and Administration'));
+
+        const whAccept = await request(app)
+            .post(`/api/deliveries/${dr.id}/accept`)
+            .set('Authorization', `Bearer ${whToken}`)
+            .send({
+                signer_name: 'Warehouse Guy',
+                signer_title: 'Loader',
+                items: [{ product_id: lotionProduct.id, accepted_quantity: 300, rejected_quantity: 0 }]
+            });
+        assert.strictEqual(whAccept.status, 403, 'Warehouse must be forbidden from accepting client deliveries');
+
+        // C. Accountant records client product receiving (e.g. from signed physical DR)
+        const acctAccept = await request(app)
+            .post(`/api/deliveries/${dr.id}/accept`)
+            .set('Authorization', `Bearer ${acctToken}`)
+            .send({
+                signer_name: 'Maria Santos',
+                signer_title: 'Receiving Store Custodian',
+                acceptance_notes: 'Goods received in good order per physical DR stamp',
+                items: [{ product_id: lotionProduct.id, accepted_quantity: 295, rejected_quantity: 5, reason: '5 dented boxes' }]
+            });
+        assert.strictEqual(acctAccept.status, 200, 'Accountant must be permitted to record client receiving');
+        assert.strictEqual(acctAccept.body.data.status, 'ACCEPTED');
+
+        // Verify dr_acceptances record
+        const savedAcceptance = db.prepare('SELECT * FROM dr_acceptances WHERE dr_id = ?').get(dr.id);
+        assert.ok(savedAcceptance);
+        assert.strictEqual(savedAcceptance.signer_name, 'Maria Santos');
+        assert.strictEqual(savedAcceptance.total_accepted_quantity, 295);
+        assert.strictEqual(savedAcceptance.total_rejected_quantity, 5);
+        assert.strictEqual(savedAcceptance.acceptance_notes, 'Goods received in good order per physical DR stamp');
+
+        // D. Operational staff (Production / Warehouse) cannot generate invoice from DR
+        const prodInv = await request(app)
+            .post(`/api/invoices/from-dr/${dr.id}`)
+            .set('Authorization', `Bearer ${prodToken}`)
+            .send({ due_date: '2026-10-16' });
+        assert.strictEqual(prodInv.status, 403, 'Production must be forbidden from generating invoices');
+
+        // E. Accountant generates official Sales Invoice
+        const acctInv = await request(app)
+            .post(`/api/invoices/from-dr/${dr.id}`)
+            .set('Authorization', `Bearer ${acctToken}`)
+            .send({
+                due_date: '2026-10-16',
+                notes: 'Official invoice issued by Accounting from accepted DR'
+            });
+        assert.strictEqual(acctInv.status, 201, 'Accountant must be able to generate invoice from accepted DR');
+        const invoice = acctInv.body.data;
+        assert.strictEqual(invoice.status, 'UNPAID');
+        assert.strictEqual(invoice.total_amount, 295 * 120); // 295 accepted @ 120 = 35,400
+
+        // --- PART 2: FLEXIBLE PAYMENT REFERENCE & PAYMENT NOTES ---
+        // A. Record payment with freeform reference (check/branch/deposit details) and multi-line notes
+        const payRes1 = await request(app)
+            .post('/api/payments')
+            .set('Authorization', `Bearer ${acctToken}`)
+            .send({
+                invoice_id: invoice.id,
+                amount: 20000.0,
+                payment_method: 'CHECK',
+                reference_number: 'BDO CHECK #00984712 / CLEARED @ ALABANG BR',
+                notes: 'Check deposited to BDO 0080-5801-0547. Cleared within 24 hours without chargeback.'
+            });
+        assert.strictEqual(payRes1.status, 201, 'Freeform reference and notes payment must succeed');
+        assert.strictEqual(payRes1.body.data.invoice.status, 'PARTIALLY_PAID');
+
+        // B. Record remaining balance with blank reference_number (must default to 'N/A') and notes
+        const payRes2 = await request(app)
+            .post('/api/payments')
+            .set('Authorization', `Bearer ${acctToken}`)
+            .send({
+                invoice_id: invoice.id,
+                amount: 15400.0,
+                payment_method: 'CASH',
+                reference_number: '',
+                notes: 'Paid in cash at accounting office, receipt issued'
+            });
+        assert.strictEqual(payRes2.status, 201, 'Blank reference number must succeed and default to N/A');
+        assert.strictEqual(payRes2.body.data.invoice.status, 'PAID');
+
+        // C. Verify GET /api/payments returns reference_number and notes accurately
+        const listPaymentsRes = await request(app)
+            .get(`/api/payments?invoiceId=${invoice.id}`)
+            .set('Authorization', `Bearer ${acctToken}`);
+        assert.strictEqual(listPaymentsRes.status, 200);
+        assert.strictEqual(listPaymentsRes.body.data.length, 2);
+
+        const checkPay = listPaymentsRes.body.data.find(p => p.payment_method === 'CHECK');
+        assert.ok(checkPay);
+        assert.strictEqual(checkPay.reference_number, 'BDO CHECK #00984712 / CLEARED @ ALABANG BR');
+        assert.strictEqual(checkPay.notes, 'Check deposited to BDO 0080-5801-0547. Cleared within 24 hours without chargeback.');
+
+        const cashPay = listPaymentsRes.body.data.find(p => p.payment_method === 'CASH');
+        assert.ok(cashPay);
+        assert.strictEqual(cashPay.reference_number, 'N/A');
+        assert.strictEqual(cashPay.notes, 'Paid in cash at accounting office, receipt issued');
+
+        // --- PART 3: FRONTEND VERIFICATIONS (admin.js) ---
+        const adminJs = fs.readFileSync(path.join(__dirname, '../public/js/admin.js'), 'utf8');
+
+        // Verify Deliveries tab is visible to Accounting (no hideTab('deliveries') under ACCOUNTING)
+        const acctBlock = adminJs.substring(adminJs.indexOf("role === 'ACCOUNTING'"), adminJs.indexOf("role === 'CEO'"));
+        assert.strictEqual(acctBlock.includes("hideTab('deliveries')"), false, 'Deliveries tab must NOT be hidden for ACCOUNTING role');
+
+        // Verify openClientReceivingModal function exists in admin.js
+        assert.ok(adminJs.includes('function openClientReceivingModal('), 'admin.js must declare openClientReceivingModal');
+        assert.ok(adminJs.includes('submitClientReceiving'), 'admin.js must declare submitClientReceiving');
+
+        // Verify loadDeliveries shows Receive Product and Invoice buttons according to role
+        assert.ok(adminJs.includes("openClientReceivingModal('${dr.id}')"), 'loadDeliveries must call openClientReceivingModal');
+        assert.ok(adminJs.includes('Awaiting Accounting Invoice'), 'loadDeliveries must show Awaiting Accounting Invoice for non-accounting roles');
+
+        // Verify Record Payment modal has pay-amount id, flexible ref placeholder, and pay-notes
+        assert.ok(adminJs.includes('id="pay-amount"'), 'Record payment modal must have id="pay-amount"');
+        assert.ok(adminJs.includes('id="pay-notes"'), 'Record payment modal must have id="pay-notes"');
+        assert.ok(adminJs.includes('Ref # / Check # / OR # / Txn ID (Optional/Freeform)'), 'Record payment modal must allow freeform reference');
+
+        // Clean up test records
+        db.prepare('DELETE FROM payments WHERE invoice_id = ?').run(invoice.id);
+        db.prepare('DELETE FROM invoice_items WHERE invoice_id = ?').run(invoice.id);
+        db.prepare('DELETE FROM sales_invoices WHERE id = ?').run(invoice.id);
+        db.prepare('DELETE FROM returns WHERE dr_id = ?').run(dr.id);
+        db.prepare('DELETE FROM dr_acceptances WHERE dr_id = ?').run(dr.id);
+        db.prepare('DELETE FROM delivery_items WHERE dr_id = ?').run(dr.id);
+        db.prepare('DELETE FROM delivery_receipts WHERE id = ?').run(dr.id);
+        db.prepare('DELETE FROM production_batches WHERE id = ?').run(batch.id);
+        db.prepare('DELETE FROM job_orders WHERE id = ?').run(jo.id);
+        db.prepare('DELETE FROM purchase_order_items WHERE po_id = ?').run(po.id);
+        db.prepare('DELETE FROM purchase_orders WHERE id = ?').run(po.id);
+    });
+
     after(() => {
         // Automatically delete all test decoys and temporary test database
         try {

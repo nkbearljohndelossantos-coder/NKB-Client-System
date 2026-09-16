@@ -281,6 +281,17 @@ router.post('/:id/accept', authenticateToken, enforceClientIsolation, (req, res)
         return res.status(403).json({ success: false, error: 'Access denied.', code: 'FORBIDDEN' });
     }
 
+    if (req.user.role !== 'CLIENT') {
+        const allowedRoles = ['ACCOUNTING', 'ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'CEO'];
+        if (!allowedRoles.includes(req.user.role)) {
+            return res.status(403).json({
+                success: false,
+                error: 'Access denied. Recording client product receiving is assigned to Accounting and Administration.',
+                code: 'FORBIDDEN'
+            });
+        }
+    }
+
     if (dr.status === 'ACCEPTED' || dr.status === 'INVOICED') {
         return res.status(400).json({ success: false, error: `Delivery Receipt is already ${dr.status}.` });
     }
@@ -356,9 +367,9 @@ router.post('/:id/accept', authenticateToken, enforceClientIsolation, (req, res)
             id,
             req.user.id,
             signer_name.trim(),
-            signer_title ? signer_title.trim() : 'Authorized Signatory',
-            signature_data || `Digitally Signed by ${signer_name}`,
-            signature_type || 'DRAWN',
+            signer_title ? signer_title.trim() : (req.user.role === 'ACCOUNTING' ? 'Authorized Client Signatory (Verified by Accounting)' : 'Authorized Signatory'),
+            signature_data || (req.user.role === 'CLIENT' ? `Digitally Signed by ${signer_name}` : `Product Received confirmed by ${signer_name} (Recorded by ${req.user.name || req.user.role})`),
+            signature_type || (req.user.role === 'CLIENT' ? 'DRAWN' : 'TYPED'),
             totalDelivered,
             totalAccepted,
             totalRejected,

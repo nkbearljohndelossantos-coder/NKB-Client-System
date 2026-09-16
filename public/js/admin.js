@@ -259,7 +259,7 @@ function applyRoleBasedUI() {
     } else if (role === 'ACCOUNTING') {
         hideTab('job-orders');
         hideTab('production');
-        hideTab('deliveries');
+        // Deliveries tab is visible for Accounting to record client receiving and issue invoices
         hideTab('users');
         hideTab('audit');
     } else if (role === 'CEO' || role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'IT_ADMIN') {
@@ -1215,6 +1215,11 @@ async function loadDeliveries() {
     const res = await NKB.api('/api/deliveries');
     const tbody = document.getElementById('table-deliveries-body');
 
+    const userRole = NKB.user?.role;
+    const canInvoice = ['ACCOUNTING', 'ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'CEO'].includes(userRole);
+    const canReceive = ['ACCOUNTING', 'ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'CEO'].includes(userRole);
+    const canEditDispatch = ['ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'PRODUCTION', 'WAREHOUSE'].includes(userRole);
+
     if (res.success && res.data && res.data.length > 0) {
         tbody.innerHTML = res.data.map(dr => `
             <tr class="hover:bg-slate-50 transition">
@@ -1241,14 +1246,25 @@ async function loadDeliveries() {
                         🖨️ Print
                     </a>
                     ${(dr.status !== 'ACCEPTED' && dr.status !== 'INVOICED' && dr.status !== 'CANCELLED') ? `
-                        <button onclick="openEditDRModal('${dr.id}')" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-xs font-bold transition inline-block" title="Edit Dispatch Details">
-                            ✏️ Edit
-                        </button>
+                        ${canReceive ? `
+                            <button onclick="openClientReceivingModal('${dr.id}')" class="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold transition inline-block shadow-sm" title="Record Client Receiving & Acceptance">
+                                📥 Receive Product
+                            </button>
+                        ` : ''}
+                        ${canEditDispatch ? `
+                            <button onclick="openEditDRModal('${dr.id}')" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-xs font-bold transition inline-block" title="Edit Dispatch Details">
+                                ✏️ Edit
+                            </button>
+                        ` : ''}
                     ` : ''}
                     ${dr.status === 'ACCEPTED' ? `
-                        <button onclick="openGenerateInvoiceModal('${dr.id}', '${dr.dr_number}', '${dr.company_name}', ${dr.total_accepted})" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition">
-                            ⚡ Invoice
-                        </button>
+                        ${canInvoice ? `
+                            <button onclick="openGenerateInvoiceModal('${dr.id}', '${dr.dr_number}', '${dr.company_name}', ${dr.total_accepted})" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition shadow-sm">
+                                ⚡ Invoice
+                            </button>
+                        ` : `
+                            <span class="text-[11px] text-slate-400 italic px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg inline-block">Awaiting Accounting Invoice</span>
+                        `}
                     ` : ''}
                 </td>
             </tr>
@@ -1376,7 +1392,10 @@ function renderPaymentsRows(paymentsList, currentTotal) {
             <td class="py-3 px-4">
                 <span class="badge bg-slate-100 text-slate-700 font-bold">${(p.payment_method || '').replace(/_/g, ' ')}</span>
             </td>
-            <td class="py-3 px-4 font-mono text-slate-600">${p.reference_number || '—'}</td>
+            <td class="py-3 px-4">
+                <div class="font-mono text-slate-700 text-xs font-semibold">${p.reference_number || '—'}</div>
+                ${p.notes ? `<div class="text-[11px] text-slate-500 italic mt-0.5 flex items-start gap-1"><span class="text-amber-600 font-bold">📝</span> <span class="break-words">${p.notes}</span></div>` : ''}
+            </td>
             <td class="py-3 px-4 text-right font-extrabold text-emerald-700 text-sm whitespace-nowrap">${NKB.formatCurrency(p.amount)}</td>
             <td class="py-3 px-4">${NKB.renderStatusBadge(p.invoice_status || 'PAID')}</td>
             <td class="py-3 px-4 text-slate-500 whitespace-nowrap">${p.recorded_by_name || 'Accounting Staff'}</td>
@@ -1395,6 +1414,7 @@ function filterPaymentsTable() {
             (p.invoice_number && p.invoice_number.toLowerCase().includes(query)) ||
             (p.company_name && p.company_name.toLowerCase().includes(query)) ||
             (p.reference_number && p.reference_number.toLowerCase().includes(query)) ||
+            (p.notes && p.notes.toLowerCase().includes(query)) ||
             (p.po_number && p.po_number.toLowerCase().includes(query)) ||
             (p.contact_person && p.contact_person.toLowerCase().includes(query));
 
@@ -4594,6 +4614,10 @@ async function openViewDRModal(drId) {
     const acceptance = dr.acceptance;
     const root = document.getElementById('modals-root');
 
+    const userRole = NKB.user?.role;
+    const canInvoice = ['ACCOUNTING', 'ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'CEO'].includes(userRole);
+    const canReceive = ['ACCOUNTING', 'ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'CEO'].includes(userRole);
+
     root.innerHTML = `
         <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
             <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
@@ -4671,7 +4695,7 @@ async function openViewDRModal(drId) {
                         <div class="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl space-y-1.5 text-emerald-950">
                             <div class="flex items-center gap-2">
                                 <span class="text-base">✍️</span>
-                                <strong class="text-emerald-900 font-bold">Client Digital Acceptance Recorded</strong>
+                                <strong class="text-emerald-900 font-bold">Client Acceptance Recorded</strong>
                             </div>
                             <div class="grid grid-cols-2 gap-2 text-xs">
                                 <div>Signer: <strong>${acceptance.signer_name}</strong> (${acceptance.signer_title || 'Authorized Signatory'})</div>
@@ -4680,16 +4704,31 @@ async function openViewDRModal(drId) {
                             ${acceptance.acceptance_notes ? `<div>Notes: <em>${acceptance.acceptance_notes}</em></div>` : ''}
                         </div>
                     ` : `
-                        <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-500 text-xs">
-                            ⏳ Awaiting client digital signature & acceptance.
+                        <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 text-xs flex justify-between items-center">
+                            <div>
+                                <span class="font-bold text-slate-800 block">⏳ Awaiting Client Product Receiving</span>
+                                <span class="text-[11px] text-slate-500">Products are out for delivery / awaiting signed receipt.</span>
+                            </div>
+                            ${(canReceive && dr.status !== 'CANCELLED') ? `
+                                <button onclick="closeModal(); openClientReceivingModal('${dr.id}')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs transition shadow-sm flex items-center gap-1">
+                                    <span>📥</span> Record Receiving
+                                </button>
+                            ` : ''}
                         </div>
                     `}
                 </div>
 
                 <div class="flex justify-between items-center pt-3 border-t border-slate-100">
-                    <a href="/print-dr.html?id=${dr.id}" class="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1">
-                        🖨️ Print DR
-                    </a>
+                    <div class="flex items-center gap-2">
+                        <a href="/print-dr.html?id=${dr.id}" class="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1">
+                            🖨️ Print DR
+                        </a>
+                        ${(dr.status === 'ACCEPTED' && canInvoice) ? `
+                            <button onclick="closeModal(); openGenerateInvoiceModal('${dr.id}', '${dr.dr_number}', '${dr.company_name}', ${dr.total_accepted})" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm">
+                                ⚡ Generate Sales Invoice
+                            </button>
+                        ` : ''}
+                    </div>
                     <button type="button" onclick="closeModal()" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition">Close</button>
                 </div>
             </div>
@@ -4697,6 +4736,187 @@ async function openViewDRModal(drId) {
     `;
 }
 window.openViewDRModal = openViewDRModal;
+
+// 6f. Record Client Product Receiving Modal (Assigned to Accounting & Admin)
+async function openClientReceivingModal(drId) {
+    const res = await NKB.api(`/api/deliveries/${drId}`);
+    if (!res.success || !res.data) {
+        NKB.showToast(res.error || 'Failed to load Delivery Receipt for receiving.', 'error');
+        return;
+    }
+    const dr = res.data;
+    const items = dr.items || [];
+    const root = document.getElementById('modals-root');
+
+    root.innerHTML = `
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
+            <div class="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 max-h-[92vh] flex flex-col">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="text-2xl">📥</span>
+                        <div>
+                            <h3 class="text-base font-bold text-slate-900">Record Client Product Receiving</h3>
+                            <p class="text-[11px] text-slate-500">${dr.dr_number} • ${dr.company_name} • PO: ${dr.po_number || 'N/A'}</p>
+                        </div>
+                    </div>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold">&times;</button>
+                </div>
+
+                <form onsubmit="submitClientReceiving(event, '${dr.id}')" class="space-y-4 text-xs font-semibold overflow-y-auto flex-1 pr-1">
+                    <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-xl space-y-1 text-emerald-950">
+                        <div class="font-bold text-emerald-900 flex items-center gap-1.5">
+                            <span>✅</span> Assigned to Senior Accountant & Administration
+                        </div>
+                        <p class="text-[11px] text-emerald-800 font-normal leading-relaxed">
+                            Verify and record the client's physical receiving of goods (e.g. from signed Delivery Receipt / receiving report). 
+                            Confirming this marks the delivery as <strong>ACCEPTED</strong> and makes it immediately ready for official Sales Invoicing.
+                        </p>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-slate-700 mb-1">Receiver Name <span class="text-rose-500">*</span></label>
+                            <input type="text" id="admin-recv-signer-name" placeholder="e.g. Client Receiving Officer / Manager" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 text-slate-900 font-bold">
+                        </div>
+                        <div>
+                            <label class="block text-slate-700 mb-1">Receiver Title / Designation</label>
+                            <input type="text" id="admin-recv-signer-title" placeholder="e.g. Warehouse Custodian / Store Head" value="Authorized Client Signatory" class="w-full px-3 py-2 border rounded-xl bg-slate-50 text-slate-900">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-slate-700 mb-1">Receiving Notes / Client Remarks</label>
+                        <textarea id="admin-recv-notes" rows="2" placeholder="e.g. Goods received in good order and condition per signed physical DR" class="w-full px-3 py-2 border rounded-xl bg-slate-50 text-slate-800 font-normal">Confirmed per signed physical DR / client receiving inspection.</textarea>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between items-center mb-1.5">
+                            <label class="block text-slate-700 font-bold">Delivered Items & Quantities</label>
+                            <span class="text-[11px] text-slate-500">Specify accepted vs rejected units</span>
+                        </div>
+                        <div class="border border-slate-200 rounded-xl overflow-hidden">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
+                                    <tr>
+                                        <th class="py-2.5 px-3">Product</th>
+                                        <th class="py-2.5 px-3 text-right">Delivered</th>
+                                        <th class="py-2.5 px-3 text-right w-28">Accepted (pcs)</th>
+                                        <th class="py-2.5 px-3 text-right w-24">Rejected</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    ${items.map(it => `
+                                        <tr>
+                                            <td class="py-2.5 px-3">
+                                                <div class="font-bold text-slate-800">${it.product_name || 'Product'}</div>
+                                                <div class="text-[10px] text-indigo-600 font-mono">Batch: ${it.batch_number || '—'}</div>
+                                            </td>
+                                            <td class="py-2.5 px-3 text-right font-bold text-slate-700">${NKB.formatNumber(it.delivered_quantity)}</td>
+                                            <td class="py-2.5 px-3 text-right">
+                                                <input type="number" id="admin-recv-accept-${it.id}" min="0" max="${it.delivered_quantity}" value="${it.delivered_quantity}"
+                                                    oninput="validateAdminRecvCounts('${it.id}', ${it.delivered_quantity})"
+                                                    class="w-24 px-2 py-1 border border-emerald-300 rounded-lg text-right font-extrabold text-emerald-700 bg-emerald-50/50">
+                                            </td>
+                                            <td class="py-2.5 px-3 text-right">
+                                                <input type="number" id="admin-recv-reject-${it.id}" min="0" max="${it.delivered_quantity}" value="0"
+                                                    oninput="validateAdminRecvRejectCounts('${it.id}', ${it.delivered_quantity})"
+                                                    class="w-20 px-2 py-1 border border-rose-300 rounded-lg text-right font-bold text-rose-700 bg-rose-50/50">
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl">Cancel</button>
+                        <button type="submit" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold flex items-center gap-1.5 shadow">
+                            <span>📥</span> Confirm Receiving & Accept DR
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+}
+window.openClientReceivingModal = openClientReceivingModal;
+
+function validateAdminRecvCounts(itemId, deliveredQty) {
+    const acceptInput = document.getElementById(`admin-recv-accept-${itemId}`);
+    const rejectInput = document.getElementById(`admin-recv-reject-${itemId}`);
+    if (!acceptInput || !rejectInput) return;
+    const acceptVal = parseInt(acceptInput.value) || 0;
+    rejectInput.value = Math.max(0, deliveredQty - acceptVal);
+}
+window.validateAdminRecvCounts = validateAdminRecvCounts;
+
+function validateAdminRecvRejectCounts(itemId, deliveredQty) {
+    const acceptInput = document.getElementById(`admin-recv-accept-${itemId}`);
+    const rejectInput = document.getElementById(`admin-recv-reject-${itemId}`);
+    if (!acceptInput || !rejectInput) return;
+    const rejectVal = parseInt(rejectInput.value) || 0;
+    acceptInput.value = Math.max(0, deliveredQty - rejectVal);
+}
+window.validateAdminRecvRejectCounts = validateAdminRecvRejectCounts;
+
+async function submitClientReceiving(e, drId) {
+    e.preventDefault();
+    const signerName = document.getElementById('admin-recv-signer-name')?.value?.trim();
+    const signerTitle = document.getElementById('admin-recv-signer-title')?.value?.trim();
+    const remarks = document.getElementById('admin-recv-notes')?.value?.trim();
+
+    if (!signerName) {
+        NKB.showToast('Receiver name is required.', 'error');
+        return;
+    }
+
+    const acceptInputs = document.querySelectorAll('[id^="admin-recv-accept-"]');
+    const items = [];
+    let totalAccepted = 0;
+
+    acceptInputs.forEach(input => {
+        const itemId = input.id.replace('admin-recv-accept-', '');
+        const rejectInput = document.getElementById(`admin-recv-reject-${itemId}`);
+        const accQty = parseInt(input.value) || 0;
+        const rejQty = rejectInput ? (parseInt(rejectInput.value) || 0) : 0;
+        totalAccepted += accQty;
+        items.push({
+            id: itemId,
+            accepted_quantity: accQty,
+            rejected_quantity: rejQty,
+            reason: rejQty > 0 ? 'Defective or rejected upon delivery inspection' : undefined
+        });
+    });
+
+    const res = await NKB.api(`/api/deliveries/${drId}/accept`, {
+        method: 'POST',
+        body: JSON.stringify({
+            signer_name: signerName,
+            signer_title: signerTitle,
+            signature_type: 'TYPED',
+            items,
+            acceptance_notes: remarks
+        })
+    });
+
+    if (res.success) {
+        NKB.showToast(res.message || 'Client product receiving recorded successfully!', 'success');
+        closeModal();
+        loadDeliveries();
+
+        // Prompt Accountant or Admin to immediately generate invoice
+        const canInvoice = ['ACCOUNTING', 'ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'CEO'].includes(NKB.user?.role);
+        if (canInvoice && res.data) {
+            setTimeout(() => {
+                openGenerateInvoiceModal(drId, res.data.dr_number, res.data.company_name, totalAccepted);
+            }, 350);
+        }
+    } else {
+        NKB.showToast(res.error || 'Failed to record product receiving.', 'error');
+    }
+}
+window.submitClientReceiving = submitClientReceiving;
 
 // 7. Generate Invoice Modal
 function openGenerateInvoiceModal(drId, drNumber, clientName, totalAccepted) {
@@ -4782,12 +5002,12 @@ function openRecordPaymentModal(invoiceId, invoiceNumber, balanceDue, clientName
                     </div>
                     <div>
                         <label class="block text-slate-600 mb-1">Payment Amount (₱)</label>
-                        <input type="number" step="0.01" min="0.01" max="${Number(balanceDue).toFixed(2)}" value="${Number(balanceDue).toFixed(2)}" inputmode="decimal" onblur="if(this.value && !isNaN(this.value)) this.value = parseFloat(this.value).toFixed(2)" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-emerald-800">
+                        <input type="number" id="pay-amount" step="0.01" min="0.01" max="${Number(balanceDue).toFixed(2)}" value="${Number(balanceDue).toFixed(2)}" inputmode="decimal" onblur="if(this.value && !isNaN(this.value)) this.value = parseFloat(this.value).toFixed(2)" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-emerald-800">
                     </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
                             <label class="block text-slate-600 mb-1">Payment Method</label>
-                            <select id="pay-method" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
+                            <select id="pay-method" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-medium">
                                 <option value="BANK_TRANSFER">Bank Transfer</option>
                                 <option value="CHECK">Check</option>
                                 <option value="ONLINE_BANKING">Online Banking</option>
@@ -4797,8 +5017,12 @@ function openRecordPaymentModal(invoiceId, invoiceNumber, balanceDue, clientName
                         </div>
                         <div>
                             <label class="block text-slate-600 mb-1">Reference Number</label>
-                            <input type="text" id="pay-ref" placeholder="BDO-TXN-12345" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-mono">
+                            <input type="text" id="pay-ref" placeholder="Ref # / Check # / OR # / Txn ID (Optional/Freeform)" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-mono">
                         </div>
+                    </div>
+                    <div>
+                        <label class="block text-slate-600 mb-1">Notes / Remarks</label>
+                        <textarea id="pay-notes" rows="2" placeholder="e.g. Cleared check, BDO branch deposit, payment terms, or receipt details" class="w-full px-3 py-2 border rounded-xl bg-slate-50 text-slate-800 font-normal"></textarea>
                     </div>
                     <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
                         <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl">Cancel</button>
@@ -4812,9 +5036,11 @@ function openRecordPaymentModal(invoiceId, invoiceNumber, balanceDue, clientName
 
 async function submitRecordPayment(e, invoiceId, balanceDue) {
     e.preventDefault();
-    const amount = parseFloat(document.getElementById('pay-amount').value);
-    const method = document.getElementById('pay-method').value;
-    const ref = document.getElementById('pay-ref').value;
+    const amountEl = document.getElementById('pay-amount');
+    const amount = amountEl ? parseFloat(amountEl.value) : 0;
+    const method = document.getElementById('pay-method')?.value;
+    const ref = document.getElementById('pay-ref')?.value?.trim() || '';
+    const notes = document.getElementById('pay-notes')?.value?.trim() || '';
 
     const res = await NKB.api('/api/payments', {
         method: 'POST',
@@ -4822,7 +5048,8 @@ async function submitRecordPayment(e, invoiceId, balanceDue) {
             invoice_id: invoiceId,
             amount,
             payment_method: method,
-            reference_number: ref
+            reference_number: ref,
+            notes
         })
     });
 

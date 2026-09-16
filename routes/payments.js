@@ -175,8 +175,8 @@ router.get('/export-csv', authenticateToken, enforceClientIsolation, (req, res) 
 router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
     const { invoice_id, amount, payment_method, reference_number, notes, payment_date } = req.body;
 
-    if (!invoice_id || !amount || !payment_method || !reference_number) {
-        return res.status(400).json({ success: false, error: 'Invoice ID, amount, payment method, and reference number are required.' });
+    if (!invoice_id || !amount || !payment_method) {
+        return res.status(400).json({ success: false, error: 'Invoice ID, amount, and payment method are required.' });
     }
 
     const payAmount = parseFloat(amount);
@@ -201,6 +201,9 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
         return res.status(400).json({ success: false, error: `Payment amount (₱${payAmount.toFixed(2)}) exceeds balance due (₱${invoice.balance_due.toFixed(2)}).` });
     }
 
+    const finalReferenceNumber = (reference_number && String(reference_number).trim()) ? String(reference_number).trim() : 'N/A';
+    const finalNotes = (notes && String(notes).trim()) ? String(notes).trim() : null;
+
     const recordPaymentTx = db.transaction(() => {
         const paymentId = uuidv4();
         const paymentNumber = getNextDocumentNumber('PAY');
@@ -222,8 +225,8 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
             payment_date || new Date().toISOString().split('T')[0],
             payAmount,
             payment_method,
-            reference_number.trim(),
-            notes || null,
+            finalReferenceNumber,
+            finalNotes,
             req.user.id
         );
 
