@@ -69,8 +69,9 @@ const PERMISSIONS = {
 
     // Purchase Orders (PO) & Confirmations
     'orders:view': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.CEO, ROLES.QC, ROLES.PURCHASING, ROLES.PRODUCTION, ROLES.WAREHOUSE, ROLES.ACCOUNTING, ROLES.INVENTORY, ROLES.CLIENT],
+    'orders:view_prices': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.CEO, ROLES.ACCOUNTING, ROLES.CLIENT],
     'orders:create': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.CLIENT],
-    'orders:update': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.CLIENT],
+    'orders:update': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.ACCOUNTING, ROLES.CLIENT],
     'orders:approve': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN],
     'orders:confirm_accounting': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.ACCOUNTING],
     'orders:confirm_inventory': [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.INVENTORY],
@@ -187,11 +188,20 @@ function requireRoles(...allowedRoles) {
     };
 }
 
+/**
+ * Helper: Check if a role can view order amounts and commercial prices
+ */
+function canViewOrderPrices(role) {
+    const norm = normalizeRole(role);
+    return [ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.CEO, ROLES.ACCOUNTING, ROLES.CLIENT].includes(norm);
+}
+
 module.exports = {
     ROLES,
     PERMISSIONS,
     normalizeRole,
     roleHasPermission,
     requirePermission,
-    requireRoles
+    requireRoles,
+    canViewOrderPrices
 };

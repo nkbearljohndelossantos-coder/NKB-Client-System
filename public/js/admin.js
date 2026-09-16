@@ -442,6 +442,8 @@ async function loadOrders() {
     if (res.success && res.data && res.data.length > 0) {
         const userRole = NKB.user ? NKB.user.role : '';
         const isExecAdmin = ['ADMIN', 'SUPER_ADMIN', 'IT_ADMIN'].includes(userRole);
+        const canViewPrices = isExecAdmin || ['CEO', 'ACCOUNTING'].includes(userRole);
+        const canEditOrder = isExecAdmin || userRole === 'ACCOUNTING';
         const canConfirmAccounting = isExecAdmin || userRole === 'ACCOUNTING';
         const canConfirmInventory = isExecAdmin || userRole === 'INVENTORY';
         const canManageProduction = isExecAdmin || userRole === 'PRODUCTION' || userRole === 'WAREHOUSE';
@@ -459,7 +461,9 @@ async function loadOrders() {
                             </div>
                             <div class="text-right font-mono flex-shrink-0">
                                 <span class="font-black text-slate-950 text-xs block">${NKB.formatNumber(it.target_quantity)} ${it.unit || 'pcs'}</span>
-                                <span class="text-[10px] text-emerald-900 font-bold font-mono">@ ₱${Number(it.unit_price).toFixed(2)}</span>
+                                ${canViewPrices && it.unit_price !== null && it.unit_price !== undefined ? `
+                                    <span class="text-[10px] text-emerald-900 font-bold font-mono">@ ₱${Number(it.unit_price).toFixed(2)}</span>
+                                ` : ''}
                             </div>
                         </div>
                         <div class="pt-1 border-t border-slate-200/60 flex justify-between items-center text-[10px]">
@@ -501,7 +505,7 @@ async function loadOrders() {
                 <td class="py-3 px-4 whitespace-nowrap"><span class="badge bg-slate-100 text-slate-700">±${po.tolerance_percent}%</span></td>
                 <td class="py-3 px-4 whitespace-nowrap"><span class="badge ${po.billing_policy === 'ACTUAL_DELIVERY' ? 'bg-indigo-50 text-indigo-700' : 'bg-purple-50 text-purple-700'}">${po.billing_policy}</span></td>
                 <td class="py-3 px-4 font-black text-slate-950 whitespace-nowrap font-mono">${NKB.formatNumber(po.total_target_quantity)} pcs</td>
-                <td class="py-3 px-4 font-extrabold text-slate-900 whitespace-nowrap font-mono">${NKB.formatCurrency(po.grand_total)}</td>
+                <td class="py-3 px-4 font-extrabold text-slate-900 whitespace-nowrap font-mono">${canViewPrices && po.grand_total !== null && po.grand_total !== undefined ? NKB.formatCurrency(po.grand_total) : '—'}</td>
                 <td class="py-3 px-4 whitespace-nowrap">
                     <div>${NKB.renderStatusBadge(po.status)}</div>
                     ${po.accounting_confirmed === 1 ? `
@@ -573,8 +577,8 @@ async function loadOrders() {
                             <span>📜 View Requisitions (${po.supply_requests_count})</span>
                         </button>
                     ` : ''}
-                    ${(isExecAdmin && po.status !== 'COMPLETED' && po.status !== 'CANCELLED' && po.status !== 'VOIDED' && (!po.dr_count || po.dr_count === 0)) ? `
-                        <button onclick="openEditPOModal('${po.id}')" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1 shadow-sm" title="Update Purchase Order products and details">
+                    ${(canEditOrder && po.status !== 'COMPLETED' && po.status !== 'CANCELLED' && po.status !== 'VOIDED' && (!po.dr_count || po.dr_count === 0)) ? `
+                        <button onclick="openEditPOModal('${po.id}')" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1 shadow-sm" title="Update Purchase Order products, form of payment, and details">
                             <span>✏️ Update</span>
                         </button>
                     ` : ''}

@@ -3,6 +3,7 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const db = require('../database/db');
 const { authenticateToken, requireRoles, enforceClientIsolation } = require('../middleware/auth');
+const { canViewOrderPrices } = require('../middleware/rbac');
 const { getNextDocumentNumber } = require('../services/documentNumberService');
 const { logAudit } = require('../services/auditService');
 
@@ -92,6 +93,22 @@ router.get('/', authenticateToken, enforceClientIsolation, (req, res) => {
             WHERE poi.po_id = ?
             ORDER BY poi.created_at ASC
         `).all(po.id);
+    }
+
+    const canSeePrices = canViewOrderPrices(req.user.role);
+    if (!canSeePrices) {
+        for (const po of orders) {
+            po.subtotal = null;
+            po.tax_percent = null;
+            po.tax_amount = null;
+            po.grand_total = null;
+            if (po.items && Array.isArray(po.items)) {
+                for (const it of po.items) {
+                    it.unit_price = null;
+                    it.subtotal = null;
+                }
+            }
+        }
     }
 
     return res.json({ success: true, data: orders });
@@ -187,6 +204,20 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
         SELECT * FROM sales_invoices WHERE po_id = ? ORDER BY created_at ASC
     `).all(id);
 
+    const canSeePrices = canViewOrderPrices(req.user.role);
+    if (!canSeePrices) {
+        po.subtotal = null;
+        po.tax_percent = null;
+        po.tax_amount = null;
+        po.grand_total = null;
+        if (items && Array.isArray(items)) {
+            for (const it of items) {
+                it.unit_price = null;
+                it.subtotal = null;
+            }
+        }
+    }
+
     return res.json({
         success: true,
         data: {
@@ -194,7 +225,7 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
             items,
             jobOrders,
             deliveries,
-            invoices
+            invoices: canSeePrices ? invoices : []
         }
     });
 });
@@ -204,7 +235,7 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
  * Create a new Purchase Order
  */
 router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
-    let { client_id, expected_delivery_date, tolerance_percent, billing_policy, notes, items, tax_percent } = req.body;
+    let { client_id, expected_delivery_date, tolerance_percent, billing_policy, notes, form_of_payment, items, tax_percent } = req.body;
 
     if (req.user.role === 'CLIENT') {
         client_id = req.clientId;
@@ -294,8 +325,8 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
 
         db.prepare(`
             INSERT INTO purchase_orders
-            (id, po_number, so_number, client_id, po_date, expected_delivery_date, tolerance_percent, billing_policy, status, notes, subtotal, tax_percent, tax_amount, grand_total, created_by, approved_by, approved_at)
-            VALUES (?, ?, ?, ?, date('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (id, po_number, so_number, client_id, po_date, expected_delivery_date, tolerance_percent, billing_policy, status, notes, form_of_payment, subtotal, tax_percent, tax_amount, grand_total, created_by, approved_by, approved_at)
+            VALUES (?, ?, ?, ?, date('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
             poId,
             poNumber,
@@ -306,6 +337,7 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
             policy,
             initialStatus,
             notes || null,
+            form_of_payment || 'COD / Bank Transfer',
             subtotal,
             taxRate,
             taxAmount,
@@ -372,7 +404,7 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
  */
 router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
     const { id } = req.params;
-    let { po_date, expected_delivery_date, tolerance_percent, billing_policy, notes, items, tax_percent } = req.body;
+    let { po_date, expected_delivery_date, tolerance_percent, billing_policy, notes, form_of_payment, items, tax_percent } = req.body;
 
     const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
     if (!po) {
@@ -385,6 +417,11 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
         }
         if (po.status !== 'PENDING_APPROVAL' && po.status !== 'DRAFT') {
             return res.status(400).json({ success: false, error: 'Clients can only edit pending orders.' });
+        }
+    } else {
+        const allowedStaffRoles = ['ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'ACCOUNTING'];
+        if (!allowedStaffRoles.includes(req.user.role)) {
+            return res.status(403).json({ success: false, error: 'Access denied. You do not have permission to update purchase orders.', code: 'FORBIDDEN' });
         }
     }
 
@@ -534,6 +571,7 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
                 tolerance_percent = ?,
                 billing_policy = ?,
                 notes = ?,
+                form_of_payment = ?,
                 subtotal = ?,
                 tax_percent = ?,
                 tax_amount = ?,
@@ -546,6 +584,7 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
             tolerance,
             policy,
             notes !== undefined ? (notes || null) : po.notes,
+            form_of_payment !== undefined ? (form_of_payment || null) : (po.form_of_payment || 'COD / Bank Transfer'),
             subtotal,
             taxRate,
             taxAmount,
@@ -564,6 +603,7 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
                 poId: id,
                 poNumber: po.po_number,
                 clientId: po.client_id,
+                formOfPayment: form_of_payment,
                 grandTotal,
                 tolerance,
                 policy,
@@ -579,6 +619,19 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
         const updatedPO = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
         const orderItems = db.prepare('SELECT * FROM purchase_order_items WHERE po_id = ?').all(id);
         const totalTargetQty = orderItems.reduce((acc, it) => acc + (it.target_quantity || 0), 0);
+
+        const canSeePrices = canViewOrderPrices(req.user.role);
+        if (!canSeePrices) {
+            updatedPO.subtotal = null;
+            updatedPO.tax_percent = null;
+            updatedPO.tax_amount = null;
+            updatedPO.grand_total = null;
+            for (const it of orderItems) {
+                it.unit_price = null;
+                it.subtotal = null;
+            }
+        }
+
         return res.json({
             success: true,
             message: `Purchase Order ${po.po_number} updated successfully.`,

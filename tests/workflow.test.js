@@ -1225,6 +1225,127 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         db.prepare('DELETE FROM purchase_orders WHERE id = ?').run(po.id);
     });
 
+    test('25. PO Receipt Bank Details, Form of Payment Section, Accountant Edit, & Order Price Privacy Test', async () => {
+        const acctToken = getAuthToken('ACCOUNTING');
+        const ceoToken = getAuthToken('CEO');
+        const prodToken = getAuthToken('PRODUCTION');
+        const whToken = getAuthToken('WAREHOUSE');
+        const purchToken = getAuthToken('PURCHASING');
+        const qcToken = getAuthToken('QC');
+
+        assert.ok(acctToken);
+        assert.ok(ceoToken);
+        assert.ok(prodToken);
+        assert.ok(whToken);
+        assert.ok(purchToken);
+        assert.ok(qcToken);
+
+        // A. Create a test PO with form_of_payment
+        const poRes = await request(app)
+            .post('/api/orders')
+            .set('Authorization', `Bearer ${clientToken}`)
+            .send({
+                client_id: demoClient.id,
+                tolerance_percent: 10.0,
+                billing_policy: 'ACTUAL_DELIVERY',
+                form_of_payment: '30 Days Net / BDO Check',
+                notes: 'Initial client order terms',
+                items: [{ product_id: lotionProduct.id, target_quantity: 500, unit_price: 150.0 }]
+            });
+        assert.strictEqual(poRes.status, 201);
+        const po = poRes.body.data;
+        assert.strictEqual(po.form_of_payment, '30 Days Net / BDO Check');
+        assert.strictEqual(po.grand_total, 60000);
+
+        // B. Accountant & CEO & Admin can see prices on GET /api/orders/:id
+        const acctPoRes = await request(app)
+            .get(`/api/orders/${po.id}`)
+            .set('Authorization', `Bearer ${acctToken}`);
+        assert.strictEqual(acctPoRes.status, 200);
+        assert.strictEqual(acctPoRes.body.data.grand_total, 60000);
+        assert.strictEqual(acctPoRes.body.data.subtotal, 60000);
+        assert.strictEqual(acctPoRes.body.data.items[0].unit_price, 120);
+        assert.strictEqual(acctPoRes.body.data.form_of_payment, '30 Days Net / BDO Check');
+
+        const ceoPoRes = await request(app)
+            .get(`/api/orders/${po.id}`)
+            .set('Authorization', `Bearer ${ceoToken}`);
+        assert.strictEqual(ceoPoRes.status, 200);
+        assert.strictEqual(ceoPoRes.body.data.grand_total, 60000);
+        assert.strictEqual(ceoPoRes.body.data.items[0].unit_price, 120);
+
+        const adminPoRes = await request(app)
+            .get(`/api/orders/${po.id}`)
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(adminPoRes.status, 200);
+        assert.strictEqual(adminPoRes.body.data.grand_total, 60000);
+
+        // C. Accountant can edit the PO (Form of Payment and below section notes)
+        const updateRes = await request(app)
+            .put(`/api/orders/${po.id}`)
+            .set('Authorization', `Bearer ${acctToken}`)
+            .send({
+                form_of_payment: '50% Downpayment, 50% upon DR delivery',
+                notes: 'Accountant verified terms: 50/50 split via BDO Bank Transfer',
+                items: [{ product_id: lotionProduct.id, target_quantity: 500 }]
+            });
+        assert.strictEqual(updateRes.status, 200);
+        assert.strictEqual(updateRes.body.data.form_of_payment, '50% Downpayment, 50% upon DR delivery');
+        assert.strictEqual(updateRes.body.data.notes, 'Accountant verified terms: 50/50 split via BDO Bank Transfer');
+
+        // D. Strict Order Price Privacy: Production, Warehouse, Purchasing, and QC MUST NOT see order amounts/prices
+        const opRoles = [
+            { name: 'PRODUCTION', token: prodToken },
+            { name: 'WAREHOUSE', token: whToken },
+            { name: 'PURCHASING', token: purchToken },
+            { name: 'QC', token: qcToken }
+        ];
+
+        for (const op of opRoles) {
+            // GET /api/orders/:id
+            const resSingle = await request(app)
+                .get(`/api/orders/${po.id}`)
+                .set('Authorization', `Bearer ${op.token}`);
+            assert.strictEqual(resSingle.status, 200);
+            assert.strictEqual(resSingle.body.data.subtotal, null, `${op.name} must receive null subtotal`);
+            assert.strictEqual(resSingle.body.data.tax_amount, null, `${op.name} must receive null tax_amount`);
+            assert.strictEqual(resSingle.body.data.grand_total, null, `${op.name} must receive null grand_total`);
+            assert.strictEqual(resSingle.body.data.items[0].unit_price, null, `${op.name} must receive null unit_price`);
+            assert.strictEqual(resSingle.body.data.items[0].subtotal, null, `${op.name} must receive null line subtotal`);
+            assert.deepStrictEqual(resSingle.body.data.invoices, [], `${op.name} must not receive invoices`);
+
+            // GET /api/orders list
+            const resList = await request(app)
+                .get('/api/orders')
+                .set('Authorization', `Bearer ${op.token}`);
+            assert.strictEqual(resList.status, 200);
+            const foundInList = resList.body.data.find(o => o.id === po.id);
+            assert.ok(foundInList, `Order must be in list for ${op.name}`);
+            assert.strictEqual(foundInList.subtotal, null, `${op.name} list subtotal must be null`);
+            assert.strictEqual(foundInList.grand_total, null, `${op.name} list grand_total must be null`);
+            assert.strictEqual(foundInList.items[0].unit_price, null, `${op.name} list item unit_price must be null`);
+            assert.strictEqual(foundInList.items[0].subtotal, null, `${op.name} list item subtotal must be null`);
+
+            // Blocked from updating order
+            const blockEdit = await request(app)
+                .put(`/api/orders/${po.id}`)
+                .set('Authorization', `Bearer ${op.token}`)
+                .send({ notes: 'Attempted unauthorized edit' });
+            assert.strictEqual(blockEdit.status, 403, `${op.name} must be forbidden from updating orders`);
+        }
+
+        // E. Verify print-po.html template contents for Bank Details and Form of Payment section
+        const printPoHtml = fs.readFileSync(path.join(__dirname, '../public/print-po.html'), 'utf8');
+        assert.ok(printPoHtml.includes('BDO UNIBANK, INC.<br>NKB MANUFACTURING CORPORATION<br>0080-5801-0547'), 'print-po.html must include NKB MANUFACTURING CORPORATION under BDO UNIBANK, INC.');
+        assert.ok(printPoHtml.includes('id="po-payment-section"'), 'print-po.html must have #po-payment-section');
+        assert.ok(printPoHtml.includes('id="disp-po-payment"'), 'print-po.html must have #disp-po-payment');
+        assert.ok(printPoHtml.includes('body.hide-prices'), 'print-po.html must contain hide-prices style for non-price viewers');
+
+        // Clean up test records
+        db.prepare('DELETE FROM purchase_order_items WHERE po_id = ?').run(po.id);
+        db.prepare('DELETE FROM purchase_orders WHERE id = ?').run(po.id);
+    });
+
     after(() => {
         // Automatically delete all test decoys and temporary test database
         try {

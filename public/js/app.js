@@ -238,6 +238,9 @@ async function openViewPOModal(poId) {
     let totalTarget = 0;
 
     const isClient = NKB.user ? (NKB.user.role === 'CLIENT') : window.location.pathname.includes('client');
+    const userRole = NKB.user?.role;
+    const canViewPrices = isClient || ['SUPER_ADMIN', 'IT_ADMIN', 'ADMIN', 'CEO', 'ACCOUNTING'].includes(userRole);
+    const canEditOrder = isClient ? (po.status === 'PENDING_APPROVAL') : ['SUPER_ADMIN', 'IT_ADMIN', 'ADMIN', 'ACCOUNTING'].includes(userRole);
     const canStartJO = !isClient && (po.status === 'APPROVED' || po.status === 'IN_PRODUCTION');
 
     const itemsRows = items.map((item, idx) => {
@@ -257,8 +260,10 @@ async function openViewPOModal(poId) {
                 <td class="py-3 px-3 text-center text-slate-600">${item.shelf_life_months || 24} mos</td>
                 <td class="py-3 px-3 text-center font-black text-slate-950 font-mono">${NKB.formatNumber(item.target_quantity)} ${item.unit || 'pcs'}</td>
                 <td class="py-3 px-3 text-center text-slate-500 font-mono text-[11px]">${NKB.formatNumber(item.min_allowed_quantity)} – ${NKB.formatNumber(item.max_allowed_quantity)}</td>
-                <td class="py-3 px-3 text-right font-bold text-indigo-900 font-mono">₱${Number(item.unit_price).toFixed(2)}</td>
-                <td class="py-3 px-3 text-right font-extrabold text-slate-900 font-mono">${NKB.formatCurrency(item.subtotal)}</td>
+                ${canViewPrices ? `
+                    <td class="py-3 px-3 text-right font-bold text-indigo-900 font-mono">₱${Number(item.unit_price || 0).toFixed(2)}</td>
+                    <td class="py-3 px-3 text-right font-extrabold text-slate-900 font-mono">${NKB.formatCurrency(item.subtotal)}</td>
+                ` : ''}
                 <td class="py-3 px-3 text-center font-semibold font-mono ${delivered >= item.target_quantity ? 'text-emerald-700' : (delivered > 0 ? 'text-indigo-700' : 'text-slate-400')}">
                     ${NKB.formatNumber(delivered)} / ${NKB.formatNumber(item.target_quantity)}
                 </td>
@@ -300,15 +305,17 @@ async function openViewPOModal(poId) {
                             </div>
                         </div>
                     </div>
-                    <div class="flex items-center gap-2 self-start sm:self-auto flex-wrap">
-                        <span class="px-2.5 py-1 bg-slate-100 border border-slate-200 rounded-lg text-xs font-mono font-black text-slate-900 flex items-center gap-1.5">
-                            <span>₱${Number(item.unit_price).toFixed(2)}</span>
-                            <span class="text-[9px] uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">Fixed Contract Price</span>
-                        </span>
-                        <span class="px-2.5 py-1 bg-indigo-50 border border-indigo-200 rounded-lg text-xs font-mono font-black text-indigo-900">
-                            Subtotal: ${NKB.formatCurrency(lineSubtotal)}
-                        </span>
-                    </div>
+                    ${canViewPrices ? `
+                        <div class="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+                            <span class="px-2.5 py-1 bg-slate-100 border border-slate-200 rounded-lg text-xs font-mono font-black text-slate-900 flex items-center gap-1.5">
+                                <span>₱${Number(item.unit_price || 0).toFixed(2)}</span>
+                                <span class="text-[9px] uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">Fixed Contract Price</span>
+                            </span>
+                            <span class="px-2.5 py-1 bg-indigo-50 border border-indigo-200 rounded-lg text-xs font-mono font-black text-indigo-900">
+                                Subtotal: ${NKB.formatCurrency(lineSubtotal)}
+                            </span>
+                        </div>
+                    ` : ''}
                 </div>
 
                 <!-- 4 Specifications Badges -->
@@ -443,8 +450,9 @@ async function openViewPOModal(poId) {
                             ${po.approved_at ? `<div class="text-[11px] text-slate-500">Approved Date: ${NKB.formatDate(po.approved_at)}</div>` : ''}
                         </div>
                         <div class="space-y-1">
-                            <span class="text-[10px] uppercase font-bold text-slate-400">Contract & Tolerance Policy</span>
+                            <span class="text-[10px] uppercase font-bold text-slate-400">Contract & Payment Terms</span>
                             <div>Tolerance Limit: <strong class="text-indigo-700 font-bold">±${po.tolerance_percent}%</strong></div>
+                            <div>Form of Payment: <strong class="text-slate-800">${po.form_of_payment || po.terms || 'COD / Bank Transfer'}</strong></div>
                             <div>Billing Policy: <span class="badge ${po.billing_policy === 'ACTUAL_DELIVERY' ? 'bg-indigo-50 text-indigo-700' : 'bg-purple-50 text-purple-700'}">${po.billing_policy}</span></div>
                             <div class="text-[10px] text-slate-500 mt-1 leading-normal">
                                 ${po.billing_policy === 'ACTUAL_DELIVERY' ? 'Over/under runs within tolerance are billed based on actual accepted units.' : 'Fixed PO quantity is billed; overruns reserved as buffer stock.'}
@@ -492,8 +500,10 @@ async function openViewPOModal(poId) {
                                             <th class="py-2.5 px-3 text-center">Shelf Life</th>
                                             <th class="py-2.5 px-3 text-center">Target Qty</th>
                                             <th class="py-2.5 px-3 text-center">Tolerance Range</th>
-                                            <th class="py-2.5 px-3 text-right">Fixed Price</th>
-                                            <th class="py-2.5 px-3 text-right">Line Total</th>
+                                            ${canViewPrices ? `
+                                                <th class="py-2.5 px-3 text-right">Fixed Price</th>
+                                                <th class="py-2.5 px-3 text-right">Line Total</th>
+                                            ` : ''}
                                             <th class="py-2.5 px-3 text-center">Delivered</th>
                                             <th class="py-2.5 px-3 text-center">JO Status</th>
                                         </tr>
@@ -506,26 +516,28 @@ async function openViewPOModal(poId) {
                         </div>
                     </div>
 
-                    <!-- Financial Breakdown -->
-                    <div class="flex justify-end">
-                        <div class="w-72 p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 font-semibold">
-                            <div class="flex justify-between text-slate-600">
-                                <span>Subtotal:</span>
-                                <span class="font-bold text-slate-900 font-mono">${NKB.formatCurrency(po.subtotal)}</span>
-                            </div>
-                            <div class="flex justify-between text-slate-600">
-                                <span>Tax (${po.tax_percent || 0}%):</span>
-                                <span class="font-bold text-slate-900 font-mono">${NKB.formatCurrency(po.tax_amount || 0)}</span>
-                            </div>
-                            <div class="flex justify-between text-base font-extrabold text-indigo-950 pt-2 border-t border-slate-200">
-                                <span>Grand Total:</span>
-                                <span class="font-mono text-indigo-700 font-black">${NKB.formatCurrency(po.grand_total)}</span>
+                    ${canViewPrices ? `
+                        <!-- Financial Breakdown -->
+                        <div class="flex justify-end">
+                            <div class="w-72 p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 font-semibold">
+                                <div class="flex justify-between text-slate-600">
+                                    <span>Subtotal:</span>
+                                    <span class="font-bold text-slate-900 font-mono">${NKB.formatCurrency(po.subtotal)}</span>
+                                </div>
+                                <div class="flex justify-between text-slate-600">
+                                    <span>Tax (${po.tax_percent || 0}%):</span>
+                                    <span class="font-bold text-slate-900 font-mono">${NKB.formatCurrency(po.tax_amount || 0)}</span>
+                                </div>
+                                <div class="flex justify-between text-base font-extrabold text-indigo-950 pt-2 border-t border-slate-200">
+                                    <span>Grand Total:</span>
+                                    <span class="font-mono text-indigo-700 font-black">${NKB.formatCurrency(po.grand_total)}</span>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    ` : ''}
 
                     <!-- Traceability (Linked Job Orders, DRs, Invoices) -->
-                    ${(jobOrders.length > 0 || deliveries.length > 0 || invoices.length > 0) ? `
+                    ${(jobOrders.length > 0 || deliveries.length > 0 || (canViewPrices && invoices.length > 0)) ? `
                         <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
                             <h4 class="font-bold text-slate-900 uppercase text-[11px] tracking-wider">🏭 Production, Delivery & Billing Pipeline</h4>
                             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
@@ -545,14 +557,16 @@ async function openViewPOModal(poId) {
                                         </ul>
                                     ` : '<span class="text-slate-400">None yet</span>'}
                                 </div>
-                                <div>
-                                    <span class="font-bold text-slate-700 block mb-1">Sales Invoices (${invoices.length}):</span>
-                                    ${invoices.length > 0 ? `
-                                        <ul class="space-y-1 max-h-40 overflow-y-auto pr-1">
-                                            ${invoices.map(i => `<li class="font-mono bg-white p-2 rounded-lg border border-slate-200"><strong>${i.invoice_number}</strong><br><span class="text-[10px] text-slate-500">${NKB.formatCurrency(i.total_amount)} • ${i.payment_status}</span></li>`).join('')}
-                                        </ul>
-                                    ` : '<span class="text-slate-400">None yet</span>'}
-                                </div>
+                                ${canViewPrices ? `
+                                    <div>
+                                        <span class="font-bold text-slate-700 block mb-1">Sales Invoices (${invoices.length}):</span>
+                                        ${invoices.length > 0 ? `
+                                            <ul class="space-y-1 max-h-40 overflow-y-auto pr-1">
+                                                ${invoices.map(i => `<li class="font-mono bg-white p-2 rounded-lg border border-slate-200"><strong>${i.invoice_number}</strong><br><span class="text-[10px] text-slate-500">${NKB.formatCurrency(i.total_amount)} • ${i.payment_status}</span></li>`).join('')}
+                                            </ul>
+                                        ` : '<span class="text-slate-400">None yet</span>'}
+                                    </div>
+                                ` : ''}
                             </div>
                         </div>
                     ` : ''}
@@ -560,7 +574,7 @@ async function openViewPOModal(poId) {
 
                 <!-- Footer Actions -->
                 <div class="flex flex-wrap justify-between items-center gap-2 pt-3 border-t border-slate-100 flex-shrink-0">
-                        ${((!NKB.user || NKB.user.role === 'ADMIN' || NKB.user.role === 'SUPER_ADMIN') && po.status !== 'COMPLETED' && po.status !== 'CANCELLED' && po.status !== 'VOIDED' && (!po.deliveries || po.deliveries.length === 0)) ? `
+                        ${(canEditOrder && po.status !== 'COMPLETED' && po.status !== 'CANCELLED' && po.status !== 'VOIDED' && (!po.deliveries || po.deliveries.length === 0)) ? `
                             <button onclick="closeModal(); openEditPOModal('${po.id}');" class="px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-300 rounded-xl font-bold text-xs shadow-sm transition inline-flex items-center gap-1.5" title="Update products and details of this order">
                                 <span>✏️ Update Order</span>
                             </button>
@@ -849,7 +863,7 @@ async function openEditPOModal(poId) {
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div>
                             <label class="block text-slate-600 mb-1">Agreed Tolerance</label>
                             <div class="px-3 py-2 border rounded-xl bg-slate-100 text-slate-800 font-bold">
@@ -862,6 +876,10 @@ async function openEditPOModal(poId) {
                                 <option value="ACTUAL_DELIVERY" ${po.billing_policy === 'ACTUAL_DELIVERY' ? 'selected' : ''}>Option A: Bill Actual Delivered</option>
                                 <option value="FIXED_PO_BUFFER" ${po.billing_policy === 'FIXED_PO_BUFFER' ? 'selected' : ''}>Option B: Fixed PO + Buffer Stock</option>
                             </select>
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 mb-1">Form of Payment</label>
+                            <input type="text" id="edit-po-form-of-payment" value="${po.form_of_payment || po.terms || 'COD / Bank Transfer'}" placeholder="e.g. COD / Bank Transfer, 50% DP..." class="w-full px-3 py-2 border rounded-xl bg-white font-medium text-slate-900">
                         </div>
                     </div>
 
@@ -1321,6 +1339,8 @@ async function submitEditPO(e) {
     const poDate = document.getElementById('edit-po-date').value;
     const deliveryDate = document.getElementById('edit-po-delivery-date').value;
     const policy = document.getElementById('edit-po-billing-policy').value;
+    const formOfPaymentEl = document.getElementById('edit-po-form-of-payment');
+    const formOfPayment = formOfPaymentEl ? formOfPaymentEl.value : undefined;
     const notes = document.getElementById('edit-po-notes').value;
 
     const res = await NKB.api(`/api/orders/${editingPOId}`, {
@@ -1329,6 +1349,7 @@ async function submitEditPO(e) {
             po_date: poDate || undefined,
             expected_delivery_date: deliveryDate || null,
             billing_policy: policy,
+            form_of_payment: formOfPayment,
             notes,
             items: editPOLineItems.map(item => {
                 const prod = editPOCatalog.find(p => p.id === item.product_id);

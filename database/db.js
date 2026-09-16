@@ -37,6 +37,9 @@ function runMigrations(dbInstance, isMysql) {
         try {
             dbInstance.exec(`ALTER TABLE purchase_order_items ADD COLUMN item_name ${textType};`);
         } catch (_) {}
+        try {
+            dbInstance.exec(`ALTER TABLE purchase_orders ADD COLUMN form_of_payment ${textType} DEFAULT 'COD / Bank Transfer';`);
+        } catch (_) {}
         if (isMysql) {
             try {
                 dbInstance.exec("ALTER TABLE purchase_orders MODIFY COLUMN status ENUM('DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'IN_PRODUCTION', 'PARTIALLY_DELIVERED', 'COMPLETED', 'CANCELLED', 'VOIDED') NOT NULL DEFAULT 'PENDING_APPROVAL';");

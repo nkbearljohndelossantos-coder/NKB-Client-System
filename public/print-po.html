@@ -463,6 +463,46 @@
             font-style: italic;
         }
 
+        /* Form of Payment Section (Under Products & Description, Above Bank Details) */
+        .po-payment-section {
+            font-size: 8.5pt;
+            color: #000000;
+            line-height: 1.45;
+            margin-top: 8px;
+            margin-bottom: 8px;
+        }
+
+        .payment-heading {
+            font-weight: bold;
+            font-size: 8.5pt;
+            color: #000000;
+            margin-bottom: 2px;
+        }
+
+        .payment-body {
+            font-size: 8.5pt;
+            color: #000000;
+            white-space: pre-wrap;
+            line-height: 1.45;
+            padding: 3px 0;
+            min-height: 16px;
+        }
+
+        body.edit-mode-active .payment-body:empty:before {
+            content: "Click to specify form of payment / terms...";
+            color: #94a3b8;
+            font-style: italic;
+        }
+
+        /* Factory / Operations Copy: Strictly hide Prices and Financial Totals */
+        body.hide-prices .th-price,
+        body.hide-prices .th-subtotal,
+        body.hide-prices .td-price,
+        body.hide-prices .td-subtotal,
+        body.hide-prices .totals-section {
+            display: none !important;
+        }
+
         /* Bank Details Footer (Outside/Below the Bordered Box) */
         .bank-details-section {
             font-size: 8.5pt;
@@ -526,6 +566,9 @@
             </div>
             <button type="button" onclick="toggleEditMode()" id="btn-toggle-edit" class="toolbar-btn toolbar-btn-edit">
                 <span>✏️ Edit Mode</span>
+            </button>
+            <button type="button" onclick="savePOChanges()" id="btn-save-po" class="toolbar-btn" style="display: none; background: #059669; color: #ffffff; border-color: #047857; font-weight: bold;">
+                <span>💾 Save Changes</span>
             </button>
             <button type="button" onclick="resetToOriginal()" class="toolbar-btn toolbar-btn-reset">
                 <span>🔄 Reset</span>
@@ -629,13 +672,19 @@
             <div id="disp-po-notes" class="notes-body cell-editable" contenteditable="false"></div>
         </div>
 
+        <!-- Form of Payment Section (Under Description, Above Bank Details) -->
+        <div id="po-payment-section" class="po-payment-section avoid-break">
+            <div class="payment-heading">Form of Payment:</div>
+            <div id="disp-po-payment" class="payment-body cell-editable" contenteditable="false">COD / Bank Transfer</div>
+        </div>
+
         <!-- Bank Details Section (Outside/Below the Bordered Box at Bottom Left) -->
         <div class="bank-details-section avoid-break">
             <div class="bank-intro">Please deposit payment to the following bank account/s:</div>
             <div class="bank-lines" id="disp-bank-details" contenteditable="false">
                 BDO UNIBANK, INC.<br>
-                Vyuceutical Beauty Products Trading<br>
-                0080-5801-0717
+                NKB MANUFACTURING CORPORATION<br>
+                0080-5801-0547
             </div>
         </div>
 
@@ -704,15 +753,18 @@
         function toggleEditMode() {
             isEditMode = !isEditMode;
             const btn = document.getElementById('btn-toggle-edit');
+            const saveBtn = document.getElementById('btn-save-po');
             if (isEditMode) {
                 document.body.classList.add('edit-mode-active');
                 btn.classList.add('active');
-                btn.innerHTML = '<span>💾 Done Editing</span>';
+                btn.innerHTML = '<span>Done Editing</span>';
+                if (saveBtn) saveBtn.style.display = 'inline-flex';
                 enableContentEditable(true);
             } else {
                 document.body.classList.remove('edit-mode-active');
                 btn.classList.remove('active');
                 btn.innerHTML = '<span>✏️ Edit Mode</span>';
+                if (saveBtn) saveBtn.style.display = 'none';
                 enableContentEditable(false);
                 recalculateTotals();
             }
@@ -739,6 +791,10 @@
 
             // Bank lines
             document.getElementById('disp-bank-details').contentEditable = val;
+
+            // Form of Payment
+            const paymentEl = document.getElementById('disp-po-payment');
+            if (paymentEl) paymentEl.contentEditable = val;
 
             // Description / Notes section
             const notesEl = document.getElementById('disp-po-notes');
@@ -913,6 +969,14 @@
 
             document.getElementById('po-items-tbody').innerHTML = itemsHtml;
 
+            // Price Visibility Check: hide price columns and totals if items have null/masked prices
+            const hasPrices = items.length > 0 && items.some(it => it.unit_price !== null && it.unit_price !== undefined);
+            if (!hasPrices) {
+                document.body.classList.add('hide-prices');
+            } else {
+                document.body.classList.remove('hide-prices');
+            }
+
             // Financial Totals
             const finalSubtotal = (po.subtotal !== undefined && po.subtotal !== null) ? po.subtotal : calculatedSubtotal;
             const finalVat = po.tax_amount || 0;
@@ -940,16 +1004,109 @@
                 }
             }
 
+            // Form of Payment Logic
+            const paymentEl = document.getElementById('disp-po-payment');
+            const poPayment = (po.form_of_payment || po.terms || 'COD / Bank Transfer').trim();
+            if (paymentEl) {
+                paymentEl.textContent = poPayment;
+            }
+
             // Bank Details Logic
             const bankEl = document.getElementById('disp-bank-details');
             if (isVyuceutical) {
                 bankEl.innerHTML = `BDO UNIBANK, INC.<br>Vyuceutical Beauty Products Trading<br>0080-5801-0717`;
             } else {
-                bankEl.innerHTML = `BDO UNIBANK, INC.<br>0080-5801-0547`;
+                bankEl.innerHTML = `BDO UNIBANK, INC.<br>NKB MANUFACTURING CORPORATION<br>0080-5801-0547`;
             }
 
             if (isEditMode) {
                 enableContentEditable(true);
+            }
+        }
+
+        async function savePOChanges() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const poId = urlParams.get('id') || urlParams.get('po_id') || urlParams.get('poId');
+            if (!poId) {
+                alert('No order ID found to save.');
+                return;
+            }
+
+            const token = localStorage.getItem('nkb_token');
+            if (!token) {
+                alert('You must be logged in as Admin or Accountant to save changes.');
+                return;
+            }
+
+            const saveBtn = document.getElementById('btn-save-po');
+            if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.innerHTML = '<span>⏳ Saving...</span>';
+            }
+
+            try {
+                const notesVal = (document.getElementById('disp-po-notes')?.textContent || '').trim();
+                const paymentVal = (document.getElementById('disp-po-payment')?.textContent || '').trim();
+                const termsVal = (document.getElementById('meta-doc-terms')?.textContent || '').trim();
+                const dueDateVal = (document.getElementById('meta-doc-due-date')?.textContent || '').trim();
+
+                const payload = {
+                    notes: notesVal,
+                    form_of_payment: paymentVal || termsVal || 'COD / Bank Transfer'
+                };
+
+                // Gather updated table items if available
+                const itemRows = document.querySelectorAll('#po-items-tbody tr');
+                const itemsPayload = [];
+                itemRows.forEach(tr => {
+                    const descEl = tr.querySelector('.td-desc');
+                    const qtyEl = tr.querySelector('.td-qty');
+                    const priceEl = tr.querySelector('.td-price');
+                    if (descEl && qtyEl) {
+                        const target_quantity = parseCleanNumber(qtyEl.textContent) || 1;
+                        const unit_price = priceEl ? parseCleanNumber(priceEl.textContent) : 0;
+                        const item_name = descEl.childNodes[0]?.textContent?.trim() || descEl.textContent.trim();
+                        const matched = rawPoData?.items?.find(it => (it.product_name || it.name) === item_name || it.item_name === item_name);
+                        if (matched && matched.product_id) {
+                            itemsPayload.push({
+                                product_id: matched.product_id,
+                                item_name,
+                                target_quantity,
+                                unit_price: unit_price || matched.unit_price || 0
+                            });
+                        }
+                    }
+                });
+
+                if (itemsPayload.length > 0 && itemsPayload.length === (rawPoData?.items?.length || 0)) {
+                    payload.items = itemsPayload;
+                }
+
+                const res = await fetch(`/api/orders/${poId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const json = await res.json();
+                if (json.success) {
+                    alert('Order receipt and Form of Payment updated successfully!');
+                    if (json.data) rawPoData = json.data;
+                    toggleEditMode();
+                } else {
+                    alert('Failed to save changes: ' + (json.error || 'Unknown error'));
+                }
+            } catch (err) {
+                console.error('Error saving PO changes:', err);
+                alert('Connection error while saving order changes.');
+            } finally {
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = '<span>💾 Save Changes</span>';
+                }
             }
         }
 
