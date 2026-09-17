@@ -15,12 +15,14 @@ router.get('/', authenticateToken, enforceClientIsolation, (req, res) => {
     const { poId, status, search } = req.query;
 
     let query = `
-        SELECT dr.*, po.po_number, po.billing_policy, po.tolerance_percent,
+        SELECT dr.*, po.po_number, COALESCE(po.so_number, REPLACE(po.po_number, 'PO-', 'SO-')) as so_number, po.billing_policy, po.tolerance_percent,
                c.company_name, c.contact_person, c.phone as client_phone, c.address as client_address, c.is_vyuceutical_ops,
                (SELECT COUNT(*) FROM delivery_items WHERE dr_id = dr.id) as items_count,
                (SELECT SUM(delivered_quantity) FROM delivery_items WHERE dr_id = dr.id) as total_delivered,
                (SELECT SUM(accepted_quantity) FROM delivery_items WHERE dr_id = dr.id) as total_accepted,
                (SELECT SUM(rejected_quantity) FROM delivery_items WHERE dr_id = dr.id) as total_rejected,
+               (SELECT SUM(target_quantity) FROM purchase_order_items WHERE po_id = dr.po_id) as po_total_target,
+               (SELECT SUM(di2.delivered_quantity) FROM delivery_items di2 JOIN delivery_receipts dr2 ON dr2.id = di2.dr_id WHERE dr2.po_id = dr.po_id AND dr2.status != 'CANCELLED') as po_delivered_total,
                si.id as invoice_id, si.invoice_number, si.total_amount as invoice_amount, si.status as invoice_status
         FROM delivery_receipts dr
         JOIN purchase_orders po ON dr.po_id = po.id
@@ -54,6 +56,26 @@ router.get('/', authenticateToken, enforceClientIsolation, (req, res) => {
     query += ' ORDER BY dr.created_at DESC';
     const deliveries = db.prepare(query).all(...params);
 
+    // Attach items with product name, SKU, batch number, delivered quantity, and PO target
+    const itemsStmt = db.prepare(`
+        SELECT di.*, COALESCE(poi.item_name, p.name) as product_name, p.sku, p.unit,
+               b.batch_number, b.production_date, b.expiry_date,
+               poi.target_quantity as po_target_quantity,
+               (SELECT SUM(di2.delivered_quantity) 
+                FROM delivery_items di2 
+                JOIN delivery_receipts dr2 ON dr2.id = di2.dr_id 
+                WHERE dr2.po_id = dr.po_id AND di2.product_id = di.product_id AND dr2.status != 'CANCELLED') as cumulative_delivered_quantity
+        FROM delivery_items di
+        JOIN products p ON di.product_id = p.id
+        JOIN production_batches b ON di.batch_id = b.id
+        LEFT JOIN purchase_order_items poi ON poi.po_id = ? AND poi.product_id = di.product_id
+        WHERE di.dr_id = ?
+    `);
+
+    for (const d of deliveries) {
+        d.items = itemsStmt.all(d.po_id, d.id);
+    }
+
     return res.json({ success: true, data: deliveries });
 });
 
@@ -64,9 +86,11 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
     const { id } = req.params;
 
     const dr = db.prepare(`
-        SELECT dr.*, po.po_number, po.po_date, po.billing_policy, po.tolerance_percent,
+        SELECT dr.*, po.po_number, COALESCE(po.so_number, REPLACE(po.po_number, 'PO-', 'SO-')) as so_number, po.po_date, po.billing_policy, po.tolerance_percent,
                c.company_name, c.contact_person, c.email as client_email, c.phone as client_phone, c.address as client_address, c.tin as client_tin, c.is_vyuceutical_ops,
                u.name as creator_name,
+               (SELECT SUM(target_quantity) FROM purchase_order_items WHERE po_id = dr.po_id) as po_total_target,
+               (SELECT SUM(di2.delivered_quantity) FROM delivery_items di2 JOIN delivery_receipts dr2 ON dr2.id = di2.dr_id WHERE dr2.po_id = dr.po_id AND dr2.status != 'CANCELLED') as po_delivered_total,
                si.id as invoice_id, si.invoice_number, si.total_amount as invoice_amount, si.status as invoice_status
         FROM delivery_receipts dr
         JOIN purchase_orders po ON dr.po_id = po.id
@@ -87,7 +111,11 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
     const items = db.prepare(`
         SELECT di.*, COALESCE(poi.item_name, p.name) as product_name, p.sku, p.unit, p.description as product_description,
                b.batch_number, b.production_date, b.expiry_date,
-               poi.target_quantity as po_target_quantity
+               poi.target_quantity as po_target_quantity,
+               (SELECT SUM(di2.delivered_quantity) 
+                FROM delivery_items di2 
+                JOIN delivery_receipts dr2 ON dr2.id = di2.dr_id 
+                WHERE dr2.po_id = dr.po_id AND di2.product_id = di.product_id AND dr2.status != 'CANCELLED') as cumulative_delivered_quantity
         FROM delivery_items di
         JOIN products p ON di.product_id = p.id
         JOIN production_batches b ON di.batch_id = b.id
@@ -199,6 +227,33 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'WAREHOUSE', 'PRODUCTI
                 notes: `Dispatched on ${drNumber} to client`,
                 createdBy: req.user.id
             });
+
+            // Synchronize delivered_quantity in purchase_order_items
+            db.prepare(`
+                UPDATE purchase_order_items
+                SET delivered_quantity = (
+                    SELECT COALESCE(SUM(di.delivered_quantity), 0)
+                    FROM delivery_items di
+                    JOIN delivery_receipts dr ON di.dr_id = dr.id
+                    WHERE dr.po_id = ? AND di.product_id = ? AND dr.status != 'CANCELLED'
+                )
+                WHERE po_id = ? AND product_id = ?
+            `).run(po_id, item.product_id, po_id, item.product_id);
+        }
+
+        // Update PO status to PARTIALLY_DELIVERED if partially dispatched
+        const poRemaining = db.prepare(`
+            SELECT SUM(CASE WHEN poi.delivered_quantity >= poi.target_quantity THEN 0 ELSE 1 END) as undelivered_count
+            FROM purchase_order_items poi
+            WHERE poi.po_id = ?
+        `).get(po_id);
+
+        if (poRemaining && poRemaining.undelivered_count > 0) {
+            db.prepare(`
+                UPDATE purchase_orders
+                SET status = 'PARTIALLY_DELIVERED', updated_at = datetime('now', 'localtime')
+                WHERE id = ? AND status IN ('APPROVED', 'IN_PRODUCTION')
+            `).run(po_id);
         }
 
         logAudit({

@@ -1352,20 +1352,43 @@ async function loadDeliveries() {
     const canEditDispatch = ['ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'PRODUCTION', 'WAREHOUSE'].includes(userRole);
 
     if (res.success && res.data && res.data.length > 0) {
-        tbody.innerHTML = res.data.map(dr => `
+        tbody.innerHTML = res.data.map(dr => {
+            const hasItems = Array.isArray(dr.items) && dr.items.length > 0;
+            const progressHtml = hasItems ? dr.items.map(it => {
+                const itemDelivered = it.delivered_quantity || 0;
+                const itemTarget = it.po_target_quantity || itemDelivered;
+                const itemCumul = it.cumulative_delivered_quantity || itemDelivered;
+                const isPartial = itemCumul < itemTarget;
+                const label = isPartial ? `Initial: ${NKB.formatNumber(itemDelivered)} pcs` : 'Completed Delivery';
+                return NKB.renderDeliveryProgressBar(itemCumul, itemTarget, {
+                    itemName: it.product_name,
+                    batchNumber: it.batch_number,
+                    label
+                });
+            }).join('') : NKB.renderDeliveryProgressBar(dr.po_delivered_total || dr.total_delivered, dr.po_total_target || dr.total_delivered, {
+                label: ((dr.po_delivered_total || dr.total_delivered) < (dr.po_total_target || dr.total_delivered) ? `Initial: ${NKB.formatNumber(dr.total_delivered)} pcs` : 'Completed Delivery')
+            });
+
+            return `
             <tr class="hover:bg-slate-50 transition">
-                <td class="py-3 px-4 font-bold text-indigo-600">${dr.dr_number}</td>
-                <td class="py-3 px-4 text-slate-600">${NKB.formatDate(dr.delivery_date)}</td>
+                <td class="py-3 px-4 font-bold text-indigo-600">
+                    <div class="font-mono text-sm">${dr.dr_number}</div>
+                    ${dr.so_number ? `<div class="text-[10px] text-slate-500 font-mono font-bold mt-0.5">SO: ${dr.so_number}</div>` : ''}
+                </td>
+                <td class="py-3 px-4 text-slate-600 whitespace-nowrap">${NKB.formatDate(dr.delivery_date)}</td>
                 <td class="py-3 px-4 font-bold text-slate-800">${(dr.is_vyuceutical_ops === 1 || (dr.company_name && dr.company_name.toLowerCase().includes('vyuceutical'))) ? `<span class="text-purple-900 font-extrabold">Vyuceutical OPC - ${dr.contact_person || dr.company_name}</span>` : dr.company_name}</td>
-                <td class="py-3 px-4">
-                    <button onclick="openViewPOModal('${dr.po_id}')" class="font-bold text-indigo-600 hover:text-indigo-800 hover:underline" title="View Purchase Order Details">
+                <td class="py-3 px-4 whitespace-nowrap">
+                    <button onclick="openViewPOModal('${dr.po_id}')" class="font-bold text-indigo-600 hover:text-indigo-800 hover:underline block" title="View Purchase Order Details">
                         ${dr.po_number}
                     </button>
+                    ${dr.so_number ? `<span class="text-[10px] font-mono text-slate-500 font-semibold">SO: ${dr.so_number}</span>` : ''}
                 </td>
-                <td class="py-3 px-4 font-bold text-slate-700">${NKB.formatNumber(dr.total_delivered)} pcs</td>
-                <td class="py-3 px-4 font-extrabold text-emerald-700">${dr.total_accepted > 0 ? NKB.formatNumber(dr.total_accepted) + ' pcs' : '-'}</td>
-                <td class="py-3 px-4 font-bold text-rose-600">${dr.total_rejected > 0 ? NKB.formatNumber(dr.total_rejected) + ' pcs' : '0'}</td>
-                <td class="py-3 px-4">${NKB.renderStatusBadge(dr.status)}</td>
+                <td class="py-3 px-4 min-w-[220px]">
+                    ${progressHtml}
+                </td>
+                <td class="py-3 px-4 font-extrabold text-emerald-700 whitespace-nowrap">${dr.total_accepted > 0 ? NKB.formatNumber(dr.total_accepted) + ' pcs' : '-'}</td>
+                <td class="py-3 px-4 font-bold text-rose-600 whitespace-nowrap">${dr.total_rejected > 0 ? NKB.formatNumber(dr.total_rejected) + ' pcs' : '0'}</td>
+                <td class="py-3 px-4 whitespace-nowrap">${NKB.renderStatusBadge(dr.status)}</td>
                 <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
                     <button onclick="openViewDRModal('${dr.id}')" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-block" title="View Delivery Receipt Details">
                         🔍 Details
@@ -1399,7 +1422,8 @@ async function loadDeliveries() {
                     ` : ''}
                 </td>
             </tr>
-        `).join('');
+            `;
+        }).join('');
     } else {
         tbody.innerHTML = `<tr><td colspan="9" class="py-6 text-center text-slate-400">No deliveries found.</td></tr>`;
     }
@@ -4291,12 +4315,18 @@ function openCreateDRModal(poNumber, joNumber, batchId, batchNumber, deliveredQt
                 </div>
                 <form onsubmit="submitCreateDR(event, '${poNumber}', '${batchId}')" class="space-y-4 text-xs font-semibold">
                     <div class="p-3 bg-slate-50 rounded-xl space-y-1 text-slate-700">
-                        <div>PO Reference: <strong class="text-slate-900">${poNumber}</strong></div>
-                        <div>Batch: <strong class="text-indigo-600">${batchNumber}</strong> (${productName})</div>
+                        <div class="flex items-center justify-between">
+                            <span>PO Ref: <strong class="text-slate-900 font-mono">${poNumber}</strong></span>
+                            <span class="text-[11px] text-slate-500 font-mono">SO: <strong class="text-slate-800">${poNumber ? poNumber.replace('PO-', 'SO-') : '—'}</strong></span>
+                        </div>
+                        <div>Batch: <strong class="text-indigo-600 font-mono font-bold">${batchNumber}</strong> (${productName})</div>
                     </div>
                     <div>
                         <label class="block text-slate-600 mb-1">Delivered Quantity (pcs)</label>
                         <input type="number" id="dr-delivered-qty" value="${deliveredQty}" min="1" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-900">
+                        <p class="text-[10.5px] text-slate-500 mt-1 font-normal">
+                            Enter the units to dispatch for this delivery (e.g. initial shipment of 720 pcs). The progress bar and remaining balance will be automatically tracked against the PO and SO.
+                        </p>
                     </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
@@ -4789,8 +4819,9 @@ async function openViewDRModal(drId) {
                             <span>${NKB.renderStatusBadge(dr.status)}</span>
                         </div>
                         <div>
-                            <span class="text-[10px] text-slate-400 uppercase block">PO Number</span>
+                            <span class="text-[10px] text-slate-400 uppercase block">PO Reference</span>
                             <span class="font-bold text-slate-900">${dr.po_number || 'N/A'}</span>
+                            ${dr.so_number ? `<span class="text-[10px] font-mono text-slate-500 font-bold block">SO: ${dr.so_number}</span>` : ''}
                         </div>
                         <div>
                             <span class="text-[10px] text-slate-400 uppercase block">Driver</span>
@@ -4810,30 +4841,41 @@ async function openViewDRModal(drId) {
 
                     <!-- Items Table -->
                     <div>
-                        <h4 class="font-bold text-slate-800 mb-2">Delivered Products</h4>
+                        <h4 class="font-bold text-slate-800 mb-2">Delivered Products & Order Progress</h4>
                         <div class="border border-slate-200 rounded-xl overflow-hidden">
                             <table class="w-full text-left text-xs">
                                 <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
                                     <tr>
                                         <th class="py-2.5 px-3">Product</th>
                                         <th class="py-2.5 px-3">Batch</th>
-                                        <th class="py-2.5 px-3 text-right">Delivered</th>
+                                        <th class="py-2.5 px-3 min-w-[160px]">Delivery Progress</th>
                                         <th class="py-2.5 px-3 text-right">Accepted</th>
                                         <th class="py-2.5 px-3 text-right">Rejected</th>
                                         <th class="py-2.5 px-3 text-right">Unit Price</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-slate-100">
-                                    ${items.map(it => `
+                                    ${items.map(it => {
+                                        const itemDelivered = it.delivered_quantity || 0;
+                                        const itemTarget = it.po_target_quantity || itemDelivered;
+                                        const itemCumul = it.cumulative_delivered_quantity || itemDelivered;
+                                        const isPartial = itemCumul < itemTarget;
+                                        const label = isPartial ? `Initial: ${NKB.formatNumber(itemDelivered)} pcs` : 'Completed';
+                                        return `
                                         <tr>
-                                            <td class="py-2.5 px-3 font-semibold text-slate-800">${it.product_name || 'Product'}</td>
-                                            <td class="py-2.5 px-3 text-indigo-600 font-bold">${it.batch_number || '—'}</td>
-                                            <td class="py-2.5 px-3 text-right font-bold text-slate-900">${NKB.formatNumber(it.delivered_quantity)} pcs</td>
+                                            <td class="py-2.5 px-3 font-semibold text-slate-800">
+                                                <div>${it.product_name || 'Product'}</div>
+                                                ${it.sku ? `<div class="text-[10px] text-slate-400 font-mono">SKU: ${it.sku}</div>` : ''}
+                                            </td>
+                                            <td class="py-2.5 px-3 text-indigo-600 font-bold font-mono">${it.batch_number || '—'}</td>
+                                            <td class="py-2.5 px-3">
+                                                ${NKB.renderDeliveryProgressBar(itemCumul, itemTarget, { compact: true, label })}
+                                            </td>
                                             <td class="py-2.5 px-3 text-right font-extrabold text-emerald-700">${it.accepted_quantity > 0 ? NKB.formatNumber(it.accepted_quantity) + ' pcs' : '—'}</td>
                                             <td class="py-2.5 px-3 text-right font-bold text-rose-600">${it.rejected_quantity > 0 ? NKB.formatNumber(it.rejected_quantity) + ' pcs' : '0'}</td>
                                             <td class="py-2.5 px-3 text-right text-slate-600">${NKB.formatCurrency(it.unit_price)}</td>
                                         </tr>
-                                    `).join('')}
+                                    `}).join('')}
                                 </tbody>
                             </table>
                         </div>
@@ -4948,7 +4990,7 @@ async function openClientReceivingModal(drId) {
                                 <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
                                     <tr>
                                         <th class="py-2.5 px-3">Product</th>
-                                        <th class="py-2.5 px-3 text-right">Delivered</th>
+                                        <th class="py-2.5 px-3 min-w-[150px]">Delivered & Progress</th>
                                         <th class="py-2.5 px-3 text-right w-28">Accepted (pcs)</th>
                                         <th class="py-2.5 px-3 text-right w-24">Rejected</th>
                                     </tr>
@@ -4960,7 +5002,10 @@ async function openClientReceivingModal(drId) {
                                                 <div class="font-bold text-slate-800">${it.product_name || 'Product'}</div>
                                                 <div class="text-[10px] text-indigo-600 font-mono">Batch: ${it.batch_number || '—'}</div>
                                             </td>
-                                            <td class="py-2.5 px-3 text-right font-bold text-slate-700">${NKB.formatNumber(it.delivered_quantity)}</td>
+                                            <td class="py-2.5 px-3">
+                                                <div class="font-extrabold text-slate-900 text-xs mb-1 text-right font-mono">${NKB.formatNumber(it.delivered_quantity)} pcs</div>
+                                                ${NKB.renderDeliveryProgressBar(it.cumulative_delivered_quantity || it.delivered_quantity, it.po_target_quantity || it.delivered_quantity, { compact: true })}
+                                            </td>
                                             <td class="py-2.5 px-3 text-right">
                                                 <input type="number" id="admin-recv-accept-${it.id}" min="0" max="${it.delivered_quantity}" value="${it.delivered_quantity}"
                                                     oninput="validateAdminRecvCounts('${it.id}', ${it.delivered_quantity})"

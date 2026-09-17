@@ -165,6 +165,72 @@ const NKB = {
         return dateObj.toLocaleString('en-PH', { timeZone: 'Asia/Manila' });
     },
 
+    // Delivery Progress Bar Helper
+    // Renders visual progress bar indicating delivered quantity vs ordered quantity
+    renderDeliveryProgressBar: function(delivered, target, options = {}) {
+        const current = Number(delivered) || 0;
+        const total = Number(target) || 0;
+        const pct = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : (current > 0 ? 100 : 0);
+        const isCompleted = total > 0 && current >= total;
+        const isPartial = current > 0 && current < total;
+        const compact = options.compact || false;
+        const showItemName = options.itemName || null;
+        const batchNumber = options.batchNumber || null;
+        const label = options.label || (isCompleted ? 'Fully Delivered' : (isPartial ? `Initial Delivery (${this.formatNumber(current)} pcs)` : 'Pending Delivery'));
+
+        let barColor = 'bg-indigo-600';
+        let badgeColor = 'text-indigo-700 bg-indigo-50 border-indigo-200';
+        if (isCompleted) {
+            barColor = 'bg-emerald-500';
+            badgeColor = 'text-emerald-700 bg-emerald-50 border-emerald-200';
+        } else if (isPartial) {
+            barColor = 'bg-amber-500';
+            badgeColor = 'text-amber-800 bg-amber-50 border-amber-200';
+        }
+
+        if (compact) {
+            return `
+                <div class="w-full space-y-1">
+                    <div class="flex items-center justify-between text-[11px]">
+                        <span class="font-extrabold text-slate-900 font-mono">${this.formatNumber(current)} / ${this.formatNumber(total)} pcs</span>
+                        <span class="font-mono font-bold text-[10px] ${isCompleted ? 'text-emerald-700' : 'text-amber-700'}">${pct}%</span>
+                    </div>
+                    <div class="w-full bg-slate-200/90 rounded-full h-2 overflow-hidden shadow-inner">
+                        <div class="${barColor} h-full rounded-full transition-all duration-500" style="width: ${pct}%"></div>
+                    </div>
+                    <div class="text-[9.5px] ${isCompleted ? 'text-emerald-700 font-bold' : 'text-amber-700 font-semibold'}">
+                        ${isCompleted ? '✓ Completed' : `⚡ Initial: ${this.formatNumber(current)} pcs`}
+                    </div>
+                </div>
+            `;
+        }
+
+        return `
+            <div class="w-full space-y-1.5 p-2 rounded-xl bg-white border border-slate-200/80 shadow-xs">
+                ${showItemName ? `
+                    <div class="flex items-center justify-between gap-1.5 text-xs">
+                        <span class="font-bold text-slate-900 truncate max-w-[150px]" title="${showItemName}">${showItemName}</span>
+                        ${batchNumber ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-100 text-slate-700 border border-slate-200">${batchNumber}</span>` : ''}
+                    </div>
+                ` : ''}
+                <div class="flex items-center justify-between gap-2 text-xs">
+                    <span class="font-extrabold font-mono text-slate-900">${this.formatNumber(current)} / ${this.formatNumber(total)} pcs</span>
+                    <span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-extrabold border ${badgeColor}">
+                        ${pct}%
+                    </span>
+                </div>
+                <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden shadow-inner border border-slate-200/70">
+                    <div class="${barColor} h-full rounded-full transition-all duration-500" style="width: ${pct}%"></div>
+                </div>
+                <div class="flex items-center justify-between text-[10px] font-semibold">
+                    <span class="${isCompleted ? 'text-emerald-700' : 'text-amber-700'} flex items-center gap-1">
+                        <span>${isCompleted ? '✓' : '⚡'}</span> ${label}
+                    </span>
+                </div>
+            </div>
+        `;
+    },
+
     // Status Badge Helper
     renderStatusBadge: function(status) {
         const map = {

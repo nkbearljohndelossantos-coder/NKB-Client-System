@@ -203,7 +203,7 @@
             </div>
             <div class="border border-slate-200 rounded p-3 space-y-1 bg-slate-50/50">
                 <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Dispatch Details:</span>
-                <div>PO Reference: <strong id="po-ref-display" class="text-slate-800 font-mono">-</strong></div>
+                <div>PO Reference: <strong id="po-ref-display" class="text-slate-800 font-mono">-</strong> <span class="text-slate-400 mx-1">•</span> SO Reference: <strong id="so-ref-display" class="text-slate-800 font-mono">-</strong></div>
                 <div>Billing Policy: <strong id="policy-display" class="text-slate-800">-</strong></div>
                 <div>Driver: <strong id="driver-display" class="text-slate-800">-</strong></div>
                 <div>Vehicle Plate: <strong id="plate-display" class="text-slate-800 font-mono">-</strong></div>
@@ -260,7 +260,7 @@
         </div>
     </div>
 
-    <script src="/js/app.js"></script>
+    <script src="/js/app.js?v=2.2.6"></script>
     <script>
 
         let rawDrData = null;
@@ -316,7 +316,9 @@
             tbody.innerHTML = items.map(item => {
                 const delivered = parseFloat(item.delivered_quantity) || 0;
                 totalQty += delivered;
-                const unit = item.unit || 'pcs';
+                const target = item.po_target_quantity ? parseFloat(item.po_target_quantity) : null;
+                const isPartial = target && delivered < target;
+                const progressText = isPartial ? `<div class="text-[9.5px] text-slate-500 font-sans font-normal mt-0.5">(Initial: ${NKB.formatNumber(delivered)} / ${NKB.formatNumber(target)})</div>` : '';
                 return `
                     <tr class="dr-row">
                         <td class="py-2 px-2.5 cell-editable" contenteditable="${isDrEditMode ? 'true' : 'false'}">
@@ -325,7 +327,10 @@
                         </td>
                         <td class="py-2 px-2.5 font-mono font-semibold text-slate-700 text-xs cell-editable dr-prod-batch" contenteditable="${isDrEditMode ? 'true' : 'false'}">${item.batch_number || '-'}</td>
                         <td class="py-2 px-2.5 text-slate-600 text-xs cell-editable dr-prod-dates" contenteditable="${isDrEditMode ? 'true' : 'false'}">${NKB.formatDate(item.production_date)} / ${NKB.formatDate(item.expiry_date)}</td>
-                        <td class="py-2 px-2.5 text-right font-semibold text-slate-900 font-mono text-xs cell-editable dr-delivered-qty" contenteditable="${isDrEditMode ? 'true' : 'false'}" onblur="recalculateDrTotals()">${NKB.formatNumber(delivered)} ${unit}</td>
+                        <td class="py-2 px-2.5 text-right font-semibold text-slate-900 font-mono text-xs cell-editable dr-delivered-qty" contenteditable="${isDrEditMode ? 'true' : 'false'}" onblur="recalculateDrTotals()">
+                            <div>${NKB.formatNumber(delivered)} ${unit}</div>
+                            ${progressText}
+                        </td>
                         <td class="py-2 px-2.5 text-right font-bold text-slate-900 font-mono text-xs cell-editable dr-accepted-qty" contenteditable="${isDrEditMode ? 'true' : 'false'}">${item.accepted_quantity > 0 ? NKB.formatNumber(item.accepted_quantity) + ' ' + unit : '-'}</td>
                         <td class="py-2 px-2 text-center edit-only no-print">
                             <button type="button" class="row-del-btn" onclick="deleteDrRow(this)">✕</button>
@@ -415,7 +420,9 @@
             document.getElementById('client-address-display').textContent = (dr.client_address || '').trim() || 'Phils.';
             document.getElementById('client-phone-display').textContent = dr.client_phone || '-';
 
-            document.getElementById('po-ref-display').textContent = dr.po_number;
+            document.getElementById('po-ref-display').textContent = dr.po_number || '-';
+            const soDisplay = document.getElementById('so-ref-display');
+            if (soDisplay) soDisplay.textContent = dr.so_number || (dr.po_number ? dr.po_number.replace('PO-', 'SO-') : '-');
             document.getElementById('policy-display').textContent = dr.billing_policy;
             document.getElementById('driver-display').textContent = dr.driver_name || 'In-house Logistics';
             document.getElementById('plate-display').textContent = dr.vehicle_plate || 'NKB-8899';

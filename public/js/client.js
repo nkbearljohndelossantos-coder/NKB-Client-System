@@ -497,18 +497,41 @@ async function loadClientDeliveries() {
     const tbody = document.getElementById('client-table-drs');
 
     if (res.success && res.data && res.data.length > 0) {
-        tbody.innerHTML = res.data.map(dr => `
+        tbody.innerHTML = res.data.map(dr => {
+            const hasItems = Array.isArray(dr.items) && dr.items.length > 0;
+            const progressHtml = hasItems ? dr.items.map(it => {
+                const itemDelivered = it.delivered_quantity || 0;
+                const itemTarget = it.po_target_quantity || itemDelivered;
+                const itemCumul = it.cumulative_delivered_quantity || itemDelivered;
+                const isPartial = itemCumul < itemTarget;
+                const label = isPartial ? `Initial: ${NKB.formatNumber(itemDelivered)} pcs` : 'Completed Delivery';
+                return NKB.renderDeliveryProgressBar(itemCumul, itemTarget, {
+                    itemName: it.product_name,
+                    batchNumber: it.batch_number,
+                    label
+                });
+            }).join('') : NKB.renderDeliveryProgressBar(dr.po_delivered_total || dr.total_delivered, dr.po_total_target || dr.total_delivered, {
+                label: ((dr.po_delivered_total || dr.total_delivered) < (dr.po_total_target || dr.total_delivered) ? `Initial: ${NKB.formatNumber(dr.total_delivered)} pcs` : 'Completed Delivery')
+            });
+
+            return `
             <tr class="hover:bg-slate-50 transition">
-                <td class="py-3 px-4 font-bold text-indigo-600">${dr.dr_number}</td>
-                <td class="py-3 px-4 text-slate-600">${NKB.formatDate(dr.delivery_date)}</td>
-                <td class="py-3 px-4">
-                    <button onclick="openViewPOModal('${dr.po_id}')" class="font-bold text-indigo-600 hover:text-indigo-800 hover:underline" title="View Purchase Order Details">
+                <td class="py-3 px-4 font-bold text-indigo-600">
+                    <div class="font-mono text-sm">${dr.dr_number}</div>
+                    ${dr.so_number ? `<div class="text-[10px] text-slate-500 font-mono font-bold mt-0.5">SO: ${dr.so_number}</div>` : ''}
+                </td>
+                <td class="py-3 px-4 text-slate-600 whitespace-nowrap">${NKB.formatDate(dr.delivery_date)}</td>
+                <td class="py-3 px-4 whitespace-nowrap">
+                    <button onclick="openViewPOModal('${dr.po_id}')" class="font-bold text-indigo-600 hover:text-indigo-800 hover:underline block" title="View Purchase Order Details">
                         ${dr.po_number}
                     </button>
+                    ${dr.so_number ? `<span class="text-[10px] font-mono text-slate-500 font-semibold">SO: ${dr.so_number}</span>` : ''}
                 </td>
-                <td class="py-3 px-4 font-bold text-slate-700">${NKB.formatNumber(dr.total_delivered)} pcs</td>
-                <td class="py-3 px-4 font-extrabold text-emerald-700">${dr.total_accepted > 0 ? NKB.formatNumber(dr.total_accepted) + ' pcs' : '<span class="text-amber-600 italic">Pending sign-off</span>'}</td>
-                <td class="py-3 px-4">${NKB.renderStatusBadge(dr.status)}</td>
+                <td class="py-3 px-4 min-w-[220px]">
+                    ${progressHtml}
+                </td>
+                <td class="py-3 px-4 font-extrabold text-emerald-700 whitespace-nowrap">${dr.total_accepted > 0 ? NKB.formatNumber(dr.total_accepted) + ' pcs' : '<span class="text-amber-600 italic">Pending sign-off</span>'}</td>
+                <td class="py-3 px-4 whitespace-nowrap">${NKB.renderStatusBadge(dr.status)}</td>
                 <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
                     <button onclick="openViewPOModal('${dr.po_id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-block" title="View Purchase Order Details">
                         👁️ View PO
@@ -523,7 +546,8 @@ async function loadClientDeliveries() {
                     ` : ''}
                 </td>
             </tr>
-        `).join('');
+            `;
+        }).join('');
     } else {
         tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-slate-400">No deliveries found.</td></tr>`;
     }
@@ -546,6 +570,7 @@ async function openClientDRAcceptModal(drId) {
                     <div>
                         <span class="text-xs font-bold text-amber-600 uppercase">Physical Goods Inspection</span>
                         <h3 class="text-xl font-black text-slate-900">Accept Delivery Receipt: ${dr.dr_number}</h3>
+                        <div class="text-xs text-slate-500 mt-1 font-mono">PO: <strong class="text-slate-800">${dr.po_number || 'N/A'}</strong> • SO: <strong class="text-slate-800">${dr.so_number || (dr.po_number ? dr.po_number.replace('PO-', 'SO-') : '—')}</strong></div>
                     </div>
                     <button onclick="closeClientModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
                 </div>
@@ -561,7 +586,7 @@ async function openClientDRAcceptModal(drId) {
                         <thead class="bg-slate-50 border-b text-slate-600 font-bold uppercase">
                             <tr>
                                 <th class="p-3">Product & Batch</th>
-                                <th class="p-3">Delivered</th>
+                                <th class="p-3 min-w-[150px]">Delivered & Progress</th>
                                 <th class="p-3">Accepted Qty</th>
                                 <th class="p-3">Rejected / Damaged</th>
                             </tr>
@@ -573,7 +598,10 @@ async function openClientDRAcceptModal(drId) {
                                         <div class="font-bold text-slate-900">${item.product_name}</div>
                                         <div class="text-[10px] text-slate-400 font-mono">Batch: ${item.batch_number} (Exp: ${NKB.formatDate(item.expiry_date)})</div>
                                     </td>
-                                    <td class="p-3 font-extrabold text-slate-900">${NKB.formatNumber(item.delivered_quantity)} pcs</td>
+                                    <td class="p-3">
+                                        <div class="font-extrabold text-slate-900 font-mono text-xs mb-1">${NKB.formatNumber(item.delivered_quantity)} pcs</div>
+                                        ${NKB.renderDeliveryProgressBar(item.cumulative_delivered_quantity || item.delivered_quantity, item.po_target_quantity || item.delivered_quantity, { compact: true })}
+                                    </td>
                                     <td class="p-3">
                                         <input type="number" id="accept-item-${item.id}" value="${item.delivered_quantity}" max="${item.delivered_quantity}" min="0" oninput="validateItemCounts('${item.id}', ${item.delivered_quantity})" class="w-24 px-2 py-1.5 border-2 border-emerald-300 rounded-lg font-bold text-emerald-900">
                                     </td>
