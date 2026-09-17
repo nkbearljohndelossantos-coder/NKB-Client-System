@@ -64,16 +64,17 @@ router.get('/', authenticateToken, enforceClientIsolation, (req, res) => {
                (SELECT SUM(di2.delivered_quantity) 
                 FROM delivery_items di2 
                 JOIN delivery_receipts dr2 ON dr2.id = di2.dr_id 
-                WHERE dr2.po_id = dr.po_id AND di2.product_id = di.product_id AND dr2.status != 'CANCELLED') as cumulative_delivered_quantity
+                WHERE dr2.po_id = cur_dr.po_id AND di2.product_id = di.product_id AND dr2.status != 'CANCELLED') as cumulative_delivered_quantity
         FROM delivery_items di
+        JOIN delivery_receipts cur_dr ON cur_dr.id = di.dr_id
         JOIN products p ON di.product_id = p.id
         JOIN production_batches b ON di.batch_id = b.id
-        LEFT JOIN purchase_order_items poi ON poi.po_id = ? AND poi.product_id = di.product_id
+        LEFT JOIN purchase_order_items poi ON poi.po_id = cur_dr.po_id AND poi.product_id = di.product_id
         WHERE di.dr_id = ?
     `);
 
     for (const d of deliveries) {
-        d.items = itemsStmt.all(d.po_id, d.id);
+        d.items = itemsStmt.all(d.id);
     }
 
     return res.json({ success: true, data: deliveries });
@@ -115,13 +116,14 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
                (SELECT SUM(di2.delivered_quantity) 
                 FROM delivery_items di2 
                 JOIN delivery_receipts dr2 ON dr2.id = di2.dr_id 
-                WHERE dr2.po_id = dr.po_id AND di2.product_id = di.product_id AND dr2.status != 'CANCELLED') as cumulative_delivered_quantity
+                WHERE dr2.po_id = cur_dr.po_id AND di2.product_id = di.product_id AND dr2.status != 'CANCELLED') as cumulative_delivered_quantity
         FROM delivery_items di
+        JOIN delivery_receipts cur_dr ON cur_dr.id = di.dr_id
         JOIN products p ON di.product_id = p.id
         JOIN production_batches b ON di.batch_id = b.id
-        LEFT JOIN purchase_order_items poi ON poi.po_id = ? AND poi.product_id = di.product_id
+        LEFT JOIN purchase_order_items poi ON poi.po_id = cur_dr.po_id AND poi.product_id = di.product_id
         WHERE di.dr_id = ?
-    `).all(dr.po_id, id);
+    `).all(id);
 
     const acceptance = db.prepare(`
         SELECT da.*, u.name as accepted_by_user_name, u.email as accepted_by_user_email

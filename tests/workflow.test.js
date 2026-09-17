@@ -1579,6 +1579,111 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         db.prepare('DELETE FROM purchase_orders WHERE id = ?').run(po.id);
     });
 
+    test('27. Delivery Progress Bar, Initial Delivery Tracking & PO/SO Numbering Synchronization', async () => {
+        // 1. Create PO with 5,040 target quantity
+        const poRes = await request(app)
+            .post('/api/orders')
+            .set('Authorization', `Bearer ${clientToken}`)
+            .send({
+                client_id: demoClient.id,
+                tolerance_percent: 10.0,
+                billing_policy: 'ACTUAL_DELIVERY',
+                items: [{ product_id: lotionProduct.id, target_quantity: 5040, unit_price: 100.0 }]
+            });
+        assert.strictEqual(poRes.status, 201);
+        const po = poRes.body.data;
+        const expectedSoNumber = po.po_number.replace('PO-', 'SO-');
+        assert.strictEqual(po.so_number, expectedSoNumber, 'SO number must match PO number pattern');
+
+        // Approve PO
+        await request(app).post(`/api/orders/${po.id}/approve`).set('Authorization', `Bearer ${adminToken}`);
+
+        // 2. Create Job Order & Production Batch with unique batch number
+        const joRes = await request(app)
+            .post('/api/job-orders')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({ po_id: po.id, product_id: lotionProduct.id, target_quantity: 5040 });
+        assert.strictEqual(joRes.status, 201);
+        const jo = joRes.body.data;
+
+        const batchRes = await request(app)
+            .post('/api/production/batches')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({ jo_id: jo.id, target_quantity: 5040 });
+        assert.strictEqual(batchRes.status, 201);
+        const batch = batchRes.body.data;
+
+        const yieldRes = await request(app)
+            .post(`/api/production/batches/${batch.id}/yield`)
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({ actual_yield: 5040, qc_notes: 'All 5040 units passed inspection' });
+        assert.strictEqual(yieldRes.status, 200);
+        const originalBatchNumber = batch.batch_number;
+
+        // 3. Create initial Delivery Receipt for 720 out of 5,040
+        const drRes = await request(app)
+            .post('/api/deliveries')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                po_id: po.id,
+                jo_id: jo.id,
+                driver_name: 'Logistics Courier',
+                vehicle_plate: 'NKB-720',
+                items: [{ product_id: lotionProduct.id, batch_id: batch.id, delivered_quantity: 720 }]
+            });
+        assert.strictEqual(drRes.status, 201);
+        const dr = drRes.body.data;
+        assert.ok(dr.id, 'DR id must be present');
+        assert.ok(dr.dr_number, 'DR number must be present');
+
+        // 4. Verify PO status transitioned to PARTIALLY_DELIVERED
+        const checkPo = db.prepare('SELECT status FROM purchase_orders WHERE id = ?').get(po.id);
+        assert.strictEqual(checkPo.status, 'PARTIALLY_DELIVERED', 'PO status must transition to PARTIALLY_DELIVERED');
+
+        // 5. Test GET /api/deliveries
+        const listRes = await request(app)
+            .get('/api/deliveries?poId=' + po.id)
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(listRes.status, 200);
+        assert.strictEqual(listRes.body.success, true);
+        const fetchedDr = listRes.body.data.find(d => d.id === dr.id);
+        assert.ok(fetchedDr, 'DR must exist in deliveries list');
+        assert.strictEqual(fetchedDr.so_number, expectedSoNumber, 'SO number must be synchronized with PO');
+        assert.strictEqual(fetchedDr.po_total_target, 5040, 'PO total target must be 5040');
+        assert.strictEqual(fetchedDr.po_delivered_total, 720, 'PO delivered total must reflect initial delivery 720');
+
+        assert.strictEqual(fetchedDr.items.length, 1);
+        const drItem = fetchedDr.items[0];
+        assert.strictEqual(drItem.batch_number, originalBatchNumber, 'Batch number must not be changed');
+        assert.strictEqual(drItem.delivered_quantity, 720, 'Initial delivery must be 720');
+        assert.strictEqual(drItem.po_target_quantity, 5040, 'Target quantity must be 5040');
+        assert.strictEqual(drItem.cumulative_delivered_quantity, 720, 'Cumulative delivered must be 720');
+
+        // 6. Test GET /api/deliveries/:id
+        const detailRes = await request(app)
+            .get(`/api/deliveries/${dr.id}`)
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(detailRes.status, 200);
+        assert.strictEqual(detailRes.body.data.so_number, expectedSoNumber);
+        assert.strictEqual(detailRes.body.data.items[0].batch_number, originalBatchNumber);
+        assert.strictEqual(detailRes.body.data.items[0].po_target_quantity, 5040);
+        assert.strictEqual(detailRes.body.data.items[0].cumulative_delivered_quantity, 720);
+
+        // 7. Verify frontend renderDeliveryProgressBar output
+        const appJsPath = path.join(__dirname, '../public/js/app.js');
+        const appJs = fs.readFileSync(appJsPath, 'utf8');
+        assert.ok(appJs.includes('renderDeliveryProgressBar'), 'app.js must provide renderDeliveryProgressBar');
+        assert.ok(appJs.includes('Initial:'), 'app.js must render initial delivery indicator');
+
+        // Clean up
+        db.prepare('DELETE FROM delivery_items WHERE dr_id = ?').run(dr.id);
+        db.prepare('DELETE FROM delivery_receipts WHERE id = ?').run(dr.id);
+        db.prepare('DELETE FROM production_batches WHERE id = ?').run(batch.id);
+        db.prepare('DELETE FROM job_orders WHERE id = ?').run(jo.id);
+        db.prepare('DELETE FROM purchase_order_items WHERE po_id = ?').run(po.id);
+        db.prepare('DELETE FROM purchase_orders WHERE id = ?').run(po.id);
+    });
+
     after(() => {
         // Automatically delete all test decoys and temporary test database
         try {
