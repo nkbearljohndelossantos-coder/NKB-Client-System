@@ -40,8 +40,16 @@
                 margin: 0 !important;
                 padding: 0 !important;
                 background: #ffffff !important;
-                font-size: 9pt !important;
+                font-size: 9.5pt !important;
                 color: #000000 !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            .items-table td, .items-table th, .td-desc, .prod-name {
+                color: #000000 !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
             }
 
             .no-print {
@@ -333,15 +341,17 @@
         .items-table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 8.8pt;
+            font-size: 9.5pt;
         }
 
         .items-table th {
-            font-weight: bold;
+            font-weight: 800;
             color: #000000;
-            padding: 4px 4px 8px 4px;
+            padding: 5px 4px 8px 4px;
             text-align: left;
-            border-bottom: 1px solid #e5e7eb;
+            border-bottom: 1.5px solid #000000;
+            font-size: 9.5pt;
+            letter-spacing: 0.2px;
         }
 
         .items-table th.th-desc { width: 50%; }
@@ -356,32 +366,53 @@
             vertical-align: top;
             color: #000000;
             line-height: 1.35;
+            font-size: 9.5pt;
         }
 
         .td-desc {
             padding-right: 10px !important;
             word-break: break-word;
+            font-weight: 700 !important;
+            font-size: 9.5pt !important;
+            color: #000000 !important;
+            line-height: 1.4 !important;
+        }
+
+        .td-desc .prod-name {
+            font-weight: 800 !important;
+            color: #000000 !important;
+            font-size: 9.5pt !important;
+            letter-spacing: 0.15px;
+            text-transform: uppercase;
+            display: block;
         }
 
         .td-qty {
             text-align: right;
             font-variant-numeric: tabular-nums;
+            font-weight: 700;
+            color: #000000;
         }
 
         .td-uom {
             text-align: left;
             padding-left: 8px !important;
+            font-weight: 700;
+            color: #000000;
         }
 
         .td-price {
             text-align: right;
             font-variant-numeric: tabular-nums;
+            font-weight: 700;
+            color: #000000;
         }
 
         .td-subtotal {
             text-align: right;
             font-variant-numeric: tabular-nums;
-            font-weight: 500;
+            font-weight: 800;
+            color: #000000;
         }
 
         .td-actions {
@@ -822,7 +853,7 @@
             const tbody = document.getElementById('po-items-tbody');
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td class="td-desc cell-editable" contenteditable="${isEditMode ? 'true' : 'false'}">NEW ITEM DESCRIPTION</td>
+                <td class="td-desc cell-editable" contenteditable="${isEditMode ? 'true' : 'false'}"><div class="prod-name">NEW ITEM DESCRIPTION</div></td>
                 <td class="td-qty cell-editable" contenteditable="${isEditMode ? 'true' : 'false'}" onblur="onRowInput(this.parentElement)">1.00</td>
                 <td class="td-uom cell-editable" contenteditable="${isEditMode ? 'true' : 'false'}">PC</td>
                 <td class="td-price cell-editable" contenteditable="${isEditMode ? 'true' : 'false'}" onblur="onRowInput(this.parentElement)">0.00</td>
@@ -861,21 +892,14 @@
 
             // Document Title
             const titleSelect = document.getElementById('doc-title-select');
-            const chosenTitle = titleSelect ? titleSelect.value : 'SALES ORDER';
+            let chosenTitle = titleSelect ? titleSelect.value : 'SALES ORDER';
             document.getElementById('hdr-doc-title').textContent = chosenTitle;
 
             // Customer Metadata
-            let clientDisplayName = '';
+            let clientDisplayName = po.company_name || 'BELLA SKIN';
             if (isVyuceutical) {
-                const contactPerson = po.contact_person || '';
-                const compName = po.company_name || '';
-                if (contactPerson && compName && !compName.toLowerCase().includes(contactPerson.toLowerCase())) {
-                    clientDisplayName = `VYU - ${compName.toUpperCase()} - ${contactPerson.toUpperCase()}`;
-                } else {
-                    clientDisplayName = compName.toUpperCase() || 'VYUCEUTICAL CLIENT';
-                }
-            } else {
-                clientDisplayName = po.company_name || 'CLIENT';
+                const contact = (po.contact_person || 'JANICE SANDOVAL I').trim();
+                clientDisplayName = `VYU - ${clientDisplayName} - ${contact}`;
             }
 
             document.getElementById('meta-client-name').textContent = clientDisplayName;
@@ -917,8 +941,8 @@
                     return `
                         <tr>
                             <td class="td-desc cell-editable" contenteditable="false">
-                                <div>${escapeHtml(desc)}</div>
-                                ${itemNote ? `<div style="font-size: 7.8pt; color: #4b5563; font-style: italic; margin-top: 1px;">Note: ${escapeHtml(itemNote)}</div>` : ''}
+                                <div class="prod-name">${escapeHtml(desc)}</div>
+                                ${itemNote ? `<div style="font-size: 8pt; color: #374151; font-style: italic; margin-top: 1px; font-weight: 600;">Note: ${escapeHtml(itemNote)}</div>` : ''}
                             </td>
                             <td class="td-qty cell-editable" contenteditable="false" onblur="onRowInput(this.parentElement)">${formatNumber2(qty)}</td>
                             <td class="td-uom cell-editable" contenteditable="false">${escapeHtml(uom)}</td>
@@ -1025,7 +1049,7 @@
                     if (descEl && qtyEl) {
                         const target_quantity = parseCleanNumber(qtyEl.textContent) || 1;
                         const unit_price = priceEl ? parseCleanNumber(priceEl.textContent) : 0;
-                        const item_name = descEl.childNodes[0]?.textContent?.trim() || descEl.textContent.trim();
+                        const item_name = (descEl.querySelector('.prod-name')?.textContent || descEl.childNodes[0]?.textContent || descEl.textContent).trim();
                         const matched = rawPoData?.items?.find(it => (it.product_name || it.name) === item_name || it.item_name === item_name);
                         if (matched && matched.product_id) {
                             itemsPayload.push({

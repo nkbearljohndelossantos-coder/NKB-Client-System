@@ -322,8 +322,8 @@
                 return `
                     <tr class="dr-row">
                         <td class="py-2 px-2.5 cell-editable" contenteditable="${isDrEditMode ? 'true' : 'false'}">
-                            <div class="font-semibold text-slate-900 text-xs dr-prod-name">${item.product_name || '-'}</div>
-                            <div class="text-[10px] text-slate-400 font-mono dr-prod-sku">SKU: ${item.sku || '-'}</div>
+                            <div class="font-black text-slate-950 text-xs dr-prod-name">${item.product_name || '-'}</div>
+                            <div class="text-[10px] text-slate-700 font-mono font-bold dr-prod-sku">SKU: ${item.sku || '-'}</div>
                         </td>
                         <td class="py-2 px-2.5 font-mono font-semibold text-slate-700 text-xs cell-editable dr-prod-batch" contenteditable="${isDrEditMode ? 'true' : 'false'}">${item.batch_number || '-'}</td>
                         <td class="py-2 px-2.5 text-slate-600 text-xs cell-editable dr-prod-dates" contenteditable="${isDrEditMode ? 'true' : 'false'}">${NKB.formatDate(item.production_date)} / ${NKB.formatDate(item.expiry_date)}</td>
@@ -361,8 +361,8 @@
             tr.className = 'dr-row';
             tr.innerHTML = `
                 <td class="py-2 px-2.5 cell-editable" contenteditable="true">
-                    <div class="font-semibold text-slate-900 text-xs dr-prod-name">NEW PRODUCT NAME</div>
-                    <div class="text-[10px] text-slate-400 font-mono dr-prod-sku">SKU: NKB-NEW</div>
+                    <div class="font-black text-slate-950 text-xs dr-prod-name">NEW PRODUCT NAME</div>
+                    <div class="text-[10px] text-slate-700 font-mono font-bold dr-prod-sku">SKU: NKB-NEW</div>
                 </td>
                 <td class="py-2 px-2.5 font-mono font-semibold text-slate-700 text-xs cell-editable dr-prod-batch" contenteditable="true">BATCH-001</td>
                 <td class="py-2 px-2.5 text-slate-600 text-xs cell-editable dr-prod-dates" contenteditable="true">09/15/2026 / 09/15/2028</td>

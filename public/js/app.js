@@ -1337,9 +1337,9 @@ function renderEditPOLineItems() {
                 <td class="py-2.5 px-3">
                     <div class="flex items-center gap-1 mb-1">
                         ${brandBadge}
-                        <span class="text-[10px] font-mono text-slate-500">${currentProd ? (currentProd.effective_sku || currentProd.sku) : ''}</span>
+                        <span class="text-[10px] font-mono text-indigo-900 font-bold bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded">${currentProd ? (currentProd.effective_sku || currentProd.sku) : ''}</span>
                     </div>
-                    <select onchange="updateEditPOLineItem(${idx}, 'product_id', this.value)" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white font-medium focus:ring-2 focus:ring-indigo-500">
+                    <select onchange="updateEditPOLineItem(${idx}, 'product_id', this.value)" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500">
                         ${window.renderProductOptionsGroupedByBrand ? window.renderProductOptionsGroupedByBrand(editPOCatalog, item.product_id) : editPOCatalog.map(p => `
                             <option value="${p.id}" ${p.id === item.product_id ? 'selected' : ''}>
                                 ${p.display_name || p.clean_name || p.name} (${p.effective_sku || p.sku}) - ₱${Number(p.default_price).toFixed(2)}${p.has_custom_price ? ' [Contract Rate]' : ''}
