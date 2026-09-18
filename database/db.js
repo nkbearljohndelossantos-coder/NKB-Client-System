@@ -278,12 +278,142 @@ function runMigrations(dbInstance, isMysql) {
             { name: 'inventory_confirmed', type: `${intType} DEFAULT 0` },
             { name: 'inventory_confirmed_at', type: textType },
             { name: 'inventory_confirmed_by', type: textType },
-            { name: 'raw_materials_status', type: `${textType} DEFAULT 'PENDING_CHECK'` }
+            { name: 'raw_materials_status', type: `${textType} DEFAULT 'PENDING_CHECK'` },
+            { name: 'formulation_converted', type: `${intType} DEFAULT 0` },
+            { name: 'formulation_converted_at', type: textType }
         ];
         for (const col of poCols) {
             try {
                 dbInstance.exec(`ALTER TABLE purchase_orders ADD COLUMN ${col.name} ${col.type};`);
             } catch (_) {}
+        }
+
+        // Create product_formulations, formulation_ingredients, and order_material_conversions tables
+        try {
+            if (isMysql) {
+                dbInstance.exec(`
+                    CREATE TABLE IF NOT EXISTS product_formulations (
+                        id VARCHAR(36) NOT NULL PRIMARY KEY,
+                        product_id VARCHAR(36) NOT NULL,
+                        formula_code VARCHAR(100) NOT NULL,
+                        name VARCHAR(255) NOT NULL,
+                        base_dose_qty DECIMAL(10,2) NOT NULL DEFAULT 1.00,
+                        base_unit VARCHAR(50) NOT NULL DEFAULT 'pcs',
+                        instructions TEXT NULL,
+                        is_confidential TINYINT(1) NOT NULL DEFAULT 1,
+                        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        INDEX idx_pf_product (product_id),
+                        INDEX idx_pf_formula_code (formula_code)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+                    CREATE TABLE IF NOT EXISTS formulation_ingredients (
+                        id VARCHAR(36) NOT NULL PRIMARY KEY,
+                        formulation_id VARCHAR(36) NOT NULL,
+                        material_code VARCHAR(100) NOT NULL,
+                        material_name VARCHAR(255) NOT NULL,
+                        phase VARCHAR(50) NOT NULL DEFAULT 'Phase A',
+                        percentage DECIMAL(6,3) NOT NULL DEFAULT 0.000,
+                        quantity_per_unit DECIMAL(12,4) NOT NULL DEFAULT 0.0000,
+                        unit VARCHAR(50) NOT NULL DEFAULT 'g',
+                        notes TEXT NULL,
+                        sort_order INT DEFAULT 0,
+                        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        INDEX idx_fi_formulation (formulation_id),
+                        INDEX idx_fi_material_code (material_code)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+                    CREATE TABLE IF NOT EXISTS order_material_conversions (
+                        id VARCHAR(36) NOT NULL PRIMARY KEY,
+                        po_id VARCHAR(36) NOT NULL,
+                        po_item_id VARCHAR(36) NULL,
+                        product_id VARCHAR(36) NOT NULL,
+                        formula_code VARCHAR(100) NULL,
+                        material_code VARCHAR(100) NOT NULL,
+                        material_name VARCHAR(255) NOT NULL,
+                        phase VARCHAR(50) NULL DEFAULT 'Phase A',
+                        percentage DECIMAL(6,3) NULL DEFAULT 0.000,
+                        unit_quantity DECIMAL(12,4) NOT NULL DEFAULT 0.0000,
+                        total_quantity DECIMAL(14,4) NOT NULL DEFAULT 0.0000,
+                        unit VARCHAR(50) NOT NULL DEFAULT 'g',
+                        status VARCHAR(50) NOT NULL DEFAULT 'ALLOCATED',
+                        converted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        INDEX idx_omc_po (po_id),
+                        INDEX idx_omc_product (product_id),
+                        INDEX idx_omc_material (material_code)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+                `);
+            } else {
+                dbInstance.exec(`
+                    CREATE TABLE IF NOT EXISTS product_formulations (
+                        id TEXT PRIMARY KEY,
+                        product_id TEXT NOT NULL,
+                        formula_code TEXT NOT NULL,
+                        name TEXT NOT NULL,
+                        base_dose_qty REAL NOT NULL DEFAULT 1.0,
+                        base_unit TEXT NOT NULL DEFAULT 'pcs',
+                        instructions TEXT,
+                        is_confidential INTEGER NOT NULL DEFAULT 1,
+                        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                        updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_pf_product ON product_formulations(product_id);
+                    CREATE INDEX IF NOT EXISTS idx_pf_formula_code ON product_formulations(formula_code);
+
+                    CREATE TABLE IF NOT EXISTS formulation_ingredients (
+                        id TEXT PRIMARY KEY,
+                        formulation_id TEXT NOT NULL,
+                        material_code TEXT NOT NULL,
+                        material_name TEXT NOT NULL,
+                        phase TEXT NOT NULL DEFAULT 'Phase A',
+                        percentage REAL NOT NULL DEFAULT 0.0,
+                        quantity_per_unit REAL NOT NULL DEFAULT 0.0,
+                        unit TEXT NOT NULL DEFAULT 'g',
+                        notes TEXT,
+                        sort_order INTEGER DEFAULT 0,
+                        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                        FOREIGN KEY (formulation_id) REFERENCES product_formulations(id) ON DELETE CASCADE
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_fi_formulation ON formulation_ingredients(formulation_id);
+                    CREATE INDEX IF NOT EXISTS idx_fi_material_code ON formulation_ingredients(material_code);
+
+                    CREATE TABLE IF NOT EXISTS order_material_conversions (
+                        id TEXT PRIMARY KEY,
+                        po_id TEXT NOT NULL,
+                        po_item_id TEXT,
+                        product_id TEXT NOT NULL,
+                        formula_code TEXT,
+                        material_code TEXT NOT NULL,
+                        material_name TEXT NOT NULL,
+                        phase TEXT DEFAULT 'Phase A',
+                        percentage REAL DEFAULT 0.0,
+                        unit_quantity REAL NOT NULL DEFAULT 0.0,
+                        total_quantity REAL NOT NULL DEFAULT 0.0,
+                        unit TEXT NOT NULL DEFAULT 'g',
+                        status TEXT NOT NULL DEFAULT 'ALLOCATED',
+                        converted_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                        FOREIGN KEY (po_id) REFERENCES purchase_orders(id) ON DELETE CASCADE,
+                        FOREIGN KEY (po_item_id) REFERENCES purchase_order_items(id) ON DELETE CASCADE,
+                        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_omc_po ON order_material_conversions(po_id);
+                    CREATE INDEX IF NOT EXISTS idx_omc_product ON order_material_conversions(product_id);
+                    CREATE INDEX IF NOT EXISTS idx_omc_material ON order_material_conversions(material_code);
+                `);
+            }
+
+            // Auto-seed default product formulations
+            try {
+                const { seedDefaultFormulations } = require('../services/formulationService');
+                seedDefaultFormulations(dbInstance);
+            } catch (seedErr) {
+                console.warn('Formulation seeding note:', seedErr.message);
+            }
+        } catch (formErr) {
+            console.warn('Formulation tables init note:', formErr.message);
         }
 
         // Create supply_requests table for Purchasing Department requisitions

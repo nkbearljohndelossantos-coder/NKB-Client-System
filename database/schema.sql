@@ -123,6 +123,8 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
     inventory_confirmed_at TEXT,
     inventory_confirmed_by TEXT,
     raw_materials_status TEXT DEFAULT 'PENDING_CHECK',
+    formulation_converted INTEGER NOT NULL DEFAULT 0,
+    formulation_converted_at TEXT,
     created_by TEXT NOT NULL,
     approved_by TEXT,
     approved_at TEXT,
@@ -497,6 +499,69 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 CREATE INDEX IF NOT EXISTS idx_cm_sender ON chat_messages(sender_id);
 CREATE INDEX IF NOT EXISTS idx_cm_receiver ON chat_messages(receiver_id);
 CREATE INDEX IF NOT EXISTS idx_cm_channel ON chat_messages(channel_type);
+
+-- Product Chemical Formulations Table (Confidential R&D / Bill of Materials)
+CREATE TABLE IF NOT EXISTS product_formulations (
+    id TEXT PRIMARY KEY,
+    product_id TEXT NOT NULL,
+    formula_code TEXT NOT NULL,
+    name TEXT NOT NULL,
+    base_dose_qty REAL NOT NULL DEFAULT 1.0,
+    base_unit TEXT NOT NULL DEFAULT 'pcs',
+    instructions TEXT,
+    is_confidential INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_pf_product ON product_formulations(product_id);
+CREATE INDEX IF NOT EXISTS idx_pf_formula_code ON product_formulations(formula_code);
+
+-- Formulation Ingredients (Bill of Materials Items)
+CREATE TABLE IF NOT EXISTS formulation_ingredients (
+    id TEXT PRIMARY KEY,
+    formulation_id TEXT NOT NULL,
+    material_code TEXT NOT NULL,
+    material_name TEXT NOT NULL,
+    phase TEXT NOT NULL DEFAULT 'Phase A',
+    percentage REAL NOT NULL DEFAULT 0.0,
+    quantity_per_unit REAL NOT NULL DEFAULT 0.0,
+    unit TEXT NOT NULL DEFAULT 'g',
+    notes TEXT,
+    sort_order INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    FOREIGN KEY (formulation_id) REFERENCES product_formulations(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_fi_formulation ON formulation_ingredients(formulation_id);
+CREATE INDEX IF NOT EXISTS idx_fi_material_code ON formulation_ingredients(material_code);
+
+-- Order Material Conversions (Calculated Bill of Materials per Purchase Order)
+CREATE TABLE IF NOT EXISTS order_material_conversions (
+    id TEXT PRIMARY KEY,
+    po_id TEXT NOT NULL,
+    po_item_id TEXT,
+    product_id TEXT NOT NULL,
+    formula_code TEXT,
+    material_code TEXT NOT NULL,
+    material_name TEXT NOT NULL,
+    phase TEXT DEFAULT 'Phase A',
+    percentage REAL DEFAULT 0.0,
+    unit_quantity REAL NOT NULL DEFAULT 0.0,
+    total_quantity REAL NOT NULL DEFAULT 0.0,
+    unit TEXT NOT NULL DEFAULT 'g',
+    status TEXT NOT NULL DEFAULT 'ALLOCATED',
+    converted_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    FOREIGN KEY (po_id) REFERENCES purchase_orders(id) ON DELETE CASCADE,
+    FOREIGN KEY (po_item_id) REFERENCES purchase_order_items(id) ON DELETE CASCADE,
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS idx_omc_po ON order_material_conversions(po_id);
+CREATE INDEX IF NOT EXISTS idx_omc_product ON order_material_conversions(product_id);
+CREATE INDEX IF NOT EXISTS idx_omc_material ON order_material_conversions(material_code);
 
 -- Initial Executive Super Admin Account (Email: admin@nkbmanufacturing.com | Password: Admin123!)
 INSERT OR REPLACE INTO users (id, name, email, password_hash, plain_password, role, is_active) VALUES

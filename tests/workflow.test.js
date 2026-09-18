@@ -1684,6 +1684,126 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         db.prepare('DELETE FROM purchase_orders WHERE id = ?').run(po.id);
     });
 
+    test('28. Formulation Tab, Accounting Order Confirmation -> Raw Materials Conversion, and Live Inventory API Test', async () => {
+        const accountingToken = getAuthToken('ACCOUNTING');
+        const INVENTORY_API_KEY = 'nkb_inv_live_6ae6965c1ca61aef54939d6b1ecfac1b';
+
+        // 1. Create a Purchase Order with 2 products (Sunscreen and Lotion)
+        const sunscreenProduct = db.prepare("SELECT * FROM products WHERE sku = 'SKC-2026001' OR name LIKE '%Sunscreen%' LIMIT 1").get() || lotionProduct;
+        const poRes = await request(app)
+            .post('/api/orders')
+            .set('Authorization', `Bearer ${clientToken}`)
+            .send({
+                client_id: demoClient.id,
+                tolerance_percent: 10.0,
+                billing_policy: 'ACTUAL_DELIVERY',
+                items: [
+                    { product_id: lotionProduct.id, target_quantity: 500, unit_price: 120.0 },
+                    { product_id: sunscreenProduct.id, target_quantity: 1000, unit_price: 150.0 }
+                ]
+            });
+        assert.strictEqual(poRes.status, 201);
+        const po = poRes.body.data;
+
+        // Verify initially formulation_converted is 0 or unconfirmed
+        const initialPo = db.prepare('SELECT accounting_confirmed, formulation_converted FROM purchase_orders WHERE id = ?').get(po.id);
+        assert.strictEqual(initialPo.accounting_confirmed, 0);
+
+        // 2. Accounting confirms the order
+        const confirmRes = await request(app)
+            .post(`/api/orders/${po.id}/accounting-confirm`)
+            .set('Authorization', `Bearer ${accountingToken}`)
+            .send({ form_of_payment: '30d' });
+        assert.strictEqual(confirmRes.status, 200);
+        assert.strictEqual(confirmRes.body.success, true);
+
+        // 3. Verify order status in DB: accounting_confirmed = 1, formulation_converted = 1
+        const updatedPo = db.prepare('SELECT accounting_confirmed, formulation_converted, form_of_payment FROM purchase_orders WHERE id = ?').get(po.id);
+        assert.strictEqual(updatedPo.accounting_confirmed, 1);
+        assert.strictEqual(updatedPo.formulation_converted, 1);
+        assert.strictEqual(updatedPo.form_of_payment, '30d');
+
+        // 4. Verify order_material_conversions table has converted raw materials
+        const convertedMaterials = db.prepare('SELECT * FROM order_material_conversions WHERE po_id = ?').all(po.id);
+        assert.ok(convertedMaterials.length > 0, 'Raw materials must be generated for all order items');
+
+        // Verify conversion quantities are calculated (target_quantity * unit_quantity)
+        for (const mat of convertedMaterials) {
+            assert.ok(mat.total_quantity > 0, `Total quantity for ${mat.material_name} must be > 0`);
+            assert.strictEqual(mat.status, 'ALLOCATED');
+            assert.ok(mat.material_code, 'Material code must be populated');
+        }
+
+        // 5. Verify Internal Role-Protected Breakdown API
+        const breakdownRes = await request(app)
+            .get(`/api/formulations/orders/${po.id}/breakdown`)
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(breakdownRes.status, 200);
+        assert.strictEqual(breakdownRes.body.success, true);
+        assert.ok(breakdownRes.body.data.perProduct.length >= 2, 'Breakdown must contain items for both ordered products');
+        assert.ok(breakdownRes.body.data.consolidated.length > 0, 'Consolidated pull sheet must contain aggregated raw materials');
+
+        // 6. Verify Confidentiality Rule: CLIENT role is strictly FORBIDDEN (403) from accessing formulations
+        const clientListRes = await request(app)
+            .get('/api/formulations')
+            .set('Authorization', `Bearer ${clientToken}`);
+        assert.strictEqual(clientListRes.status, 403, 'Client must be forbidden from listing formulations');
+
+        const clientDetailRes = await request(app)
+            .get(`/api/formulations/${lotionProduct.id}`)
+            .set('Authorization', `Bearer ${clientToken}`);
+        assert.strictEqual(clientDetailRes.status, 403, 'Client must be forbidden from accessing chemical formulation');
+
+        const clientBreakdownRes = await request(app)
+            .get(`/api/formulations/orders/${po.id}/breakdown`)
+            .set('Authorization', `Bearer ${clientToken}`);
+        assert.strictEqual(clientBreakdownRes.status, 403, 'Client must be forbidden from accessing material breakdown');
+
+        // 7. Verify External Live Inventory API Key Authentication
+        // 7a. External Status Check with Valid API Key
+        const extStatusValid = await request(app)
+            .get('/api/formulations/external/status')
+            .set('x-api-key', INVENTORY_API_KEY);
+        assert.strictEqual(extStatusValid.status, 200);
+        assert.strictEqual(extStatusValid.body.success, true);
+        assert.strictEqual(extStatusValid.body.apiLive, true);
+
+        // 7b. External Status Check without API Key -> 401
+        const extStatusNoKey = await request(app)
+            .get('/api/formulations/external/status');
+        assert.strictEqual(extStatusNoKey.status, 401);
+        assert.strictEqual(extStatusNoKey.body.error, 'UNAUTHORIZED_INVENTORY_API');
+
+        // 7c. External Status Check with Wrong Key -> 401
+        const extStatusWrongKey = await request(app)
+            .get('/api/formulations/external/status')
+            .set('x-api-key', 'wrong_api_key_12345');
+        assert.strictEqual(extStatusWrongKey.status, 401);
+
+        // 7d. External Materials Pull by PO with Valid API Key
+        const extMaterialsRes = await request(app)
+            .get(`/api/formulations/external/orders/${po.id}/materials`)
+            .set('x-api-key', INVENTORY_API_KEY);
+        assert.strictEqual(extMaterialsRes.status, 200);
+        assert.strictEqual(extMaterialsRes.body.success, true);
+        assert.strictEqual(extMaterialsRes.body.orderNumber, po.po_number);
+        assert.strictEqual(extMaterialsRes.body.accountingConfirmed, true);
+        assert.ok(extMaterialsRes.body.consolidatedMaterials.length > 0);
+
+        // 8. Verify Printable Formulation Receipt Document exists
+        const printReceiptPath = path.join(__dirname, '../public/print-formulation-receipt.html');
+        assert.ok(fs.existsSync(printReceiptPath), 'print-formulation-receipt.html must exist in public folder');
+        const printReceiptHtml = fs.readFileSync(printReceiptPath, 'utf8');
+        assert.ok(printReceiptHtml.includes('FORMULATION MATERIAL REQUISITION RECEIPT'), 'Must contain receipt header');
+        assert.ok(printReceiptHtml.includes('CONFIDENTIAL & PROPRIETARY TRADE SECRET'), 'Must contain confidential trade secret notice');
+        assert.ok(printReceiptHtml.includes('Formulation Chemist'), 'Must contain sign-off block for Chemist');
+
+        // Clean up
+        db.prepare('DELETE FROM order_material_conversions WHERE po_id = ?').run(po.id);
+        db.prepare('DELETE FROM purchase_order_items WHERE po_id = ?').run(po.id);
+        db.prepare('DELETE FROM purchase_orders WHERE id = ?').run(po.id);
+    });
+
     after(() => {
         // Automatically delete all test decoys and temporary test database
         try {

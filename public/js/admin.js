@@ -265,6 +265,12 @@ function applyRoleBasedUI() {
     } else if (role === 'CEO' || role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'IT_ADMIN') {
         // Full oversight
     }
+
+    // Proprietary chemical formulations are strictly confidential trade secrets
+    const canViewFormulations = ['SUPER_ADMIN', 'ADMIN', 'IT_ADMIN', 'CEO', 'PRODUCTION', 'INVENTORY'].includes(role);
+    if (!canViewFormulations) {
+        hideTab('formulations');
+    }
 }
 
 async function loadInitialData() {
@@ -323,6 +329,7 @@ function switchTab(tabId) {
     else if (tabId === 'buffer') loadBufferStock();
     else if (tabId === 'clients') loadClients();
     else if (tabId === 'products') loadProducts();
+    else if (tabId === 'formulations') loadFormulations();
     else if (tabId === 'users') loadUsers();
     else if (tabId === 'purchasing') loadPurchasingRequisitions();
     else if (tabId === 'reports') loadReports();
@@ -558,6 +565,11 @@ async function loadOrders() {
                     <a href="/print-jo.html?po_id=${po.id}" class="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Print Sales Order Copy (2 Portrait Slips on A4 Landscape)">
                         <span>📄 SO Copy</span>
                     </a>
+                    ${(po.accounting_confirmed === 1 || po.formulation_converted === 1) ? `
+                        <a href="/print-formulation-receipt.html?id=${po.id}" target="_blank" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Print Formulation & Raw Material Breakdown Receipt">
+                            <span>🧪 Formulation Receipt</span>
+                        </a>
+                    ` : ''}
                     ${(canConfirmAccounting && !po.accounting_confirmed && po.status !== 'CANCELLED' && po.status !== 'VOIDED') ? `
                         <button onclick="confirmAccountingPO('${po.id}', '${po.po_number}')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition inline-flex items-center gap-1 shadow-sm" title="Confirm order financing & payment terms">
                             <span>💳 Confirm (Accounting)</span>
@@ -6491,4 +6503,318 @@ async function submitUpdateRequisition(e, reqId) {
         }
     }
 }
+
+// -------------------------------------------------------------
+// 12. PROPRIETARY FORMULATIONS & BILL OF MATERIALS (BOM)
+// -------------------------------------------------------------
+let cachedFormulations = [];
+
+async function loadFormulations() {
+    const tbody = document.getElementById('table-formulations-body');
+    const convertedTbody = document.getElementById('table-converted-orders-body');
+    if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-slate-400 font-bold">Loading formulations & chemical recipes...</td></tr>';
+    }
+    if (convertedTbody) {
+        convertedTbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-slate-400 font-bold">Loading order material conversions...</td></tr>';
+    }
+
+    try {
+        const [formRes, ordersRes] = await Promise.all([
+            NKB.api('/api/formulations'),
+            NKB.api('/api/orders')
+        ]);
+
+        if (formRes.success && formRes.data) {
+            cachedFormulations = formRes.data;
+            renderFormulationsTable(cachedFormulations);
+
+            const totalFormulas = cachedFormulations.length;
+            let totalIngredients = 0;
+            cachedFormulations.forEach(f => {
+                totalIngredients += Number(f.ingredient_count || (f.ingredients ? f.ingredients.length : 0));
+            });
+
+            const kpiCount = document.getElementById('kpi-formulations-count');
+            if (kpiCount) kpiCount.textContent = totalFormulas;
+            const kpiIng = document.getElementById('kpi-formulations-ingredients');
+            if (kpiIng) kpiIng.textContent = totalIngredients;
+            const counter = document.getElementById('formulations-table-counter');
+            if (counter) counter.textContent = `${totalFormulas} formulas`;
+        } else {
+            if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-rose-500 font-bold">${formRes.error || 'Failed to load formulations.'}</td></tr>`;
+        }
+
+        if (ordersRes.success && ordersRes.data) {
+            const allOrders = ordersRes.data;
+            const convertedOrders = allOrders.filter(po => po.accounting_confirmed === 1 || po.formulation_converted === 1);
+
+            const kpiConverted = document.getElementById('kpi-formulations-converted-orders');
+            if (kpiConverted) kpiConverted.textContent = convertedOrders.length;
+
+            if (convertedTbody) {
+                if (allOrders.length === 0) {
+                    convertedTbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-slate-400">No purchase orders found.</td></tr>';
+                } else {
+                    convertedTbody.innerHTML = allOrders.slice(0, 15).map(po => {
+                        const itemsSummary = (po.items && po.items.length > 0)
+                            ? po.items.map(it => `<span class="inline-block bg-slate-100 px-1.5 py-0.5 rounded text-[10px] text-slate-700 font-semibold mr-1 mb-1">${it.product_name} (${NKB.formatNumber(it.target_quantity)} pcs)</span>`).join('')
+                            : '<span class="text-slate-400">No items</span>';
+
+                        const isConfirmed = po.accounting_confirmed === 1;
+                        const isConverted = po.formulation_converted === 1 || isConfirmed;
+
+                        return `
+                            <tr class="hover:bg-slate-50 transition">
+                                <td class="py-3 px-4 whitespace-nowrap">
+                                    <span class="font-bold text-indigo-600 cursor-pointer hover:underline" onclick="openViewPOModal('${po.id}')">${po.po_number}</span>
+                                    ${po.so_number ? `<span class="block text-[10px] font-mono text-purple-700 font-bold">${po.so_number}</span>` : ''}
+                                </td>
+                                <td class="py-3 px-4 font-bold text-slate-800">
+                                    ${po.company_name || '—'}
+                                </td>
+                                <td class="py-3 px-4 max-w-xs">
+                                    <div class="line-clamp-2">${itemsSummary}</div>
+                                </td>
+                                <td class="py-3 px-4 text-center whitespace-nowrap">
+                                    ${isConfirmed ? `
+                                        <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 inline-flex items-center gap-1">
+                                            ✓ Confirmed
+                                        </span>
+                                    ` : `
+                                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 inline-flex items-center gap-1">
+                                            ⏳ Pending Acct
+                                        </span>
+                                    `}
+                                </td>
+                                <td class="py-3 px-4 text-center whitespace-nowrap">
+                                    ${isConverted ? `
+                                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-teal-100 text-teal-800 border border-teal-300 inline-flex items-center gap-1">
+                                            🧪 Auto-Converted
+                                        </span>
+                                    ` : `
+                                        <span class="text-slate-400 text-[11px] italic">Awaiting Confirmation</span>
+                                    `}
+                                </td>
+                                <td class="py-3 px-4 text-right whitespace-nowrap">
+                                    ${isConfirmed ? `
+                                        <a href="/print-formulation-receipt.html?id=${po.id}" target="_blank" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-500/20 transition inline-flex items-center gap-1.5">
+                                            <span>🧪 Print Receipt</span>
+                                        </a>
+                                    ` : `
+                                        <button disabled class="px-2.5 py-1 bg-slate-100 text-slate-400 rounded-lg text-xs font-medium cursor-not-allowed">
+                                            Requires Confirmation
+                                        </button>
+                                    `}
+                                </td>
+                            </tr>
+                        `;
+                    }).join('');
+                }
+            }
+        }
+    } catch (err) {
+        console.error('Error loading formulations:', err);
+        if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-rose-500 font-bold">Error loading formulations.</td></tr>`;
+    }
+}
+
+function renderFormulationsTable(list) {
+    const tbody = document.getElementById('table-formulations-body');
+    if (!tbody) return;
+
+    if (!list || list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-slate-400 font-medium">No formulation recipes found matching criteria.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = list.map(f => `
+        <tr class="hover:bg-slate-50 transition">
+            <td class="py-3 px-4 font-mono font-black text-indigo-700 whitespace-nowrap">
+                ${f.formula_code}
+            </td>
+            <td class="py-3 px-4">
+                <div class="font-black text-slate-900 text-xs">${f.name || f.product_name}</div>
+                <div class="text-[10px] text-slate-500 font-mono">${f.product_sku ? `SKU: ${f.product_sku}` : ''}</div>
+            </td>
+            <td class="py-3 px-4 whitespace-nowrap">
+                <span class="badge bg-slate-100 text-slate-700 font-semibold">${f.product_category || 'Cosmetics'}</span>
+            </td>
+            <td class="py-3 px-4 text-center font-mono font-bold text-slate-800 whitespace-nowrap">
+                ${f.base_dose_qty} ${f.base_unit}
+            </td>
+            <td class="py-3 px-4 text-center whitespace-nowrap">
+                <span class="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-bold text-[11px] border border-indigo-200">
+                    ⚗️ ${f.ingredient_count || (f.ingredients ? f.ingredients.length : 0)} ingredients
+                </span>
+            </td>
+            <td class="py-3 px-4 text-center whitespace-nowrap">
+                <span class="px-2 py-0.5 rounded-full text-[9.5px] font-black bg-rose-50 text-rose-700 border border-rose-200 tracking-wide uppercase">
+                    🔒 STRICT STAFF ONLY
+                </span>
+            </td>
+            <td class="py-3 px-4 text-right whitespace-nowrap">
+                <button onclick="openViewFormulationModal('${f.product_id}')" class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition inline-flex items-center gap-1 shadow-sm">
+                    <span>🔬 View Recipe</span>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function filterFormulationsTable() {
+    const term = (document.getElementById('filter-formulation-search')?.value || '').trim().toLowerCase();
+    if (!term) {
+        renderFormulationsTable(cachedFormulations);
+        return;
+    }
+    const filtered = cachedFormulations.filter(f => 
+        (f.formula_code && f.formula_code.toLowerCase().includes(term)) ||
+        (f.name && f.name.toLowerCase().includes(term)) ||
+        (f.product_name && f.product_name.toLowerCase().includes(term)) ||
+        (f.product_sku && f.product_sku.toLowerCase().includes(term)) ||
+        (f.product_category && f.product_category.toLowerCase().includes(term))
+    );
+    renderFormulationsTable(filtered);
+}
+
+async function openViewFormulationModal(productId) {
+    const root = document.getElementById('modals-root');
+    if (!root) return;
+
+    root.innerHTML = `
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50 overflow-y-auto">
+            <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 my-auto">
+                <div class="flex items-center gap-3 text-slate-700 font-bold text-sm">
+                    <span class="animate-spin text-xl">🧪</span>
+                    <span>Retrieving Confidential Formulation & BOM...</span>
+                </div>
+            </div>
+        </div>
+    `;
+
+    try {
+        const res = await NKB.api(`/api/formulations/${productId}`);
+        if (!res.success || !res.data) {
+            NKB.showToast(res.error || 'Failed to load formulation details.', 'error');
+            closeModal();
+            return;
+        }
+
+        const data = res.data;
+        const formulation = data.formulation;
+        const ingredients = data.ingredients || [];
+
+        const phases = {};
+        ingredients.forEach(ing => {
+            const p = ing.phase || 'Phase A';
+            if (!phases[p]) phases[p] = [];
+            phases[p].push(ing);
+        });
+
+        root.innerHTML = `
+            <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50 overflow-y-auto">
+                <div class="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl space-y-5 my-auto max-h-[92vh] flex flex-col">
+                    <div class="flex justify-between items-start border-b border-slate-100 pb-3 flex-shrink-0">
+                        <div class="flex items-center gap-3">
+                            <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white flex items-center justify-center text-xl shadow-md shadow-indigo-500/20">
+                                🧪
+                            </div>
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <h3 class="text-base font-black text-slate-900">${formulation.name}</h3>
+                                    <span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300 uppercase tracking-wide">
+                                        🔒 CONFIDENTIAL BOM
+                                    </span>
+                                </div>
+                                <p class="text-xs text-slate-500 font-medium mt-0.5">Formula Code: <strong class="font-mono text-indigo-700">${formulation.formula_code}</strong> • Standard Batch Dose: <strong class="font-mono text-slate-800">${formulation.base_dose_qty} ${formulation.base_unit}</strong></p>
+                            </div>
+                        </div>
+                        <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-2xl leading-none">&times;</button>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-shrink-0">
+                        <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                            <span class="text-[10px] text-slate-400 uppercase font-bold block">Target Product</span>
+                            <div class="font-black text-slate-900 text-xs mt-0.5">${data.product?.name || formulation.name}</div>
+                            <div class="text-[10px] font-mono text-indigo-700 font-bold mt-0.5">SKU: ${data.product?.sku || 'N/A'}</div>
+                        </div>
+                        <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                            <span class="text-[10px] text-slate-400 uppercase font-bold block">Chemical Stability & Yield</span>
+                            <div class="font-bold text-emerald-700 text-xs mt-0.5">Cleanroom Grade Tested</div>
+                            <div class="text-[10px] text-slate-500 mt-0.5">${ingredients.length} Active Ingredients</div>
+                        </div>
+                        <div class="p-3 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl border border-emerald-200">
+                            <span class="text-[10px] text-emerald-800 uppercase font-bold block">Live Inventory Synced</span>
+                            <div class="font-mono font-bold text-emerald-900 text-[11px] mt-0.5 truncate">Key: nkb_inv_live_6ae...</div>
+                            <div class="text-[10px] text-emerald-700 font-medium">Automatic BOM translation active</div>
+                        </div>
+                    </div>
+
+                    <div class="overflow-y-auto flex-1 space-y-4 border border-slate-200 rounded-2xl p-4 bg-slate-50/50">
+                        ${Object.keys(phases).map(phaseName => {
+                            const phaseItems = phases[phaseName];
+                            const phasePct = phaseItems.reduce((acc, it) => acc + Number(it.percentage || 0), 0);
+                            return `
+                                <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                                    <div class="bg-slate-100 px-4 py-2 flex justify-between items-center border-b border-slate-200">
+                                        <span class="font-black text-slate-800 text-xs">${phaseName}</span>
+                                        <span class="text-[11px] font-mono font-bold text-indigo-700">Subtotal: ${phasePct.toFixed(2)}%</span>
+                                    </div>
+                                    <table class="w-full text-left text-xs">
+                                        <thead class="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider text-[10px] border-b border-slate-100">
+                                            <tr>
+                                                <th class="py-2 px-3">Material Code</th>
+                                                <th class="py-2 px-3">Material Name / INCI</th>
+                                                <th class="py-2 px-3 text-center">% w/w</th>
+                                                <th class="py-2 px-3 text-right">Dose / Unit</th>
+                                                <th class="py-2 px-3">Application Notes</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-slate-100 font-medium">
+                                            ${phaseItems.map(item => `
+                                                <tr class="hover:bg-slate-50">
+                                                    <td class="py-2 px-3 font-mono font-bold text-slate-800 text-[11px] whitespace-nowrap">${item.material_code}</td>
+                                                    <td class="py-2 px-3 font-bold text-slate-900">${item.material_name}</td>
+                                                    <td class="py-2 px-3 text-center font-mono font-bold text-indigo-700">${Number(item.percentage).toFixed(2)}%</td>
+                                                    <td class="py-2 px-3 text-right font-mono font-black text-slate-900">${Number(item.quantity_per_unit).toFixed(4)} ${item.unit}</td>
+                                                    <td class="py-2 px-3 text-slate-500 text-[11px]">${item.notes || '—'}</td>
+                                                </tr>
+                                            `).join('')}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            `;
+                        }).join('')}
+
+                        ${formulation.instructions ? `
+                            <div class="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs space-y-1">
+                                <span class="font-bold text-amber-900 block uppercase text-[10px] tracking-wider">🔬 Compounding & Mixing Instructions:</span>
+                                <p class="text-slate-800 leading-relaxed">${formulation.instructions}</p>
+                            </div>
+                        ` : ''}
+                    </div>
+
+                    <div class="flex justify-between items-center pt-2 border-t border-slate-100 flex-shrink-0">
+                        <div class="text-[10px] text-slate-400 font-medium">
+                            NKB Chemical & Formulation Secret • Unauthorized copying is strictly prohibited.
+                        </div>
+                        <button type="button" onclick="closeModal()" class="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs transition">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        console.error('Error viewing formulation modal:', err);
+        NKB.showToast('Error opening formulation details.', 'error');
+        closeModal();
+    }
+}
+
+window.loadFormulations = loadFormulations;
+window.renderFormulationsTable = renderFormulationsTable;
+window.filterFormulationsTable = filterFormulationsTable;
+window.openViewFormulationModal = openViewFormulationModal;
 

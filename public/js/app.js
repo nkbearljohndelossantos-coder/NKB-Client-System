@@ -698,6 +698,11 @@ async function openViewPOModal(poId) {
                         ` : ''}
                     </div>
                     <div class="flex items-center gap-2">
+                        ${(!isClient && (po.accounting_confirmed === 1 || po.formulation_converted === 1)) ? `
+                            <a href="/print-formulation-receipt.html?id=${po.id}" target="_blank" class="px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-xl font-bold text-xs shadow-sm transition flex items-center gap-1.5" title="Print Formulation & Raw Materials Breakdown Receipt">
+                                <span>🧪 Formulation Receipt</span>
+                            </a>
+                        ` : ''}
                         <a href="/print-po.html?id=${po.id}" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-xs shadow-md shadow-indigo-600/30 transition flex items-center gap-1.5">
                             <span>🖨️ Print Purchase Order</span>
                         </a>

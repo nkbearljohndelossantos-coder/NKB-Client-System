@@ -119,6 +119,8 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
     inventory_confirmed_at DATETIME NULL,
     inventory_confirmed_by VARCHAR(36) NULL,
     raw_materials_status VARCHAR(50) NOT NULL DEFAULT 'PENDING_CHECK',
+    formulation_converted TINYINT(1) NOT NULL DEFAULT 0,
+    formulation_converted_at DATETIME NULL,
     created_by VARCHAR(36) NOT NULL,
     approved_by VARCHAR(36) NULL,
     approved_at DATETIME NULL,
@@ -463,7 +465,67 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 24. Insert Document Sequences
+-- 24. Product Chemical Formulations Table (Confidential R&D / BOM)
+CREATE TABLE IF NOT EXISTS product_formulations (
+    id VARCHAR(36) NOT NULL PRIMARY KEY,
+    product_id VARCHAR(36) NOT NULL,
+    formula_code VARCHAR(100) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    base_dose_qty DECIMAL(10,2) NOT NULL DEFAULT 1.00,
+    base_unit VARCHAR(50) NOT NULL DEFAULT 'pcs',
+    instructions TEXT NULL,
+    is_confidential TINYINT(1) NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_pf_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+    INDEX idx_pf_product (product_id),
+    INDEX idx_pf_formula_code (formula_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 25. Formulation Ingredients (BOM Items)
+CREATE TABLE IF NOT EXISTS formulation_ingredients (
+    id VARCHAR(36) NOT NULL PRIMARY KEY,
+    formulation_id VARCHAR(36) NOT NULL,
+    material_code VARCHAR(100) NOT NULL,
+    material_name VARCHAR(255) NOT NULL,
+    phase VARCHAR(50) NOT NULL DEFAULT 'Phase A',
+    percentage DECIMAL(6,3) NOT NULL DEFAULT 0.000,
+    quantity_per_unit DECIMAL(12,4) NOT NULL DEFAULT 0.0000,
+    unit VARCHAR(50) NOT NULL DEFAULT 'g',
+    notes TEXT NULL,
+    sort_order INT DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_fi_formulation FOREIGN KEY (formulation_id) REFERENCES product_formulations(id) ON DELETE CASCADE,
+    INDEX idx_fi_formulation (formulation_id),
+    INDEX idx_fi_material_code (material_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 26. Order Material Conversions
+CREATE TABLE IF NOT EXISTS order_material_conversions (
+    id VARCHAR(36) NOT NULL PRIMARY KEY,
+    po_id VARCHAR(36) NOT NULL,
+    po_item_id VARCHAR(36) NULL,
+    product_id VARCHAR(36) NOT NULL,
+    formula_code VARCHAR(100) NULL,
+    material_code VARCHAR(100) NOT NULL,
+    material_name VARCHAR(255) NOT NULL,
+    phase VARCHAR(50) NULL DEFAULT 'Phase A',
+    percentage DECIMAL(6,3) NULL DEFAULT 0.000,
+    unit_quantity DECIMAL(12,4) NOT NULL DEFAULT 0.0000,
+    total_quantity DECIMAL(14,4) NOT NULL DEFAULT 0.0000,
+    unit VARCHAR(50) NOT NULL DEFAULT 'g',
+    status VARCHAR(50) NOT NULL DEFAULT 'ALLOCATED',
+    converted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_omc_po FOREIGN KEY (po_id) REFERENCES purchase_orders(id) ON DELETE CASCADE,
+    CONSTRAINT fk_omc_po_item FOREIGN KEY (po_item_id) REFERENCES purchase_order_items(id) ON DELETE CASCADE,
+    CONSTRAINT fk_omc_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
+    INDEX idx_omc_po (po_id),
+    INDEX idx_omc_product (product_id),
+    INDEX idx_omc_material (material_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 27. Insert Document Sequences
 INSERT INTO document_sequences (doc_type, current_year, last_sequence) VALUES 
 ('PO', YEAR(CURRENT_DATE), 0),
 ('JO', YEAR(CURRENT_DATE), 0),

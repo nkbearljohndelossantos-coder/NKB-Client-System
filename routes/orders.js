@@ -743,11 +743,38 @@ router.post('/:id/accounting-confirm', authenticateToken, requireRoles('ACCOUNTI
         }
     });
 
+    // Automatically convert product order to raw materials using formulations
+    let conversionSummary = null;
+    try {
+        const { convertOrderToRawMaterials } = require('../services/formulationService');
+        conversionSummary = convertOrderToRawMaterials(db, id, req.user.id);
+        logAudit({
+            userId: req.user.id,
+            userName: req.user.name,
+            userRole: req.user.role,
+            action: 'CONVERT_PO_FORMULATION_MATERIALS',
+            entityType: 'PURCHASE_ORDER',
+            entityId: po.po_number,
+            details: {
+                poId: id,
+                rawMaterialItems: conversionSummary.totalRawMaterialItems,
+                uniqueMaterials: conversionSummary.totalUniqueRawMaterials
+            }
+        });
+    } catch (convErr) {
+        console.warn('Auto formulation conversion note:', convErr.message);
+    }
+
     const updated = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
     return res.json({ 
         success: true, 
-        message: `Purchase Order ${po.po_number} successfully confirmed by Accounting Department.`, 
-        data: updated 
+        message: `Purchase Order ${po.po_number} successfully confirmed by Accounting Department and converted to raw materials using product formulations.`, 
+        data: updated,
+        materialsConverted: !!conversionSummary,
+        rawMaterialsSummary: conversionSummary ? {
+            totalItems: conversionSummary.totalRawMaterialItems,
+            uniqueMaterials: conversionSummary.totalUniqueRawMaterials
+        } : null
     });
 });
 

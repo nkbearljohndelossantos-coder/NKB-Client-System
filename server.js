@@ -137,6 +137,7 @@ function mountApiRoutes() {
     app.use('/api/supply-requests', require('./routes/supplyRequests'));
     app.use('/api/notifications', require('./routes/notifications'));
     app.use('/api/chat', require('./routes/chat'));
+    app.use('/api/formulations', require('./routes/formulations'));
 }
 
 function loadDatabaseAndRoutes() {
