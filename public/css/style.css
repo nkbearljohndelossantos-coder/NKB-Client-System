@@ -99,6 +99,7 @@ input[type=number] {
 .text-rose-700 { color: #be123c !important; }
 .text-rose-800 { color: #9f1239 !important; }
 
+.text-slate-950 { color: #020617 !important; }
 .text-slate-900 { color: #0f172a !important; }
 .text-slate-800 { color: #1e293b !important; }
 .text-slate-700 { color: #334155 !important; }
@@ -251,7 +252,7 @@ main {
 
 /* Specific Headings in Main (excluding banners) */
 main > section h2:not(.text-white),
-main div:not(.hero-banner):not(.bg-gradient-to-r) > h2:not(.text-white),
+main div:not(.hero-banner) > h2:not(.text-white),
 main h3:not(.text-white),
 main h4:not(.text-white) {
     color: #0f172a;
@@ -259,23 +260,18 @@ main h4:not(.text-white) {
 }
 
 /* Hero / Welcome Banner */
-.hero-banner,
-.bg-gradient-to-r {
+.hero-banner {
     background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #312e81 100%) !important;
     border: 1px solid rgba(255, 255, 255, 0.12) !important;
     border-radius: 1.25rem !important;
     box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.25) !important;
 }
 
-.hero-banner *,
-.bg-gradient-to-r h2,
-.bg-gradient-to-r p,
-.bg-gradient-to-r span {
+.hero-banner * {
     color: #ffffff !important;
 }
 
-.hero-banner p,
-.bg-gradient-to-r p {
+.hero-banner p {
     color: #c7d2fe !important;
 }
 
@@ -648,4 +644,73 @@ textarea:focus {
         max-height: 520px !important;
         border-radius: 1.25rem !important;
     }
+}
+
+/* =========================================================
+   PO Search Suggestions Dropdown Styling - High Contrast
+========================================================= */
+#po-search-wrapper,
+#edit-po-search-wrapper {
+    background: #f8fafc !important;
+    background-color: #f8fafc !important;
+    border: 1px solid #cbd5e1 !important;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05) !important;
+}
+
+#po-suggestions-container,
+#edit-po-suggestions-container {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    border: 1px solid #94a3b8 !important;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.08) !important;
+    z-index: 9999 !important;
+}
+
+#po-suggestions-container .suggestion-header,
+#edit-po-suggestions-container .suggestion-header {
+    background: #f1f5f9 !important;
+    background-color: #f1f5f9 !important;
+    color: #1e293b !important;
+    border-bottom: 1px solid #cbd5e1 !important;
+}
+
+#po-suggestions-container .suggestion-header span,
+#edit-po-suggestions-container .suggestion-header span {
+    color: #1e293b !important;
+    font-weight: 700 !important;
+}
+
+#po-suggestions-container .suggestion-item,
+#edit-po-suggestions-container .suggestion-item {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+}
+
+#po-suggestions-container .suggestion-item:hover,
+#edit-po-suggestions-container .suggestion-item:hover {
+    background: #eff6ff !important;
+    background-color: #eff6ff !important;
+}
+
+#po-suggestions-container .suggestion-prod-name,
+#edit-po-suggestions-container .suggestion-prod-name {
+    color: #020617 !important;
+    font-weight: 800 !important;
+}
+
+#po-suggestions-container .suggestion-prod-price,
+#edit-po-suggestions-container .suggestion-prod-price {
+    color: #065f46 !important;
+    font-weight: 900 !important;
+}
+
+#po-suggestions-container .suggestion-prod-sku,
+#edit-po-suggestions-container .suggestion-prod-sku {
+    color: #1e1b4b !important;
+    background-color: #e0e7ff !important;
+    border: 1px solid #c7d2fe !important;
+    font-weight: 700 !important;
 }

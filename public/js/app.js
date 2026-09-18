@@ -996,7 +996,7 @@ async function openEditPOModal(poId) {
                     </div>
 
                     <!-- Multi-Brand Search with Suggestions (Edit Mode) -->
-                    <div class="p-3 bg-gradient-to-r from-slate-50 to-indigo-50/50 border border-indigo-100 rounded-2xl space-y-2 relative" id="edit-po-search-wrapper">
+                    <div class="p-3 bg-slate-50 border border-slate-300 rounded-2xl space-y-2 relative shadow-sm" id="edit-po-search-wrapper">
                         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                             <div class="flex items-center gap-1.5">
                                 <span class="text-sm">🔍</span>
@@ -1191,7 +1191,7 @@ function renderEditPOSuggestions(query = '') {
 
     if (matches.length === 0) {
         container.innerHTML = `
-            <div class="p-4 text-center text-xs text-slate-500 font-medium">
+            <div class="p-4 text-center text-xs font-semibold" style="color: #475569 !important; background-color: #ffffff !important;">
                 <span>⚠️ No products found matching your search. Try another keyword or select "All Brands".</span>
             </div>
         `;
@@ -1200,9 +1200,9 @@ function renderEditPOSuggestions(query = '') {
 
     const displayList = matches.slice(0, 40);
     container.innerHTML = `
-        <div class="p-2 bg-slate-50 text-[11px] font-bold text-slate-500 flex justify-between items-center border-b border-slate-100">
-            <span>Found ${matches.length} products (showing ${displayList.length})</span>
-            <span class="text-[10px] text-slate-400">Click to add to PO</span>
+        <div class="suggestion-header p-2 text-[11px] font-bold flex justify-between items-center" style="background-color: #f1f5f9 !important; color: #1e293b !important; border-bottom: 1px solid #cbd5e1 !important;">
+            <span class="font-extrabold" style="color: #1e293b !important;">Found ${matches.length} products (showing ${displayList.length})</span>
+            <span class="text-[10px] font-semibold" style="color: #64748b !important;">Click to add to PO</span>
         </div>
         <div class="divide-y divide-slate-100">
             ${displayList.map((p, idx) => {
@@ -1211,18 +1211,19 @@ function renderEditPOSuggestions(query = '') {
                 return `
                     <div id="edit-po-suggestion-item-${idx}" 
                          onclick="selectEditPOSuggestion('${p.id}')" 
-                         class="p-2.5 hover:bg-indigo-50/80 cursor-pointer flex items-center justify-between gap-3 transition ${isSelected ? 'bg-indigo-50 ring-1 ring-indigo-300' : ''}">
+                         class="suggestion-item p-2.5 cursor-pointer flex items-center justify-between gap-3 transition ${isSelected ? 'bg-indigo-50 ring-1 ring-indigo-300' : 'bg-white'}"
+                         style="${isSelected ? 'background-color: #eef2ff !important;' : 'background-color: #ffffff !important;'}">
                         <div class="min-w-0 flex-1">
                             <div class="flex items-center gap-2 flex-wrap">
-                                <span class="px-2 py-0.5 rounded text-[10px] font-bold ${window.getBrandBadgeClass ? window.getBrandBadgeClass(p.brand) : 'bg-slate-100 text-slate-700'}">${p.brand || 'OTHER'}</span>
-                                <span class="font-bold text-xs text-slate-900 truncate">${p.display_name}</span>
-                                <span class="text-[10px] font-mono text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">${p.effective_sku || p.sku}</span>
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold ${window.getBrandBadgeClass ? window.getBrandBadgeClass(p.brand) : 'bg-slate-100 text-slate-700'}" style="font-weight: 700 !important;">${p.brand || 'OTHER'}</span>
+                                <span class="suggestion-prod-name font-black text-xs truncate" style="color: #020617 !important; font-weight: 800 !important;">${p.display_name}</span>
+                                <span class="suggestion-prod-sku text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border" style="color: #1e1b4b !important; background-color: #e0e7ff !important; border-color: #c7d2fe !important;">${p.effective_sku || p.sku}</span>
                             </div>
-                            ${isCleaned ? `<div class="text-[10px] text-slate-400 mt-0.5 truncate">Original: ${p.name}</div>` : ''}
+                            ${isCleaned ? `<div class="text-[10px] mt-0.5 truncate font-semibold" style="color: #64748b !important;">Original: ${p.name}</div>` : ''}
                         </div>
                         <div class="flex items-center gap-2 flex-shrink-0">
-                            <span class="text-xs font-bold text-slate-800 font-mono">₱${Number(p.default_price || 0).toFixed(2)}</span>
-                            <button type="button" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white rounded-lg text-[11px] font-bold border border-indigo-200 hover:border-indigo-600 transition flex items-center gap-1 shadow-sm">
+                            <span class="suggestion-prod-price text-xs font-black font-mono" style="color: #065f46 !important; font-weight: 900 !important;">₱${Number(p.default_price || 0).toFixed(2)}</span>
+                            <button type="button" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white rounded-lg text-[11px] font-bold border border-indigo-200 hover:border-indigo-600 transition flex items-center gap-1 shadow-sm" style="color: #4338ca !important;">
                                 <span>➕</span><span>Add</span>
                             </button>
                         </div>
