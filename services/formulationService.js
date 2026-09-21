@@ -43,6 +43,30 @@ const DEFAULT_MATERIAL_COSTS = {
     'RM-EWX-01': 0.65
 };
 
+/**
+ * Self-healing helper: ensure unit_cost and total_cost exist in SQLite schema
+ */
+function ensureFormulationPricingColumns(db) {
+    if (!db) return;
+    try {
+        const fiCols = db.prepare("PRAGMA table_info(formulation_ingredients)").all().map(c => c.name);
+        if (fiCols.length > 0 && !fiCols.includes('unit_cost')) {
+            db.exec("ALTER TABLE formulation_ingredients ADD COLUMN unit_cost REAL DEFAULT 0.0;");
+        }
+    } catch (_) {}
+    try {
+        const omcCols = db.prepare("PRAGMA table_info(order_material_conversions)").all().map(c => c.name);
+        if (omcCols.length > 0) {
+            if (!omcCols.includes('unit_cost')) {
+                db.exec("ALTER TABLE order_material_conversions ADD COLUMN unit_cost REAL DEFAULT 0.0;");
+            }
+            if (!omcCols.includes('total_cost')) {
+                db.exec("ALTER TABLE order_material_conversions ADD COLUMN total_cost REAL DEFAULT 0.0;");
+            }
+        }
+    } catch (_) {}
+}
+
 const DEFAULT_RECIPE_TEMPLATES = {
     SUNSCREEN: {
         code: 'FORM-SGC-V1',
@@ -439,6 +463,8 @@ function convertOrderToRawMaterials(db, poId, userId = null) {
         throw new Error('No items found in this Purchase Order to convert.');
     }
 
+    ensureFormulationPricingColumns(db);
+
     // Remove existing conversion records for this PO to ensure clean idempotency
     db.prepare('DELETE FROM order_material_conversions WHERE po_id = ?').run(poId);
 
@@ -537,6 +563,8 @@ function getOrderMaterialBreakdown(db, poId) {
     `).get(poId);
 
     if (!po) return null;
+
+    ensureFormulationPricingColumns(db);
 
     // Check if conversion already exists
     let rawList = db.prepare(`
@@ -655,6 +683,8 @@ function getOrderMaterialBreakdown(db, poId) {
 }
 
 module.exports = {
+    DEFAULT_MATERIAL_COSTS,
+    ensureFormulationPricingColumns,
     seedDefaultFormulations,
     getFormulations,
     getFormulationByProductId,

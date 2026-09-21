@@ -14,6 +14,7 @@ function runMigrations(dbInstance, isMysql) {
     try {
         const textType = isMysql ? 'VARCHAR(255)' : 'TEXT';
         const intType = isMysql ? 'TINYINT(1)' : 'INTEGER';
+        const realType = isMysql ? 'DECIMAL(14,4)' : 'REAL';
         const batchCols = ['compounding_operator', 'bottling_lead', 'qc_inspector', 'line_assignment'];
         for (const col of batchCols) {
             try {
@@ -288,20 +289,6 @@ function runMigrations(dbInstance, isMysql) {
             } catch (_) {}
         }
 
-        // Schema Upgrades: User Online Presence & Formulation Material Pricing
-        try {
-            dbInstance.exec(`ALTER TABLE users ADD COLUMN last_active_at ${textType};`);
-        } catch (_) {}
-        try {
-            dbInstance.exec(`ALTER TABLE formulation_ingredients ADD COLUMN unit_cost ${realType} DEFAULT 0.0;`);
-        } catch (_) {}
-        try {
-            dbInstance.exec(`ALTER TABLE order_material_conversions ADD COLUMN unit_cost ${realType} DEFAULT 0.0;`);
-        } catch (_) {}
-        try {
-            dbInstance.exec(`ALTER TABLE order_material_conversions ADD COLUMN total_cost ${realType} DEFAULT 0.0;`);
-        } catch (_) {}
-
         // Create product_formulations, formulation_ingredients, and order_material_conversions tables
         try {
             if (isMysql) {
@@ -423,6 +410,40 @@ function runMigrations(dbInstance, isMysql) {
                     CREATE INDEX IF NOT EXISTS idx_omc_product ON order_material_conversions(product_id);
                     CREATE INDEX IF NOT EXISTS idx_omc_material ON order_material_conversions(material_code);
                 `);
+            }
+
+            // Schema Upgrades: User Online Presence & Formulation Material Pricing
+            if (!isMysql) {
+                try {
+                    const userCols = dbInstance.prepare("PRAGMA table_info(users)").all().map(c => c.name);
+                    if (!userCols.includes('last_active_at')) {
+                        dbInstance.exec("ALTER TABLE users ADD COLUMN last_active_at TEXT;");
+                    }
+                } catch (_) {}
+
+                try {
+                    const fiCols = dbInstance.prepare("PRAGMA table_info(formulation_ingredients)").all().map(c => c.name);
+                    if (fiCols.length > 0 && !fiCols.includes('unit_cost')) {
+                        dbInstance.exec("ALTER TABLE formulation_ingredients ADD COLUMN unit_cost REAL DEFAULT 0.0;");
+                    }
+                } catch (_) {}
+
+                try {
+                    const omcCols = dbInstance.prepare("PRAGMA table_info(order_material_conversions)").all().map(c => c.name);
+                    if (omcCols.length > 0) {
+                        if (!omcCols.includes('unit_cost')) {
+                            dbInstance.exec("ALTER TABLE order_material_conversions ADD COLUMN unit_cost REAL DEFAULT 0.0;");
+                        }
+                        if (!omcCols.includes('total_cost')) {
+                            dbInstance.exec("ALTER TABLE order_material_conversions ADD COLUMN total_cost REAL DEFAULT 0.0;");
+                        }
+                    }
+                } catch (_) {}
+            } else {
+                try { dbInstance.exec("ALTER TABLE users ADD COLUMN last_active_at VARCHAR(255) NULL;"); } catch (_) {}
+                try { dbInstance.exec("ALTER TABLE formulation_ingredients ADD COLUMN unit_cost DECIMAL(12,4) DEFAULT 0.0000;"); } catch (_) {}
+                try { dbInstance.exec("ALTER TABLE order_material_conversions ADD COLUMN unit_cost DECIMAL(12,4) DEFAULT 0.0000;"); } catch (_) {}
+                try { dbInstance.exec("ALTER TABLE order_material_conversions ADD COLUMN total_cost DECIMAL(14,4) DEFAULT 0.0000;"); } catch (_) {}
             }
 
             // Auto-seed default product formulations
