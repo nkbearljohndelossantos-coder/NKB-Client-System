@@ -277,54 +277,55 @@
         table.styled-table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 8pt;
+            font-size: 8.5pt;
             margin-bottom: 10px;
         }
 
         table.styled-table th {
-            background: #f1f5f9;
-            color: #1e293b;
+            background: #f8fafc;
+            color: #0f172a;
             font-weight: 800;
             text-align: left;
-            padding: 5px 8px;
+            padding: 6px 8px;
             border-top: 1px solid #cbd5e1;
             border-bottom: 1.5px solid #0f172a;
             text-transform: uppercase;
-            font-size: 7pt;
+            font-size: 7.5pt;
             letter-spacing: 0.3px;
         }
 
         table.styled-table td {
-            padding: 5px 8px;
+            padding: 6px 8px;
             border-bottom: 1px solid #e2e8f0;
             color: #0f172a;
+            font-size: 8.5pt;
         }
 
         .prod-name-bold {
             font-weight: 800;
             color: #000000 !important;
-            font-size: 8.5pt;
+            font-size: 9pt;
         }
 
         .sku-tag {
             font-family: monospace;
             font-weight: 700;
-            color: #312e81;
-            background: #e0e7ff;
-            padding: 1px 4px;
-            border-radius: 3px;
-            font-size: 7pt;
+            color: #1e1b4b;
+            background: #e2e8f0;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 7.5pt;
         }
 
         .phase-badge {
             display: inline-block;
-            padding: 1px 6px;
+            padding: 2px 6px;
             border-radius: 4px;
-            font-size: 6.5pt;
+            font-size: 7pt;
             font-weight: 800;
             text-transform: uppercase;
             background: #f1f5f9;
-            color: #334155;
+            color: #1e293b;
             border: 1px solid #cbd5e1;
         }
 
@@ -332,9 +333,9 @@
             background: #dcfce7;
             color: #15803d;
             border: 1px solid #86efac;
-            padding: 1px 6px;
+            padding: 2px 6px;
             border-radius: 4px;
-            font-size: 6.5pt;
+            font-size: 7pt;
             font-weight: 800;
             text-transform: uppercase;
         }
@@ -549,21 +550,29 @@
 
         <!-- SECTION 3: CONSOLIDATED COMPOUNDING & WAREHOUSE PULL SHEET -->
         <div class="avoid-break">
-            <div class="section-title">3. Consolidated Compounding & Warehouse Raw Material Pull Sheet</div>
+            <div class="section-title">3. Consolidated Raw Material Pull Sheet & Valuation</div>
             <table class="styled-table" id="table-consolidated">
                 <thead>
                     <tr>
                         <th style="width: 32px; text-align: center;">#</th>
                         <th style="width: 110px;">Material Code</th>
                         <th>Chemical / Raw Material Name</th>
-                        <th style="width: 130px;">Primary Phase</th>
                         <th style="width: 150px; text-align: right;">Total Required Quantity</th>
-                        <th style="width: 90px; text-align: center;">Status</th>
+                        <th style="width: 110px; text-align: right;">Est. Unit Price (₱)</th>
+                        <th style="width: 120px; text-align: right;">Total Price (₱)</th>
+                        <th style="width: 80px; text-align: center;">Status</th>
                     </tr>
                 </thead>
                 <tbody id="table-consolidated-body">
-                    <tr><td colspan="6" style="text-align: center; padding: 12px; color: #64748b;">Loading consolidated pull sheet...</td></tr>
+                    <tr><td colspan="7" style="text-align: center; padding: 12px; color: #64748b;">Loading consolidated pull sheet...</td></tr>
                 </tbody>
+                <tfoot>
+                    <tr style="background: #f8fafc; font-weight: 800; border-top: 1.5px solid #0f172a;">
+                        <td colspan="5" style="text-align: right; text-transform: uppercase;">Grand Total Raw Material Cost:</td>
+                        <td id="consolidated-grand-cost" style="text-align: right; font-family: monospace; font-size: 9pt; color: #047857;">₱0.00</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
             </table>
         </div>
 
@@ -737,58 +746,75 @@
             } else {
                 formContainer.innerHTML = perProduct.map((p, pIdx) => {
                     const materials = p.materials || [];
+                    const productRawCost = materials.reduce((acc, it) => acc + (Number(it.total_cost) || (Number(it.total_quantity || 0) * Number(it.unit_cost || 0))), 0);
                     return `
                         <div class="product-formulation-block avoid-break">
                             <div class="product-formulation-header">
                                 <div>
-                                    <span style="font-size: 8pt; font-weight: 800; color: #1e1b4b; text-transform: uppercase;">
+                                    <span style="font-size: 8.5pt; font-weight: 800; color: #0f172a; text-transform: uppercase;">
                                         📦 Item #${pIdx + 1}: ${p.product_name}
                                     </span>
                                     <span class="sku-tag" style="margin-left: 6px;">${p.product_sku}</span>
-                                    <span style="font-size: 7.5pt; color: #64748b; margin-left: 8px;">
+                                    <span style="font-size: 8pt; color: #475569; margin-left: 8px;">
                                         Formula: <strong style="color: #0f172a;">${p.formula_code || 'FORM-STD'}</strong>
                                     </span>
                                 </div>
-                                <div style="font-size: 8pt; font-weight: 800; color: #0f172a;">
-                                    Target Batch Qty: <span style="font-family: monospace; color: #4338ca;">${formatNumber(p.target_quantity)} pcs</span>
+                                <div style="font-size: 8.5pt; font-weight: 800; color: #0f172a;">
+                                    Target Batch Qty: <span style="font-family: monospace; color: #1e1b4b;">${formatNumber(p.target_quantity)} pcs</span>
                                 </div>
                             </div>
                             <table class="styled-table" style="margin-bottom: 0;">
                                 <thead>
-                                    <tr style="background: #fafafa;">
-                                        <th style="width: 110px;">Phase</th>
-                                        <th style="width: 95px;">Material Code</th>
+                                    <tr style="background: #f8fafc;">
+                                        <th style="width: 32px; text-align: center;">#</th>
+                                        <th style="width: 100px;">Material Code</th>
                                         <th>Chemical / Raw Material Name</th>
-                                        <th style="width: 70px; text-align: right;">% w/w</th>
-                                        <th style="width: 85px; text-align: right;">Unit Dosage</th>
-                                        <th style="width: 120px; text-align: right;">Required Qty</th>
-                                        <th style="width: 75px; text-align: center;">Status</th>
+                                        <th style="width: 130px; text-align: right;">Required Qty</th>
+                                        <th style="width: 110px; text-align: right;">Unit Price (₱)</th>
+                                        <th style="width: 120px; text-align: right;">Total Price (₱)</th>
+                                        <th style="width: 80px; text-align: center;">Status</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    ${materials.map(m => {
+                                    ${materials.map((m, mIdx) => {
                                         const totalQtyVal = Number(m.total_quantity) || 0;
                                         let kgStr = '';
                                         if (m.unit === 'g' && totalQtyVal >= 1000) {
-                                            kgStr = ` <span style="color: #166534; font-size: 7pt;">(${(totalQtyVal / 1000).toFixed(2)} kg)</span>`;
+                                            kgStr = ` <span style="color: #166534; font-size: 7.5pt; font-weight: 600;">(${(totalQtyVal / 1000).toFixed(2)} kg)</span>`;
                                         } else if (m.unit === 'ml' && totalQtyVal >= 1000) {
-                                            kgStr = ` <span style="color: #166534; font-size: 7pt;">(${(totalQtyVal / 1000).toFixed(2)} L)</span>`;
+                                            kgStr = ` <span style="color: #166534; font-size: 7.5pt; font-weight: 600;">(${(totalQtyVal / 1000).toFixed(2)} L)</span>`;
                                         }
+                                        const unitPrice = Number(m.unit_cost) || 0;
+                                        const totalPrice = Number(m.total_cost) || (totalQtyVal * unitPrice);
+
                                         return `
                                             <tr>
-                                                <td><span class="phase-badge">${m.phase || 'Phase A'}</span></td>
-                                                <td style="font-family: monospace; font-weight: bold; color: #334155;">${m.material_code}</td>
-                                                <td style="font-weight: 600;">${m.material_name}</td>
-                                                <td style="text-align: right; font-family: monospace; color: #475569;">${Number(m.percentage || 0).toFixed(1)}%</td>
-                                                <td style="text-align: right; font-family: monospace; color: #64748b;">${Number(m.unit_quantity || 0).toFixed(2)} ${m.unit}</td>
+                                                <td style="text-align: center; color: #64748b; font-weight: 700;">${mIdx + 1}</td>
+                                                <td style="font-family: monospace; font-weight: 800; color: #0f172a;">${m.material_code}</td>
+                                                <td style="font-weight: 700; color: #0f172a;">${m.material_name}</td>
                                                 <td style="text-align: right; font-family: monospace; font-weight: 800; color: #0f172a;">
                                                     ${formatNumber(totalQtyVal.toFixed(2))} ${m.unit}${kgStr}
+                                                </td>
+                                                <td style="text-align: right; font-family: monospace; color: #334155; font-weight: 600;">
+                                                    ₱${unitPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </td>
+                                                <td style="text-align: right; font-family: monospace; font-weight: 800; color: #047857;">
+                                                    ₱${totalPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </td>
                                                 <td style="text-align: center;"><span class="status-pill">${m.status || 'ALLOCATED'}</span></td>
                                             </tr>
                                         `;
                                     }).join('')}
                                 </tbody>
+                                <tfoot>
+                                    <tr style="background: #f8fafc; font-weight: 800; border-top: 1px solid #cbd5e1;">
+                                        <td colspan="5" style="text-align: right; text-transform: uppercase; font-size: 8pt; color: #334155;">Product Raw Material Total:</td>
+                                        <td style="text-align: right; font-family: monospace; font-size: 8.5pt; color: #047857; font-weight: 800;">
+                                            ₱${productRawCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </td>
+                                        <td></td>
+                                    </tr>
+                                </tfoot>
                             </table>
                         </div>
                     `;
@@ -797,26 +823,40 @@
 
             // Render Consolidated Compounding Pull Sheet Table
             const consTbody = document.getElementById('table-consolidated-body');
+            const consGrandCostEl = document.getElementById('consolidated-grand-cost');
             if (consolidated.length === 0) {
-                consTbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 12px; color: #64748b;">No materials consolidated.</td></tr>`;
+                consTbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 12px; color: #64748b;">No materials consolidated.</td></tr>`;
             } else {
+                let calculatedGrandTotal = 0;
                 consTbody.innerHTML = consolidated.map((c, idx) => {
+                    const uCost = Number(c.unit_cost) || 0;
+                    const tCost = Number(c.total_cost) || (Number(c.total_quantity || 0) * uCost);
+                    calculatedGrandTotal += tCost;
                     return `
                         <tr>
                             <td style="text-align: center; font-weight: bold; color: #64748b;">${idx + 1}</td>
-                            <td style="font-family: monospace; font-weight: 800; color: #1e1b4b;">${c.material_code}</td>
+                            <td style="font-family: monospace; font-weight: 800; color: #0f172a;">${c.material_code}</td>
                             <td>
                                 <div style="font-weight: 700; color: #0f172a;">${c.material_name}</div>
-                                <div style="font-size: 6.5pt; color: #64748b;">Used in: ${(c.used_in_products || []).join(', ')}</div>
+                                <div style="font-size: 7pt; color: #64748b;">Used in: ${(c.used_in_products || []).join(', ')}</div>
                             </td>
-                            <td><span class="phase-badge">${c.phase || 'Phase A'}</span></td>
-                            <td style="text-align: right; font-weight: 900; font-family: monospace; font-size: 8.5pt; color: #064e3b;">
+                            <td style="text-align: right; font-weight: 800; font-family: monospace; font-size: 8.5pt; color: #0f172a;">
                                 ${c.formatted_quantity}
+                            </td>
+                            <td style="text-align: right; font-family: monospace; color: #334155; font-weight: 600;">
+                                ₱${uCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td style="text-align: right; font-weight: 800; font-family: monospace; font-size: 8.5pt; color: #047857;">
+                                ₱${tCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </td>
                             <td style="text-align: center;"><span class="status-pill">CLEARED</span></td>
                         </tr>
                     `;
                 }).join('');
+
+                if (consGrandCostEl) {
+                    consGrandCostEl.textContent = data.formattedGrandTotalRawMaterialCost || ('₱' + calculatedGrandTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                }
             }
         }
 

@@ -1804,6 +1804,110 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         db.prepare('DELETE FROM purchase_orders WHERE id = ?').run(po.id);
     });
 
+    test('29. Meta Messenger Chat Features (Heartbeat, Typing Indicator, Presence Tracking) & Formulation Receipt Pricing Test', async () => {
+        const acctToken = getAuthToken('ACCOUNTING');
+        const acctUser = db.prepare("SELECT * FROM users WHERE role = 'ACCOUNTING'").get();
+        const clientUser = db.prepare("SELECT * FROM users WHERE client_id = ?").get(demoClient.id);
+
+        // 1. POST /api/chat/heartbeat updates last_active_at and returns isOnline
+        const heartbeatRes = await request(app)
+            .post('/api/chat/heartbeat')
+            .set('Authorization', `Bearer ${acctToken}`);
+        assert.strictEqual(heartbeatRes.status, 200);
+        assert.strictEqual(heartbeatRes.body.success, true);
+        assert.strictEqual(heartbeatRes.body.isOnline, true);
+        assert.ok(heartbeatRes.body.timestamp);
+
+        const updatedAcctUser = db.prepare('SELECT last_active_at FROM users WHERE id = ?').get(acctUser.id);
+        assert.ok(updatedAcctUser.last_active_at);
+
+        // 2. GET /api/chat/contacts includes isOnline and activeStatus
+        const contactsRes = await request(app)
+            .get('/api/chat/contacts')
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(contactsRes.status, 200);
+        assert.strictEqual(contactsRes.body.success, true);
+        assert.ok(Array.isArray(contactsRes.body.contacts));
+        // Accountant was recently active via heartbeat, so activeStatus must be 'Active now'
+        const acctContact = contactsRes.body.contacts.find(s => s.userId === acctUser.id || s.id === `user-${acctUser.id}`);
+        assert.ok(acctContact, 'Accountant contact must be found in contacts list');
+        assert.strictEqual(acctContact.isOnline, true);
+        assert.strictEqual(acctContact.activeStatus, 'Active now');
+
+        // 3. POST /api/chat/typing records typing state
+        const typingRes = await request(app)
+            .post('/api/chat/typing')
+            .set('Authorization', `Bearer ${acctToken}`)
+            .send({
+                channelType: 'DIRECT',
+                recipientId: clientUser.id,
+                isTyping: true
+            });
+        assert.strictEqual(typingRes.status, 200);
+        assert.strictEqual(typingRes.body.success, true);
+
+        // 4. GET /api/chat/status shows typing indication to recipient
+        const statusRes = await request(app)
+            .get(`/api/chat/status?channelType=DIRECT&targetId=${acctUser.id}`)
+            .set('Authorization', `Bearer ${clientToken}`);
+        assert.strictEqual(statusRes.status, 200);
+        assert.strictEqual(statusRes.body.success, true);
+        assert.strictEqual(statusRes.body.isOnline, true);
+        assert.strictEqual(statusRes.body.isTyping, true);
+        assert.ok(statusRes.body.typingUsers.length > 0);
+        assert.strictEqual(statusRes.body.typingUsers[0].name, acctUser.name);
+
+        // 5. Formulation breakdown returns ingredient pricing (unit_cost, total_cost, grandTotalRawMaterialCost)
+        const poRes = await request(app)
+            .post('/api/orders')
+            .set('Authorization', `Bearer ${clientToken}`)
+            .send({
+                client_id: demoClient.id,
+                tolerance_percent: 10.0,
+                billing_policy: 'ACTUAL_DELIVERY',
+                items: [{ product_id: lotionProduct.id, target_quantity: 400, unit_price: 120.0 }]
+            });
+        assert.strictEqual(poRes.status, 201);
+        const po = poRes.body.data;
+
+        // Confirm by accounting to trigger conversion
+        await request(app)
+            .post(`/api/orders/${po.id}/accounting-confirm`)
+            .set('Authorization', `Bearer ${acctToken}`)
+            .send({ form_of_payment: '30d' });
+
+        const breakdownRes = await request(app)
+            .get(`/api/formulations/orders/${po.id}/breakdown`)
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(breakdownRes.status, 200);
+        const breakdown = breakdownRes.body.data;
+        assert.ok(breakdown.perProduct.length > 0);
+        const firstProd = breakdown.perProduct[0];
+        assert.ok(firstProd.total_material_cost > 0, 'Product material total cost must be > 0');
+        assert.ok(firstProd.ingredients.length > 0);
+        const firstIng = firstProd.ingredients[0];
+        assert.ok(firstIng.unit_cost > 0, 'Ingredient unit_cost must be > 0');
+        assert.ok(firstIng.total_cost > 0, 'Ingredient total_cost must be > 0');
+        assert.ok(breakdown.grandTotalRawMaterialCost > 0, 'Order grandTotalRawMaterialCost must be > 0');
+
+        // 6. Recipe viewer and Receipt Verification
+        const printReceiptPath = path.join(__dirname, '../public/print-formulation-receipt.html');
+        const printReceiptHtml = fs.readFileSync(printReceiptPath, 'utf8');
+        assert.ok(printReceiptHtml.includes('Unit Price (₱)'), 'Receipt must contain Unit Price header');
+        assert.ok(printReceiptHtml.includes('Total Price (₱)'), 'Receipt must contain Total Price header');
+        assert.ok(printReceiptHtml.includes('Product Raw Material Total:'), 'Receipt must contain per-product total');
+        assert.ok(printReceiptHtml.includes('Grand Total Raw Material Cost:'), 'Receipt must contain consolidated total');
+        // Steps, % w/w, unit dosage removed
+        assert.strictEqual(printReceiptHtml.includes('Compounding / Mixing Steps'), false, 'Receipt must NOT contain Compounding steps');
+        assert.strictEqual(printReceiptHtml.includes('% w/w'), false, 'Receipt must NOT contain % w/w');
+        assert.strictEqual(printReceiptHtml.includes('Unit Dosage'), false, 'Receipt must NOT contain Unit Dosage');
+
+        // Clean up
+        db.prepare('DELETE FROM order_material_conversions WHERE po_id = ?').run(po.id);
+        db.prepare('DELETE FROM purchase_order_items WHERE po_id = ?').run(po.id);
+        db.prepare('DELETE FROM purchase_orders WHERE id = ?').run(po.id);
+    });
+
     after(() => {
         // Automatically delete all test decoys and temporary test database
         try {

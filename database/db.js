@@ -288,6 +288,20 @@ function runMigrations(dbInstance, isMysql) {
             } catch (_) {}
         }
 
+        // Schema Upgrades: User Online Presence & Formulation Material Pricing
+        try {
+            dbInstance.exec(`ALTER TABLE users ADD COLUMN last_active_at ${textType};`);
+        } catch (_) {}
+        try {
+            dbInstance.exec(`ALTER TABLE formulation_ingredients ADD COLUMN unit_cost ${realType} DEFAULT 0.0;`);
+        } catch (_) {}
+        try {
+            dbInstance.exec(`ALTER TABLE order_material_conversions ADD COLUMN unit_cost ${realType} DEFAULT 0.0;`);
+        } catch (_) {}
+        try {
+            dbInstance.exec(`ALTER TABLE order_material_conversions ADD COLUMN total_cost ${realType} DEFAULT 0.0;`);
+        } catch (_) {}
+
         // Create product_formulations, formulation_ingredients, and order_material_conversions tables
         try {
             if (isMysql) {
@@ -316,6 +330,7 @@ function runMigrations(dbInstance, isMysql) {
                         percentage DECIMAL(6,3) NOT NULL DEFAULT 0.000,
                         quantity_per_unit DECIMAL(12,4) NOT NULL DEFAULT 0.0000,
                         unit VARCHAR(50) NOT NULL DEFAULT 'g',
+                        unit_cost DECIMAL(12,4) NOT NULL DEFAULT 0.0000,
                         notes TEXT NULL,
                         sort_order INT DEFAULT 0,
                         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -336,6 +351,8 @@ function runMigrations(dbInstance, isMysql) {
                         unit_quantity DECIMAL(12,4) NOT NULL DEFAULT 0.0000,
                         total_quantity DECIMAL(14,4) NOT NULL DEFAULT 0.0000,
                         unit VARCHAR(50) NOT NULL DEFAULT 'g',
+                        unit_cost DECIMAL(12,4) NOT NULL DEFAULT 0.0000,
+                        total_cost DECIMAL(14,4) NOT NULL DEFAULT 0.0000,
                         status VARCHAR(50) NOT NULL DEFAULT 'ALLOCATED',
                         converted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -371,6 +388,7 @@ function runMigrations(dbInstance, isMysql) {
                         percentage REAL NOT NULL DEFAULT 0.0,
                         quantity_per_unit REAL NOT NULL DEFAULT 0.0,
                         unit TEXT NOT NULL DEFAULT 'g',
+                        unit_cost REAL NOT NULL DEFAULT 0.0,
                         notes TEXT,
                         sort_order INTEGER DEFAULT 0,
                         created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
@@ -392,6 +410,8 @@ function runMigrations(dbInstance, isMysql) {
                         unit_quantity REAL NOT NULL DEFAULT 0.0,
                         total_quantity REAL NOT NULL DEFAULT 0.0,
                         unit TEXT NOT NULL DEFAULT 'g',
+                        unit_cost REAL NOT NULL DEFAULT 0.0,
+                        total_cost REAL NOT NULL DEFAULT 0.0,
                         status TEXT NOT NULL DEFAULT 'ALLOCATED',
                         converted_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
                         created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),

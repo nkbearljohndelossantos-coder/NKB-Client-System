@@ -4,6 +4,23 @@ const { v4: uuidv4 } = require('uuid');
 const db = require('../database/db');
 const { authenticateToken, normalizeRole, ROLES } = require('../middleware/auth');
 
+const activeTypingTracker = new Map();
+
+/**
+ * Helper: Calculate user's active status from last_active_at timestamp
+ */
+function computeActiveStatus(lastActiveAt) {
+    if (!lastActiveAt) return { isOnline: false, activeStatus: 'Offline' };
+    const dateStr = lastActiveAt.includes('T') ? lastActiveAt : lastActiveAt.replace(' ', 'T') + '+08:00';
+    const lastActiveTime = new Date(dateStr).getTime();
+    if (isNaN(lastActiveTime)) return { isOnline: false, activeStatus: 'Offline' };
+    const diffMinutes = Math.floor((Date.now() - lastActiveTime) / 60000);
+    if (diffMinutes <= 3) return { isOnline: true, activeStatus: 'Active now' };
+    if (diffMinutes < 60) return { isOnline: false, activeStatus: `Active ${diffMinutes}m ago` };
+    if (diffMinutes < 1440) return { isOnline: false, activeStatus: `Active ${Math.floor(diffMinutes / 60)}h ago` };
+    return { isOnline: false, activeStatus: 'Offline' };
+}
+
 /**
  * GET /api/chat/contacts
  * Retrieve available conversation channels and contacts based on role permissions
@@ -15,6 +32,13 @@ router.get('/contacts', authenticateToken, (req, res) => {
         const contacts = [];
 
         // 1. Pinned Contact Support (Accessible to Everyone, direct to IT & Super Admin)
+        const supportOnline = db.prepare(`
+            SELECT COUNT(*) as cnt FROM users 
+            WHERE (role = 'IT_ADMIN' OR role = 'SUPER_ADMIN') AND is_active = 1 
+              AND (strftime('%s', 'now', 'localtime') - strftime('%s', last_active_at)) <= 300
+        `).get();
+        const isSupportOnline = Boolean(supportOnline && supportOnline.cnt > 0);
+
         contacts.push({
             id: 'channel-support',
             name: 'Contact Support (IT & Super Admin)',
@@ -23,18 +47,29 @@ router.get('/contacts', authenticateToken, (req, res) => {
             isSupport: true,
             avatar: '🆘',
             description: 'Direct priority channel for IT assistance, bug reports & urgent escalation.',
-            pinned: true
+            pinned: true,
+            isOnline: isSupportOnline,
+            activeStatus: isSupportOnline ? 'Active now' : 'Helpdesk Available'
         });
 
         // 2. Client Isolation: Clients can ONLY chat with Accounting (and Support)
         if (role === ROLES.CLIENT) {
+            const acctOnline = db.prepare(`
+                SELECT COUNT(*) as cnt FROM users 
+                WHERE role = 'ACCOUNTING' AND is_active = 1 
+                  AND (strftime('%s', 'now', 'localtime') - strftime('%s', last_active_at)) <= 300
+            `).get();
+            const isAcctOnline = Boolean(acctOnline && acctOnline.cnt > 0);
+
             contacts.push({
                 id: 'role-accounting',
                 name: 'Accounting Department',
                 channelType: 'ROLE',
                 targetRole: 'ACCOUNTING',
                 avatar: '💰',
-                description: 'Invoices, billing inquiries, statement of account, and payment receipts.'
+                description: 'Invoices, billing inquiries, statement of account, and payment receipts.',
+                isOnline: isAcctOnline,
+                activeStatus: isAcctOnline ? 'Active now' : 'Staff Available'
             });
 
             return res.json({ success: true, role, contacts });
@@ -51,25 +86,35 @@ router.get('/contacts', authenticateToken, (req, res) => {
         ];
 
         for (const r of internalRoles) {
+            const rOnline = db.prepare(`
+                SELECT COUNT(*) as cnt FROM users 
+                WHERE role = ? AND is_active = 1 
+                  AND (strftime('%s', 'now', 'localtime') - strftime('%s', last_active_at)) <= 300
+            `).get(r.role);
+            const isDeptOnline = Boolean(rOnline && rOnline.cnt > 0);
+
             contacts.push({
                 id: r.id,
                 name: r.name,
                 channelType: 'ROLE',
                 targetRole: r.role,
                 avatar: r.avatar,
-                description: r.desc
+                description: r.desc,
+                isOnline: isDeptOnline,
+                activeStatus: isDeptOnline ? 'Active now' : 'Staff Available'
             });
         }
 
         // 4. Individual Internal Staff Members (Direct 1-on-1 Messages)
         const staffUsers = db.prepare(`
-            SELECT id, name, email, role 
+            SELECT id, name, email, role, last_active_at 
             FROM users 
             WHERE id != ? AND role != 'CLIENT' AND is_active = 1 
             ORDER BY name ASC
         `).all(user.id);
 
         for (const s of staffUsers) {
+            const statusInfo = computeActiveStatus(s.last_active_at);
             contacts.push({
                 id: `user-${s.id}`,
                 userId: s.id,
@@ -78,13 +123,15 @@ router.get('/contacts', authenticateToken, (req, res) => {
                 channelType: 'DIRECT',
                 targetRole: s.role,
                 avatar: '👤',
-                description: `${s.role} • ${s.email}`
+                description: `${s.role} • ${s.email}`,
+                isOnline: statusInfo.isOnline,
+                activeStatus: statusInfo.activeStatus
             });
         }
 
         // 5. Client Contacts (Staff can review and reply to clients)
         const clientUsers = db.prepare(`
-            SELECT u.id, u.name, u.email, c.company_name
+            SELECT u.id, u.name, u.email, u.last_active_at, c.company_name
             FROM users u
             JOIN clients c ON u.client_id = c.id
             WHERE u.role = 'CLIENT' AND u.is_active = 1
@@ -92,6 +139,7 @@ router.get('/contacts', authenticateToken, (req, res) => {
         `).all();
 
         for (const c of clientUsers) {
+            const statusInfo = computeActiveStatus(c.last_active_at);
             contacts.push({
                 id: `client-${c.id}`,
                 userId: c.id,
@@ -100,7 +148,9 @@ router.get('/contacts', authenticateToken, (req, res) => {
                 channelType: 'DIRECT',
                 targetRole: 'CLIENT',
                 avatar: '🏢',
-                description: `Client Account • ${c.email}`
+                description: `Client Account • ${c.email}`,
+                isOnline: statusInfo.isOnline,
+                activeStatus: statusInfo.activeStatus
             });
         }
 
@@ -365,6 +415,125 @@ router.get('/unread-count', authenticateToken, (req, res) => {
         return res.json({ success: true, unreadCount: unread });
     } catch (err) {
         return res.json({ success: true, unreadCount: 0 });
+    }
+});
+
+/**
+ * POST /api/chat/heartbeat
+ * Keep-alive ping from active browser window to maintain online presence
+ */
+router.post('/heartbeat', authenticateToken, (req, res) => {
+    try {
+        const userId = req.user.id;
+        db.prepare("UPDATE users SET last_active_at = datetime('now', 'localtime') WHERE id = ?").run(userId);
+        return res.json({ success: true, timestamp: new Date().toISOString(), isOnline: true });
+    } catch (err) {
+        return res.json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/chat/typing
+ * Broadcast live typing indicators to other conversation participants
+ */
+router.post('/typing', authenticateToken, (req, res) => {
+    try {
+        const user = req.user;
+        const { contactId, channelType, targetRole, userId, recipientId, targetId, isTyping } = req.body;
+        
+        let convKey;
+        const otherId = userId || recipientId || targetId || (contactId && (contactId.startsWith('user-') || contactId.startsWith('client-')) ? contactId.replace('user-', '').replace('client-', '') : null);
+        if (channelType === 'DIRECT' || otherId) {
+            const pair = [String(user.id), String(otherId)].sort().join(':');
+            convKey = `DIRECT:${pair}`;
+        } else {
+            convKey = `${channelType || 'ROLE'}:${targetRole || contactId || 'general'}`;
+        }
+        const trackerKey = `${convKey}:${user.id}`;
+
+        if (isTyping) {
+            activeTypingTracker.set(trackerKey, {
+                convKey,
+                userId: user.id,
+                userName: user.name,
+                userRole: user.role,
+                expiresAt: Date.now() + 4000
+            });
+        } else {
+            activeTypingTracker.delete(trackerKey);
+        }
+        return res.json({ success: true });
+    } catch (err) {
+        return res.json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * GET /api/chat/status
+ * Return active status and live typing state for a conversation channel
+ */
+router.get('/status', authenticateToken, (req, res) => {
+    try {
+        const user = req.user;
+        const { contactId, channelType, targetRole, userId, targetId, recipientId } = req.query;
+        const now = Date.now();
+
+        // 1. Check live typing state for this conversation
+        let convKey;
+        const otherId = userId || targetId || recipientId || (contactId && (contactId.startsWith('user-') || contactId.startsWith('client-')) ? contactId.replace('user-', '').replace('client-', '') : null);
+        if (channelType === 'DIRECT' || otherId) {
+            const pair = [String(user.id), String(otherId)].sort().join(':');
+            convKey = `DIRECT:${pair}`;
+        } else {
+            convKey = `${channelType || 'ROLE'}:${targetRole || contactId || 'general'}`;
+        }
+        const typingUsers = [];
+
+        for (const [key, item] of activeTypingTracker.entries()) {
+            if (item.expiresAt < now) {
+                activeTypingTracker.delete(key);
+                continue;
+            }
+            if (item.convKey === convKey && item.userId !== user.id) {
+                typingUsers.push({ id: item.userId, name: item.userName, role: item.userRole });
+            }
+        }
+
+        // 2. Compute active presence status for target user or role
+        let isOnline = false;
+        let activeText = 'Offline';
+
+        if (otherId) {
+            const targetUser = db.prepare('SELECT last_active_at FROM users WHERE id = ?').get(otherId);
+            if (targetUser && targetUser.last_active_at) {
+                const statusInfo = computeActiveStatus(targetUser.last_active_at);
+                isOnline = statusInfo.isOnline;
+                activeText = statusInfo.activeStatus;
+            }
+        } else if (targetRole) {
+            const activeStaff = db.prepare(`
+                SELECT id FROM users 
+                WHERE role = ? AND is_active = 1 
+                  AND (strftime('%s', 'now', 'localtime') - strftime('%s', last_active_at)) <= 180
+                LIMIT 1
+            `).get(targetRole.toUpperCase());
+            if (activeStaff) {
+                isOnline = true;
+                activeText = 'Active now';
+            } else {
+                activeText = 'Department Available';
+            }
+        }
+
+        return res.json({
+            success: true,
+            isOnline,
+            activeText,
+            isTyping: typingUsers.length > 0,
+            typingUsers
+        });
+    } catch (err) {
+        return res.json({ success: false, error: err.message });
     }
 });
 

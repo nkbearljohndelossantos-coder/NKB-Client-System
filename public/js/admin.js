@@ -6702,8 +6702,10 @@ async function openViewFormulationModal(productId) {
         }
 
         const data = res.data;
-        const formulation = data.formulation;
-        const ingredients = data.ingredients || [];
+        const formulation = data.formulation || data;
+        const ingredients = data.ingredients || formulation.ingredients || [];
+        const prodName = data.product_name || formulation.product_name || (data.product && data.product.name) || formulation.name;
+        const prodSku = data.product_sku || formulation.product_sku || (data.product && data.product.sku) || formulation.formula_code || 'N/A';
 
         const phases = {};
         ingredients.forEach(ing => {
@@ -6736,8 +6738,8 @@ async function openViewFormulationModal(productId) {
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-shrink-0">
                         <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
                             <span class="text-[10px] text-slate-400 uppercase font-bold block">Target Product</span>
-                            <div class="font-black text-slate-900 text-xs mt-0.5">${data.product?.name || formulation.name}</div>
-                            <div class="text-[10px] font-mono text-indigo-700 font-bold mt-0.5">SKU: ${data.product?.sku || 'N/A'}</div>
+                            <div class="font-black text-slate-900 text-xs mt-0.5">${prodName}</div>
+                            <div class="text-[10px] font-mono text-indigo-700 font-bold mt-0.5">SKU: ${prodSku}</div>
                         </div>
                         <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
                             <span class="text-[10px] text-slate-400 uppercase font-bold block">Chemical Stability & Yield</span>
@@ -6768,6 +6770,7 @@ async function openViewFormulationModal(productId) {
                                                 <th class="py-2 px-3">Material Name / INCI</th>
                                                 <th class="py-2 px-3 text-center">% w/w</th>
                                                 <th class="py-2 px-3 text-right">Dose / Unit</th>
+                                                <th class="py-2 px-3 text-right">Est. Unit Cost</th>
                                                 <th class="py-2 px-3">Application Notes</th>
                                             </tr>
                                         </thead>
@@ -6778,6 +6781,7 @@ async function openViewFormulationModal(productId) {
                                                     <td class="py-2 px-3 font-bold text-slate-900">${item.material_name}</td>
                                                     <td class="py-2 px-3 text-center font-mono font-bold text-indigo-700">${Number(item.percentage).toFixed(2)}%</td>
                                                     <td class="py-2 px-3 text-right font-mono font-black text-slate-900">${Number(item.quantity_per_unit).toFixed(4)} ${item.unit}</td>
+                                                    <td class="py-2 px-3 text-right font-mono text-emerald-700 font-bold">₱${(Number(item.unit_cost) || 0).toFixed(2)}</td>
                                                     <td class="py-2 px-3 text-slate-500 text-[11px]">${item.notes || '—'}</td>
                                                 </tr>
                                             `).join('')}
