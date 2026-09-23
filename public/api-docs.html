@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Developer API Documentation | NKB Manufacturing Corporation</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #0b0f17; color: #f1f5f9; }
+        code, pre { font-family: 'JetBrains Mono', monospace; }
+        .sidebar-link.active { background-color: rgba(99, 102, 241, 0.15); color: #818cf8; border-right: 3px solid #6366f1; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Top Navigation Header -->
+    <header class="sticky top-0 z-40 bg-[#0f172a]/95 backdrop-blur border-b border-slate-800 px-4 lg:px-8 py-3.5 flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+            <a href="/" class="flex items-center gap-2.5">
+                <span class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-black text-sm shadow-md shadow-indigo-600/30">NKB</span>
+                <div>
+                    <div class="text-sm font-bold text-white tracking-wide flex items-center gap-2">
+                        NKB Developer API
+                        <span class="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">v1.0 REST</span>
+                    </div>
+                    <div class="text-[10px] text-slate-400">NKB Manufacturing Corporation</div>
+                </div>
+            </a>
+        </div>
+
+        <!-- Interactive API Key Bar -->
+        <div class="flex items-center gap-3 flex-1 max-w-xl justify-end">
+            <div class="relative w-full max-w-sm hidden sm:block">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 text-xs">🔑</div>
+                <input type="password" id="global-api-key" placeholder="Enter API Key (e.g. nkb_live_...)" 
+                       class="w-full pl-8 pr-20 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-mono transition"
+                       oninput="saveApiKey(this.value)">
+                <button onclick="toggleKeyVisibility()" class="absolute inset-y-0 right-0 pr-2.5 flex items-center text-[10px] font-semibold text-slate-400 hover:text-white">
+                    Show
+                </button>
+            </div>
+            <a href="/admin.html" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs font-semibold text-slate-200 transition">
+                Admin Portal
+            </a>
+            <a href="/api/v1/openapi.json" target="_blank" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-xs font-bold text-white shadow-sm shadow-indigo-600/30 transition">
+                OpenAPI Spec
+            </a>
+        </div>
+    </header>
+
+    <!-- Main Docs Layout -->
+    <div class="flex-1 flex max-w-7xl w-full mx-auto">
+
+        <!-- Left Navigation Sidebar -->
+        <aside class="w-64 border-r border-slate-800 p-4 shrink-0 hidden md:block overflow-y-auto max-h-[calc(100vh-65px)] sticky top-[65px]">
+            <div class="space-y-6 text-xs">
+                <div>
+                    <div class="font-bold text-[10px] uppercase tracking-wider text-slate-400 mb-2 px-2">Overview</div>
+                    <ul class="space-y-1">
+                        <li><a href="#section-intro" class="sidebar-link block px-2.5 py-1.5 rounded-lg text-slate-300 hover:bg-slate-800/60 hover:text-white transition active">Introduction</a></li>
+                        <li><a href="#section-auth" class="sidebar-link block px-2.5 py-1.5 rounded-lg text-slate-300 hover:bg-slate-800/60 hover:text-white transition">Authentication & Scopes</a></li>
+                        <li><a href="#section-ratelimits" class="sidebar-link block px-2.5 py-1.5 rounded-lg text-slate-300 hover:bg-slate-800/60 hover:text-white transition">Rate Limits & Errors</a></li>
+                    </ul>
+                </div>
+
+                <div>
+                    <div class="font-bold text-[10px] uppercase tracking-wider text-slate-400 mb-2 px-2">Cosmetic Products</div>
+                    <ul class="space-y-1">
+                        <li><a href="#endpoint-products-list" class="sidebar-link block px-2.5 py-1.5 rounded-lg text-slate-300 hover:bg-slate-800/60 hover:text-white transition"><span class="text-emerald-400 font-bold mr-1.5">GET</span> List Products</a></li>
+                        <li><a href="#endpoint-products-detail" class="sidebar-link block px-2.5 py-1.5 rounded-lg text-slate-300 hover:bg-slate-800/60 hover:text-white transition"><span class="text-emerald-400 font-bold mr-1.5">GET</span> Product Details</a></li>
+                    </ul>
+                </div>
+
+                <div>
+                    <div class="font-bold text-[10px] uppercase tracking-wider text-slate-400 mb-2 px-2">Purchase Orders</div>
+                    <ul class="space-y-1">
+                        <li><a href="#endpoint-orders-list" class="sidebar-link block px-2.5 py-1.5 rounded-lg text-slate-300 hover:bg-slate-800/60 hover:text-white transition"><span class="text-emerald-400 font-bold mr-1.5">GET</span> List Orders</a></li>
+                        <li><a href="#endpoint-orders-create" class="sidebar-link block px-2.5 py-1.5 rounded-lg text-slate-300 hover:bg-slate-800/60 hover:text-white transition"><span class="text-indigo-400 font-bold mr-1.5">POST</span> Create Order</a></li>
+                        <li><a href="#endpoint-orders-detail" class="sidebar-link block px-2.5 py-1.5 rounded-lg text-slate-300 hover:bg-slate-800/60 hover:text-white transition"><span class="text-emerald-400 font-bold mr-1.5">GET</span> Order Status</a></li>
+                    </ul>
+                </div>
+
+                <div>
+                    <div class="font-bold text-[10px] uppercase tracking-wider text-slate-400 mb-2 px-2">Deliveries / DR</div>
+                    <ul class="space-y-1">
+                        <li><a href="#endpoint-deliveries-list" class="sidebar-link block px-2.5 py-1.5 rounded-lg text-slate-300 hover:bg-slate-800/60 hover:text-white transition"><span class="text-emerald-400 font-bold mr-1.5">GET</span> List Deliveries</a></li>
+                        <li><a href="#endpoint-deliveries-detail" class="sidebar-link block px-2.5 py-1.5 rounded-lg text-slate-300 hover:bg-slate-800/60 hover:text-white transition"><span class="text-emerald-400 font-bold mr-1.5">GET</span> Delivery Details</a></li>
+                    </ul>
+                </div>
+
+                <div>
+                    <div class="font-bold text-[10px] uppercase tracking-wider text-slate-400 mb-2 px-2">Sales Invoices</div>
+                    <ul class="space-y-1">
+                        <li><a href="#endpoint-invoices-list" class="sidebar-link block px-2.5 py-1.5 rounded-lg text-slate-300 hover:bg-slate-800/60 hover:text-white transition"><span class="text-emerald-400 font-bold mr-1.5">GET</span> List Invoices</a></li>
+                        <li><a href="#endpoint-invoices-detail" class="sidebar-link block px-2.5 py-1.5 rounded-lg text-slate-300 hover:bg-slate-800/60 hover:text-white transition"><span class="text-emerald-400 font-bold mr-1.5">GET</span> Invoice Details</a></li>
+                    </ul>
+                </div>
+
+                <div>
+                    <div class="font-bold text-[10px] uppercase tracking-wider text-slate-400 mb-2 px-2">Inventory & BOM</div>
+                    <ul class="space-y-1">
+                        <li><a href="#endpoint-inventory" class="sidebar-link block px-2.5 py-1.5 rounded-lg text-slate-300 hover:bg-slate-800/60 hover:text-white transition"><span class="text-emerald-400 font-bold mr-1.5">GET</span> Stock & Materials</a></li>
+                    </ul>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Right Documentation Content -->
+        <main class="flex-1 p-6 lg:p-10 space-y-12 max-w-4xl">
+
+            <!-- Section: Introduction -->
+            <section id="section-intro" class="space-y-4">
+                <h1 class="text-3xl font-extrabold text-white tracking-tight">NKB Developer REST API Reference</h1>
+                <p class="text-slate-400 text-sm leading-relaxed">
+                    The NKB Manufacturing Corporation API enables external platforms, eCommerce stores (Shopify, WooCommerce), custom ERPs, and warehouse barcode scanners to programmatically sync product catalogs, submit purchase orders, track production deliveries, and retrieve real-time invoices.
+                </p>
+                <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between text-xs font-mono">
+                    <span class="text-slate-400">Base Production URL:</span>
+                    <span class="text-indigo-400 font-bold" id="base-url-disp">http://my.nkbmanufacturing.com/api/v1</span>
+                </div>
+            </section>
+
+            <!-- Section: Authentication -->
+            <section id="section-auth" class="space-y-4 pt-6 border-t border-slate-800">
+                <h2 class="text-2xl font-bold text-white">Authentication & Scopes</h2>
+                <p class="text-slate-400 text-sm">
+                    Authenticate all API requests by providing your secret API Key via the <code class="text-indigo-300 bg-slate-900 px-1.5 py-0.5 rounded text-xs">x-api-key</code> HTTP header or as a Bearer token in the <code class="text-indigo-300 bg-slate-900 px-1.5 py-0.5 rounded text-xs">Authorization</code> header.
+                </p>
+
+                <div class="bg-slate-900 rounded-xl border border-slate-800 p-4">
+                    <div class="text-xs font-bold text-slate-300 mb-2">Example Header:</div>
+                    <pre class="text-xs text-emerald-400 overflow-x-auto"><code>x-api-key: nkb_live_3f9a7c81d2...</code></pre>
+                </div>
+
+                <h3 class="text-base font-bold text-white pt-2">Available Permission Scopes</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div class="p-3 bg-slate-900 border border-slate-800 rounded-lg">
+                        <div class="font-mono font-bold text-indigo-400">products:read</div>
+                        <div class="text-slate-400 mt-1">Access catalog, product descriptions, pricing, and packaging details.</div>
+                    </div>
+                    <div class="p-3 bg-slate-900 border border-slate-800 rounded-lg">
+                        <div class="font-mono font-bold text-indigo-400">orders:read</div>
+                        <div class="text-slate-400 mt-1">View purchase orders, item lines, production tracking, and order statuses.</div>
+                    </div>
+                    <div class="p-3 bg-slate-900 border border-slate-800 rounded-lg">
+                        <div class="font-mono font-bold text-indigo-400">orders:write</div>
+                        <div class="text-slate-400 mt-1">Create and submit new purchase orders programmatically.</div>
+                    </div>
+                    <div class="p-3 bg-slate-900 border border-slate-800 rounded-lg">
+                        <div class="font-mono font-bold text-indigo-400">deliveries:read</div>
+                        <div class="text-slate-400 mt-1">Track Delivery Receipts (DRs), vehicles, drivers, and client acceptance.</div>
+                    </div>
+                    <div class="p-3 bg-slate-900 border border-slate-800 rounded-lg">
+                        <div class="font-mono font-bold text-indigo-400">invoices:read</div>
+                        <div class="text-slate-400 mt-1">View sales invoices, balances, due dates, and payment history.</div>
+                    </div>
+                    <div class="p-3 bg-slate-900 border border-slate-800 rounded-lg">
+                        <div class="font-mono font-bold text-indigo-400">inventory:read</div>
+                        <div class="text-slate-400 mt-1">View finished goods stock and converted raw material requirements.</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ENDPOINT: List Products -->
+            <section id="endpoint-products-list" class="space-y-4 pt-6 border-t border-slate-800">
+                <div class="flex items-center gap-2.5">
+                    <span class="px-2 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded font-bold text-xs font-mono">GET</span>
+                    <span class="font-mono text-sm font-bold text-white">/api/v1/products</span>
+                    <span class="ml-auto text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">Scope: products:read</span>
+                </div>
+                <p class="text-slate-400 text-sm">Retrieve list of active cosmetic products with pagination, search, category filter, and client-specific pricing.</p>
+
+                <!-- Code Tabs & Live Console -->
+                <div class="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden text-xs">
+                    <div class="flex items-center justify-between border-b border-slate-800 px-4 py-2 bg-slate-950/60">
+                        <div class="flex gap-2">
+                            <button onclick="switchCodeTab('prod-list', 'curl')" id="btn-prod-list-curl" class="px-2 py-1 font-mono text-indigo-400 font-bold border-b-2 border-indigo-500">cURL</button>
+                            <button onclick="switchCodeTab('prod-list', 'js')" id="btn-prod-list-js" class="px-2 py-1 font-mono text-slate-400 hover:text-white">JavaScript</button>
+                            <button onclick="switchCodeTab('prod-list', 'py')" id="btn-prod-list-py" class="px-2 py-1 font-mono text-slate-400 hover:text-white">Python</button>
+                        </div>
+                        <button onclick="runTestRequest('/api/v1/products?limit=5', 'GET', 'res-prod-list')" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded shadow transition">
+                            ⚡ Test Request
+                        </button>
+                    </div>
+                    <div class="p-4 overflow-x-auto">
+                        <pre id="code-prod-list-curl" class="text-emerald-400 font-mono"><code>curl -X GET "http://my.nkbmanufacturing.com/api/v1/products?limit=5" \
+  -H "x-api-key: YOUR_API_KEY"</code></pre>
+                        <pre id="code-prod-list-js" class="text-emerald-400 font-mono hidden"><code>const res = await fetch("http://my.nkbmanufacturing.com/api/v1/products?limit=5", {
+  headers: { "x-api-key": "YOUR_API_KEY" }
+});
+const data = await res.json();
+console.log(data);</code></pre>
+                        <pre id="code-prod-list-py" class="text-emerald-400 font-mono hidden"><code>import requests
+
+headers = { "x-api-key": "YOUR_API_KEY" }
+res = requests.get("http://my.nkbmanufacturing.com/api/v1/products?limit=5", headers=headers)
+print(res.json())</code></pre>
+                    </div>
+                    <div id="box-res-prod-list" class="border-t border-slate-800 p-4 bg-black/40 hidden">
+                        <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 flex items-center justify-between">
+                            <span>Live Response</span>
+                            <span id="status-res-prod-list" class="font-mono text-emerald-400"></span>
+                        </div>
+                        <pre id="res-prod-list" class="text-[11px] text-slate-300 font-mono overflow-x-auto max-h-60"></pre>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ENDPOINT: Create Order -->
+            <section id="endpoint-orders-create" class="space-y-4 pt-6 border-t border-slate-800">
+                <div class="flex items-center gap-2.5">
+                    <span class="px-2 py-1 bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 rounded font-bold text-xs font-mono">POST</span>
+                    <span class="font-mono text-sm font-bold text-white">/api/v1/orders</span>
+                    <span class="ml-auto text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">Scope: orders:write</span>
+                </div>
+                <p class="text-slate-400 text-sm">Programmatically submit a Purchase Order with line items. Automatically calculates custom pricing and assigns transaction-safe PO-YYYY-XXXXXX numbers.</p>
+
+                <div class="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden text-xs">
+                    <div class="flex items-center justify-between border-b border-slate-800 px-4 py-2 bg-slate-950/60">
+                        <div class="flex gap-2">
+                            <button onclick="switchCodeTab('order-create', 'curl')" id="btn-order-create-curl" class="px-2 py-1 font-mono text-indigo-400 font-bold border-b-2 border-indigo-500">cURL</button>
+                            <button onclick="switchCodeTab('order-create', 'js')" id="btn-order-create-js" class="px-2 py-1 font-mono text-slate-400 hover:text-white">JavaScript</button>
+                            <button onclick="switchCodeTab('order-create', 'py')" id="btn-order-create-py" class="px-2 py-1 font-mono text-slate-400 hover:text-white">Python</button>
+                        </div>
+                    </div>
+                    <div class="p-4 overflow-x-auto">
+                        <pre id="code-order-create-curl" class="text-emerald-400 font-mono"><code>curl -X POST "http://my.nkbmanufacturing.com/api/v1/orders" \
+  -H "x-api-key: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tolerance_percent": 10.0,
+    "billing_policy": "ACTUAL_DELIVERY",
+    "form_of_payment": "30 Days Net",
+    "notes": "Automated order via REST API",
+    "items": [
+      { "sku": "SKC-2026001", "target_quantity": 500 }
+    ]
+  }'</code></pre>
+                        <pre id="code-order-create-js" class="text-emerald-400 font-mono hidden"><code>const res = await fetch("http://my.nkbmanufacturing.com/api/v1/orders", {
+  method: "POST",
+  headers: {
+    "x-api-key": "YOUR_API_KEY",
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    tolerance_percent: 10.0,
+    items: [{ sku: "SKC-2026001", target_quantity: 500 }]
+  })
+});
+const data = await res.json();
+console.log(data);</code></pre>
+                        <pre id="code-order-create-py" class="text-emerald-400 font-mono hidden"><code>import requests
+
+payload = {
+    "tolerance_percent": 10.0,
+    "items": [{"sku": "SKC-2026001", "target_quantity": 500}]
+}
+res = requests.post("http://my.nkbmanufacturing.com/api/v1/orders", 
+                    headers={"x-api-key": "YOUR_API_KEY"}, 
+                    json=payload)
+print(res.json())</code></pre>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ENDPOINT: List Deliveries -->
+            <section id="endpoint-deliveries-list" class="space-y-4 pt-6 border-t border-slate-800">
+                <div class="flex items-center gap-2.5">
+                    <span class="px-2 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded font-bold text-xs font-mono">GET</span>
+                    <span class="font-mono text-sm font-bold text-white">/api/v1/deliveries</span>
+                    <span class="ml-auto text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">Scope: deliveries:read</span>
+                </div>
+                <p class="text-slate-400 text-sm">Track dispatch status, vehicle plate numbers, driver details, and delivery receipts (DRs).</p>
+
+                <div class="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden text-xs">
+                    <div class="flex items-center justify-between border-b border-slate-800 px-4 py-2 bg-slate-950/60">
+                        <span class="text-slate-400 font-mono text-[11px]">Request Example</span>
+                        <button onclick="runTestRequest('/api/v1/deliveries?limit=5', 'GET', 'res-dr-list')" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded shadow transition">
+                            ⚡ Test Request
+                        </button>
+                    </div>
+                    <div class="p-4 overflow-x-auto">
+                        <pre class="text-emerald-400 font-mono"><code>curl -X GET "http://my.nkbmanufacturing.com/api/v1/deliveries?limit=5" \
+  -H "x-api-key: YOUR_API_KEY"</code></pre>
+                    </div>
+                    <div id="box-res-dr-list" class="border-t border-slate-800 p-4 bg-black/40 hidden">
+                        <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 flex items-center justify-between">
+                            <span>Live Response</span>
+                            <span id="status-res-dr-list" class="font-mono text-emerald-400"></span>
+                        </div>
+                        <pre id="res-dr-list" class="text-[11px] text-slate-300 font-mono overflow-x-auto max-h-60"></pre>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ENDPOINT: List Invoices -->
+            <section id="endpoint-invoices-list" class="space-y-4 pt-6 border-t border-slate-800">
+                <div class="flex items-center gap-2.5">
+                    <span class="px-2 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded font-bold text-xs font-mono">GET</span>
+                    <span class="font-mono text-sm font-bold text-white">/api/v1/invoices</span>
+                    <span class="ml-auto text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">Scope: invoices:read</span>
+                </div>
+                <p class="text-slate-400 text-sm">Query sales invoices issued based on client-accepted DR quantities, balance due, and payment terms.</p>
+
+                <div class="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden text-xs">
+                    <div class="flex items-center justify-between border-b border-slate-800 px-4 py-2 bg-slate-950/60">
+                        <span class="text-slate-400 font-mono text-[11px]">Request Example</span>
+                        <button onclick="runTestRequest('/api/v1/invoices?limit=5', 'GET', 'res-inv-list')" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded shadow transition">
+                            ⚡ Test Request
+                        </button>
+                    </div>
+                    <div class="p-4 overflow-x-auto">
+                        <pre class="text-emerald-400 font-mono"><code>curl -X GET "http://my.nkbmanufacturing.com/api/v1/invoices?limit=5" \
+  -H "x-api-key: YOUR_API_KEY"</code></pre>
+                    </div>
+                    <div id="box-res-inv-list" class="border-t border-slate-800 p-4 bg-black/40 hidden">
+                        <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 flex items-center justify-between">
+                            <span>Live Response</span>
+                            <span id="status-res-inv-list" class="font-mono text-emerald-400"></span>
+                        </div>
+                        <pre id="res-inv-list" class="text-[11px] text-slate-300 font-mono overflow-x-auto max-h-60"></pre>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ENDPOINT: Inventory & Materials -->
+            <section id="endpoint-inventory" class="space-y-4 pt-6 border-t border-slate-800 pb-16">
+                <div class="flex items-center gap-2.5">
+                    <span class="px-2 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded font-bold text-xs font-mono">GET</span>
+                    <span class="font-mono text-sm font-bold text-white">/api/v1/inventory</span>
+                    <span class="ml-auto text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">Scope: inventory:read</span>
+                </div>
+                <p class="text-slate-400 text-sm">Access live cosmetic warehouse stock levels and converted formulation material pull requirements.</p>
+
+                <div class="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden text-xs">
+                    <div class="flex items-center justify-between border-b border-slate-800 px-4 py-2 bg-slate-950/60">
+                        <span class="text-slate-400 font-mono text-[11px]">Request Example</span>
+                        <button onclick="runTestRequest('/api/v1/inventory', 'GET', 'res-inventory')" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded shadow transition">
+                            ⚡ Test Request
+                        </button>
+                    </div>
+                    <div class="p-4 overflow-x-auto">
+                        <pre class="text-emerald-400 font-mono"><code>curl -X GET "http://my.nkbmanufacturing.com/api/v1/inventory" \
+  -H "x-api-key: YOUR_API_KEY"</code></pre>
+                    </div>
+                    <div id="box-res-inventory" class="border-t border-slate-800 p-4 bg-black/40 hidden">
+                        <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 flex items-center justify-between">
+                            <span>Live Response</span>
+                            <span id="status-res-inventory" class="font-mono text-emerald-400"></span>
+                        </div>
+                        <pre id="res-inventory" class="text-[11px] text-slate-300 font-mono overflow-x-auto max-h-60"></pre>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script>
+        // Set dynamic base URL
+        const currentOrigin = window.location.origin;
+        document.getElementById('base-url-disp').textContent = currentOrigin + '/api/v1';
+
+        // Load saved API key
+        const savedKey = localStorage.getItem('nkb_api_docs_key') || '';
+        if (savedKey) {
+            document.getElementById('global-api-key').value = savedKey;
+        }
+
+        function saveApiKey(val) {
+            localStorage.setItem('nkb_api_docs_key', val.trim());
+        }
+
+        function toggleKeyVisibility() {
+            const input = document.getElementById('global-api-key');
+            input.type = input.type === 'password' ? 'text' : 'password';
+        }
+
+        function switchCodeTab(section, lang) {
+            ['curl', 'js', 'py'].forEach(l => {
+                const pre = document.getElementById(`code-${section}-${l}`);
+                const btn = document.getElementById(`btn-${section}-${l}`);
+                if (pre) pre.classList.add('hidden');
+                if (btn) {
+                    btn.classList.remove('text-indigo-400', 'font-bold', 'border-b-2', 'border-indigo-500');
+                    btn.classList.add('text-slate-400');
+                }
+            });
+            const activePre = document.getElementById(`code-${section}-${lang}`);
+            const activeBtn = document.getElementById(`btn-${section}-${lang}`);
+            if (activePre) activePre.classList.remove('hidden');
+            if (activeBtn) {
+                activeBtn.classList.add('text-indigo-400', 'font-bold', 'border-b-2', 'border-indigo-500');
+                activeBtn.classList.remove('text-slate-400');
+            }
+        }
+
+        async function runTestRequest(endpoint, method, targetId) {
+            const box = document.getElementById(`box-${targetId}`);
+            const output = document.getElementById(targetId);
+            const statusBadge = document.getElementById(`status-${targetId}`);
+            const apiKey = (document.getElementById('global-api-key').value || '').trim();
+
+            if (!apiKey) {
+                alert('Please enter your API Key in the top bar to test live requests.');
+                document.getElementById('global-api-key').focus();
+                return;
+            }
+
+            box.classList.remove('hidden');
+            output.textContent = 'Executing request...';
+            statusBadge.textContent = 'PENDING...';
+            statusBadge.className = 'font-mono text-amber-400';
+
+            try {
+                const res = await fetch(endpoint, {
+                    method: method,
+                    headers: {
+                        'x-api-key': apiKey,
+                        'Accept': 'application/json'
+                    }
+                });
+
+                statusBadge.textContent = `${res.status} ${res.statusText}`;
+                statusBadge.className = res.ok ? 'font-mono text-emerald-400' : 'font-mono text-rose-400';
+
+                const json = await res.json();
+                output.textContent = JSON.stringify(json, null, 2);
+            } catch (err) {
+                statusBadge.textContent = 'NETWORK ERROR';
+                statusBadge.className = 'font-mono text-rose-400';
+                output.textContent = err.message;
+            }
+        }
+    </script>
+</body>
+</html>

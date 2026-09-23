@@ -567,6 +567,43 @@ CREATE INDEX IF NOT EXISTS idx_omc_po ON order_material_conversions(po_id);
 CREATE INDEX IF NOT EXISTS idx_omc_product ON order_material_conversions(product_id);
 CREATE INDEX IF NOT EXISTS idx_omc_material ON order_material_conversions(material_code);
 
+-- API Keys Table (Developer REST API v1)
+CREATE TABLE IF NOT EXISTS api_keys (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    key_prefix TEXT NOT NULL,
+    key_hash TEXT NOT NULL UNIQUE,
+    client_id TEXT,
+    user_id TEXT NOT NULL,
+    scopes TEXT NOT NULL DEFAULT '["orders:read","products:read"]',
+    rate_limit_rpm INTEGER NOT NULL DEFAULT 120,
+    status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'REVOKED', 'EXPIRED')),
+    last_used_at TEXT,
+    expires_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
+CREATE INDEX IF NOT EXISTS idx_api_keys_client ON api_keys(client_id);
+
+-- Webhooks Table
+CREATE TABLE IF NOT EXISTS webhooks (
+    id TEXT PRIMARY KEY,
+    api_key_id TEXT,
+    url TEXT NOT NULL,
+    events TEXT NOT NULL DEFAULT '["*"]',
+    secret TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    FOREIGN KEY (api_key_id) REFERENCES api_keys(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_webhooks_key ON webhooks(api_key_id);
+
 -- Initial Executive Super Admin Account (Email: admin@nkbmanufacturing.com | Password: Admin123!)
 INSERT OR REPLACE INTO users (id, name, email, password_hash, plain_password, role, is_active) VALUES
 ('a0000000-0000-0000-0000-000000000001', 'Executive Admin', 'admin@nkbmanufacturing.com', '$2b$10$jny3GQXy8GwL8vkYVtV4EeTH2QDo8tfg6hJO/vbpG3Xrwakfqgx2G', 'Admin123!', 'SUPER_ADMIN', 1);

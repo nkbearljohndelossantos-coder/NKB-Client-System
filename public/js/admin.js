@@ -271,6 +271,12 @@ function applyRoleBasedUI() {
     if (!canViewFormulations) {
         hideTab('formulations');
     }
+
+    // Developer API Keys management restricted to technical & company executives
+    const canManageApiKeys = ['SUPER_ADMIN', 'ADMIN', 'IT_ADMIN', 'CEO'].includes(role);
+    if (!canManageApiKeys) {
+        hideTab('apikeys');
+    }
 }
 
 async function loadInitialData() {
@@ -334,6 +340,7 @@ function switchTab(tabId) {
     else if (tabId === 'purchasing') loadPurchasingRequisitions();
     else if (tabId === 'reports') loadReports();
     else if (tabId === 'audit') loadAuditLogs();
+    else if (tabId === 'apikeys') loadApiKeys();
 }
 
 // -------------------------------------------------------------
@@ -6821,4 +6828,467 @@ window.loadFormulations = loadFormulations;
 window.renderFormulationsTable = renderFormulationsTable;
 window.filterFormulationsTable = filterFormulationsTable;
 window.openViewFormulationModal = openViewFormulationModal;
+
+// -------------------------------------------------------------
+// 16. DEVELOPER REST API & API KEYS MANAGER
+// -------------------------------------------------------------
+let cachedApiKeys = [];
+
+function escapeApiKeyHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+async function loadApiKeys() {
+    const tbody = document.getElementById('table-api-keys-body');
+    const kpiEl = document.getElementById('kpi-api-active-keys');
+    if (tbody) {
+        tbody.innerHTML = `<tr><td colspan="7" class="py-8 text-center text-slate-400">
+            <div class="inline-block animate-spin text-xl mr-2">⚙️</div> Loading API keys...
+        </td></tr>`;
+    }
+
+    try {
+        const res = await NKB.api('/api/api-keys');
+        if (!res.success || !Array.isArray(res.data)) {
+            if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-red-500 font-semibold">Failed to load API keys: ${res.error || 'Unknown error'}</td></tr>`;
+            return;
+        }
+
+        cachedApiKeys = res.data;
+        const activeCount = cachedApiKeys.filter(k => k.status === 'ACTIVE').length;
+        if (kpiEl) kpiEl.textContent = activeCount;
+
+        renderApiKeysTable(cachedApiKeys);
+    } catch (err) {
+        console.error('Failed to load API keys:', err);
+        if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-red-500">Error connecting to API keys service.</td></tr>`;
+    }
+}
+
+function renderApiKeysTable(keys) {
+    const tbody = document.getElementById('table-api-keys-body');
+    if (!tbody) return;
+
+    if (!keys || keys.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" class="py-12 text-center text-slate-400 space-y-3">
+                    <div class="text-4xl">🔑</div>
+                    <div class="font-bold text-slate-700 text-sm">No external API keys provisioned yet</div>
+                    <p class="text-xs text-slate-500 max-w-md mx-auto">Generate API keys to allow external eCommerce platforms, ERPs, or automated pipelines to sync orders, products, and inventory.</p>
+                    <button onclick="openCreateApiKeyModal()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 inline-flex items-center gap-1.5 transition">
+                        <span>➕ Generate First API Key</span>
+                    </button>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = keys.map(k => {
+        const scopes = Array.isArray(k.scopes) ? k.scopes : (typeof k.scopes === 'string' ? JSON.parse(k.scopes || '[]') : []);
+        
+        let statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">ACTIVE</span>';
+        if (k.status === 'REVOKED') {
+            statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-200">REVOKED</span>';
+        } else if (k.status === 'EXPIRED') {
+            statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-200">EXPIRED</span>';
+        }
+
+        const clientLabel = k.client_name 
+            ? `<span class="px-2 py-0.5 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-md font-bold text-[11px]">${escapeApiKeyHtml(k.client_name)}</span>`
+            : `<span class="px-2 py-0.5 bg-slate-100 border border-slate-200 text-slate-600 rounded-md text-[10px] font-medium">All Clients (Global)</span>`;
+
+        const lastUsedFormatted = k.last_used_at 
+            ? `<span class="font-mono text-[11px] text-slate-700">${k.last_used_at.substring(0, 16)}</span>`
+            : `<span class="text-slate-400 italic text-[11px]">Never used</span>`;
+
+        const createdDate = k.created_at ? k.created_at.substring(0, 10) : '';
+
+        return `
+            <tr class="hover:bg-slate-50/80 transition group">
+                <td class="py-3 px-4">
+                    <div class="font-bold text-slate-900">${escapeApiKeyHtml(k.name)}</div>
+                    <div class="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                        <span>Created ${createdDate}</span>
+                        ${k.created_by_name ? `<span>by ${escapeApiKeyHtml(k.created_by_name)}</span>` : ''}
+                        <span>• Limit: ${k.rate_limit_rpm || 120} rpm</span>
+                    </div>
+                </td>
+                <td class="py-3 px-4">
+                    <span class="font-mono text-xs text-indigo-700 bg-indigo-50/70 border border-indigo-200/70 px-2 py-1 rounded select-all font-semibold">
+                        ${escapeApiKeyHtml(k.key_prefix)}
+                    </span>
+                </td>
+                <td class="py-3 px-4">
+                    ${clientLabel}
+                </td>
+                <td class="py-3 px-4">
+                    <div class="flex flex-wrap gap-1 max-w-xs">
+                        ${scopes.map(s => {
+                            let color = 'bg-slate-100 text-slate-700 border-slate-200';
+                            if (s.includes('write')) color = 'bg-amber-50 text-amber-800 border-amber-200';
+                            else if (s.includes('orders')) color = 'bg-blue-50 text-blue-800 border-blue-200';
+                            else if (s.includes('inventory')) color = 'bg-purple-50 text-purple-800 border-purple-200';
+                            return `<span class="text-[10px] px-1.5 py-0.5 rounded border ${color} font-mono font-medium">${s}</span>`;
+                        }).join('')}
+                    </div>
+                </td>
+                <td class="py-3 px-4 text-center">
+                    ${statusBadge}
+                </td>
+                <td class="py-3 px-4">
+                    ${lastUsedFormatted}
+                </td>
+                <td class="py-3 px-4 text-right">
+                    <div class="flex items-center justify-end gap-1.5">
+                        ${k.status === 'ACTIVE' ? `
+                            <button onclick="revokeApiKey('${k.id}', '${escapeApiKeyHtml(k.name)}')" class="px-2.5 py-1 text-amber-700 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg text-xs font-bold transition" title="Revoke this API Key immediately">
+                                Revoke
+                            </button>
+                        ` : ''}
+                        <button onclick="deleteApiKey('${k.id}', '${escapeApiKeyHtml(k.name)}')" class="px-2.5 py-1 text-rose-700 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg text-xs font-bold transition" title="Permanently delete this key">
+                            Delete
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+async function openCreateApiKeyModal() {
+    const root = document.getElementById('modals-root');
+    if (!root) return;
+
+    if (!cachedClients || cachedClients.length === 0) {
+        const cRes = await NKB.api('/api/clients');
+        if (cRes.success) cachedClients = cRes.data;
+    }
+
+    const clientOptions = (cachedClients || []).map(c => `
+        <option value="${c.id}">${escapeApiKeyHtml(c.name || c.company_name)}</option>
+    `).join('');
+
+    root.innerHTML = `
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
+            <div class="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-5 max-h-[90vh] flex flex-col">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-base">🔑</div>
+                        <div>
+                            <h3 class="text-lg font-bold text-slate-900">Generate Developer API Key</h3>
+                            <p class="text-[11px] text-slate-500">Create a secure credential for external integrations & eCommerce sync.</p>
+                        </div>
+                    </div>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
+                </div>
+
+                <form onsubmit="submitCreateApiKey(event)" class="overflow-y-auto flex-1 space-y-4 pr-1">
+                    <!-- Key Name -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Key Name / Identifier <span class="text-rose-500">*</span></label>
+                        <input type="text" id="api-key-name" required placeholder="e.g. Shopify Store Sync, Vyuceutical ERP, Warehouse Barcode App" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    </div>
+
+                    <!-- Client Binding -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Associate Client (Data Isolation Scope)</label>
+                        <select id="api-key-client-id" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                            <option value="">— Global / Internal System (Full Access to all clients) —</option>
+                            ${clientOptions}
+                        </select>
+                        <p class="text-[10px] text-slate-400 mt-1">If bound to a client, external requests using this key will only be able to view and create orders/products for that client.</p>
+                    </div>
+
+                    <!-- Scopes Selection -->
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center">
+                            <label class="block text-xs font-bold text-slate-700">Permission Scopes <span class="text-rose-500">*</span></label>
+                            <div class="flex gap-2">
+                                <button type="button" onclick="selectAllApiScopes(true)" class="text-[10px] text-indigo-600 hover:underline font-bold">Select All</button>
+                                <span class="text-slate-300">•</span>
+                                <button type="button" onclick="selectAllApiScopes(false)" class="text-[10px] text-slate-500 hover:underline">Clear</button>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+                            <label class="flex items-start gap-2 cursor-pointer p-1.5 hover:bg-white rounded-lg transition">
+                                <input type="checkbox" name="api-scope" value="products:read" checked class="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500">
+                                <div>
+                                    <div class="font-bold text-slate-800">products:read</div>
+                                    <div class="text-[10px] text-slate-500 leading-tight">View cosmetic catalog & prices</div>
+                                </div>
+                            </label>
+                            <label class="flex items-start gap-2 cursor-pointer p-1.5 hover:bg-white rounded-lg transition">
+                                <input type="checkbox" name="api-scope" value="orders:read" checked class="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500">
+                                <div>
+                                    <div class="font-bold text-slate-800">orders:read</div>
+                                    <div class="text-[10px] text-slate-500 leading-tight">Read purchase orders & status</div>
+                                </div>
+                            </label>
+                            <label class="flex items-start gap-2 cursor-pointer p-1.5 hover:bg-white rounded-lg transition">
+                                <input type="checkbox" name="api-scope" value="orders:write" checked class="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500">
+                                <div>
+                                    <div class="font-bold text-slate-800">orders:write</div>
+                                    <div class="text-[10px] text-slate-500 leading-tight">Create & submit orders via API</div>
+                                </div>
+                            </label>
+                            <label class="flex items-start gap-2 cursor-pointer p-1.5 hover:bg-white rounded-lg transition">
+                                <input type="checkbox" name="api-scope" value="deliveries:read" checked class="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500">
+                                <div>
+                                    <div class="font-bold text-slate-800">deliveries:read</div>
+                                    <div class="text-[10px] text-slate-500 leading-tight">Track Delivery Receipts (DR)</div>
+                                </div>
+                            </label>
+                            <label class="flex items-start gap-2 cursor-pointer p-1.5 hover:bg-white rounded-lg transition">
+                                <input type="checkbox" name="api-scope" value="invoices:read" checked class="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500">
+                                <div>
+                                    <div class="font-bold text-slate-800">invoices:read</div>
+                                    <div class="text-[10px] text-slate-500 leading-tight">Read billing invoices & balance</div>
+                                </div>
+                            </label>
+                            <label class="flex items-start gap-2 cursor-pointer p-1.5 hover:bg-white rounded-lg transition">
+                                <input type="checkbox" name="api-scope" value="inventory:read" class="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500">
+                                <div>
+                                    <div class="font-bold text-slate-800">inventory:read</div>
+                                    <div class="text-[10px] text-slate-500 leading-tight">Live inventory & BOM materials</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Expiration & Rate Limit -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">Key Expiration</label>
+                            <select id="api-key-expires" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                                <option value="">Never Expires (Recommended)</option>
+                                <option value="30">Expires in 30 days</option>
+                                <option value="90">Expires in 90 days</option>
+                                <option value="365">Expires in 1 year</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">Rate Limit (Requests / Min)</label>
+                            <input type="number" id="api-key-rate-limit" value="120" min="10" max="1000" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition">Cancel</button>
+                        <button type="submit" id="btn-submit-api-key" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 transition">Generate Key</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+}
+
+function selectAllApiScopes(select) {
+    document.querySelectorAll('input[name="api-scope"]').forEach(cb => {
+        cb.checked = !!select;
+    });
+}
+
+async function submitCreateApiKey(e) {
+    if (e && e.preventDefault) e.preventDefault();
+
+    const name = document.getElementById('api-key-name')?.value?.trim();
+    const clientId = document.getElementById('api-key-client-id')?.value || null;
+    const expiresInDays = document.getElementById('api-key-expires')?.value || null;
+    const rateLimitRpm = parseInt(document.getElementById('api-key-rate-limit')?.value || '120', 10);
+
+    const checkedBoxes = Array.from(document.querySelectorAll('input[name="api-scope"]:checked'));
+    const scopes = checkedBoxes.map(cb => cb.value);
+
+    if (!name) {
+        NKB.showToast('Please enter an API key name.', 'warning');
+        return;
+    }
+    if (scopes.length === 0) {
+        NKB.showToast('Please select at least one permission scope.', 'warning');
+        return;
+    }
+
+    const submitBtn = document.getElementById('btn-submit-api-key');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = 'Generating...';
+    }
+
+    try {
+        const res = await NKB.api('/api/api-keys', {
+            method: 'POST',
+            body: {
+                name,
+                clientId,
+                scopes,
+                expiresInDays: expiresInDays ? parseInt(expiresInDays, 10) : null,
+                rateLimitRpm
+            }
+        });
+
+        if (!res.success || !res.rawKey) {
+            NKB.showToast(`Failed to generate key: ${res.error || 'Unknown error'}`, 'error');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = 'Generate Key';
+            }
+            return;
+        }
+
+        NKB.showToast('API Key generated successfully!', 'success');
+        loadApiKeys();
+        openRawKeyRevealModal(res.rawKey, res.apiKey.name, res.apiKey.scopes);
+    } catch (err) {
+        console.error('Error submitting API key:', err);
+        NKB.showToast('Error generating API key.', 'error');
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = 'Generate Key';
+        }
+    }
+}
+
+function openRawKeyRevealModal(rawKey, keyName, scopes = []) {
+    const root = document.getElementById('modals-root');
+    if (!root) return;
+
+    root.innerHTML = `
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
+            <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center text-xl font-bold">✨</div>
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-900">API Key Generated!</h3>
+                        <p class="text-xs text-slate-500">Key: <span class="font-bold text-slate-800">${escapeApiKeyHtml(keyName)}</span></p>
+                    </div>
+                </div>
+
+                <div class="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs space-y-1">
+                    <div class="font-bold flex items-center gap-1.5 text-amber-800">
+                        <span>⚠️</span> Important Security Notice:
+                    </div>
+                    <p class="leading-relaxed">
+                        Copy this secret API key now. For your security, this key is encrypted with SHA-256 and <strong>will never be shown to you again</strong>.
+                    </p>
+                </div>
+
+                <div class="space-y-1.5">
+                    <label class="block text-xs font-bold text-slate-700">Your Live API Key</label>
+                    <div class="flex items-center gap-2">
+                        <input type="text" id="reveal-raw-key-input" readonly value="${rawKey}" class="w-full px-3 py-2.5 bg-slate-900 text-indigo-300 font-mono text-xs rounded-xl font-bold border border-slate-700 select-all focus:outline-none">
+                        <button onclick="copyRawApiKey()" id="btn-copy-raw-key" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 whitespace-nowrap transition flex items-center gap-1.5">
+                            <span id="copy-btn-icon">📋</span>
+                            <span id="copy-btn-text">Copy Key</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1 text-slate-600">
+                    <div class="font-bold text-slate-700">How to use this key in HTTP requests:</div>
+                    <code class="block font-mono text-[11px] bg-white p-2 rounded border border-slate-200 text-indigo-700 select-all">
+                        x-api-key: ${rawKey}
+                    </code>
+                </div>
+
+                <div class="flex justify-between items-center pt-2 border-t border-slate-100">
+                    <a href="/api/docs" target="_blank" class="text-xs text-indigo-600 hover:underline font-bold inline-flex items-center gap-1">
+                        <span>📖 Test in Interactive API Docs</span>
+                        <span>↗</span>
+                    </a>
+                    <button type="button" onclick="closeModal()" class="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition">
+                        I Have Copied My Key
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function copyRawApiKey() {
+    const input = document.getElementById('reveal-raw-key-input');
+    if (!input) return;
+    input.select();
+    input.setSelectionRange(0, 99999);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(input.value).then(() => {
+            handleCopySuccess();
+        }).catch(() => {
+            document.execCommand('copy');
+            handleCopySuccess();
+        });
+    } else {
+        document.execCommand('copy');
+        handleCopySuccess();
+    }
+}
+
+function handleCopySuccess() {
+    const btnText = document.getElementById('copy-btn-text');
+    const btnIcon = document.getElementById('copy-btn-icon');
+    if (btnText) btnText.textContent = 'Copied!';
+    if (btnIcon) btnIcon.textContent = '✅';
+    NKB.showToast('API key copied to clipboard!', 'success');
+    setTimeout(() => {
+        if (btnText) btnText.textContent = 'Copy Key';
+        if (btnIcon) btnIcon.textContent = '📋';
+    }, 2500);
+}
+
+async function revokeApiKey(id, name) {
+    if (!confirm(`Are you sure you want to revoke API key "${name}"?\n\nExternal systems using this key will immediately lose access.`)) {
+        return;
+    }
+
+    try {
+        const res = await NKB.api(`/api/api-keys/${id}/revoke`, { method: 'POST' });
+        if (res.success) {
+            NKB.showToast(`API key "${name}" revoked.`, 'info');
+            loadApiKeys();
+        } else {
+            NKB.showToast(`Failed to revoke key: ${res.error}`, 'error');
+        }
+    } catch (err) {
+        console.error('Revoke key failed:', err);
+        NKB.showToast('Error revoking API key.', 'error');
+    }
+}
+
+async function deleteApiKey(id, name) {
+    if (!confirm(`Are you sure you want to permanently delete API key "${name}"?\n\nThis action cannot be undone.`)) {
+        return;
+    }
+
+    try {
+        const res = await NKB.api(`/api/api-keys/${id}`, { method: 'DELETE' });
+        if (res.success) {
+            NKB.showToast(`API key "${name}" permanently deleted.`, 'success');
+            loadApiKeys();
+        } else {
+            NKB.showToast(`Failed to delete key: ${res.error}`, 'error');
+        }
+    } catch (err) {
+        console.error('Delete key failed:', err);
+        NKB.showToast('Error deleting API key.', 'error');
+    }
+}
+
+window.loadApiKeys = loadApiKeys;
+window.renderApiKeysTable = renderApiKeysTable;
+window.openCreateApiKeyModal = openCreateApiKeyModal;
+window.selectAllApiScopes = selectAllApiScopes;
+window.submitCreateApiKey = submitCreateApiKey;
+window.openRawKeyRevealModal = openRawKeyRevealModal;
+window.copyRawApiKey = copyRawApiKey;
+window.revokeApiKey = revokeApiKey;
+window.deleteApiKey = deleteApiKey;
+
 

@@ -120,6 +120,11 @@
                     <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
                     <span>Audit Trails</span>
                 </button>
+                <button onclick="switchTab('apikeys')" id="tab-btn-apikeys" class="sidebar-btn w-full flex items-center gap-3 px-3 py-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 transition">
+                    <svg class="w-4 h-4 flex-shrink-0 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+                    <span>Developer API</span>
+                    <span class="ml-auto text-[8px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-extrabold border border-indigo-500/30">REST v1</span>
+                </button>
                 <a href="/concept-map.html" class="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sky-400 hover:text-white hover:bg-sky-950/40 border border-sky-800/40 transition">
                     <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                     <span>Concept Map & PDF</span>
@@ -1056,6 +1061,85 @@
                             </thead>
                             <tbody id="table-audit-body" class="divide-y divide-slate-100 font-mono text-[11px]">
                                 <tr><td colspan="6" class="py-6 text-center text-slate-400">Loading audit logs...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB: DEVELOPER API & KEYS -->
+            <section id="view-apikeys" class="space-y-6 hidden">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <div class="flex items-center gap-2.5">
+                            <h2 class="text-2xl font-black text-slate-900">Developer REST API & Integrations</h2>
+                            <span class="px-2 py-0.5 rounded bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200">v1.0 Ready</span>
+                        </div>
+                        <p class="text-sm text-slate-500 mt-1">Manage external API keys, permission scopes, and client eCommerce/ERP integrations.</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <a href="/api/docs" target="_blank" class="px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 shadow-sm flex items-center gap-1.5 transition">
+                            <span>📖 Interactive API Docs</span>
+                            <span class="text-slate-400">↗</span>
+                        </a>
+                        <button onclick="openCreateApiKeyModal()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 flex items-center gap-1.5 transition">
+                            <span>➕ Generate New API Key</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- API Quick Stats & Endpoints Banner -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                        <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">API Gateway Status</div>
+                        <div class="text-lg font-black text-emerald-600 mt-1 flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                            Online & Secured
+                        </div>
+                        <div class="text-[11px] text-slate-500 mt-0.5">SHA-256 Auth • Rate Limit 120 rpm</div>
+                    </div>
+                    <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                        <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Active API Keys</div>
+                        <div class="text-lg font-black text-slate-900 mt-1" id="kpi-api-active-keys">0</div>
+                        <div class="text-[11px] text-slate-500 mt-0.5">Authorized external integrations</div>
+                    </div>
+                    <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                        <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Pre-Configured System Key</div>
+                        <div class="text-xs font-mono font-bold text-indigo-600 mt-1.5 truncate">nkb_inv_live_6ae...</div>
+                        <div class="text-[11px] text-emerald-600 mt-0.5">Connected (Full BOM Scopes)</div>
+                    </div>
+                    <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                        <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">OpenAPI Specification</div>
+                        <div class="text-xs font-mono font-bold text-slate-700 mt-1.5">/api/v1/openapi.json</div>
+                        <a href="/api/v1/openapi.json" target="_blank" class="text-[11px] text-indigo-600 hover:underline mt-0.5 inline-block font-semibold">Download Schema ↗</a>
+                    </div>
+                </div>
+
+                <!-- API Keys Table Card -->
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                        <div>
+                            <div class="font-bold text-sm text-slate-800">Provisioned API Keys</div>
+                            <div class="text-xs text-slate-500">Keys provide programmatic access based on their assigned scopes.</div>
+                        </div>
+                        <button onclick="loadApiKeys()" class="text-xs text-indigo-600 hover:text-indigo-800 font-bold">🔄 Refresh Keys</button>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-50 border-y border-slate-200 text-slate-600 font-bold uppercase tracking-wider">
+                                <tr>
+                                    <th class="py-3 px-4">Key Name & Label</th>
+                                    <th class="py-3 px-4">Key Prefix</th>
+                                    <th class="py-3 px-4">Associated Client</th>
+                                    <th class="py-3 px-4">Permission Scopes</th>
+                                    <th class="py-3 px-4 text-center">Status</th>
+                                    <th class="py-3 px-4">Last Activity</th>
+                                    <th class="py-3 px-4 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-api-keys-body" class="divide-y divide-slate-100">
+                                <tr><td colspan="7" class="py-6 text-center text-slate-400">Loading API keys...</td></tr>
                             </tbody>
                         </table>
                     </div>

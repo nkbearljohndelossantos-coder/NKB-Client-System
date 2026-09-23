@@ -98,6 +98,11 @@ app.get(['/test', '/qa'], (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'test.html'));
 });
 
+// Developer Documentation Portal
+app.get(['/api/docs', '/docs', '/developers'], (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'api-docs.html'));
+});
+
 app.get('/api/health', (req, res) => {
     res.json({
         status: 'ok',
@@ -138,6 +143,8 @@ function mountApiRoutes() {
     app.use('/api/notifications', require('./routes/notifications'));
     app.use('/api/chat', require('./routes/chat'));
     app.use('/api/formulations', require('./routes/formulations'));
+    app.use('/api/api-keys', require('./routes/apiKeys'));
+    app.use('/api/v1', require('./routes/v1/apiV1'));
 }
 
 function loadDatabaseAndRoutes() {

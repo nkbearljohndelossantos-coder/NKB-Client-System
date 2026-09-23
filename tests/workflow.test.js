@@ -1908,6 +1908,179 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         db.prepare('DELETE FROM purchase_orders WHERE id = ?').run(po.id);
     });
 
+    test('30. Developer REST API (v1), Scopes, Key Management, OpenAPI & Interactive Docs', async () => {
+        // 1. Scopes endpoint returns available scopes
+        const scopesRes = await request(app)
+            .get('/api/api-keys/scopes')
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(scopesRes.status, 200);
+        assert.strictEqual(scopesRes.body.success, true);
+        assert.ok(Array.isArray(scopesRes.body.scopes));
+        assert.ok(scopesRes.body.scopes.some(s => s.id === 'orders:read'));
+
+        // 2. Generate Global Admin API key with full scopes
+        const createKeyRes = await request(app)
+            .post('/api/api-keys')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                name: 'External ERP Test Key',
+                scopes: ['products:read', 'orders:read', 'orders:write', 'deliveries:read', 'invoices:read', 'inventory:read'],
+                rateLimitRpm: 120
+            });
+        assert.strictEqual(createKeyRes.status, 201);
+        assert.strictEqual(createKeyRes.body.success, true);
+        assert.ok(createKeyRes.body.rawKey.startsWith('nkb_live_'));
+        const globalApiKey = createKeyRes.body.rawKey;
+        const globalKeyId = createKeyRes.body.apiKey.id;
+
+        // Verify key hash is stored and raw key is NOT stored in DB
+        const dbKeyRow = db.prepare('SELECT * FROM api_keys WHERE id = ?').get(globalKeyId);
+        assert.ok(dbKeyRow);
+        assert.ok(dbKeyRow.key_hash);
+        assert.strictEqual(dbKeyRow.key_prefix.startsWith('nkb_live_'), true);
+        assert.strictEqual(dbKeyRow.key_hash.includes('nkb_live_'), false); // raw key is not stored
+
+        // 3. Ping API v1 with Global API Key
+        const pingRes = await request(app)
+            .get('/api/v1/ping')
+            .set('x-api-key', globalApiKey);
+        assert.strictEqual(pingRes.status, 200);
+        assert.strictEqual(pingRes.body.status, 'ok');
+        assert.strictEqual(pingRes.body.key.name, 'External ERP Test Key');
+        assert.ok(pingRes.body.key.scopes.includes('orders:read'));
+
+        // 4. Ping with invalid key -> 401
+        const pingBadRes = await request(app)
+            .get('/api/v1/ping')
+            .set('x-api-key', 'nkb_live_invalidkey12345');
+        assert.strictEqual(pingBadRes.status, 401);
+        assert.strictEqual(pingBadRes.body.error, 'INVALID_API_KEY');
+
+        // 5. Query Products via GET /api/v1/products
+        const prodRes = await request(app)
+            .get('/api/v1/products?limit=10')
+            .set('x-api-key', globalApiKey);
+        assert.strictEqual(prodRes.status, 200);
+        assert.strictEqual(prodRes.body.success, true);
+        assert.ok(Array.isArray(prodRes.body.data));
+        assert.ok(prodRes.body.total > 0);
+
+        // 6. Create Purchase Order via POST /api/v1/orders
+        const createOrderRes = await request(app)
+            .post('/api/v1/orders')
+            .set('x-api-key', globalApiKey)
+            .send({
+                client_id: demoClient.id,
+                tolerance_percent: 5.0,
+                billing_policy: 'ACTUAL_DELIVERY',
+                items: [
+                    { product_id: lotionProduct.id, target_quantity: 150 }
+                ]
+            });
+        assert.strictEqual(createOrderRes.status, 201);
+        assert.strictEqual(createOrderRes.body.success, true);
+        const createdOrder = createOrderRes.body.data;
+        assert.ok(createdOrder.id);
+        assert.ok(createdOrder.po_number.startsWith('PO-'));
+        assert.ok(createdOrder.so_number.startsWith('SO-'));
+        assert.strictEqual(createdOrder.items.length, 1);
+
+        // 7. Retrieve the Order via GET /api/v1/orders/:id
+        const getOrderRes = await request(app)
+            .get(`/api/v1/orders/${createdOrder.id}`)
+            .set('x-api-key', globalApiKey);
+        assert.strictEqual(getOrderRes.status, 200);
+        assert.strictEqual(getOrderRes.body.success, true);
+        assert.strictEqual(getOrderRes.body.data.id, createdOrder.id);
+
+        // 8. Client Data Isolation: Create client-scoped key for otherClient
+        const clientKeyRes = await request(app)
+            .post('/api/api-keys')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                name: 'Glow Essentials Client App Key',
+                clientId: otherClient.id,
+                scopes: ['orders:read', 'orders:write', 'products:read']
+            });
+        assert.strictEqual(clientKeyRes.status, 201);
+        const otherClientKey = clientKeyRes.body.rawKey;
+        const otherClientKeyId = clientKeyRes.body.apiKey.id;
+
+        // Trying to access demoClient's order with otherClient's key must return 404 (isolated)
+        const isolatedGetRes = await request(app)
+            .get(`/api/v1/orders/${createdOrder.id}`)
+            .set('x-api-key', otherClientKey);
+        assert.strictEqual(isolatedGetRes.status, 404);
+        assert.strictEqual(isolatedGetRes.body.error, 'ORDER_NOT_FOUND');
+
+        // 9. Scope Enforcement: Create key with ONLY products:read scope
+        const readOnlyKeyRes = await request(app)
+            .post('/api/api-keys')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                name: 'Catalog Only Key',
+                scopes: ['products:read']
+            });
+        assert.strictEqual(readOnlyKeyRes.status, 201);
+        const readOnlyKey = readOnlyKeyRes.body.rawKey;
+        const readOnlyKeyId = readOnlyKeyRes.body.apiKey.id;
+
+        // Attempting to access /api/v1/orders without orders:read must return 403
+        const forbiddenRes = await request(app)
+            .get('/api/v1/orders')
+            .set('x-api-key', readOnlyKey);
+        assert.strictEqual(forbiddenRes.status, 403);
+        assert.strictEqual(forbiddenRes.body.error, 'INSUFFICIENT_SCOPE');
+
+        // 10. Backward Compatibility: Live Inventory Key works on /api/v1/inventory
+        const invRes = await request(app)
+            .get('/api/v1/inventory')
+            .set('x-api-key', 'nkb_inv_live_6ae6965c1ca61aef54939d6b1ecfac1b');
+        assert.strictEqual(invRes.status, 200);
+        assert.strictEqual(invRes.body.success, true);
+        assert.ok(Array.isArray(invRes.body.products));
+
+        // 11. OpenAPI 3.0 Specification endpoint
+        const openApiRes = await request(app)
+            .get('/api/v1/openapi.json');
+        assert.strictEqual(openApiRes.status, 200);
+        assert.strictEqual(openApiRes.body.openapi.startsWith('3.0'), true);
+        assert.ok(openApiRes.body.info.title.includes('NKB Manufacturing Corporation'));
+        assert.ok(openApiRes.body.paths['/products']);
+        assert.ok(openApiRes.body.paths['/orders']);
+
+        // 12. Developer Documentation HTML portal
+        const docsRes = await request(app)
+            .get('/api/docs');
+        assert.strictEqual(docsRes.status, 200);
+        assert.ok(docsRes.text.includes('NKB Developer API'));
+
+        // 13. Key Revocation: Revoke global key
+        const revokeRes = await request(app)
+            .post(`/api/api-keys/${globalKeyId}/revoke`)
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(revokeRes.status, 200);
+        assert.strictEqual(revokeRes.body.success, true);
+
+        // Ping with revoked key must return 401 (INVALID_API_KEY)
+        const revokedPing = await request(app)
+            .get('/api/v1/ping')
+            .set('x-api-key', globalApiKey);
+        assert.strictEqual(revokedPing.status, 401);
+        assert.strictEqual(revokedPing.body.error, 'INVALID_API_KEY');
+
+        // 14. Key Deletion
+        const delRes = await request(app)
+            .delete(`/api/api-keys/${globalKeyId}`)
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(delRes.status, 200);
+
+        // Clean up created orders & test keys
+        db.prepare('DELETE FROM purchase_order_items WHERE po_id = ?').run(createdOrder.id);
+        db.prepare('DELETE FROM purchase_orders WHERE id = ?').run(createdOrder.id);
+        db.prepare('DELETE FROM api_keys WHERE id IN (?, ?)').run(otherClientKeyId, readOnlyKeyId);
+    });
+
     after(() => {
         // Automatically delete all test decoys and temporary test database
         try {

@@ -535,9 +535,45 @@ INSERT INTO document_sequences (doc_type, current_year, last_sequence) VALUES
 ('PAY', YEAR(CURRENT_DATE), 0)
 ON DUPLICATE KEY UPDATE current_year = VALUES(current_year);
 
+-- 28. API Keys Table
+CREATE TABLE IF NOT EXISTS api_keys (
+    id VARCHAR(36) NOT NULL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    key_prefix VARCHAR(32) NOT NULL,
+    key_hash VARCHAR(64) NOT NULL UNIQUE,
+    client_id VARCHAR(36) NULL,
+    user_id VARCHAR(36) NOT NULL,
+    scopes TEXT NOT NULL,
+    rate_limit_rpm INT NOT NULL DEFAULT 120,
+    status ENUM('ACTIVE', 'REVOKED', 'EXPIRED') NOT NULL DEFAULT 'ACTIVE',
+    last_used_at DATETIME NULL,
+    expires_at DATETIME NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_api_keys_client FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL,
+    CONSTRAINT fk_api_keys_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_api_keys_hash (key_hash),
+    INDEX idx_api_keys_client (client_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 29. Webhooks Table
+CREATE TABLE IF NOT EXISTS webhooks (
+    id VARCHAR(36) NOT NULL PRIMARY KEY,
+    api_key_id VARCHAR(36) NULL,
+    url VARCHAR(500) NOT NULL,
+    events TEXT NOT NULL,
+    secret VARCHAR(255) NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_webhooks_key FOREIGN KEY (api_key_id) REFERENCES api_keys(id) ON DELETE CASCADE,
+    INDEX idx_webhooks_key (api_key_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- 25. Insert Initial Root Super Admin Account (Password: Admin123!)
 INSERT INTO users (id, name, email, password_hash, plain_password, role, is_active) VALUES
 ('a0000000-0000-0000-0000-000000000001', 'Executive Admin', 'admin@nkbmanufacturing.com', '$2b$10$jny3GQXy8GwL8vkYVtV4EeTH2QDo8tfg6hJO/vbpG3Xrwakfqgx2G', 'Admin123!', 'SUPER_ADMIN', 1)
+ON DUPLICATE KEY UPDATE email = VALUES(email);
 ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash), plain_password = VALUES(plain_password), updated_at = CURRENT_TIMESTAMP;
 
 SET FOREIGN_KEY_CHECKS = 1;

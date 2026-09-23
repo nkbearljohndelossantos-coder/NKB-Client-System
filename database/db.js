@@ -615,6 +615,80 @@ function runMigrations(dbInstance, isMysql) {
             console.warn('User seed note:', userSeedErr.message);
         }
 
+        // Create api_keys and webhooks tables for Developer REST API v1
+        try {
+            if (isMysql) {
+                dbInstance.exec(`
+                    CREATE TABLE IF NOT EXISTS api_keys (
+                        id VARCHAR(36) NOT NULL PRIMARY KEY,
+                        name VARCHAR(255) NOT NULL,
+                        key_prefix VARCHAR(32) NOT NULL,
+                        key_hash VARCHAR(64) NOT NULL UNIQUE,
+                        client_id VARCHAR(36) NULL,
+                        user_id VARCHAR(36) NOT NULL,
+                        scopes TEXT NOT NULL,
+                        rate_limit_rpm INT NOT NULL DEFAULT 120,
+                        status ENUM('ACTIVE', 'REVOKED', 'EXPIRED') NOT NULL DEFAULT 'ACTIVE',
+                        last_used_at DATETIME NULL,
+                        expires_at DATETIME NULL,
+                        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        INDEX idx_api_keys_hash (key_hash),
+                        INDEX idx_api_keys_client (client_id)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+                    CREATE TABLE IF NOT EXISTS webhooks (
+                        id VARCHAR(36) NOT NULL PRIMARY KEY,
+                        api_key_id VARCHAR(36) NULL,
+                        url VARCHAR(500) NOT NULL,
+                        events TEXT NOT NULL,
+                        secret VARCHAR(255) NULL,
+                        is_active TINYINT(1) NOT NULL DEFAULT 1,
+                        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        INDEX idx_webhooks_key (api_key_id)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+                `);
+            } else {
+                dbInstance.exec(`
+                    CREATE TABLE IF NOT EXISTS api_keys (
+                        id TEXT PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        key_prefix TEXT NOT NULL,
+                        key_hash TEXT NOT NULL UNIQUE,
+                        client_id TEXT,
+                        user_id TEXT NOT NULL,
+                        scopes TEXT NOT NULL DEFAULT '["orders:read","products:read"]',
+                        rate_limit_rpm INTEGER NOT NULL DEFAULT 120,
+                        status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'REVOKED', 'EXPIRED')),
+                        last_used_at TEXT,
+                        expires_at TEXT,
+                        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                        updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                        FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL,
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
+                    CREATE INDEX IF NOT EXISTS idx_api_keys_client ON api_keys(client_id);
+
+                    CREATE TABLE IF NOT EXISTS webhooks (
+                        id TEXT PRIMARY KEY,
+                        api_key_id TEXT,
+                        url TEXT NOT NULL,
+                        events TEXT NOT NULL DEFAULT '["*"]',
+                        secret TEXT,
+                        is_active INTEGER NOT NULL DEFAULT 1,
+                        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                        updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                        FOREIGN KEY (api_key_id) REFERENCES api_keys(id) ON DELETE CASCADE
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_webhooks_key ON webhooks(api_key_id);
+                `);
+            }
+        } catch (apiKeysErr) {
+            console.warn('API keys table init note:', apiKeysErr.message);
+        }
+
         // Idempotent migration: Shift historical UTC timestamps in SQLite to Philippine Time (Asia/Manila, UTC+8)
         if (!isMysql) {
             try {
