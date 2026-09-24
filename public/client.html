@@ -27,6 +27,11 @@
             </div>
             
             <div class="flex items-center gap-3">
+                <button type="button" onclick="openCommandPalette()" class="hidden md:inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-xs text-slate-300 hover:text-white border border-slate-700/80 transition shadow-inner cursor-pointer" title="Quick Search & Navigation (Ctrl+K)">
+                    <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                    <span>Quick Search...</span>
+                    <kbd class="px-1.5 py-0.5 bg-slate-800 text-slate-300 rounded border border-slate-600 text-[10px] font-mono">Ctrl+K</kbd>
+                </button>
                 <a href="/admin.html" class="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 border border-slate-700 transition">
                     <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                     <span>Operations View</span>
@@ -128,37 +133,37 @@
 
                 <!-- Modern KPI Metric Cards Grid -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div class="kpi-card border-t-4 border-indigo-500">
+                    <div class="kpi-card border-t-4 border-indigo-500 cursor-pointer hover:border-indigo-400 hover:shadow-md transition" onclick="switchClientTab('my-orders')" title="Click to view My Purchase Orders">
                         <div class="flex items-center justify-between">
                             <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Active Orders</span>
                             <span class="p-1.5 rounded-lg bg-indigo-50 text-indigo-600 text-xs font-bold">PO</span>
                         </div>
                         <div id="client-kpi-open-pos" class="text-3xl font-black text-slate-900 mt-2">0</div>
-                        <div class="text-xs text-indigo-600 font-semibold mt-1">Orders in production</div>
+                        <div class="text-xs text-indigo-600 font-semibold mt-1">Orders in production →</div>
                     </div>
-                    <div class="kpi-card border-t-4 border-amber-500">
+                    <div class="kpi-card border-t-4 border-amber-500 cursor-pointer hover:border-amber-400 hover:shadow-md transition" onclick="switchClientTab('dr-acceptance')" title="Click to view Delivery Receipts pending sign-off">
                         <div class="flex items-center justify-between">
                             <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Pending DR Acceptance</span>
                             <span class="p-1.5 rounded-lg bg-amber-50 text-amber-600 text-xs font-bold">DR</span>
                         </div>
                         <div id="client-kpi-pending-drs" class="text-3xl font-black text-amber-600 mt-2">0</div>
-                        <div class="text-xs text-amber-700 font-semibold mt-1">Waiting for your sign-off</div>
+                        <div class="text-xs text-amber-700 font-semibold mt-1">Waiting for your sign-off →</div>
                     </div>
-                    <div class="kpi-card border-t-4 border-rose-500">
+                    <div class="kpi-card border-t-4 border-rose-500 cursor-pointer hover:border-rose-400 hover:shadow-md transition" onclick="switchClientTab('invoices')" title="Click to view Outstanding Invoices">
                         <div class="flex items-center justify-between">
                             <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Outstanding Invoices</span>
                             <span class="p-1.5 rounded-lg bg-rose-50 text-rose-600 text-xs font-bold">AR</span>
                         </div>
                         <div id="client-kpi-unpaid-invoices" class="text-3xl font-black text-rose-600 mt-2">₱0.00</div>
-                        <div class="text-xs text-slate-500 mt-1">Total balance due</div>
+                        <div class="text-xs text-slate-500 mt-1">Total balance due →</div>
                     </div>
-                    <div class="kpi-card border-t-4 border-emerald-500">
+                    <div class="kpi-card border-t-4 border-emerald-500 cursor-pointer hover:border-emerald-400 hover:shadow-md transition" onclick="switchClientTab('buffer')" title="Click to view Reserved Buffer Stock">
                         <div class="flex items-center justify-between">
                             <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Reserved Buffer Stock</span>
                             <span class="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 text-xs font-bold">STK</span>
                         </div>
                         <div id="client-kpi-buffer-units" class="text-3xl font-black text-emerald-600 mt-2">0 pcs</div>
-                        <div class="text-xs text-emerald-700 font-semibold mt-1">Ready for drawdown</div>
+                        <div class="text-xs text-emerald-700 font-semibold mt-1">Ready for drawdown →</div>
                     </div>
                 </div>
 

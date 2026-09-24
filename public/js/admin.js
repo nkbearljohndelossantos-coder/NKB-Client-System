@@ -9,6 +9,16 @@ let cachedProducts = [];
 let cachedPayments = [];
 let cachedEmployees = [];
 let cachedCategories = [];
+let cachedOrders = [];
+let cachedDeliveries = [];
+let cachedInvoices = [];
+
+// Expose caches for Command Palette search
+window.cachedClients = cachedClients;
+window.cachedProducts = cachedProducts;
+window.cachedOrders = cachedOrders;
+window.cachedDeliveries = cachedDeliveries;
+window.cachedInvoices = cachedInvoices;
 
 async function ensureCategoriesLoaded() {
     if (!cachedCategories || cachedCategories.length === 0) {
@@ -167,6 +177,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Apply Role-Based Navigation & Access Restrictions
     applyRoleBasedUI();
+    restoreSidebarSections();
 
     // Initial Load
     await loadInitialData();
@@ -306,6 +317,64 @@ function toggleMobileSidebar(show) {
 }
 window.toggleMobileSidebar = toggleMobileSidebar;
 
+function toggleSidebarSection(id) {
+    const section = document.getElementById(`section-${id}`);
+    const chevron = document.getElementById(`chevron-${id}`);
+    if (!section) return;
+    const isClosed = section.classList.contains('hidden');
+    if (isClosed) {
+        section.classList.remove('hidden');
+        if (chevron) chevron.classList.remove('-rotate-90');
+        try { localStorage.setItem(`nkb_sidebar_${id}`, 'open'); } catch (_) {}
+    } else {
+        section.classList.add('hidden');
+        if (chevron) chevron.classList.add('-rotate-90');
+        try { localStorage.setItem(`nkb_sidebar_${id}`, 'closed'); } catch (_) {}
+    }
+}
+window.toggleSidebarSection = toggleSidebarSection;
+
+function restoreSidebarSections() {
+    ['operations', 'finance', 'lab', 'management'].forEach(id => {
+        try {
+            const saved = localStorage.getItem(`nkb_sidebar_${id}`);
+            if (saved === 'closed') {
+                const section = document.getElementById(`section-${id}`);
+                const chevron = document.getElementById(`chevron-${id}`);
+                if (section) section.classList.add('hidden');
+                if (chevron) chevron.classList.add('-rotate-90');
+            }
+        } catch (_) {}
+    });
+}
+window.restoreSidebarSections = restoreSidebarSections;
+
+function setPOSegmentedFilter(status) {
+    const select = document.getElementById('filter-po-status');
+    if (select) select.value = status;
+
+    document.querySelectorAll('.po-filter-pill').forEach(pill => {
+        if (pill.getAttribute('data-status') === status) {
+            pill.className = 'po-filter-pill px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-900 text-white shadow-sm transition whitespace-nowrap cursor-pointer';
+        } else {
+            const isVoidedPill = pill.getAttribute('data-status') === 'VOIDED';
+            pill.className = isVoidedPill
+                ? 'po-filter-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 transition whitespace-nowrap cursor-pointer'
+                : 'po-filter-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition whitespace-nowrap cursor-pointer';
+        }
+    });
+
+    loadOrders();
+}
+window.setPOSegmentedFilter = setPOSegmentedFilter;
+
+function onPOSelectFilterChange() {
+    const select = document.getElementById('filter-po-status');
+    const val = select ? select.value : '';
+    setPOSegmentedFilter(val);
+}
+window.onPOSelectFilterChange = onPOSelectFilterChange;
+
 // Tab Switching
 function switchTab(tabId) {
     toggleMobileSidebar(false);
@@ -322,6 +391,15 @@ function switchTab(tabId) {
     if (targetBtn) {
         targetBtn.classList.add('bg-indigo-600', 'text-white', 'font-bold', 'shadow-md', 'shadow-indigo-600/30');
         targetBtn.classList.remove('text-slate-400');
+
+        // Automatically expand parent section if collapsed
+        const parentSection = targetBtn.closest('[id^="section-"]');
+        if (parentSection && parentSection.classList.contains('hidden')) {
+            parentSection.classList.remove('hidden');
+            const secId = parentSection.id.replace('section-', '');
+            const chevron = document.getElementById(`chevron-${secId}`);
+            if (chevron) chevron.classList.remove('-rotate-90');
+        }
     }
 
     // Call tab-specific loader
@@ -454,6 +532,8 @@ async function loadOrders() {
     const tbody = document.getElementById('table-orders-body');
 
     if (res.success && res.data && res.data.length > 0) {
+        cachedOrders = res.data;
+        window.cachedOrders = cachedOrders;
         const userRole = NKB.user ? NKB.user.role : '';
         const isExecAdmin = ['ADMIN', 'SUPER_ADMIN', 'IT_ADMIN'].includes(userRole);
         const canViewPrices = isExecAdmin || ['CEO', 'ACCOUNTING'].includes(userRole);
@@ -562,86 +642,105 @@ async function loadOrders() {
                         </div>
                     `}
                 </td>
-                <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
-                    <button onclick="openViewPOModal('${po.id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="View Full Order Info">
-                        <span>👁️ View</span>
-                    </button>
-                    <a href="/print-po.html?id=${po.id}" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Print Purchase Order">
-                        <span>🖨️ PO</span>
-                    </a>
-                    <a href="/print-jo.html?po_id=${po.id}" class="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Print Sales Order Copy (2 Portrait Slips on A4 Landscape)">
-                        <span>📄 SO Copy</span>
-                    </a>
-                    ${(po.accounting_confirmed === 1 || po.formulation_converted === 1) ? `
-                        <a href="/print-formulation-receipt.html?id=${po.id}" target="_blank" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="Print Formulation & Raw Material Breakdown Receipt">
-                            <span>🧪 Formulation Receipt</span>
-                        </a>
-                    ` : ''}
-                    ${(canConfirmAccounting && !po.accounting_confirmed && po.status !== 'CANCELLED' && po.status !== 'VOIDED') ? `
-                        <button onclick="confirmAccountingPO('${po.id}', '${po.po_number}')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition inline-flex items-center gap-1 shadow-sm" title="Confirm order financing & payment terms">
-                            <span>💳 Confirm (Accounting)</span>
-                        </button>
-                    ` : ''}
-                    ${(canConfirmInventory && !po.inventory_confirmed && po.status !== 'CANCELLED' && po.status !== 'VOIDED') ? `
-                        ${po.accounting_confirmed === 1 ? `
-                            <button onclick="confirmInventoryPO('${po.id}', '${po.po_number}')" class="px-2.5 py-1 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-xs font-bold transition inline-flex items-center gap-1 shadow-sm" title="Confirm sufficient raw materials exist for manufacturing">
-                                <span>✅ Confirm Raw Materials</span>
+                <td class="py-3 px-4 text-right whitespace-nowrap">
+                    <div class="inline-flex items-center gap-1.5 justify-end">
+                        ${(isExecAdmin && po.status === 'PENDING_APPROVAL') ? `
+                            <button onclick="approvePO('${po.id}', '${po.po_number}')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer" title="Approve Purchase Order">
+                                Approve
                             </button>
+                        ` : (canManageProduction && (po.status === 'APPROVED' || po.status === 'IN_PRODUCTION' || po.status === 'PARTIALLY_DELIVERED') && !allDispatched) ? `
+                            ${!allJOsStarted ? `
+                                <button onclick="openCreateJOModal('${po.id}', '${po.po_number}', '${po.company_name.replace(/'/g, "\\'")}')" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-extrabold transition inline-flex items-center gap-1.5 shadow-sm cursor-pointer" title="Start Job Orders for all products in this order">
+                                    <span>🏭 Start JO</span>
+                                </button>
+                            ` : !allBatchesStarted ? `
+                                <button onclick="openCreateAllBatchesModal('${po.client_id}', '${po.id}', '${po.company_name.replace(/'/g, "\\'")}')" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-xl text-xs font-extrabold transition inline-flex items-center gap-1.5 shadow-sm cursor-pointer" title="Record batch numbers and yield">
+                                    <span>⚗️ Batch</span>
+                                </button>
+                            ` : `
+                                <button onclick="openCreateAllDRModal('${po.client_id}', '${po.id}', '${po.company_name.replace(/'/g, "\\'")}')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-extrabold transition inline-flex items-center gap-1.5 shadow-sm cursor-pointer" title="Create Delivery Receipt">
+                                    <span>🚚 Deliver (DR)</span>
+                                </button>
+                            `}
                         ` : `
-                            <button disabled class="px-2.5 py-1 bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed rounded-lg text-xs font-medium inline-flex items-center gap-1" title="Order must first be confirmed by Accounting Department">
-                                <span>⏳ Awaiting Acct Confirm</span>
+                            <button onclick="openViewPOModal('${po.id}')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition inline-flex items-center gap-1 cursor-pointer" title="View Full Order Info">
+                                <span>👁️ View</span>
                             </button>
                         `}
-                    ` : ''}
-                    ${(canConfirmInventory && po.status !== 'CANCELLED' && po.status !== 'VOIDED') ? `
-                        <button onclick="openSupplyRequestModal('${po.id}', '${po.po_number}', '${(po.company_name || '').replace(/'/g, "\\'")}')" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-xs font-bold transition inline-flex items-center gap-1 shadow-sm" title="Submit requisition form to Purchasing Department for needed raw materials / supplies">
-                            <span>📋 Request Supplies</span>
-                        </button>
-                    ` : ''}
-                    ${(po.supply_requests_count > 0) ? `
-                        <button onclick="viewSupplyRequestsModal('${po.id}', '${po.po_number}')" class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="View submitted requisitions for Purchasing Dept">
-                            <span>📜 View Requisitions (${po.supply_requests_count})</span>
-                        </button>
-                    ` : ''}
-                    ${(canEditOrder && po.status !== 'COMPLETED' && po.status !== 'CANCELLED' && po.status !== 'VOIDED' && (!po.dr_count || po.dr_count === 0)) ? `
-                        <button onclick="openEditPOModal('${po.id}')" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1 shadow-sm" title="Update Purchase Order products, form of payment, and details">
-                            <span>✏️ Update</span>
-                        </button>
-                    ` : ''}
-                    ${(isExecAdmin && po.status === 'PENDING_APPROVAL') ? `
-                        <button onclick="approvePO('${po.id}', '${po.po_number}')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition">
-                            Approve
-                        </button>
-                    ` : ''}
-                    ${(canManageProduction && (po.status === 'APPROVED' || po.status === 'IN_PRODUCTION' || po.status === 'PARTIALLY_DELIVERED')) ? `
-                        ${!allJOsStarted ? `
-                            <button onclick="openCreateJOModal('${po.id}', '${po.po_number}', '${po.company_name.replace(/'/g, "\\'")}')" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-extrabold transition inline-flex items-center gap-1.5 shadow-sm" title="Start Job Orders for all products in this order for ${po.company_name}">
-                                <span>🏭 Start Job Order</span>
+
+                        <!-- 3-Dot (•••) Dropdown Menu -->
+                        <div class="relative inline-block text-left">
+                            <button type="button" onclick="togglePOActionMenu(event, '${po.id}')" class="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl border border-slate-200 transition focus:outline-none cursor-pointer" title="More Actions">
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"/></svg>
                             </button>
-                        ` : !allBatchesStarted ? `
-                            <button onclick="openCreateAllBatchesModal('${po.client_id}', '${po.id}', '${po.company_name.replace(/'/g, "\\'")}')" class="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-xl text-xs font-extrabold transition inline-flex items-center gap-1.5 shadow-md shadow-purple-600/20" title="Products are made. Click to record batch numbers and actual yield before delivering.">
-                                <span>⚗️ Batch Products</span>
-                            </button>
-                        ` : !allDispatched ? `
-                            <button onclick="openCreateAllDRModal('${po.client_id}', '${po.id}', '${po.company_name.replace(/'/g, "\\'")}')" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-extrabold transition inline-flex items-center gap-1.5 shadow-md shadow-emerald-600/20" title="Batches are ready for delivery. Click to create Delivery Receipt.">
-                                <span>🚚 Deliver (DR)</span>
-                            </button>
-                        ` : `
-                            <span class="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold font-mono inline-flex items-center gap-1" title="All products have been dispatched on Delivery Receipts">
-                                <span>✓ Dispatched</span>
-                            </span>
-                        `}
-                    ` : ''}
-                    ${(isExecAdmin && po.status !== 'VOIDED' && po.status !== 'CANCELLED' && po.status !== 'COMPLETED') ? `
-                        <button onclick="voidPO('${po.id}', '${po.po_number}')" class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1 shadow-sm" title="Void Purchase Order ${po.po_number}">
-                            <span>🚫 Void</span>
-                        </button>
-                    ` : ''}
-                    ${(isExecAdmin && po.status === 'VOIDED') ? `
-                        <button onclick="deletePO('${po.id}', '${po.po_number}')" class="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1 shadow-sm" title="Permanently Delete Voided Order ${po.po_number}">
-                            <span>🗑️ Delete</span>
-                        </button>
-                    ` : ''}
+                            <div id="po-menu-${po.id}" class="table-action-menu hidden absolute right-0 mt-1 w-56 bg-white rounded-2xl shadow-2xl border border-slate-200 py-1.5 z-40 text-left animate-fade-in font-medium text-xs divide-y divide-slate-100">
+                                <div class="py-1">
+                                    <div class="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Order Info & Docs</div>
+                                    <button onclick="openViewPOModal('${po.id}')" class="w-full flex items-center gap-2 px-3 py-1.5 text-slate-700 hover:bg-slate-50 transition text-left cursor-pointer">
+                                        <span>👁️</span><span>View Full Details</span>
+                                    </button>
+                                    <a href="/print-po.html?id=${po.id}" class="flex items-center gap-2 px-3 py-1.5 text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 transition">
+                                        <span>🖨️</span><span>Print Purchase Order</span>
+                                    </a>
+                                    <a href="/print-jo.html?po_id=${po.id}" class="flex items-center gap-2 px-3 py-1.5 text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 transition">
+                                        <span>📄</span><span>Print SO Slip Copy</span>
+                                    </a>
+                                    ${(po.accounting_confirmed === 1 || po.formulation_converted === 1) ? `
+                                        <a href="/print-formulation-receipt.html?id=${po.id}" target="_blank" class="flex items-center gap-2 px-3 py-1.5 text-amber-800 hover:bg-amber-50 transition">
+                                            <span>🧪</span><span>Formulation Receipt</span>
+                                        </a>
+                                    ` : ''}
+                                </div>
+                                <div class="py-1">
+                                    <div class="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Workflow Actions</div>
+                                    ${(canEditOrder && po.status !== 'COMPLETED' && po.status !== 'CANCELLED' && po.status !== 'VOIDED' && (!po.dr_count || po.dr_count === 0)) ? `
+                                        <button onclick="openEditPOModal('${po.id}')" class="w-full flex items-center gap-2 px-3 py-1.5 text-amber-700 hover:bg-amber-50 transition text-left font-bold cursor-pointer">
+                                            <span>✏️</span><span>Update Order Details</span>
+                                        </button>
+                                    ` : ''}
+                                    ${(canConfirmAccounting && !po.accounting_confirmed && po.status !== 'CANCELLED' && po.status !== 'VOIDED') ? `
+                                        <button onclick="confirmAccountingPO('${po.id}', '${po.po_number}')" class="w-full flex items-center gap-2 px-3 py-1.5 text-emerald-700 hover:bg-emerald-50 transition text-left font-bold cursor-pointer">
+                                            <span>💳</span><span>Confirm (Accounting)</span>
+                                        </button>
+                                    ` : ''}
+                                    ${(canConfirmInventory && !po.inventory_confirmed && po.status !== 'CANCELLED' && po.status !== 'VOIDED') ? `
+                                        ${po.accounting_confirmed === 1 ? `
+                                            <button onclick="confirmInventoryPO('${po.id}', '${po.po_number}')" class="w-full flex items-center gap-2 px-3 py-1.5 text-teal-700 hover:bg-teal-50 transition text-left font-bold cursor-pointer">
+                                                <span>✅</span><span>Confirm Raw Materials</span>
+                                            </button>
+                                        ` : `
+                                            <div class="px-3 py-1.5 text-slate-400 italic text-[11px]">⏳ Awaiting Acct Confirm</div>
+                                        `}
+                                    ` : ''}
+                                    ${(canConfirmInventory && po.status !== 'CANCELLED' && po.status !== 'VOIDED') ? `
+                                        <button onclick="openSupplyRequestModal('${po.id}', '${po.po_number}', '${(po.company_name || '').replace(/'/g, "\\'")}')" class="w-full flex items-center gap-2 px-3 py-1.5 text-slate-700 hover:bg-slate-50 transition text-left cursor-pointer">
+                                            <span>📋</span><span>Request Supplies</span>
+                                        </button>
+                                    ` : ''}
+                                    ${(po.supply_requests_count > 0) ? `
+                                        <button onclick="viewSupplyRequestsModal('${po.id}', '${po.po_number}')" class="w-full flex items-center gap-2 px-3 py-1.5 text-rose-700 hover:bg-rose-50 transition text-left font-bold cursor-pointer">
+                                            <span>📜</span><span>View Requisitions (${po.supply_requests_count})</span>
+                                        </button>
+                                    ` : ''}
+                                </div>
+                                ${(isExecAdmin && (po.status !== 'COMPLETED' || po.status === 'VOIDED')) ? `
+                                    <div class="py-1">
+                                        <div class="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Danger Zone</div>
+                                        ${po.status !== 'VOIDED' && po.status !== 'CANCELLED' && po.status !== 'COMPLETED' ? `
+                                            <button onclick="voidPO('${po.id}', '${po.po_number}')" class="w-full flex items-center gap-2 px-3 py-1.5 text-rose-600 hover:bg-rose-50 transition text-left font-bold cursor-pointer">
+                                                <span>🚫</span><span>Void Order</span>
+                                            </button>
+                                        ` : ''}
+                                        ${po.status === 'VOIDED' ? `
+                                            <button onclick="deletePO('${po.id}', '${po.po_number}')" class="w-full flex items-center gap-2 px-3 py-1.5 text-red-700 hover:bg-red-50 transition text-left font-bold cursor-pointer">
+                                                <span>🗑️</span><span>Permanently Delete</span>
+                                            </button>
+                                        ` : ''}
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
                 </td>
             </tr>
             `;
@@ -650,6 +749,26 @@ async function loadOrders() {
         tbody.innerHTML = `<tr><td colspan="10" class="py-6 text-center text-slate-400">No purchase orders found.</td></tr>`;
     }
 }
+
+function toggleTableActionMenu(e, menuId) {
+    if (e) {
+        e.stopPropagation();
+    }
+    const menu = document.getElementById(menuId);
+    if (!menu) return;
+    const isHidden = menu.classList.contains('hidden');
+    // Close any other open table menus
+    document.querySelectorAll('.table-action-menu, [id^="po-menu-"]').forEach(m => m.classList.add('hidden'));
+    if (isHidden) {
+        menu.classList.remove('hidden');
+    }
+}
+window.toggleTableActionMenu = toggleTableActionMenu;
+
+function togglePOActionMenu(e, id) {
+    toggleTableActionMenu(e, `po-menu-${id}`);
+}
+window.togglePOActionMenu = togglePOActionMenu;
 
 async function approvePO(id, poNumber) {
     if (!confirm(`Approve Purchase Order ${poNumber}?`)) return;
@@ -1371,6 +1490,8 @@ async function loadDeliveries() {
     const canEditDispatch = ['ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'PRODUCTION', 'WAREHOUSE'].includes(userRole);
 
     if (res.success && res.data && res.data.length > 0) {
+        cachedDeliveries = res.data;
+        window.cachedDeliveries = cachedDeliveries;
         tbody.innerHTML = res.data.map(dr => {
             const hasItems = Array.isArray(dr.items) && dr.items.length > 0;
             const progressHtml = hasItems ? dr.items.map(it => {
@@ -1408,37 +1529,67 @@ async function loadDeliveries() {
                 <td class="py-3 px-4 font-extrabold text-emerald-700 whitespace-nowrap">${dr.total_accepted > 0 ? NKB.formatNumber(dr.total_accepted) + ' pcs' : '-'}</td>
                 <td class="py-3 px-4 font-bold text-rose-600 whitespace-nowrap">${dr.total_rejected > 0 ? NKB.formatNumber(dr.total_rejected) + ' pcs' : '0'}</td>
                 <td class="py-3 px-4 whitespace-nowrap">${NKB.renderStatusBadge(dr.status)}</td>
-                <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
-                    <button onclick="openViewDRModal('${dr.id}')" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-block" title="View Delivery Receipt Details">
-                        🔍 Details
-                    </button>
-                    <button onclick="openViewPOModal('${dr.po_id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-block" title="View Purchase Order Details">
-                        👁️ View PO
-                    </button>
-                    <a href="/print-dr.html?id=${dr.id}" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-block">
-                        🖨️ Print
-                    </a>
-                    ${(dr.status !== 'ACCEPTED' && dr.status !== 'INVOICED' && dr.status !== 'CANCELLED') ? `
-                        ${canReceive ? `
-                            <button onclick="openClientReceivingModal('${dr.id}')" class="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold transition inline-block shadow-sm" title="Record Client Receiving & Acceptance">
-                                📥 Receive Product
-                            </button>
-                        ` : ''}
-                        ${canEditDispatch ? `
-                            <button onclick="openEditDRModal('${dr.id}')" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-xs font-bold transition inline-block" title="Edit Dispatch Details">
-                                ✏️ Edit
-                            </button>
-                        ` : ''}
-                    ` : ''}
-                    ${dr.status === 'ACCEPTED' ? `
-                        ${canInvoice ? `
-                            <button onclick="openGenerateInvoiceModal('${dr.id}', '${dr.dr_number}', '${dr.company_name}', ${dr.total_accepted})" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition shadow-sm">
-                                ⚡ Invoice
+                <td class="py-3 px-4 text-right whitespace-nowrap">
+                    <div class="inline-flex items-center gap-1.5 justify-end">
+                        ${dr.status === 'ACCEPTED' ? (
+                            canInvoice ? `
+                                <button onclick="openGenerateInvoiceModal('${dr.id}', '${dr.dr_number}', '${(dr.company_name || '').replace(/'/g, "\\'")}', ${dr.total_accepted})" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs inline-flex items-center gap-1 cursor-pointer">
+                                    <span>⚡ Invoice</span>
+                                </button>
+                            ` : `
+                                <span class="text-[11px] text-slate-400 italic px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg inline-block">Awaiting Accounting Invoice</span>
+                            `
+                        ) : (dr.status !== 'INVOICED' && dr.status !== 'CANCELLED' && canReceive) ? `
+                            <button onclick="openClientReceivingModal('${dr.id}')" class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold transition inline-flex items-center gap-1 cursor-pointer shadow-xs" title="Record Client Receiving & Acceptance">
+                                <span>📥 Receive</span>
                             </button>
                         ` : `
-                            <span class="text-[11px] text-slate-400 italic px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg inline-block">Awaiting Accounting Invoice</span>
+                            <button onclick="openViewDRModal('${dr.id}')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition inline-flex items-center gap-1 cursor-pointer" title="View Delivery Receipt Details">
+                                <span>🔍 Details</span>
+                            </button>
                         `}
-                    ` : ''}
+
+                        <!-- 3-Dot (•••) Dropdown Menu -->
+                        <div class="relative inline-block text-left">
+                            <button type="button" onclick="toggleTableActionMenu(event, 'dr-menu-${dr.id}')" class="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl border border-slate-200 transition focus:outline-none cursor-pointer" title="More Actions">
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"/></svg>
+                            </button>
+                            <div id="dr-menu-${dr.id}" class="table-action-menu hidden absolute right-0 mt-1 w-52 bg-white rounded-2xl shadow-2xl border border-slate-200 py-1.5 z-40 text-left animate-fade-in font-medium text-xs divide-y divide-slate-100">
+                                <div class="py-1">
+                                    <div class="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">DR Actions</div>
+                                    <button onclick="openViewDRModal('${dr.id}')" class="w-full flex items-center gap-2 px-3 py-1.5 text-slate-700 hover:bg-slate-50 transition text-left cursor-pointer">
+                                        <span>🔍</span><span>View DR Details</span>
+                                    </button>
+                                    <button onclick="openViewPOModal('${dr.po_id}')" class="w-full flex items-center gap-2 px-3 py-1.5 text-indigo-700 hover:bg-indigo-50 transition text-left cursor-pointer">
+                                        <span>👁️</span><span>View PO (${dr.po_number})</span>
+                                    </button>
+                                    <a href="/print-dr.html?id=${dr.id}" class="flex items-center gap-2 px-3 py-1.5 text-slate-700 hover:bg-slate-50 transition">
+                                        <span>🖨️</span><span>Print Delivery Receipt</span>
+                                    </a>
+                                </div>
+                                ${(canEditDispatch || canReceive) ? `
+                                    <div class="py-1">
+                                        <div class="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Operations</div>
+                                        ${(canEditDispatch && dr.status !== 'ACCEPTED' && dr.status !== 'INVOICED' && dr.status !== 'CANCELLED') ? `
+                                            <button onclick="openEditDRModal('${dr.id}')" class="w-full flex items-center gap-2 px-3 py-1.5 text-amber-700 hover:bg-amber-50 transition text-left cursor-pointer font-bold">
+                                                <span>✏️</span><span>Edit Dispatch Info</span>
+                                            </button>
+                                        ` : ''}
+                                        ${(canReceive && dr.status !== 'ACCEPTED' && dr.status !== 'INVOICED' && dr.status !== 'CANCELLED') ? `
+                                            <button onclick="openClientReceivingModal('${dr.id}')" class="w-full flex items-center gap-2 px-3 py-1.5 text-emerald-700 hover:bg-emerald-50 transition text-left cursor-pointer font-bold">
+                                                <span>📥</span><span>Client Acceptance</span>
+                                            </button>
+                                        ` : ''}
+                                        ${(canInvoice && dr.status === 'ACCEPTED') ? `
+                                            <button onclick="openGenerateInvoiceModal('${dr.id}', '${dr.dr_number}', '${(dr.company_name || '').replace(/'/g, "\\'")}', ${dr.total_accepted})" class="w-full flex items-center gap-2 px-3 py-1.5 text-emerald-700 hover:bg-emerald-50 transition text-left cursor-pointer font-bold">
+                                                <span>⚡</span><span>Generate Invoice</span>
+                                            </button>
+                                        ` : ''}
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
                 </td>
             </tr>
             `;
@@ -1456,6 +1607,8 @@ async function loadInvoices() {
     const tbody = document.getElementById('table-invoices-body');
 
     if (res.success && res.data && res.data.length > 0) {
+        cachedInvoices = res.data;
+        window.cachedInvoices = cachedInvoices;
         tbody.innerHTML = res.data.map(si => `
             <tr class="hover:bg-slate-50 transition">
                 <td class="py-3 px-4 font-bold text-indigo-600">${si.invoice_number}</td>
@@ -1474,20 +1627,43 @@ async function loadInvoices() {
                 <td class="py-3 px-4 font-extrabold text-rose-700">${NKB.formatCurrency(si.balance_due)}</td>
                 <td class="py-3 px-4"><span class="badge ${si.agingCategory === 'Current' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-100 text-rose-800 font-bold'}">${si.agingCategory}</span></td>
                 <td class="py-3 px-4">${NKB.renderStatusBadge(si.status)}</td>
-                <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
-                    ${si.po_id ? `
-                        <button onclick="openViewPOModal('${si.po_id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-block" title="View Purchase Order Details">
-                            👁️ View PO
-                        </button>
-                    ` : ''}
-                    <a href="/print-invoice.html?id=${si.id}" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-block">
-                        🖨️ Print SI
-                    </a>
-                    ${si.balance_due > 0 ? `
-                        <button onclick="openRecordPaymentModal('${si.id}', '${si.invoice_number}', ${si.balance_due}, '${si.company_name}')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition">
-                            💵 Pay
-                        </button>
-                    ` : ''}
+                <td class="py-3 px-4 text-right whitespace-nowrap">
+                    <div class="inline-flex items-center gap-1.5 justify-end">
+                        ${si.balance_due > 0 ? `
+                            <button onclick="openRecordPaymentModal('${si.id}', '${si.invoice_number}', ${si.balance_due}, '${(si.company_name || '').replace(/'/g, "\\'")}')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs inline-flex items-center gap-1 cursor-pointer">
+                                <span>💵 Pay</span>
+                            </button>
+                        ` : `
+                            <a href="/print-invoice.html?id=${si.id}" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition inline-flex items-center gap-1">
+                                <span>🖨️ Print SI</span>
+                            </a>
+                        `}
+
+                        <!-- 3-Dot (•••) Dropdown Menu -->
+                        <div class="relative inline-block text-left">
+                            <button type="button" onclick="toggleTableActionMenu(event, 'si-menu-${si.id}')" class="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl border border-slate-200 transition focus:outline-none cursor-pointer" title="More Actions">
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"/></svg>
+                            </button>
+                            <div id="si-menu-${si.id}" class="table-action-menu hidden absolute right-0 mt-1 w-48 bg-white rounded-2xl shadow-2xl border border-slate-200 py-1.5 z-40 text-left animate-fade-in font-medium text-xs divide-y divide-slate-100">
+                                <div class="py-1">
+                                    <div class="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Invoice Options</div>
+                                    <a href="/print-invoice.html?id=${si.id}" class="flex items-center gap-2 px-3 py-1.5 text-slate-700 hover:bg-slate-50 transition">
+                                        <span>🖨️</span><span>Print Sales Invoice</span>
+                                    </a>
+                                    ${si.po_id ? `
+                                        <button onclick="openViewPOModal('${si.po_id}')" class="w-full flex items-center gap-2 px-3 py-1.5 text-indigo-700 hover:bg-indigo-50 transition text-left cursor-pointer">
+                                            <span>👁️</span><span>View PO (${si.po_number || ''})</span>
+                                        </button>
+                                    ` : ''}
+                                    ${si.balance_due > 0 ? `
+                                        <button onclick="openRecordPaymentModal('${si.id}', '${si.invoice_number}', ${si.balance_due}, '${(si.company_name || '').replace(/'/g, "\\'")}')" class="w-full flex items-center gap-2 px-3 py-1.5 text-emerald-700 hover:bg-emerald-50 transition text-left font-bold cursor-pointer">
+                                            <span>💵</span><span>Record Payment</span>
+                                        </button>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </td>
             </tr>
         `).join('');

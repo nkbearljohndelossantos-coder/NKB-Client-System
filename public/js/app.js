@@ -1576,28 +1576,53 @@ function toggleCustomPOTerm(prefix = 'edit') {
 window.toggleCustomPOTerm = toggleCustomPOTerm;
 
 // -------------------------------------------------------------
-// GLOBAL KEYBOARD SHORTCUTS
-// 1. Ctrl+O (or Cmd+O, Ctrl+Shift+O, Alt+P): Create / Place Purchase Order
-// 2. Escape: Exit mini tabs, modals, docked chats, flyouts, and dropdowns
+// GLOBAL KEYBOARD SHORTCUTS & EVENT LISTENERS
+// 1. Ctrl+K (or Cmd+K): Universal Command Palette & Search
+// 2. Ctrl+O (or Cmd+O, Ctrl+Shift+O, Alt+P): Create / Place Purchase Order
+// 3. Escape: Exit table menus, command palette, mini tabs, modals, docked chats, flyouts
 // -------------------------------------------------------------
+
+// Dismiss table action dropdown menus when clicking outside
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.table-action-menu') && !e.target.closest('button[onclick*="toggleTableActionMenu"]') && !e.target.closest('button[onclick*="togglePOActionMenu"]')) {
+        document.querySelectorAll('.table-action-menu, [id^="po-menu-"]').forEach(m => m.classList.add('hidden'));
+    }
+});
+
 document.addEventListener('keydown', function (e) {
-    // 1. ESCAPE KEY: Exit mini tabs, modals, flyouts, dropdowns
+    const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+
+    // 1. ESCAPE KEY: Multi-tier dismissal
     if (e.key === 'Escape' || e.key === 'Esc' || e.keyCode === 27) {
         let handled = false;
 
-        // A. Autocomplete / Search suggestions dropdowns
+        // A. Table Action Dropdown Menus
+        const openMenus = document.querySelectorAll('.table-action-menu:not(.hidden), [id^="po-menu-"]:not(.hidden)');
+        if (openMenus.length > 0) {
+            openMenus.forEach(m => m.classList.add('hidden'));
+            handled = true;
+        }
+
+        // B. Command Palette Modal
+        const cmdModal = document.getElementById('command-palette-modal');
+        if (!handled && cmdModal && !cmdModal.classList.contains('hidden')) {
+            closeCommandPalette();
+            handled = true;
+        }
+
+        // C. Autocomplete / Search suggestions dropdowns
         const editSuggestions = document.getElementById('edit-po-suggestions-container');
-        if (editSuggestions && !editSuggestions.classList.contains('hidden')) {
+        if (!handled && editSuggestions && !editSuggestions.classList.contains('hidden')) {
             editSuggestions.classList.add('hidden');
             handled = true;
         }
         const poSuggestions = document.getElementById('po-suggestions-container');
-        if (poSuggestions && !poSuggestions.classList.contains('hidden')) {
+        if (!handled && poSuggestions && !poSuggestions.classList.contains('hidden')) {
             poSuggestions.classList.add('hidden');
             handled = true;
         }
 
-        // B. Active Modals (#modals-root and #client-modals-root)
+        // D. Active Modals (#modals-root and #client-modals-root)
         const modalsRoot = document.getElementById('modals-root');
         if (!handled && modalsRoot && modalsRoot.children.length > 0 && modalsRoot.innerHTML.trim() !== '') {
             if (typeof closeModal === 'function') {
@@ -1620,7 +1645,7 @@ document.addEventListener('keydown', function (e) {
             handled = true;
         }
 
-        // C. Notification & Messenger Flyouts
+        // E. Notification & Messenger Flyouts
         const bellFlyout = document.getElementById('agent-bell-flyout');
         if (!handled && bellFlyout && !bellFlyout.classList.contains('hidden')) {
             bellFlyout.classList.add('hidden');
@@ -1633,14 +1658,14 @@ document.addEventListener('keydown', function (e) {
             handled = true;
         }
 
-        // D. Messenger Docked Mini-Tabs / Chat Windows
+        // F. Messenger Docked Mini-Tabs / Chat Windows
         if (!handled && window.NKB_Agents && typeof window.NKB_Agents.closeTopDockedChat === 'function') {
             handled = window.NKB_Agents.closeTopDockedChat();
         }
 
-        // E. Mobile Sidebars (if open on mobile)
+        // G. Mobile Sidebars (if open on mobile)
         if (!handled) {
-            const adminSidebar = document.getElementById('sidebar');
+            const adminSidebar = document.getElementById('admin-sidebar') || document.getElementById('sidebar');
             if (adminSidebar && !adminSidebar.classList.contains('-translate-x-full') && typeof toggleMobileSidebar === 'function') {
                 if (window.innerWidth < 1024) {
                     toggleMobileSidebar(false);
@@ -1663,8 +1688,16 @@ document.addEventListener('keydown', function (e) {
         }
     }
 
-    // 2. CTRL+O / CMD+O / ALT+P: Open / Create Purchase Order
-    const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+    // 2. CTRL+K / CMD+K: Universal Command Palette & Search
+    const isKeyK = e.key && (e.key === 'k' || e.key === 'K');
+    if (isCtrlOrCmd && isKeyK) {
+        e.preventDefault();
+        e.stopPropagation();
+        openCommandPalette();
+        return;
+    }
+
+    // 3. CTRL+O / CMD+O / ALT+P: Open / Create Purchase Order
     const isKeyO = e.key && (e.key === 'o' || e.key === 'O');
     const isAltP = e.altKey && (e.key === 'p' || e.key === 'P');
 
@@ -1699,6 +1732,353 @@ document.addEventListener('keydown', function (e) {
         }
     }
 });
+
+// -------------------------------------------------------------
+// UNIVERSAL COMMAND PALETTE (CTRL+K / CMD+K)
+// -------------------------------------------------------------
+let cmdPaletteActiveIndex = 0;
+let cmdPaletteFilteredItems = [];
+
+function ensureCommandPaletteModal() {
+    let modal = document.getElementById('command-palette-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'command-palette-modal';
+        modal.className = 'fixed inset-0 z-50 flex items-start justify-center pt-16 sm:pt-24 px-4 bg-slate-950/60 backdrop-blur-sm animate-fade-in hidden';
+        modal.onclick = function(e) {
+            if (e.target === modal) closeCommandPalette();
+        };
+        modal.innerHTML = `
+            <div class="bg-white w-full max-w-xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[75vh]" onclick="event.stopPropagation()">
+                <div class="relative flex items-center border-b border-slate-100 px-4 py-3 bg-slate-50/70">
+                    <svg class="w-5 h-5 text-slate-400 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                    <input id="command-palette-input" type="text" autocomplete="off" spellcheck="false" placeholder="Type a command, tab, order #, or client..." class="w-full bg-transparent text-sm text-slate-800 placeholder-slate-400 font-medium focus:outline-none" />
+                    <kbd class="px-2 py-0.5 text-[10px] bg-white border border-slate-200 text-slate-400 rounded-md font-mono shadow-xs">ESC</kbd>
+                </div>
+                <div id="command-palette-results" class="flex-1 overflow-y-auto p-2 space-y-1 divide-y divide-slate-100/50">
+                    <!-- Results dynamically generated -->
+                </div>
+                <div class="px-4 py-2.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 font-medium select-none">
+                    <div class="flex items-center gap-3">
+                        <span><kbd class="px-1.5 py-0.5 bg-white border border-slate-200 rounded font-mono text-[9px] text-slate-600 shadow-xs">↑</kbd> <kbd class="px-1.5 py-0.5 bg-white border border-slate-200 rounded font-mono text-[9px] text-slate-600 shadow-xs">↓</kbd> Navigate</span>
+                        <span><kbd class="px-1.5 py-0.5 bg-white border border-slate-200 rounded font-mono text-[9px] text-slate-600 shadow-xs">↵</kbd> Select</span>
+                    </div>
+                    <span><kbd class="px-1.5 py-0.5 bg-white border border-slate-200 rounded font-mono text-[9px] text-slate-600 shadow-xs">esc</kbd> Dismiss</span>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        const input = document.getElementById('command-palette-input');
+        if (input) {
+            input.addEventListener('input', function() {
+                cmdPaletteActiveIndex = 0;
+                renderCommandPaletteResults(this.value);
+            });
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    if (cmdPaletteFilteredItems.length > 0) {
+                        cmdPaletteActiveIndex = (cmdPaletteActiveIndex + 1) % cmdPaletteFilteredItems.length;
+                        highlightActiveCommandItem();
+                    }
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if (cmdPaletteFilteredItems.length > 0) {
+                        cmdPaletteActiveIndex = (cmdPaletteActiveIndex - 1 + cmdPaletteFilteredItems.length) % cmdPaletteFilteredItems.length;
+                        highlightActiveCommandItem();
+                    }
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (cmdPaletteFilteredItems.length > 0 && cmdPaletteFilteredItems[cmdPaletteActiveIndex]) {
+                        executeCommandItem(cmdPaletteActiveIndex);
+                    }
+                }
+            });
+        }
+    }
+    return modal;
+}
+
+function openCommandPalette() {
+    const modal = ensureCommandPaletteModal();
+    modal.classList.remove('hidden');
+    const input = document.getElementById('command-palette-input');
+    if (input) {
+        input.value = '';
+        setTimeout(() => input.focus(), 30);
+    }
+    cmdPaletteActiveIndex = 0;
+    renderCommandPaletteResults('');
+}
+window.openCommandPalette = openCommandPalette;
+
+function closeCommandPalette() {
+    const modal = document.getElementById('command-palette-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+}
+window.closeCommandPalette = closeCommandPalette;
+
+function getCommandPaletteData() {
+    const isAdmin = !!document.getElementById('admin-sidebar') || typeof switchTab === 'function';
+    const isClient = !!document.getElementById('client-sidebar') || typeof switchClientTab === 'function';
+
+    const items = [];
+
+    if (isAdmin) {
+        // Actions
+        items.push({
+            group: 'Quick Actions',
+            icon: '➕',
+            title: 'Create Purchase Order',
+            subtitle: 'New client order entry (Ctrl+O)',
+            badge: 'Ctrl+O',
+            action: () => {
+                if (typeof switchTab === 'function') switchTab('orders');
+                if (typeof openCreatePOModal === 'function') openCreatePOModal();
+            }
+        });
+        items.push({
+            group: 'Quick Actions',
+            icon: '🏢',
+            title: 'Add New B2B Client',
+            subtitle: 'Register new client profile & pricing',
+            action: () => {
+                if (typeof openCreateClientModal === 'function') openCreateClientModal();
+                else if (typeof switchTab === 'function') switchTab('clients');
+            }
+        });
+        items.push({
+            group: 'Quick Actions',
+            icon: '🧴',
+            title: 'Add New Product',
+            subtitle: 'Register cosmetic SKU to catalog',
+            action: () => {
+                if (typeof openCreateProductModal === 'function') openCreateProductModal();
+                else if (typeof switchTab === 'function') switchTab('products');
+            }
+        });
+        items.push({
+            group: 'Quick Actions',
+            icon: '📋',
+            title: 'Requisition Raw Materials',
+            subtitle: 'Submit supply request to Purchasing',
+            action: () => {
+                if (typeof switchTab === 'function') switchTab('purchasing');
+            }
+        });
+        items.push({
+            group: 'Quick Actions',
+            icon: '🔄',
+            title: 'Refresh Dashboard Metrics',
+            subtitle: 'Reload KPI overview and live data',
+            action: () => {
+                if (typeof loadDashboard === 'function') loadDashboard();
+            }
+        });
+
+        // Navigation
+        const tabs = [
+            { id: 'dashboard', name: 'Dashboard', icon: '📊', desc: 'KPI overview & active summary' },
+            { id: 'orders', name: 'Purchase Orders', icon: '📦', desc: 'Manage client POs & approvals' },
+            { id: 'purchasing', name: 'Requisitions (Purchasing)', icon: '📋', desc: 'Materials ordering & delivery' },
+            { id: 'job-orders', name: 'Job Orders', icon: '⚙️', desc: 'Factory manufacturing tickets' },
+            { id: 'production', name: 'Batches & Yield', icon: '🏭', desc: 'Batch logging & QC clearance' },
+            { id: 'deliveries', name: 'Deliveries / DR', icon: '🚚', desc: 'Delivery receipts & dispatch' },
+            { id: 'invoices', name: 'Sales Invoices', icon: '🧾', desc: 'Billing & AR accounts' },
+            { id: 'payments', name: 'Payments & Collections', icon: '💵', desc: 'Recorded payments & reconciliation' },
+            { id: 'buffer', name: 'Buffer Inventory', icon: '📦', desc: 'Client reserved stock buffer' },
+            { id: 'formulations', name: 'Lab & Formulations', icon: '🧪', desc: 'Chemical formulations & recipes' },
+            { id: 'clients', name: 'B2B Clients Directory', icon: '🏢', desc: 'Customer accounts & special pricing' },
+            { id: 'products', name: 'Products Catalog', icon: '🧴', desc: 'Cosmetic formulas & assigned products' },
+            { id: 'users', name: 'User Management', icon: '👥', desc: 'Staff roles, access & credentials' },
+            { id: 'reports', name: 'Analytics & Reports', icon: '📈', desc: 'Yield analysis & sales reports' },
+            { id: 'audit', name: 'Audit Logs', icon: '📜', desc: 'System security & action trail' },
+            { id: 'apikeys', name: 'Developer REST API', icon: '🔑', desc: 'API keys & integration docs' }
+        ];
+
+        tabs.forEach(t => {
+            items.push({
+                group: 'Navigation',
+                icon: t.icon,
+                title: t.name,
+                subtitle: t.desc,
+                action: () => {
+                    if (typeof switchTab === 'function') switchTab(t.id);
+                }
+            });
+        });
+
+        // Live Orders
+        if (window.cachedOrders && Array.isArray(window.cachedOrders)) {
+            window.cachedOrders.slice(0, 15).forEach(po => {
+                items.push({
+                    group: 'Recent Purchase Orders',
+                    icon: '📦',
+                    title: `${po.po_number} — ${po.company_name || 'Client'}`,
+                    subtitle: `Status: ${po.status} | Qty: ${po.total_target_quantity ? Number(po.total_target_quantity).toLocaleString() + ' pcs' : 'N/A'}`,
+                    badge: po.status,
+                    action: () => {
+                        if (typeof switchTab === 'function') switchTab('orders');
+                        if (typeof openViewPOModal === 'function') openViewPOModal(po.id);
+                    }
+                });
+            });
+        }
+
+        // Live Clients
+        if (window.cachedClients && Array.isArray(window.cachedClients)) {
+            window.cachedClients.slice(0, 15).forEach(c => {
+                items.push({
+                    group: 'B2B Clients',
+                    icon: '🏢',
+                    title: c.company_name || c.name,
+                    subtitle: `Contact: ${c.contact_person || 'N/A'} | Email: ${c.email || 'N/A'}`,
+                    action: () => {
+                        if (typeof switchTab === 'function') switchTab('clients');
+                    }
+                });
+            });
+        }
+    } else if (isClient) {
+        // Client Quick Actions
+        items.push({
+            group: 'Quick Actions',
+            icon: '🛒',
+            title: 'Place New Order',
+            subtitle: 'Select cosmetic product & submit PO (Ctrl+O)',
+            badge: 'Ctrl+O',
+            action: () => {
+                if (typeof switchClientTab === 'function') switchClientTab('place-order');
+            }
+        });
+        items.push({
+            group: 'Quick Actions',
+            icon: '🔑',
+            title: 'Change Password',
+            subtitle: 'Update your client account credentials',
+            action: () => {
+                if (typeof openClientChangePasswordModal === 'function') openClientChangePasswordModal();
+            }
+        });
+
+        // Client Navigation
+        const clientTabs = [
+            { id: 'dashboard', name: 'Overview Dashboard', icon: '📊', desc: 'Order tracking & stats' },
+            { id: 'my-orders', name: 'My Orders', icon: '📦', desc: 'Live status of submitted POs' },
+            { id: 'dr-acceptance', name: 'DR Acceptance', icon: '📥', desc: 'Accept & sign delivery receipts' },
+            { id: 'invoices', name: 'Invoices & Statements', icon: '🧾', desc: 'Billing history & balance' },
+            { id: 'buffer', name: 'Buffer Stock', icon: '📦', desc: 'View reserved factory inventory' },
+            { id: 'place-order', name: 'Place Order', icon: '🛍️', desc: 'Catalog & ordering page' }
+        ];
+
+        clientTabs.forEach(t => {
+            items.push({
+                group: 'Navigation',
+                icon: t.icon,
+                title: t.name,
+                subtitle: t.desc,
+                action: () => {
+                    if (typeof switchClientTab === 'function') switchClientTab(t.id);
+                }
+            });
+        });
+    }
+
+    return items;
+}
+
+function renderCommandPaletteResults(query = '') {
+    const resultsContainer = document.getElementById('command-palette-results');
+    if (!resultsContainer) return;
+
+    const allItems = getCommandPaletteData();
+    const q = (query || '').toLowerCase().trim();
+
+    if (!q) {
+        cmdPaletteFilteredItems = allItems;
+    } else {
+        cmdPaletteFilteredItems = allItems.filter(item => {
+            const titleMatch = (item.title || '').toLowerCase().includes(q);
+            const subMatch = (item.subtitle || '').toLowerCase().includes(q);
+            const groupMatch = (item.group || '').toLowerCase().includes(q);
+            return titleMatch || subMatch || groupMatch;
+        });
+    }
+
+    if (cmdPaletteFilteredItems.length === 0) {
+        resultsContainer.innerHTML = `
+            <div class="py-8 text-center text-slate-400">
+                <div class="text-2xl mb-1">🔍</div>
+                <div class="text-xs font-semibold">No results matching "${query}"</div>
+                <div class="text-[11px] text-slate-400 mt-0.5">Try searching for a tab name, order number, or client.</div>
+            </div>
+        `;
+        return;
+    }
+
+    // Group items by category
+    const groups = {};
+    cmdPaletteFilteredItems.forEach((item, idx) => {
+        const g = item.group || 'Actions';
+        if (!groups[g]) groups[g] = [];
+        groups[g].push({ ...item, globalIndex: idx });
+    });
+
+    let html = '';
+    for (const [groupName, groupItems] of Object.entries(groups)) {
+        html += `
+            <div class="pt-2 pb-1 first:pt-1">
+                <div class="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">${groupName}</div>
+                <div class="space-y-0.5">
+                    ${groupItems.map(item => `
+                        <div id="cmd-item-${item.globalIndex}" onclick="executeCommandItem(${item.globalIndex})" class="cmd-item flex items-center justify-between px-3 py-2 rounded-xl text-slate-700 hover:bg-indigo-50 hover:text-indigo-900 transition cursor-pointer select-none ${item.globalIndex === cmdPaletteActiveIndex ? 'bg-indigo-50 text-indigo-900 font-semibold ring-1 ring-indigo-200' : ''}">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                                <span class="text-base flex-shrink-0">${item.icon || '⚡'}</span>
+                                <div class="truncate">
+                                    <div class="text-xs text-slate-900 font-bold truncate leading-tight">${item.title}</div>
+                                    ${item.subtitle ? `<div class="text-[10px] text-slate-500 truncate leading-tight mt-0.5">${item.subtitle}</div>` : ''}
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                                ${item.badge ? `<span class="px-1.5 py-0.5 bg-white border border-slate-200 rounded text-[9.5px] font-mono text-slate-600 shadow-xs">${item.badge}</span>` : ''}
+                                <span class="text-slate-400 text-xs">↵</span>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    resultsContainer.innerHTML = html;
+    highlightActiveCommandItem();
+}
+
+function highlightActiveCommandItem() {
+    document.querySelectorAll('.cmd-item').forEach((el, idx) => {
+        if (idx === cmdPaletteActiveIndex) {
+            el.classList.add('bg-indigo-50', 'text-indigo-900', 'font-semibold', 'ring-1', 'ring-indigo-200');
+            el.scrollIntoView({ block: 'nearest' });
+        } else {
+            el.classList.remove('bg-indigo-50', 'text-indigo-900', 'font-semibold', 'ring-1', 'ring-indigo-200');
+        }
+    });
+}
+
+function executeCommandItem(idx) {
+    if (cmdPaletteFilteredItems[idx] && typeof cmdPaletteFilteredItems[idx].action === 'function') {
+        const act = cmdPaletteFilteredItems[idx].action;
+        closeCommandPalette();
+        act();
+    }
+}
+window.executeCommandItem = executeCommandItem;
+
 
 
 
