@@ -10,6 +10,8 @@ const db = require('../../database/db');
 const { authenticateApiKey, requireScope } = require('../../middleware/apiKeyAuth');
 const { getNextDocumentNumber } = require('../../services/documentNumberService');
 const { getOrderMaterialBreakdown } = require('../../services/formulationService');
+const { logAudit } = require('../../services/auditService');
+const { saveAttachment } = require('../../services/attachmentService');
 
 // All v1 endpoints (except openapi.json and ping) require a valid API key
 router.use((req, res, next) => {
@@ -705,6 +707,275 @@ router.get('/inventory', requireScope('inventory:read'), (req, res) => {
 });
 
 /**
+ * GET /api/v1/payables
+ * List cheque payables for external COO review & ERP synchronization
+ */
+router.get('/payables', (req, res) => {
+    try {
+        const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+        const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+        const offset = (page - 1) * limit;
+        const status = (req.query.status || '').trim();
+        const category = (req.query.category || '').trim();
+        const bank = (req.query.bank || '').trim();
+        const search = (req.query.search || '').trim();
+        const dateFrom = (req.query.date_from || '').trim();
+        const dateTo = (req.query.date_to || '').trim();
+
+        let whereClause = 'WHERE 1=1';
+        const params = [];
+
+        if (status) {
+            whereClause += ' AND cp.status = ?';
+            params.push(status);
+        }
+        if (category) {
+            whereClause += ' AND cp.category = ?';
+            params.push(category);
+        }
+        if (bank) {
+            whereClause += ' AND cp.bank_name LIKE ?';
+            params.push(`%${bank}%`);
+        }
+        if (dateFrom) {
+            whereClause += ' AND cp.cheque_date >= ?';
+            params.push(dateFrom);
+        }
+        if (dateTo) {
+            whereClause += ' AND cp.cheque_date <= ?';
+            params.push(dateTo);
+        }
+        if (search) {
+            whereClause += ' AND (cp.payee_name LIKE ? OR cp.request_number LIKE ? OR cp.cheque_number LIKE ? OR cp.purpose LIKE ?)';
+            const term = `%${search}%`;
+            params.push(term, term, term, term);
+        }
+
+        const countRow = db.prepare(`SELECT COUNT(*) as count FROM cheque_payables cp ${whereClause}`).get(...params);
+        const total = countRow ? countRow.count : 0;
+
+        const sql = `
+            SELECT cp.*, u.name as requestor_name, u.email as requestor_email
+            FROM cheque_payables cp
+            LEFT JOIN users u ON cp.requested_by = u.id
+            ${whereClause}
+            ORDER BY cp.cheque_date DESC, cp.created_at DESC
+            LIMIT ? OFFSET ?
+        `;
+        params.push(limit, offset);
+
+        const rows = db.prepare(sql).all(...params);
+
+        return res.json({
+            success: true,
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+            data: rows
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * GET /api/v1/payables/:id
+ * Get single cheque payable by ID or request number
+ */
+router.get('/payables/:id', (req, res) => {
+    try {
+        const item = db.prepare(`
+            SELECT cp.*, u.name as requestor_name, u.email as requestor_email
+            FROM cheque_payables cp
+            LEFT JOIN users u ON cp.requested_by = u.id
+            WHERE cp.id = ? OR cp.request_number = ?
+        `).get(req.params.id, req.params.id);
+
+        if (!item) {
+            return res.status(404).json({ success: false, error: 'Cheque payable record not found.' });
+        }
+
+        return res.json({ success: true, data: item });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/v1/payables/:id/confirm
+ * COO confirmation from external website via API
+ */
+router.post('/payables/:id/confirm', (req, res) => {
+    try {
+        const { decision = 'CONFIRMED', cheque_number, notes, confirmed_by } = req.body;
+        const item = db.prepare('SELECT * FROM cheque_payables WHERE id = ? OR request_number = ?').get(req.params.id, req.params.id);
+
+        if (!item) {
+            return res.status(404).json({ success: false, error: 'Cheque payable record not found.' });
+        }
+
+        const isApproved = decision.toUpperCase() === 'CONFIRMED' || decision.toUpperCase() === 'APPROVED';
+        const newStatus = isApproved ? 'CONFIRMED' : 'REJECTED';
+        const finalChequeNum = cheque_number ? String(cheque_number).trim() : item.cheque_number;
+        const approverName = confirmed_by ? String(confirmed_by).trim() : 'COO Executive Office (External Portal)';
+        const confirmedAt = new Date().toISOString().replace('T', ' ').substring(0, 19);
+
+        db.prepare(`
+            UPDATE cheque_payables
+            SET status = ?,
+                coo_decision = ?,
+                cheque_number = ?,
+                coo_confirmed_by = ?,
+                coo_confirmed_at = ?,
+                coo_notes = ?,
+                updated_at = datetime('now', 'localtime')
+            WHERE id = ?
+        `).run(
+            newStatus,
+            decision.toUpperCase(),
+            finalChequeNum,
+            approverName,
+            confirmedAt,
+            notes ? String(notes).trim() : null,
+            item.id
+        );
+
+        const updated = db.prepare('SELECT * FROM cheque_payables WHERE id = ?').get(item.id);
+
+        logAudit({
+            userId: req.apiKey?.id || 'coo-external-api',
+            userName: approverName,
+            userRole: 'COO',
+            action: isApproved ? 'COO_API_CONFIRM_PAYABLE' : 'COO_API_REJECT_PAYABLE',
+            entityType: 'PAYABLE',
+            entityId: item.request_number,
+            details: {
+                requestNumber: item.request_number,
+                payeeName: item.payee_name,
+                amount: item.amount,
+                chequeNumber: finalChequeNum,
+                decision: newStatus,
+                confirmedBy: approverName,
+                notes,
+                apiKeyName: req.apiKey?.name
+            }
+        });
+
+        // Insert notification for the accountant user
+        try {
+            const notifId = uuidv4();
+            db.prepare(`
+                INSERT INTO notifications (id, user_id, type, title, message, link, is_read, created_at)
+                VALUES (?, ?, 'PAYABLE_CONFIRMED', ?, ?, '/admin#payables', 0, datetime('now', 'localtime'))
+            `).run(
+                notifId,
+                item.requested_by,
+                `Cheque Payable ${isApproved ? 'CONFIRMED' : 'REJECTED'} by COO`,
+                `Request ${item.request_number} for ${item.payee_name} (₱${Number(item.amount).toLocaleString()}) was ${isApproved ? 'CONFIRMED' : 'REJECTED'} by COO.${finalChequeNum ? ` Cheque #: ${finalChequeNum}` : ''}`
+            );
+        } catch (_) {}
+
+        return res.json({
+            success: true,
+            message: `Cheque payable ${item.request_number} has been ${isApproved ? 'CONFIRMED' : 'REJECTED'} successfully.`,
+            data: updated
+        });
+    } catch (err) {
+        return res.status(400).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/v1/payables
+ * Create a new cheque payable request programmatically
+ */
+router.post('/payables', (req, res) => {
+    try {
+        const {
+            payee_name,
+            amount,
+            cheque_date,
+            bank_name,
+            bank_account_number,
+            cheque_number,
+            category,
+            purpose,
+            invoice_reference,
+            attachment_url,
+            attachment_data,
+            notes,
+            requested_by_name
+        } = req.body;
+
+        if (!payee_name || !amount || !cheque_date || !bank_name || !category || !purpose) {
+            return res.status(400).json({
+                success: false,
+                error: 'MISSING_FIELDS',
+                message: 'payee_name, amount, cheque_date, bank_name, category, and purpose are required.'
+            });
+        }
+
+        const numAmount = parseFloat(amount);
+        if (isNaN(numAmount) || numAmount <= 0) {
+            return res.status(400).json({ success: false, error: 'INVALID_AMOUNT', message: 'Amount must be greater than 0.' });
+        }
+
+        const id = uuidv4();
+        const requestNumber = getNextDocumentNumber('CHQ');
+        let savedAttachment = null;
+        if (attachment_data || attachment_url) {
+            savedAttachment = saveAttachment(attachment_data || attachment_url, 'payables');
+        }
+
+        const adminUser = db.prepare("SELECT id, name FROM users WHERE role = 'ACCOUNTING' OR role = 'ADMIN' LIMIT 1").get();
+        const creatorId = adminUser ? adminUser.id : (req.apiKey.userId || 'system');
+        const creatorName = requested_by_name || (adminUser ? adminUser.name : 'API Client');
+
+        db.prepare(`
+            INSERT INTO cheque_payables (
+                id, request_number, payee_name, amount, cheque_date, bank_name,
+                bank_account_number, cheque_number, category, purpose,
+                invoice_reference, attachment_url, status, requested_by,
+                requested_by_name, coo_notes, api_key_used, created_at, updated_at
+            ) VALUES (
+                ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?,
+                ?, ?, 'PENDING_COO_APPROVAL', ?,
+                ?, ?, ?, datetime('now', 'localtime'), datetime('now', 'localtime')
+            )
+        `).run(
+            id,
+            requestNumber,
+            String(payee_name).trim(),
+            numAmount,
+            cheque_date,
+            String(bank_name).trim(),
+            bank_account_number || null,
+            cheque_number || null,
+            String(category).trim(),
+            String(purpose).trim(),
+            invoice_reference || null,
+            savedAttachment,
+            creatorId,
+            creatorName,
+            notes || 'Created via Developer REST API v1',
+            req.apiKey.name || 'API Key'
+        );
+
+        const created = db.prepare('SELECT * FROM cheque_payables WHERE id = ?').get(id);
+
+        return res.status(201).json({
+            success: true,
+            message: `Cheque payable request ${requestNumber} created successfully.`,
+            data: created
+        });
+    } catch (err) {
+        return res.status(400).json({ success: false, error: err.message });
+    }
+});
+
+/**
  * GET /api/v1/openapi.json
  * OpenAPI 3.0 API Specification
  */
@@ -813,6 +1084,45 @@ router.get('/openapi.json', (req, res) => {
                 get: {
                     summary: 'Get finished cosmetic inventory and formula pull sheets',
                     responses: { '200': { description: 'Inventory availability' } }
+                }
+            },
+            '/payables': {
+                get: {
+                    summary: 'List cheque payables for COO review & ERP synchronization',
+                    parameters: [
+                        { name: 'status', in: 'query', schema: { type: 'string', enum: ['PENDING_COO_APPROVAL', 'CONFIRMED', 'ISSUED', 'CLEARED', 'REJECTED'] } },
+                        { name: 'category', in: 'query', schema: { type: 'string' } },
+                        { name: 'bank', in: 'query', schema: { type: 'string' } },
+                        { name: 'date_from', in: 'query', schema: { type: 'string', format: 'date' } },
+                        { name: 'date_to', in: 'query', schema: { type: 'string', format: 'date' } }
+                    ],
+                    responses: { '200': { description: 'List of cheque payables' } }
+                },
+                post: {
+                    summary: 'Create a cheque payable request',
+                    responses: { '201': { description: 'Cheque payable created' } }
+                }
+            },
+            '/payables/{id}/confirm': {
+                post: {
+                    summary: 'Confirm or reject cheque payable by COO via API Key',
+                    requestBody: {
+                        required: true,
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        decision: { type: 'string', enum: ['CONFIRMED', 'REJECTED'] },
+                                        cheque_number: { type: 'string' },
+                                        notes: { type: 'string' },
+                                        confirmed_by: { type: 'string' }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    responses: { '200': { description: 'Cheque payable confirmed or rejected' } }
                 }
             }
         }

@@ -99,6 +99,11 @@ app.get(['/login', '/staff', '/staff-login'], (req, res) => {
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
+const uploadsPath = path.join(__dirname, 'uploads');
+if (!require('fs').existsSync(uploadsPath)) {
+    try { require('fs').mkdirSync(uploadsPath, { recursive: true }); } catch (_) {}
+}
+app.use('/uploads', express.static(uploadsPath));
 
 app.get('/favicon.ico', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'favicon.svg'));
@@ -155,6 +160,7 @@ function mountApiRoutes() {
     app.use('/api/chat', require('./routes/chat'));
     app.use('/api/formulations', require('./routes/formulations'));
     app.use('/api/api-keys', require('./routes/apiKeys'));
+    app.use('/api/cheque-payables', require('./routes/chequePayables'));
     app.use('/api/v1', require('./routes/v1/apiV1'));
 }
 

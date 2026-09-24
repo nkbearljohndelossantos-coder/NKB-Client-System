@@ -1793,28 +1793,28 @@ function ensureCommandPaletteModal() {
     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'command-palette-modal';
-        modal.className = 'fixed inset-0 z-50 flex items-start justify-center pt-16 sm:pt-24 px-4 bg-slate-950/60 backdrop-blur-sm animate-fade-in hidden';
+        modal.className = 'fixed inset-0 z-50 flex items-start justify-center pt-8 sm:pt-14 px-3 sm:px-4 bg-slate-950/65 backdrop-blur-sm animate-fade-in hidden';
         modal.onclick = function(e) {
             if (e.target === modal) closeCommandPalette();
         };
         modal.innerHTML = `
-            <div class="bg-white w-full max-w-xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[75vh]" onclick="event.stopPropagation()">
-                <div class="relative flex items-center border-b border-slate-100 px-4 py-3 bg-slate-50/70">
+            <div id="command-palette-card" class="bg-white w-full max-w-xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col" style="max-height: calc(100vh - clamp(2rem, 10vh, 5.5rem)); max-height: calc(100dvh - clamp(2rem, 10vh, 5.5rem));" onclick="event.stopPropagation()">
+                <div id="command-palette-header" class="relative flex items-center border-b border-slate-200 px-4 py-3 bg-slate-50/90 shrink-0">
                     <svg class="w-5 h-5 text-slate-400 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                     </svg>
                     <input id="command-palette-input" type="text" autocomplete="off" spellcheck="false" placeholder="Type a command, tab, order #, or client..." class="w-full bg-transparent text-sm text-slate-800 placeholder-slate-400 font-medium focus:outline-none" />
-                    <kbd class="px-2 py-0.5 text-[10px] bg-white border border-slate-200 text-slate-400 rounded-md font-mono shadow-xs">ESC</kbd>
+                    <kbd class="px-2 py-0.5 text-xs bg-white border border-slate-200 text-slate-500 rounded font-mono shadow-xs cursor-pointer select-none" onclick="closeCommandPalette()" title="Close (Esc)">ESC</kbd>
                 </div>
-                <div id="command-palette-results" class="flex-1 overflow-y-auto p-2 space-y-1 divide-y divide-slate-100/50">
+                <div id="command-palette-results" class="flex-1 min-h-0 overflow-y-auto p-2 space-y-1 divide-y divide-slate-100" style="min-height: 0; flex: 1 1 auto; overflow-y: auto;">
                     <!-- Results dynamically generated -->
                 </div>
-                <div class="px-4 py-2.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 font-medium select-none">
+                <div id="command-palette-footer" class="px-4 py-2.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 font-medium select-none shrink-0">
                     <div class="flex items-center gap-3">
-                        <span><kbd class="px-1.5 py-0.5 bg-white border border-slate-200 rounded font-mono text-[9px] text-slate-600 shadow-xs">↑</kbd> <kbd class="px-1.5 py-0.5 bg-white border border-slate-200 rounded font-mono text-[9px] text-slate-600 shadow-xs">↓</kbd> Navigate</span>
-                        <span><kbd class="px-1.5 py-0.5 bg-white border border-slate-200 rounded font-mono text-[9px] text-slate-600 shadow-xs">↵</kbd> Select</span>
+                        <span><kbd class="px-1.5 py-0.5 bg-white border border-slate-200 rounded font-mono text-xs text-slate-600 shadow-xs">↑</kbd> <kbd class="px-1.5 py-0.5 bg-white border border-slate-200 rounded font-mono text-xs text-slate-600 shadow-xs">↓</kbd> Navigate</span>
+                        <span><kbd class="px-1.5 py-0.5 bg-white border border-slate-200 rounded font-mono text-xs text-slate-600 shadow-xs">↵</kbd> Select</span>
                     </div>
-                    <span><kbd class="px-1.5 py-0.5 bg-white border border-slate-200 rounded font-mono text-[9px] text-slate-600 shadow-xs">esc</kbd> Dismiss</span>
+                    <span><kbd class="px-1.5 py-0.5 bg-white border border-slate-200 rounded font-mono text-xs text-slate-600 shadow-xs cursor-pointer" onclick="closeCommandPalette()">esc</kbd> Dismiss</span>
                 </div>
             </div>
         `;
@@ -2084,19 +2084,19 @@ function renderCommandPaletteResults(query = '') {
     for (const [groupName, groupItems] of Object.entries(groups)) {
         html += `
             <div class="pt-2 pb-1 first:pt-1">
-                <div class="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">${groupName}</div>
+                <div class="px-3 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider cmd-group-title">${groupName}</div>
                 <div class="space-y-0.5">
                     ${groupItems.map(item => `
-                        <div id="cmd-item-${item.globalIndex}" onclick="executeCommandItem(${item.globalIndex})" class="cmd-item flex items-center justify-between px-3 py-2 rounded-xl text-slate-700 hover:bg-indigo-50 hover:text-indigo-900 transition cursor-pointer select-none ${item.globalIndex === cmdPaletteActiveIndex ? 'bg-indigo-50 text-indigo-900 font-semibold ring-1 ring-indigo-200' : ''}">
+                        <div id="cmd-item-${item.globalIndex}" onclick="executeCommandItem(${item.globalIndex})" onmouseenter="highlightHoveredCommandItem(${item.globalIndex})" class="cmd-item flex items-center justify-between px-3 py-2 rounded-xl text-slate-700 transition cursor-pointer select-none ${item.globalIndex === cmdPaletteActiveIndex ? 'active bg-indigo-50 text-indigo-900 font-semibold' : ''}">
                             <div class="flex items-center gap-2.5 min-w-0">
                                 <span class="text-base flex-shrink-0">${item.icon || '⚡'}</span>
                                 <div class="truncate">
                                     <div class="text-xs text-slate-900 font-bold truncate leading-tight">${item.title}</div>
-                                    ${item.subtitle ? `<div class="text-[10px] text-slate-500 truncate leading-tight mt-0.5">${item.subtitle}</div>` : ''}
+                                    ${item.subtitle ? `<div class="text-xs text-slate-500 truncate leading-tight mt-0.5 cmd-item-subtitle">${item.subtitle}</div>` : ''}
                                 </div>
                             </div>
                             <div class="flex items-center gap-1.5 flex-shrink-0 ml-2">
-                                ${item.badge ? `<span class="px-1.5 py-0.5 bg-white border border-slate-200 rounded text-[9.5px] font-mono text-slate-600 shadow-xs">${item.badge}</span>` : ''}
+                                ${item.badge ? `<span class="px-1.5 py-0.5 bg-white border border-slate-200 rounded font-mono text-xs text-slate-600 shadow-xs cmd-badge">${item.badge}</span>` : ''}
                                 <span class="text-slate-400 text-xs">↵</span>
                             </div>
                         </div>
@@ -2113,13 +2113,25 @@ function renderCommandPaletteResults(query = '') {
 function highlightActiveCommandItem() {
     document.querySelectorAll('.cmd-item').forEach((el, idx) => {
         if (idx === cmdPaletteActiveIndex) {
-            el.classList.add('bg-indigo-50', 'text-indigo-900', 'font-semibold', 'ring-1', 'ring-indigo-200');
+            el.classList.add('active', 'bg-indigo-50', 'text-indigo-900', 'font-semibold');
             el.scrollIntoView({ block: 'nearest' });
         } else {
-            el.classList.remove('bg-indigo-50', 'text-indigo-900', 'font-semibold', 'ring-1', 'ring-indigo-200');
+            el.classList.remove('active', 'bg-indigo-50', 'text-indigo-900', 'font-semibold');
         }
     });
 }
+
+function highlightHoveredCommandItem(idx) {
+    cmdPaletteActiveIndex = idx;
+    document.querySelectorAll('.cmd-item').forEach((el, i) => {
+        if (i === idx) {
+            el.classList.add('active', 'bg-indigo-50', 'text-indigo-900', 'font-semibold');
+        } else {
+            el.classList.remove('active', 'bg-indigo-50', 'text-indigo-900', 'font-semibold');
+        }
+    });
+}
+window.highlightHoveredCommandItem = highlightHoveredCommandItem;
 
 function executeCommandItem(idx) {
     if (cmdPaletteFilteredItems[idx] && typeof cmdPaletteFilteredItems[idx].action === 'function') {

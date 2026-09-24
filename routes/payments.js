@@ -6,6 +6,7 @@ const { authenticateToken, requireRoles, enforceClientIsolation } = require('../
 const { getNextDocumentNumber } = require('../services/documentNumberService');
 const { logAudit } = require('../services/auditService');
 const { getManilaDate } = require('../helpers/timezone');
+const { saveAttachment } = require('../services/attachmentService');
 
 /**
  * GET /api/payments
@@ -174,7 +175,18 @@ router.get('/export-csv', authenticateToken, enforceClientIsolation, (req, res) 
  * Record payment for an invoice (Admin / Accounting, or Client submission)
  */
 router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
-    const { invoice_id, amount, payment_method, reference_number, notes, payment_date } = req.body;
+    const { 
+        invoice_id, 
+        amount, 
+        payment_method, 
+        reference_number, 
+        notes, 
+        payment_date,
+        attachment_url,
+        attachment_data,
+        check_number,
+        bank_name
+    } = req.body;
 
     if (!invoice_id || !amount || !payment_method) {
         return res.status(400).json({ success: false, error: 'Invoice ID, amount, and payment method are required.' });
@@ -204,6 +216,14 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
 
     const finalReferenceNumber = (reference_number && String(reference_number).trim()) ? String(reference_number).trim() : 'N/A';
     const finalNotes = (notes && String(notes).trim()) ? String(notes).trim() : null;
+    const finalCheckNumber = (check_number && String(check_number).trim()) ? String(check_number).trim() : null;
+    const finalBankName = (bank_name && String(bank_name).trim()) ? String(bank_name).trim() : null;
+
+    // Save attachment if provided (as base64 or URL)
+    let savedAttachmentUrl = null;
+    if (attachment_data || attachment_url) {
+        savedAttachmentUrl = saveAttachment(attachment_data || attachment_url, 'checks');
+    }
 
     const recordPaymentTx = db.transaction(() => {
         const paymentId = uuidv4();
@@ -216,8 +236,8 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
         // Insert payment record
         db.prepare(`
             INSERT INTO payments
-            (id, payment_number, invoice_id, client_id, payment_date, amount, payment_method, reference_number, notes, recorded_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (id, payment_number, invoice_id, client_id, payment_date, amount, payment_method, reference_number, bank_name, check_number, attachment_url, notes, recorded_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
             paymentId,
             paymentNumber,
@@ -227,6 +247,9 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
             payAmount,
             payment_method,
             finalReferenceNumber,
+            finalBankName,
+            finalCheckNumber,
+            savedAttachmentUrl,
             finalNotes,
             req.user.id
         );
@@ -251,11 +274,23 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
                 invoiceNumber: invoice.invoice_number,
                 amount: payAmount,
                 newBalanceDue,
-                newStatus
+                newStatus,
+                checkNumber: finalCheckNumber,
+                bankName: finalBankName,
+                hasAttachment: !!savedAttachmentUrl
             }
         });
 
-        return { paymentId, paymentNumber, newPaidAmount, newBalanceDue, newStatus };
+        return {
+            paymentId,
+            paymentNumber,
+            newPaidAmount,
+            newBalanceDue,
+            newStatus,
+            savedAttachmentUrl,
+            checkNumber: finalCheckNumber,
+            bankName: finalBankName
+        };
     });
 
     try {
@@ -265,8 +300,75 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
             success: true,
             message: `Payment ${result.paymentNumber} of ₱${payAmount.toFixed(2)} recorded successfully. Invoice balance: ₱${result.newBalanceDue.toFixed(2)} (${result.newStatus}).`,
             data: {
+                id: result.paymentId,
+                paymentId: result.paymentId,
                 paymentNumber: result.paymentNumber,
+                payment_number: result.paymentNumber,
+                bank_name: result.bankName,
+                check_number: result.checkNumber,
+                attachment_url: result.savedAttachmentUrl,
                 invoice: updatedInvoice
+            }
+        });
+    } catch (err) {
+        return res.status(400).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/payments/:id/attachment
+ * Upload or update check attachment for an existing payment record
+ */
+router.post('/:id/attachment', authenticateToken, (req, res) => {
+    try {
+        const paymentId = req.params.id;
+        const { attachment_url, attachment_data, check_number, bank_name } = req.body;
+
+        const payment = db.prepare('SELECT * FROM payments WHERE id = ? OR payment_number = ?').get(paymentId, paymentId);
+        if (!payment) {
+            return res.status(404).json({ success: false, error: 'Payment record not found.' });
+        }
+
+        let savedUrl = payment.attachment_url;
+        if (attachment_data || attachment_url) {
+            savedUrl = saveAttachment(attachment_data || attachment_url, 'checks');
+        }
+
+        const finalCheckNum = check_number !== undefined ? (check_number ? String(check_number).trim() : null) : payment.check_number;
+        const finalBank = bank_name !== undefined ? (bank_name ? String(bank_name).trim() : null) : payment.bank_name;
+
+        db.prepare(`
+            UPDATE payments
+            SET attachment_url = ?,
+                check_number = ?,
+                bank_name = ?
+            WHERE id = ?
+        `).run(savedUrl, finalCheckNum, finalBank, payment.id);
+
+        logAudit({
+            userId: req.user.id,
+            userName: req.user.name,
+            userRole: req.user.role,
+            action: 'UPDATE_PAYMENT_ATTACHMENT',
+            entityType: 'PAYMENT',
+            entityId: payment.payment_number,
+            details: {
+                paymentId: payment.id,
+                attachment_url: savedUrl,
+                check_number: finalCheckNum,
+                bank_name: finalBank
+            }
+        });
+
+        return res.json({
+            success: true,
+            message: 'Check attachment updated successfully.',
+            data: {
+                id: payment.id,
+                payment_number: payment.payment_number,
+                attachment_url: savedUrl,
+                check_number: finalCheckNum,
+                bank_name: finalBank
             }
         });
     } catch (err) {

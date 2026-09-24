@@ -388,6 +388,9 @@ CREATE TABLE IF NOT EXISTS payments (
     amount REAL NOT NULL CHECK (amount > 0),
     payment_method TEXT NOT NULL CHECK (payment_method IN ('BANK_TRANSFER', 'CHECK', 'CASH', 'GCASH', 'ONLINE_BANKING')),
     reference_number TEXT NOT NULL,
+    bank_name TEXT,
+    check_number TEXT,
+    attachment_url TEXT,
     notes TEXT,
     recorded_by TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
@@ -395,6 +398,36 @@ CREATE TABLE IF NOT EXISTS payments (
     FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE RESTRICT,
     FOREIGN KEY (recorded_by) REFERENCES users(id)
 );
+
+-- Cheque Payables & COO Approvals Integration
+CREATE TABLE IF NOT EXISTS cheque_payables (
+    id TEXT PRIMARY KEY,
+    request_number TEXT UNIQUE NOT NULL,
+    payee_name TEXT NOT NULL,
+    amount REAL NOT NULL CHECK (amount > 0),
+    cheque_date TEXT NOT NULL,
+    bank_name TEXT NOT NULL,
+    bank_account_number TEXT,
+    cheque_number TEXT,
+    category TEXT NOT NULL,
+    purpose TEXT NOT NULL,
+    invoice_reference TEXT,
+    attachment_url TEXT,
+    status TEXT NOT NULL DEFAULT 'PENDING_COO_APPROVAL' CHECK (status IN ('PENDING_COO_APPROVAL', 'CONFIRMED', 'ISSUED', 'CLEARED', 'REJECTED', 'VOIDED')),
+    requested_by TEXT NOT NULL,
+    requested_by_name TEXT NOT NULL,
+    coo_decision TEXT,
+    coo_confirmed_by TEXT,
+    coo_confirmed_at TEXT,
+    coo_notes TEXT,
+    api_key_used TEXT DEFAULT 'nkb_inv_live_6ae6965c1ca61aef54939d6b1ecfac1b',
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    FOREIGN KEY (requested_by) REFERENCES users(id)
+);
+CREATE INDEX IF NOT EXISTS idx_payables_status ON cheque_payables(status);
+CREATE INDEX IF NOT EXISTS idx_payables_category ON cheque_payables(category);
+CREATE INDEX IF NOT EXISTS idx_payables_date ON cheque_payables(cheque_date);
 
 -- Client Reserved Buffer Stock (For Option B: FIXED_PO_BUFFER)
 CREATE TABLE IF NOT EXISTS client_buffer_stock (

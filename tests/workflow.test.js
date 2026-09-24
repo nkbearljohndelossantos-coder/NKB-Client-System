@@ -2259,6 +2259,186 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.ok(typeof clientOverviewRes.body.data.purchasedPaidThisMonth === 'number', 'purchasedPaidThisMonth must be a number');
     });
 
+    test('33. Payment Check Attachments, Accountant Cheque Payables & External COO Approval API Workflow', async () => {
+        const acctToken = getAuthToken('ACCOUNTING');
+        assert.ok(acctToken, 'Accounting token must be available');
+
+        // --- PART 1: PAYMENT CHECK ATTACHMENTS & BANK DETAILS ---
+        // 1. Create a test PO, JO, Batch, DR, and Invoice
+        const poRes = await request(app)
+            .post('/api/orders')
+            .set('Authorization', `Bearer ${clientToken}`)
+            .send({
+                client_id: demoClient.id,
+                tolerance_percent: 10.0,
+                billing_policy: 'ACTUAL_DELIVERY',
+                notes: 'Check Attachment Payment Workflow Test',
+                items: [{ product_id: lotionProduct.id, target_quantity: 200, unit_price: 150.0 }]
+            });
+        assert.strictEqual(poRes.status, 201);
+        const po = poRes.body.data;
+
+        await request(app).post(`/api/orders/${po.id}/approve`).set('Authorization', `Bearer ${adminToken}`);
+        const joRes = await request(app)
+            .post('/api/job-orders')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({ po_id: po.id, product_id: lotionProduct.id, target_quantity: 200 });
+        const jo = joRes.body.data;
+
+        const prodToken = getAuthToken('PRODUCTION');
+        const batchRes = await request(app)
+            .post('/api/production/batches')
+            .set('Authorization', `Bearer ${prodToken}`)
+            .send({ jo_id: jo.id, target_quantity: 200 });
+        const batch = batchRes.body.data;
+
+        await request(app)
+            .post(`/api/production/batches/${batch.id}/record-output`)
+            .set('Authorization', `Bearer ${prodToken}`)
+            .send({ actual_yield: 200, notes: 'Completed for check payment test' });
+
+        const drRes = await request(app)
+            .post('/api/deliveries')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                po_id: po.id,
+                jo_id: jo.id,
+                items: [{ product_id: lotionProduct.id, batch_id: batch.id, delivered_quantity: 200, unit_price: 150.0 }]
+            });
+        assert.strictEqual(drRes.status, 201);
+        const dr = drRes.body.data;
+
+        await request(app)
+            .post(`/api/deliveries/${dr.id}/accept`)
+            .set('Authorization', `Bearer ${clientToken}`)
+            .send({
+                signer_name: 'Payment Check Signer',
+                signer_title: 'Finance Supervisor',
+                signature_data: 'Digitally Approved - Payment Check Signer'
+            });
+
+        const invRes = await request(app)
+            .post(`/api/invoices/from-dr/${dr.id}`)
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({});
+        assert.strictEqual(invRes.status, 201);
+        const invoice = invRes.body.data;
+
+        // 2. Record Payment with Bank Name, Check Number, and Base64 Attachment
+        const sampleCheckBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+        const payRes = await request(app)
+            .post('/api/payments')
+            .set('Authorization', `Bearer ${acctToken}`)
+            .send({
+                invoice_id: invoice.id,
+                amount: 15000.0,
+                payment_method: 'CHECK',
+                bank_name: 'BDO Unibank',
+                check_number: 'BDO-CHQ-998877',
+                reference_number: 'DEP-883921',
+                attachment_data: sampleCheckBase64,
+                notes: 'Partial payment via physical check'
+            });
+        assert.strictEqual(payRes.status, 201);
+        assert.strictEqual(payRes.body.success, true);
+        const payment = payRes.body.data;
+        assert.ok(payment.attachment_url, 'Payment must store attachment URL');
+        assert.strictEqual(payment.bank_name, 'BDO Unibank');
+        assert.strictEqual(payment.check_number, 'BDO-CHQ-998877');
+
+        // 3. Update Check Attachment via POST /api/payments/:id/attachment
+        const sampleUpdatedCheckBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEklEQVR42mN8//8/AwAI/AL+X8F7AAAAAElFTkSuQmCC';
+        const updateAttRes = await request(app)
+            .post(`/api/payments/${payment.id}/attachment`)
+            .set('Authorization', `Bearer ${acctToken}`)
+            .send({
+                check_number: 'BDO-CHQ-998877-REVISED',
+                bank_name: 'BDO Unibank Main Branch',
+                attachment_data: sampleUpdatedCheckBase64
+            });
+        assert.strictEqual(updateAttRes.status, 200);
+        assert.strictEqual(updateAttRes.body.success, true);
+        assert.strictEqual(updateAttRes.body.data.check_number, 'BDO-CHQ-998877-REVISED');
+        assert.strictEqual(updateAttRes.body.data.bank_name, 'BDO Unibank Main Branch');
+
+        // --- PART 2: ACCOUNTANT CHEQUE PAYABLE REQUISITION ---
+        const sampleVoucherBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+        const payableRes = await request(app)
+            .post('/api/cheque-payables')
+            .set('Authorization', `Bearer ${acctToken}`)
+            .send({
+                payee_name: 'Supreme Packaging Corp.',
+                amount: 75000.0,
+                cheque_date: '2026-09-30',
+                category: 'Packaging Supplies',
+                bank_name: 'Security Bank',
+                bank_account_number: '3128-4902-1855',
+                purpose: 'Payment for 10,000 customized cosmetic pump bottles and caps',
+                invoice_reference: 'SUP-INV-2026-554',
+                attachment_data: sampleVoucherBase64,
+                internal_notes: 'Urgent packaging shipment for sunscreen production run'
+            });
+        assert.strictEqual(payableRes.status, 201);
+        assert.strictEqual(payableRes.body.success, true);
+        const payable = payableRes.body.data;
+        assert.ok(payable.request_number.startsWith('CHQ-'), 'Must have sequential CHQ request number');
+        assert.strictEqual(payable.status, 'PENDING_COO_APPROVAL');
+        assert.strictEqual(payable.category, 'Packaging Supplies');
+        assert.strictEqual(payable.bank_name, 'Security Bank');
+        assert.ok(payable.attachment_url, 'Must store voucher attachment URL');
+
+        // Verify Accountant can query and filter cheque payables
+        const listPayablesRes = await request(app)
+            .get('/api/cheque-payables?status=PENDING_COO_APPROVAL&category=Packaging+Supplies')
+            .set('Authorization', `Bearer ${acctToken}`);
+        assert.strictEqual(listPayablesRes.status, 200);
+        assert.strictEqual(listPayablesRes.body.success, true);
+        assert.ok(listPayablesRes.body.data.length >= 1);
+        assert.ok(listPayablesRes.body.summary.totalPending >= 75000.0);
+
+        // --- PART 3: EXTERNAL COO APPROVAL INTEGRATION (API KEY: nkb_inv_live_6ae6965c1ca61aef54939d6b1ecfac1b) ---
+        const COO_KEY = 'nkb_inv_live_6ae6965c1ca61aef54939d6b1ecfac1b';
+
+        // A. COO queries payables from external system
+        const cooGetRes = await request(app)
+            .get('/api/v1/payables?status=PENDING_COO_APPROVAL')
+            .set('x-api-key', COO_KEY);
+        assert.strictEqual(cooGetRes.status, 200);
+        assert.strictEqual(cooGetRes.body.success, true);
+        assert.ok(Array.isArray(cooGetRes.body.data));
+        const foundPending = cooGetRes.body.data.find(p => p.id === payable.id);
+        assert.ok(foundPending, 'COO external GET API must find the newly requested cheque payable');
+
+        // B. COO confirms the cheque payable request
+        const cooConfirmRes = await request(app)
+            .post(`/api/v1/payables/${payable.id}/confirm`)
+            .set('x-api-key', COO_KEY)
+            .send({
+                action: 'CONFIRMED',
+                confirmed_by: 'Engr. Glen Nobleza (COO)',
+                cheque_number: 'SEC-2026-004812',
+                coo_notes: 'Approved for disbursement. Ensure delivery receipt matches PO specifications.'
+            });
+        assert.strictEqual(cooConfirmRes.status, 200);
+        assert.strictEqual(cooConfirmRes.body.success, true);
+        assert.strictEqual(cooConfirmRes.body.data.status, 'CONFIRMED');
+        assert.strictEqual(cooConfirmRes.body.data.coo_confirmed_by, 'Engr. Glen Nobleza (COO)');
+        assert.strictEqual(cooConfirmRes.body.data.cheque_number, 'SEC-2026-004812');
+
+        // C. Verified records flow back to the Accountant's ledger
+        const acctVerifyRes = await request(app)
+            .get(`/api/cheque-payables/${payable.id}`)
+            .set('Authorization', `Bearer ${acctToken}`);
+        assert.strictEqual(acctVerifyRes.status, 200);
+        assert.strictEqual(acctVerifyRes.body.success, true);
+        assert.strictEqual(acctVerifyRes.body.data.status, 'CONFIRMED');
+        assert.strictEqual(acctVerifyRes.body.data.coo_confirmed_by, 'Engr. Glen Nobleza (COO)');
+        assert.ok(acctVerifyRes.body.data.coo_confirmed_at, 'Must have COO confirmation timestamp');
+
+        // Clean up test records
+        db.prepare('DELETE FROM cheque_payables WHERE id = ?').run(payable.id);
+    });
+
     after(() => {
         // Automatically delete all test decoys and temporary test database
         try {

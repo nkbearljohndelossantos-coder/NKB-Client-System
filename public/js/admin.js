@@ -223,6 +223,7 @@ function applyRoleBasedUI() {
         hideTab('deliveries');
         hideTab('invoices');
         hideTab('payments');
+        hideTab('payables');
         hideTab('buffer');
         hideTab('clients');
         hideTab('products');
@@ -237,6 +238,7 @@ function applyRoleBasedUI() {
         hideTab('deliveries');
         hideTab('invoices');
         hideTab('payments');
+        hideTab('payables');
         hideTab('buffer');
         hideTab('clients');
         hideTab('products');
@@ -247,6 +249,7 @@ function applyRoleBasedUI() {
     } else if (role === 'QC') {
         hideTab('invoices');
         hideTab('payments');
+        hideTab('payables');
         hideTab('clients');
         hideTab('users');
         hideTab('audit');
@@ -256,6 +259,7 @@ function applyRoleBasedUI() {
         // PRODUCTION role now manages deliveries alongside ADMIN and WAREHOUSE
         hideTab('invoices');
         hideTab('payments');
+        hideTab('payables');
         hideTab('buffer');
         hideTab('users');
         hideTab('audit');
@@ -265,6 +269,7 @@ function applyRoleBasedUI() {
         hideTab('production');
         hideTab('invoices');
         hideTab('payments');
+        hideTab('payables');
         hideTab('users');
         hideTab('audit');
     } else if (role === 'ACCOUNTING') {
@@ -410,6 +415,7 @@ function switchTab(tabId) {
     else if (tabId === 'deliveries') loadDeliveries();
     else if (tabId === 'invoices') loadInvoices();
     else if (tabId === 'payments') loadPayments();
+    else if (tabId === 'payables') loadPayables();
     else if (tabId === 'buffer') loadBufferStock();
     else if (tabId === 'clients') loadClients();
     else if (tabId === 'products') loadProducts();
@@ -1860,7 +1866,7 @@ function renderPaymentsRows(paymentsList, currentTotal) {
     if (!tbody) return;
 
     if (!paymentsList || paymentsList.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-slate-400 font-medium">No payment records found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="10" class="py-8 text-center text-slate-400 font-medium">No payment records found.</td></tr>`;
         const footerTotal = document.getElementById('table-footer-total-paid');
         if (footerTotal) footerTotal.textContent = NKB.formatCurrency(0);
         return;
@@ -1884,12 +1890,27 @@ function renderPaymentsRows(paymentsList, currentTotal) {
             </td>
             <td class="py-3 px-4">
                 <span class="badge bg-slate-100 text-slate-700 font-bold">${(p.payment_method || '').replace(/_/g, ' ')}</span>
+                ${p.bank_name ? `<div class="text-[10px] font-semibold text-slate-500 mt-0.5">${p.bank_name}</div>` : ''}
             </td>
             <td class="py-3 px-4">
                 <div class="font-mono text-slate-700 text-xs font-semibold">${p.reference_number || '—'}</div>
+                ${p.check_number ? `<div class="text-[10px] font-bold text-indigo-600">Check #: ${p.check_number}</div>` : ''}
                 ${p.notes ? `<div class="text-[11px] text-slate-500 italic mt-0.5 flex items-start gap-1"><span class="text-amber-600 font-bold">📝</span> <span class="break-words">${p.notes}</span></div>` : ''}
             </td>
             <td class="py-3 px-4 text-right font-extrabold text-emerald-700 text-sm whitespace-nowrap">${NKB.formatCurrency(p.amount)}</td>
+            <td class="py-3 px-4 text-center whitespace-nowrap">
+                ${p.attachment_url ? `
+                    <button onclick="openViewCheckModal('${p.id}')" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-xs font-bold inline-flex items-center gap-1 shadow-2xs transition cursor-pointer" title="View Check Image">
+                        <span>🖼️</span>
+                        <span>View Check</span>
+                    </button>
+                ` : `
+                    <button onclick="openAttachCheckModal('${p.id}')" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 rounded-lg text-[11px] font-semibold inline-flex items-center gap-1 transition cursor-pointer" title="Attach Check or Deposit Proof">
+                        <span>➕</span>
+                        <span>Attach</span>
+                    </button>
+                `}
+            </td>
             <td class="py-3 px-4">${NKB.renderStatusBadge(p.invoice_status || 'PAID')}</td>
             <td class="py-3 px-4 text-slate-500 whitespace-nowrap">${p.recorded_by_name || 'Accounting Staff'}</td>
         </tr>
@@ -1907,6 +1928,8 @@ function filterPaymentsTable() {
             (p.invoice_number && p.invoice_number.toLowerCase().includes(query)) ||
             (p.company_name && p.company_name.toLowerCase().includes(query)) ||
             (p.reference_number && p.reference_number.toLowerCase().includes(query)) ||
+            (p.check_number && p.check_number.toLowerCase().includes(query)) ||
+            (p.bank_name && p.bank_name.toLowerCase().includes(query)) ||
             (p.notes && p.notes.toLowerCase().includes(query)) ||
             (p.po_number && p.po_number.toLowerCase().includes(query)) ||
             (p.contact_person && p.contact_person.toLowerCase().includes(query));
@@ -2247,8 +2270,1167 @@ function printPaymentsReport() {
 }
 
 // -------------------------------------------------------------
-// 8. BUFFER STOCK
+// 7B. CHEQUE PAYABLES & COO APPROVALS (ACCOUNTANT WORKFLOW)
 // -------------------------------------------------------------
+let cachedPayables = [];
+let cachedPayablesSummary = {};
+let cachedPayablesMeta = { banks: [], categories: [] };
+let currentPayableAttachmentBase64 = null;
+const LIVE_COO_API_KEY = 'nkb_inv_live_6ae6965c1ca61aef54939d6b1ecfac1b';
+
+async function loadPayables() {
+    try {
+        const res = await NKB.api('/api/cheque-payables');
+        if (!res.success) {
+            NKB.showToast(res.error || 'Failed to load cheque payables.', 'error');
+            return;
+        }
+
+        cachedPayables = Array.isArray(res.data) ? res.data : [];
+        cachedPayablesSummary = res.summary || {};
+        cachedPayablesMeta = {
+            banks: Array.isArray(res.banks) ? res.banks : [],
+            categories: Array.isArray(res.categories) ? res.categories : []
+        };
+
+        // Update KPI Cards
+        const setEl = (id, text) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = text;
+        };
+
+        const totalReq = parseFloat(cachedPayablesSummary.totalRequested) || 0;
+        const totalCount = parseInt(cachedPayablesSummary.totalCount, 10) || cachedPayables.length;
+        const pendingAmt = parseFloat(cachedPayablesSummary.totalPending) || 0;
+        const pendingCount = parseInt(cachedPayablesSummary.countPending, 10) || 0;
+        const confAmt = parseFloat(cachedPayablesSummary.totalConfirmed) || 0;
+        const confCount = parseInt(cachedPayablesSummary.countConfirmed, 10) || 0;
+        const disbAmt = parseFloat(cachedPayablesSummary.totalDisbursed) || 0;
+        const disbCount = parseInt(cachedPayablesSummary.countDisbursed, 10) || 0;
+
+        setEl('payables-kpi-total-amount', NKB.formatCurrency(totalReq));
+        setEl('payables-kpi-total-count', `${totalCount} total request${totalCount === 1 ? '' : 's'}`);
+        setEl('payables-kpi-pending-amount', NKB.formatCurrency(pendingAmt));
+        setEl('payables-kpi-pending-count', `${pendingCount} awaiting COO authorization`);
+        setEl('payables-kpi-confirmed-amount', NKB.formatCurrency(confAmt));
+        setEl('payables-kpi-confirmed-count', `${confCount} confirmed for release`);
+        setEl('payables-kpi-disbursed-amount', NKB.formatCurrency(disbAmt));
+        setEl('payables-kpi-disbursed-count', `${disbCount} cheques released`);
+        setEl('payables-visible-count', `Showing all (${cachedPayables.length})`);
+
+        // Populate Category Filter Dropdown if needed
+        const catSelect = document.getElementById('payables-category-filter');
+        if (catSelect && cachedPayablesMeta.categories && catSelect.options.length <= 1) {
+            cachedPayablesMeta.categories.forEach(cat => {
+                const opt = document.createElement('option');
+                opt.value = cat;
+                opt.textContent = cat;
+                catSelect.appendChild(opt);
+            });
+        }
+
+        // Populate Bank Filter Dropdown if needed
+        const bankSelect = document.getElementById('payables-bank-filter');
+        if (bankSelect && cachedPayablesMeta.banks && bankSelect.options.length <= 1) {
+            cachedPayablesMeta.banks.forEach(b => {
+                const opt = document.createElement('option');
+                opt.value = b.name;
+                opt.textContent = b.name;
+                bankSelect.appendChild(opt);
+            });
+        }
+
+        renderPayablesRows(cachedPayables, totalReq);
+    } catch (err) {
+        console.error('loadPayables failed:', err);
+        NKB.showToast('Error loading cheque payables.', 'error');
+    }
+}
+
+function renderPayablesRows(payablesList, currentTotal) {
+    const tbody = document.getElementById('table-payables-body');
+    if (!tbody) return;
+
+    if (!payablesList || payablesList.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="10" class="py-12 text-center text-slate-400">
+                    <span class="text-3xl block mb-2">📑</span>
+                    <div class="font-bold text-slate-600">No cheque payable records found</div>
+                    <div class="text-xs text-slate-400 mt-1">Click "Request Payables" above to submit a new cheque requisition for COO approval.</div>
+                </td>
+            </tr>
+        `;
+        const footerTotal = document.getElementById('table-payables-footer-total');
+        if (footerTotal) footerTotal.textContent = NKB.formatCurrency(0);
+        return;
+    }
+
+    const calcTotal = currentTotal != null ? currentTotal : payablesList.reduce((sum, cp) => sum + (parseFloat(cp.amount) || 0), 0);
+    const footerTotal = document.getElementById('table-payables-footer-total');
+    if (footerTotal) footerTotal.textContent = NKB.formatCurrency(calcTotal);
+
+    const getCategoryBadge = (cat) => {
+        const c = String(cat || '').toLowerCase();
+        let bg = 'bg-slate-100 text-slate-700 border-slate-200';
+        if (c.includes('material')) bg = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+        else if (c.includes('pack')) bg = 'bg-purple-50 text-purple-700 border-purple-200';
+        else if (c.includes('util')) bg = 'bg-amber-50 text-amber-700 border-amber-200';
+        else if (c.includes('rent')) bg = 'bg-blue-50 text-blue-700 border-blue-200';
+        else if (c.includes('pay') || c.includes('labor')) bg = 'bg-cyan-50 text-cyan-700 border-cyan-200';
+        else if (c.includes('maint') || c.includes('repair')) bg = 'bg-orange-50 text-orange-700 border-orange-200';
+        else if (c.includes('freight') || c.includes('logist')) bg = 'bg-teal-50 text-teal-700 border-teal-200';
+        else if (c.includes('tax')) bg = 'bg-rose-50 text-rose-700 border-rose-200';
+        return `<span class="px-2 py-0.5 rounded-md text-[10px] font-bold border ${bg} whitespace-nowrap">${cat || 'General'}</span>`;
+    };
+
+    const getStatusBadge = (status) => {
+        switch (status) {
+            case 'PENDING_COO_APPROVAL':
+                return `<span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 border border-amber-300 inline-flex items-center gap-1 shadow-2xs animate-pulse"><span>⏳</span><span>Pending COO</span></span>`;
+            case 'CONFIRMED':
+                return `<span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 inline-flex items-center gap-1 shadow-2xs"><span>✅</span><span>COO Approved</span></span>`;
+            case 'ISSUED':
+                return `<span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-blue-100 text-blue-800 border border-blue-300 inline-flex items-center gap-1 shadow-2xs"><span>📤</span><span>Issued</span></span>`;
+            case 'CLEARED':
+                return `<span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-teal-100 text-teal-800 border border-teal-300 inline-flex items-center gap-1 shadow-2xs"><span>🏦</span><span>Cleared</span></span>`;
+            case 'REJECTED':
+                return `<span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-rose-100 text-rose-800 border border-rose-300 inline-flex items-center gap-1 shadow-2xs"><span>❌</span><span>COO Rejected</span></span>`;
+            default:
+                return `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300">${(status || '').replace(/_/g, ' ')}</span>`;
+        }
+    };
+
+    tbody.innerHTML = payablesList.map(cp => {
+        const hasAttachment = !!cp.attachment_url;
+        const isPdf = hasAttachment && cp.attachment_url.toLowerCase().endsWith('.pdf');
+
+        return `
+            <tr class="hover:bg-slate-50/80 transition border-b border-slate-100">
+                <td class="py-3.5 px-4 font-mono font-bold text-indigo-700 whitespace-nowrap">
+                    <div>${cp.request_number}</div>
+                    ${cp.cheque_number ? `<div class="text-[10px] text-slate-500 font-normal">Chq: ${cp.cheque_number}</div>` : ''}
+                </td>
+                <td class="py-3.5 px-4 text-slate-600 whitespace-nowrap">${NKB.formatDate(cp.cheque_date)}</td>
+                <td class="py-3.5 px-4">
+                    <div class="font-bold text-slate-900 leading-tight">${cp.payee_name}</div>
+                    ${cp.invoice_reference ? `<div class="text-[10px] text-indigo-600 font-mono mt-0.5 font-semibold">Ref: ${cp.invoice_reference}</div>` : ''}
+                </td>
+                <td class="py-3.5 px-4">${getCategoryBadge(cp.category)}</td>
+                <td class="py-3.5 px-4">
+                    <div class="font-bold text-slate-800">${cp.bank_name || '—'}</div>
+                    ${cp.bank_account_number ? `<div class="text-[10px] text-slate-400 font-mono">${cp.bank_account_number}</div>` : ''}
+                </td>
+                <td class="py-3.5 px-4">
+                    <div class="text-xs text-slate-700 line-clamp-2 max-w-xs" title="${(cp.purpose || '').replace(/"/g, '&quot;')}">
+                        ${cp.purpose || '—'}
+                    </div>
+                </td>
+                <td class="py-3.5 px-4 text-right font-black text-slate-900 text-sm whitespace-nowrap">
+                    ${NKB.formatCurrency(cp.amount)}
+                </td>
+                <td class="py-3.5 px-4 text-center whitespace-nowrap">
+                    ${hasAttachment ? `
+                        <button onclick="openViewPayableDetailsModal('${cp.id}')" class="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-[11px] font-bold inline-flex items-center gap-1 shadow-2xs transition cursor-pointer" title="View Voucher / Bill Attachment">
+                            <span>${isPdf ? '📄' : '🖼️'}</span>
+                            <span>View</span>
+                        </button>
+                    ` : `
+                        <span class="text-slate-300 text-xs">—</span>
+                    `}
+                </td>
+                <td class="py-3.5 px-4 whitespace-nowrap">${getStatusBadge(cp.status)}</td>
+                <td class="py-3.5 px-4 text-right whitespace-nowrap">
+                    <div class="flex items-center justify-end gap-1.5">
+                        <button onclick="openViewPayableDetailsModal('${cp.id}')" class="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition cursor-pointer" title="View Full Cheque Details & Audit">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                        </button>
+                        <button onclick="printSingleChequeVoucher('${cp.id}')" class="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition cursor-pointer" title="Print Cheque Disbursement Voucher (CDV)">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                        </button>
+                        ${cp.status === 'PENDING_COO_APPROVAL' ? `
+                            <button onclick="openCooConfirmPayableModal('${cp.id}')" class="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-[11px] font-bold shadow-2xs transition inline-flex items-center gap-1 cursor-pointer" title="Confirm via COO Integration">
+                                <span>⚡</span>
+                                <span>COO Action</span>
+                            </button>
+                        ` : ''}
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function filterPayablesTable() {
+    if (!cachedPayables) return;
+    const query = (document.getElementById('payables-search-input')?.value || '').trim().toLowerCase();
+    const status = (document.getElementById('payables-status-filter')?.value || '').trim();
+    const category = (document.getElementById('payables-category-filter')?.value || '').trim();
+    const bank = (document.getElementById('payables-bank-filter')?.value || '').trim().toLowerCase();
+    const dateFrom = (document.getElementById('payables-date-from')?.value || '').trim();
+    const dateTo = (document.getElementById('payables-date-to')?.value || '').trim();
+
+    const filtered = cachedPayables.filter(cp => {
+        const matchesQuery = !query ||
+            (cp.request_number && cp.request_number.toLowerCase().includes(query)) ||
+            (cp.cheque_number && cp.cheque_number.toLowerCase().includes(query)) ||
+            (cp.payee_name && cp.payee_name.toLowerCase().includes(query)) ||
+            (cp.purpose && cp.purpose.toLowerCase().includes(query)) ||
+            (cp.bank_name && cp.bank_name.toLowerCase().includes(query)) ||
+            (cp.invoice_reference && cp.invoice_reference.toLowerCase().includes(query)) ||
+            (cp.internal_notes && cp.internal_notes.toLowerCase().includes(query));
+
+        const matchesStatus = !status || cp.status === status;
+        const matchesCategory = !category || cp.category === category;
+        const matchesBank = !bank || (cp.bank_name && cp.bank_name.toLowerCase().includes(bank));
+        const matchesDateFrom = !dateFrom || cp.cheque_date >= dateFrom;
+        const matchesDateTo = !dateTo || cp.cheque_date <= dateTo;
+
+        return matchesQuery && matchesStatus && matchesCategory && matchesBank && matchesDateFrom && matchesDateTo;
+    });
+
+    const filteredTotal = filtered.reduce((sum, cp) => sum + (parseFloat(cp.amount) || 0), 0);
+    const countEl = document.getElementById('payables-visible-count');
+    if (countEl) {
+        countEl.textContent = `Showing ${filtered.length} of ${cachedPayables.length}`;
+    }
+
+    renderPayablesRows(filtered, filteredTotal);
+}
+
+function setPayablesDatePreset(preset) {
+    const fromEl = document.getElementById('payables-date-from');
+    const toEl = document.getElementById('payables-date-to');
+    if (!fromEl || !toEl) return;
+
+    const today = NKB.getManilaDate();
+    if (preset === 'today') {
+        fromEl.value = today;
+        toEl.value = today;
+    } else if (preset === 'week') {
+        const d = new Date();
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
+        const monday = new Date(d.setDate(diff));
+        fromEl.value = monday.toISOString().split('T')[0];
+        toEl.value = today;
+    } else if (preset === 'month') {
+        const parts = today.split('-');
+        fromEl.value = `${parts[0]}-${parts[1]}-01`;
+        toEl.value = today;
+    } else {
+        fromEl.value = '';
+        toEl.value = '';
+    }
+
+    filterPayablesTable();
+}
+
+function resetPayablesFilters() {
+    const sInput = document.getElementById('payables-search-input');
+    const stSelect = document.getElementById('payables-status-filter');
+    const catSelect = document.getElementById('payables-category-filter');
+    const bSelect = document.getElementById('payables-bank-filter');
+    const fromEl = document.getElementById('payables-date-from');
+    const toEl = document.getElementById('payables-date-to');
+
+    if (sInput) sInput.value = '';
+    if (stSelect) stSelect.value = '';
+    if (catSelect) catSelect.value = '';
+    if (bSelect) bSelect.value = '';
+    if (fromEl) fromEl.value = '';
+    if (toEl) toEl.value = '';
+
+    filterPayablesTable();
+}
+
+function quickFilterPayablesStatus(status) {
+    const stSelect = document.getElementById('payables-status-filter');
+    if (stSelect) {
+        stSelect.value = status;
+        filterPayablesTable();
+    }
+}
+
+// Accountant Cheque Payable Requisition Modal
+function handlePayableAttachmentSelect(input) {
+    const previewContainer = document.getElementById('req-payable-preview-container');
+    const previewImg = document.getElementById('req-payable-preview-img');
+    const previewName = document.getElementById('req-payable-preview-name');
+    const dropText = document.getElementById('req-payable-droptext');
+
+    if (!input.files || !input.files[0]) {
+        currentPayableAttachmentBase64 = null;
+        if (previewContainer) previewContainer.classList.add('hidden');
+        if (dropText) dropText.classList.remove('hidden');
+        return;
+    }
+
+    const file = input.files[0];
+    if (file.size > 12 * 1024 * 1024) {
+        NKB.showToast('Attachment must be under 12MB.', 'warning');
+        input.value = '';
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        currentPayableAttachmentBase64 = e.target.result;
+        if (previewContainer) previewContainer.classList.remove('hidden');
+        if (dropText) dropText.classList.add('hidden');
+        if (previewName) previewName.textContent = file.name;
+        if (previewImg) {
+            if (file.type.startsWith('image/')) {
+                previewImg.src = currentPayableAttachmentBase64;
+                previewImg.classList.remove('hidden');
+            } else {
+                previewImg.classList.add('hidden');
+            }
+        }
+    };
+    reader.readAsDataURL(file);
+}
+
+function clearPayableAttachment() {
+    currentPayableAttachmentBase64 = null;
+    const input = document.getElementById('req-payable-file');
+    if (input) input.value = '';
+    const previewContainer = document.getElementById('req-payable-preview-container');
+    if (previewContainer) previewContainer.classList.add('hidden');
+    const dropText = document.getElementById('req-payable-droptext');
+    if (dropText) dropText.classList.remove('hidden');
+}
+
+function onPayableBankChange(selectEl) {
+    const selectedBankName = selectEl.value;
+    const bankAccountInput = document.getElementById('req-payable-bank-acct');
+    if (!bankAccountInput) return;
+
+    const bankObj = cachedPayablesMeta.banks.find(b => b.name === selectedBankName);
+    if (bankObj && bankObj.account_number) {
+        bankAccountInput.value = `${bankObj.account_number} (${bankObj.account_name || 'NKB Corp.'})`;
+    } else {
+        bankAccountInput.value = '';
+    }
+}
+
+function openRequestPayableModal() {
+    currentPayableAttachmentBase64 = null;
+    const root = document.getElementById('modals-root');
+    const today = NKB.getManilaDate();
+
+    const categories = cachedPayablesMeta.categories.length > 0 ? cachedPayablesMeta.categories : [
+        'Raw Materials', 'Packaging Supplies', 'Factory Utilities & Power', 'Facility Rent & Lease',
+        'Payroll & Labor Advances', 'Machine Maintenance & Repairs', 'Logistics & Freight Delivery',
+        'Government Taxes & Licensing', 'Laboratory & Quality Testing', 'Office Supplies & Administrative', 'Miscellaneous & Contingency'
+    ];
+
+    const banks = cachedPayablesMeta.banks.length > 0 ? cachedPayablesMeta.banks : [
+        { id: 'bdo', name: 'BDO Unibank', account_number: '1029-3847-4821', account_name: 'NKB Manufacturing Corp.' },
+        { id: 'bpi', name: 'Bank of the Philippine Islands (BPI)', account_number: '0982-3712-9104', account_name: 'NKB Manufacturing Corp.' },
+        { id: 'metrobank', name: 'Metropolitan Bank & Trust Co. (Metrobank)', account_number: '4562-8901-3372', account_name: 'NKB Manufacturing Corp.' },
+        { id: 'security_bank', name: 'Security Bank', account_number: '3128-4902-1855', account_name: 'NKB Manufacturing Corp.' },
+        { id: 'unionbank', name: 'UnionBank of the Philippines', account_number: '1094-8273-6290', account_name: 'NKB Manufacturing Corp.' }
+    ];
+
+    root.innerHTML = `
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50 overflow-y-auto">
+            <div class="bg-white rounded-2xl max-w-2xl w-full p-6 sm:p-7 shadow-2xl space-y-4 my-8">
+                <!-- Header -->
+                <div class="flex justify-between items-start border-b border-slate-100 pb-3">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-2xl">📝</span>
+                            <h3 class="text-lg font-bold text-slate-900">Request Cheque Payable (Accountant Form)</h3>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-0.5">Submit cheque requisition with designated bank account and expenditure breakdown for external COO authorization.</p>
+                    </div>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-xl cursor-pointer">&times;</button>
+                </div>
+
+                <!-- Live Integration Banner -->
+                <div class="p-3 bg-gradient-to-r from-amber-50 to-indigo-50/60 rounded-xl border border-amber-200/80 flex items-start gap-3 text-xs">
+                    <span class="text-lg">📡</span>
+                    <div class="flex-1 min-w-0">
+                        <div class="font-bold text-amber-900">External COO Approval Gateway Integration</div>
+                        <div class="text-[11px] text-slate-600 mt-0.5 leading-relaxed">
+                            This request will be dispatched to the COO authorization portal via API key:
+                            <code class="px-1.5 py-0.5 rounded bg-white font-mono text-[10px] font-bold text-indigo-700 border border-slate-200">${LIVE_COO_API_KEY}</code>.
+                            Once approved by the COO, the record will return to your accounting ledger with a verified timestamp.
+                        </div>
+                    </div>
+                </div>
+
+                <form onsubmit="submitRequestPayable(event)" class="space-y-4 text-xs font-semibold">
+                    <!-- Row 1: Payee & Amount -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-slate-700 mb-1">Payee / Beneficiary Name *</label>
+                            <input type="text" id="req-payable-payee" required placeholder="e.g. Chemical Master Supplies Corp." class="w-full px-3 py-2 border rounded-xl bg-slate-50 text-slate-900 font-bold focus:bg-white focus:ring-2 focus:ring-amber-500">
+                        </div>
+                        <div>
+                            <label class="block text-slate-700 mb-1">Cheque Amount (₱) *</label>
+                            <input type="number" id="req-payable-amount" step="0.01" min="0.01" required placeholder="0.00" inputmode="decimal" class="w-full px-3 py-2 border rounded-xl bg-slate-50 text-emerald-800 font-black text-sm focus:bg-white focus:ring-2 focus:ring-emerald-500">
+                        </div>
+                    </div>
+
+                    <!-- Row 2: Cheque Date & Category -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-slate-700 mb-1">Cheque Issue / Maturity Date *</label>
+                            <input type="date" id="req-payable-date" value="${today}" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-medium focus:bg-white">
+                        </div>
+                        <div>
+                            <label class="block text-slate-700 mb-1">Expenditure Category *</label>
+                            <select id="req-payable-category" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-medium focus:bg-white">
+                                ${categories.map(c => `<option value="${c}">${c}</option>`).join('')}
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Row 3: Bank & Account Used -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-slate-700 mb-1">Bank to Use for Cheque *</label>
+                            <select id="req-payable-bank" onchange="onPayableBankChange(this)" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-800 focus:bg-white">
+                                <option value="">Select Bank Account...</option>
+                                ${banks.map(b => `<option value="${b.name}">${b.name}</option>`).join('')}
+                                <option value="Other Bank Account">Other Bank Account</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-slate-700 mb-1">NKB Depository Account #</label>
+                            <input type="text" id="req-payable-bank-acct" placeholder="Auto-fills from bank selection..." class="w-full px-3 py-2 border rounded-xl bg-slate-50 text-slate-700 font-mono">
+                        </div>
+                    </div>
+
+                    <!-- Row 4: Cheque Number & Invoice Ref -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-slate-700 mb-1">Cheque Number (Optional / if pre-assigned)</label>
+                            <input type="text" id="req-payable-check-no" placeholder="e.g. 0004928172" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-slate-700 mb-1">Supplier Billing / Invoice Ref # (Optional)</label>
+                            <input type="text" id="req-payable-ref" placeholder="e.g. BILL-2026-904" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-mono">
+                        </div>
+                    </div>
+
+                    <!-- Row 5: Purpose / Where the money will be used -->
+                    <div>
+                        <label class="block text-slate-700 mb-1">Where will the money be used? (Purpose / Justification) *</label>
+                        <textarea id="req-payable-purpose" rows="3" required placeholder="Detailed explanation for COO review: e.g. Payment for 50 drums of cosmetic raw material stearic acid & glycerin for Batch SKC-2026-004." class="w-full px-3 py-2 border rounded-xl bg-slate-50 text-slate-800 font-normal focus:bg-white focus:ring-2 focus:ring-amber-500"></textarea>
+                    </div>
+
+                    <!-- Row 6: Attachment / Voucher / Bill Document -->
+                    <div class="space-y-1.5">
+                        <label class="block text-slate-700">Supporting Bill / Invoice / Voucher Attachment (Optional)</label>
+                        <div class="border-2 border-dashed border-slate-300 hover:border-amber-400 rounded-xl p-3.5 bg-slate-50 transition relative text-center">
+                            <input type="file" id="req-payable-file" accept="image/*,.pdf" onchange="handlePayableAttachmentSelect(this)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                            <div id="req-payable-droptext" class="space-y-1 pointer-events-none">
+                                <span class="text-2xl">📑</span>
+                                <div class="text-xs text-slate-700 font-bold">Attach supplier bill, invoice, or voucher proof</div>
+                                <div class="text-[10px] text-slate-400">PNG, JPG, WEBP, or PDF up to 12MB</div>
+                            </div>
+                            <div id="req-payable-preview-container" class="hidden flex items-center justify-between gap-3 p-2 bg-white rounded-lg border border-slate-200 text-left">
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <img id="req-payable-preview-img" src="" alt="Voucher Preview" class="w-12 h-10 object-cover rounded border border-slate-200 hidden">
+                                    <div class="min-w-0">
+                                        <div id="req-payable-preview-name" class="text-xs font-bold text-slate-800 truncate">voucher.pdf</div>
+                                        <div class="text-[10px] text-emerald-600 font-bold">Ready to dispatch with request</div>
+                                    </div>
+                                </div>
+                                <button type="button" onclick="clearPayableAttachment()" class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded text-[10px] font-bold border border-rose-200 cursor-pointer">Remove</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Row 7: Internal Notes -->
+                    <div>
+                        <label class="block text-slate-700 mb-1">Internal Accountant Notes</label>
+                        <input type="text" id="req-payable-notes" placeholder="Optional notes for internal accounting record" class="w-full px-3 py-2 border rounded-xl bg-slate-50 text-slate-800 font-normal focus:bg-white">
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition cursor-pointer">Cancel</button>
+                        <button type="submit" class="px-5 py-2.5 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white rounded-xl font-black shadow-md shadow-amber-600/30 transition flex items-center gap-2 cursor-pointer">
+                            <span>📤</span>
+                            <span>Submit Request to COO</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+}
+
+async function submitRequestPayable(e) {
+    e.preventDefault();
+
+    const payee = document.getElementById('req-payable-payee')?.value?.trim();
+    const amount = parseFloat(document.getElementById('req-payable-amount')?.value);
+    const chequeDate = document.getElementById('req-payable-date')?.value;
+    const category = document.getElementById('req-payable-category')?.value;
+    const bankName = document.getElementById('req-payable-bank')?.value;
+    const bankAccount = document.getElementById('req-payable-bank-acct')?.value?.trim() || null;
+    const chequeNumber = document.getElementById('req-payable-check-no')?.value?.trim() || null;
+    const invoiceRef = document.getElementById('req-payable-ref')?.value?.trim() || null;
+    const purpose = document.getElementById('req-payable-purpose')?.value?.trim();
+    const notes = document.getElementById('req-payable-notes')?.value?.trim() || null;
+
+    if (!payee || !amount || isNaN(amount) || amount <= 0 || !chequeDate || !bankName || !purpose) {
+        NKB.showToast('Please fill in all required fields (Payee, Amount, Date, Bank, Purpose).', 'warning');
+        return;
+    }
+
+    try {
+        const payload = {
+            payee_name: payee,
+            amount,
+            cheque_date: chequeDate,
+            category,
+            bank_name: bankName,
+            bank_account_number: bankAccount,
+            cheque_number: chequeNumber,
+            invoice_reference: invoiceRef,
+            purpose,
+            internal_notes: notes,
+            attachment_data: currentPayableAttachmentBase64
+        };
+
+        const res = await NKB.api('/api/cheque-payables', {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+
+        if (res.success) {
+            NKB.showToast(`Cheque request ${res.data?.request_number || ''} submitted successfully! COO notified.`, 'success');
+            closeModal();
+            loadPayables();
+        } else {
+            NKB.showToast(res.error || 'Failed to submit cheque request.', 'error');
+        }
+    } catch (err) {
+        console.error('submitRequestPayable error:', err);
+        NKB.showToast('Server error submitting cheque request.', 'error');
+    }
+}
+
+// View Details Modal with Timeline & Audit
+function openViewPayableDetailsModal(payableId) {
+    const cp = cachedPayables.find(item => item.id === payableId || item.request_number === payableId);
+    if (!cp) {
+        NKB.showToast('Cheque payable record not found.', 'error');
+        return;
+    }
+
+    const root = document.getElementById('modals-root');
+    const hasAttachment = !!cp.attachment_url;
+    const isPdf = hasAttachment && cp.attachment_url.toLowerCase().endsWith('.pdf');
+
+    root.innerHTML = `
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50 overflow-y-auto">
+            <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 my-8">
+                <!-- Top Header -->
+                <div class="flex justify-between items-start border-b border-slate-100 pb-3">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xl">📑</span>
+                            <h3 class="text-base font-bold text-slate-900">Cheque Payable Details</h3>
+                            <span class="font-mono text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">${cp.request_number}</span>
+                        </div>
+                        <div class="text-[11px] text-slate-400 mt-0.5">Created ${NKB.formatDate(cp.created_at)} by ${cp.requestor_name || 'Accountant'}</div>
+                    </div>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg cursor-pointer">&times;</button>
+                </div>
+
+                <!-- Status Banner -->
+                <div class="p-3 rounded-xl border flex items-center justify-between text-xs ${
+                    cp.status === 'CONFIRMED' ? 'bg-emerald-50 border-emerald-200 text-emerald-900' :
+                    cp.status === 'PENDING_COO_APPROVAL' ? 'bg-amber-50 border-amber-200 text-amber-900' :
+                    cp.status === 'REJECTED' ? 'bg-rose-50 border-rose-200 text-rose-900' :
+                    'bg-slate-50 border-slate-200 text-slate-900'
+                }">
+                    <div class="flex items-center gap-2">
+                        <span class="text-lg">${cp.status === 'CONFIRMED' ? '✅' : cp.status === 'PENDING_COO_APPROVAL' ? '⏳' : '📋'}</span>
+                        <div>
+                            <div class="font-bold uppercase tracking-wider text-[11px]">Status: ${(cp.status || '').replace(/_/g, ' ')}</div>
+                            ${cp.coo_confirmed_at ? `<div class="text-[10px] opacity-80">Confirmed by ${cp.coo_confirmed_by || 'COO'} on ${NKB.formatDate(cp.coo_confirmed_at)}</div>` : ''}
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-[10px] uppercase font-bold text-slate-500">Payable Amount</div>
+                        <div class="text-lg font-black text-slate-900">${NKB.formatCurrency(cp.amount)}</div>
+                    </div>
+                </div>
+
+                <!-- Info Grid -->
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs p-3.5 bg-slate-50 rounded-xl border border-slate-200/80">
+                    <div>
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Payee / Beneficiary</span>
+                        <span class="font-bold text-slate-900 text-sm">${cp.payee_name}</span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Cheque Date</span>
+                        <span class="font-semibold text-slate-800">${NKB.formatDate(cp.cheque_date)}</span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Expenditure Category</span>
+                        <span class="font-bold text-indigo-700">${cp.category}</span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Designated Bank</span>
+                        <span class="font-bold text-slate-800">${cp.bank_name}</span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Account Number</span>
+                        <span class="font-mono text-slate-700">${cp.bank_account_number || '—'}</span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Cheque Number</span>
+                        <span class="font-mono font-bold text-indigo-600">${cp.cheque_number || 'Pending Issuance'}</span>
+                    </div>
+                </div>
+
+                <!-- Purpose / Where money is used -->
+                <div class="p-3.5 bg-white rounded-xl border border-slate-200 space-y-1">
+                    <span class="text-[10px] text-slate-400 font-bold uppercase block">Purpose & Fund Utilization</span>
+                    <p class="text-xs text-slate-800 leading-relaxed whitespace-pre-line font-medium">${cp.purpose || 'No purpose stated.'}</p>
+                </div>
+
+                ${cp.coo_notes ? `
+                    <div class="p-3 bg-amber-50 rounded-xl border border-amber-200 space-y-1 text-xs text-amber-900">
+                        <span class="font-bold text-[10px] uppercase text-amber-800 block">COO Approval Remarks</span>
+                        <p>${cp.coo_notes}</p>
+                    </div>
+                ` : ''}
+
+                <!-- Attachment Area -->
+                ${hasAttachment ? `
+                    <div class="space-y-1.5">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Attached Voucher / Bill</span>
+                        <div class="rounded-xl border border-slate-200 bg-slate-900 p-2 overflow-hidden flex items-center justify-center max-h-[300px]">
+                            ${isPdf ? `
+                                <div class="text-center p-4">
+                                    <span class="text-3xl block mb-2">📄</span>
+                                    <a href="${cp.attachment_url}" target="_blank" class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold inline-block">
+                                        Open PDF Document ↗
+                                    </a>
+                                </div>
+                            ` : `
+                                <img src="${cp.attachment_url}" alt="Attachment" class="max-w-full max-h-[280px] object-contain rounded cursor-zoom-in" onclick="window.open('${cp.attachment_url}', '_blank')">
+                            `}
+                        </div>
+                    </div>
+                ` : ''}
+
+                <!-- Footer Actions -->
+                <div class="flex items-center justify-between pt-3 border-t border-slate-100">
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="printSingleChequeVoucher('${cp.id}')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition inline-flex items-center gap-1.5 cursor-pointer">
+                            <span>🖨️</span>
+                            <span>Print Cheque Voucher</span>
+                        </button>
+                        ${cp.status === 'PENDING_COO_APPROVAL' ? `
+                            <button type="button" onclick="openCooConfirmPayableModal('${cp.id}')" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition inline-flex items-center gap-1 cursor-pointer">
+                                <span>⚡</span>
+                                <span>COO Confirm</span>
+                            </button>
+                        ` : ''}
+                    </div>
+                    <button type="button" onclick="closeModal()" class="px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// COO Confirmation Modal
+function openCooConfirmPayableModal(payableId) {
+    const cp = cachedPayables.find(item => item.id === payableId || item.request_number === payableId);
+    if (!cp) {
+        NKB.showToast('Cheque payable record not found.', 'error');
+        return;
+    }
+
+    const root = document.getElementById('modals-root');
+    root.innerHTML = `
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
+            <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xl">⚡</span>
+                        <h3 class="text-base font-bold text-slate-900">COO Cheque Authorization</h3>
+                    </div>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold">&times;</button>
+                </div>
+
+                <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/80 space-y-1 text-xs">
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Request:</span>
+                        <span class="font-mono font-bold text-indigo-700">${cp.request_number}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Payee:</span>
+                        <span class="font-bold text-slate-900">${cp.payee_name}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Bank:</span>
+                        <span class="font-semibold text-slate-800">${cp.bank_name}</span>
+                    </div>
+                    <div class="flex justify-between pt-1 border-t border-slate-200">
+                        <span class="text-slate-500 font-bold">Amount:</span>
+                        <span class="font-black text-base text-emerald-700">${NKB.formatCurrency(cp.amount)}</span>
+                    </div>
+                </div>
+
+                <form onsubmit="submitCooConfirmPayable(event, '${cp.id}')" class="space-y-4 text-xs font-semibold">
+                    <div>
+                        <label class="block text-slate-700 mb-1">COO Decision *</label>
+                        <select id="coo-action-decision" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-800 focus:bg-white">
+                            <option value="CONFIRMED">✅ CONFIRM & APPROVE CHEQUE</option>
+                            <option value="REJECTED">❌ REJECT CHEQUE REQUEST</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-slate-700 mb-1">Assigned Cheque Number (Optional / if issued now)</label>
+                        <input type="text" id="coo-action-check-number" value="${cp.cheque_number || ''}" placeholder="e.g. 0004928172" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-mono">
+                    </div>
+
+                    <div>
+                        <label class="block text-slate-700 mb-1">COO Approver Name</label>
+                        <input type="text" id="coo-action-approver" value="Chief Operating Officer (COO)" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-medium">
+                    </div>
+
+                    <div>
+                        <label class="block text-slate-700 mb-1">COO Remarks / Directives</label>
+                        <textarea id="coo-action-notes" rows="2" placeholder="e.g. Approved as budgeted for factory raw materials." class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-normal focus:bg-white"></textarea>
+                    </div>
+
+                    <div class="p-2.5 bg-indigo-50 rounded-xl text-[11px] text-indigo-900 border border-indigo-200">
+                        <strong class="font-bold">API Key:</strong> <span class="font-mono">${LIVE_COO_API_KEY}</span>
+                        <div class="text-[10px] text-indigo-700 mt-0.5">Executes via live COO authorization API gateway.</div>
+                    </div>
+
+                    <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold cursor-pointer">Cancel</button>
+                        <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow-md shadow-emerald-600/20 cursor-pointer">Save COO Authorization</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+}
+
+async function submitCooConfirmPayable(e, payableId) {
+    e.preventDefault();
+    const decision = document.getElementById('coo-action-decision')?.value || 'CONFIRMED';
+    const checkNumber = document.getElementById('coo-action-check-number')?.value?.trim() || null;
+    const approverName = document.getElementById('coo-action-approver')?.value?.trim() || 'COO';
+    const notes = document.getElementById('coo-action-notes')?.value?.trim() || null;
+
+    try {
+        const res = await NKB.api(`/api/cheque-payables/${payableId}/confirm`, {
+            method: 'POST',
+            body: JSON.stringify({
+                action: decision,
+                confirmed_by: approverName,
+                cheque_number: checkNumber,
+                coo_notes: notes,
+                api_key: LIVE_COO_API_KEY
+            })
+        });
+
+        if (res.success) {
+            NKB.showToast(res.message || 'COO authorization processed successfully.', 'success');
+            closeModal();
+            loadPayables();
+        } else {
+            NKB.showToast(res.error || 'Failed to process authorization.', 'error');
+        }
+    } catch (err) {
+        console.error('submitCooConfirmPayable error:', err);
+        NKB.showToast('Server error processing COO confirmation.', 'error');
+    }
+}
+
+// Export Cheque Payables to Excel
+function exportPayablesToExcel() {
+    if (!cachedPayables || cachedPayables.length === 0) {
+        NKB.showToast('No cheque payable records available to export.', 'warning');
+        return;
+    }
+
+    const totalAmt = cachedPayables.reduce((sum, cp) => sum + (parseFloat(cp.amount) || 0), 0);
+
+    if (typeof XLSX !== 'undefined') {
+        const rows = [
+            ['NKB MANUFACTURING CORPORATION'],
+            ['CHEQUE PAYABLES & COO APPROVAL DISBURSEMENT REGISTER'],
+            [`Export Date: ${NKB.getManilaDateTime()}`, '', `Total Records: ${cachedPayables.length}`, '', `Total Amount: PHP ${totalAmt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
+            [],
+            [
+                '#',
+                'Request No.',
+                'Cheque Date',
+                'Payee / Beneficiary',
+                'Amount (PHP)',
+                'Category',
+                'Bank Name',
+                'Bank Account',
+                'Cheque No.',
+                'Purpose / Usage',
+                'Invoice Ref',
+                'Status',
+                'Requested By',
+                'COO Confirmed By',
+                'COO Confirmed Date',
+                'COO Remarks'
+            ]
+        ];
+
+        cachedPayables.forEach((cp, idx) => {
+            rows.push([
+                idx + 1,
+                cp.request_number || '',
+                cp.cheque_date || '',
+                cp.payee_name || '',
+                parseFloat(cp.amount) || 0,
+                cp.category || '',
+                cp.bank_name || '',
+                cp.bank_account_number || '',
+                cp.cheque_number || '',
+                cp.purpose || '',
+                cp.invoice_reference || '',
+                (cp.status || '').replace(/_/g, ' '),
+                cp.requestor_name || 'Accountant',
+                cp.coo_confirmed_by || '',
+                cp.coo_confirmed_at ? cp.coo_confirmed_at.split('T')[0] : '',
+                cp.coo_notes || ''
+            ]);
+        });
+
+        rows.push([]);
+        rows.push(['TOTAL', '', '', '', totalAmt, '', '', '', '', '', '', '', '', '', '', '']);
+
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        ws['!cols'] = [
+            { wch: 6 },  // #
+            { wch: 18 }, // Request No.
+            { wch: 14 }, // Cheque Date
+            { wch: 28 }, // Payee
+            { wch: 18 }, // Amount
+            { wch: 22 }, // Category
+            { wch: 22 }, // Bank
+            { wch: 18 }, // Account
+            { wch: 16 }, // Cheque No.
+            { wch: 35 }, // Purpose
+            { wch: 16 }, // Invoice Ref
+            { wch: 18 }, // Status
+            { wch: 18 }, // Requested By
+            { wch: 20 }, // Confirmed By
+            { wch: 16 }, // Confirmed Date
+            { wch: 30 }  // Remarks
+        ];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Cheque Payables');
+        XLSX.writeFile(wb, `NKB_Cheque_Payables_${NKB.getManilaDate()}.xlsx`);
+        NKB.showToast(`Exported ${cachedPayables.length} cheque records to Excel successfully!`, 'success');
+    } else {
+        // Fallback to CSV API
+        window.location.href = '/api/cheque-payables/export-csv';
+    }
+}
+
+// Print Cheque Payables Summary Report
+function printPayablesReport() {
+    if (!cachedPayables || cachedPayables.length === 0) {
+        NKB.showToast('No cheque payable records to print.', 'warning');
+        return;
+    }
+
+    const totalAmt = cachedPayables.reduce((sum, cp) => sum + (parseFloat(cp.amount) || 0), 0);
+    let printIframe = document.getElementById('print-payables-iframe');
+    if (!printIframe) {
+        printIframe = document.createElement('iframe');
+        printIframe.id = 'print-payables-iframe';
+        printIframe.style.display = 'none';
+        document.body.appendChild(printIframe);
+    }
+
+    const doc = printIframe.contentWindow.document;
+    doc.open();
+    doc.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>NKB Cheque Payables Report - ${NKB.getManilaDate()}</title>
+            <style>
+                @page { margin: 12mm 15mm; size: landscape; }
+                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 11px; color: #1e293b; margin: 0; padding: 10px; }
+                .header-container { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0f172a; padding-bottom: 10px; margin-bottom: 15px; }
+                h1 { margin: 0; font-size: 18px; font-weight: 900; letter-spacing: -0.5px; }
+                .subtitle { margin: 3px 0 0 0; font-size: 11px; color: #64748b; font-weight: 500; }
+                .kpi-row { display: flex; gap: 15px; margin-bottom: 15px; }
+                .kpi-box { padding: 8px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; flex: 1; }
+                .kpi-label { font-size: 9px; font-weight: bold; text-transform: uppercase; color: #64748b; }
+                .kpi-val { font-size: 16px; font-weight: 900; color: #0f172a; margin-top: 2px; }
+                table { width: 100%; border-collapse: collapse; font-size: 10px; }
+                th { background-color: #f1f5f9; color: #475569; font-weight: 800; text-transform: uppercase; font-size: 9px; padding: 7px 8px; border-bottom: 1px solid #cbd5e1; text-align: left; }
+                td { padding: 7px 8px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+                tr:nth-child(even) td { background-color: #f8fafc; }
+                .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+                .font-bold { font-weight: bold; }
+                .text-right { text-align: right; }
+                .total-row td { background-color: #f8fafc; font-weight: 900; border-top: 2px solid #cbd5e1; border-bottom: 2px solid #cbd5e1; }
+                .footer { margin-top: 25px; border-top: 1px solid #cbd5e1; padding-top: 10px; font-size: 9px; color: #64748b; display: flex; justify-content: space-between; }
+                @media print {
+                    .no-print { display: none !important; }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="header-container">
+                <div>
+                    <h1>NKB MANUFACTURING CORPORATION</h1>
+                    <p class="subtitle">Official Cheque Payables & COO Authorization Register</p>
+                </div>
+                <div style="text-align: right;">
+                    <div style="font-size: 10px; color: #64748b;">Generated: ${new Date().toLocaleString()}</div>
+                    <button class="no-print" onclick="window.print()" style="margin-top: 4px; padding: 5px 12px; background: #0f172a; color: white; border: none; border-radius: 6px; font-size: 10px; font-weight: bold; cursor: pointer;">🖨️ Print Document</button>
+                </div>
+            </div>
+
+            <div class="kpi-row">
+                <div class="kpi-box">
+                    <div class="kpi-label">Total Cheques Amount</div>
+                    <div class="kpi-val">${NKB.formatCurrency(totalAmt)}</div>
+                </div>
+                <div class="kpi-box">
+                    <div class="kpi-label">Total Requisitions</div>
+                    <div class="kpi-val">${cachedPayables.length}</div>
+                </div>
+                <div class="kpi-box">
+                    <div class="kpi-label">Integration Key</div>
+                    <div class="kpi-val font-mono" style="font-size: 11px;">${LIVE_COO_API_KEY.slice(0, 18)}...</div>
+                </div>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 25px;">#</th>
+                        <th>Req Number</th>
+                        <th>Cheque Date</th>
+                        <th>Payee Name</th>
+                        <th>Category</th>
+                        <th>Bank & Account</th>
+                        <th>Cheque No.</th>
+                        <th>Purpose / Usage</th>
+                        <th class="text-right">Amount (PHP)</th>
+                        <th>Status</th>
+                        <th>COO Confirmed By</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${cachedPayables.map((cp, idx) => `
+                        <tr>
+                            <td>${idx + 1}</td>
+                            <td class="font-mono font-bold">${cp.request_number}</td>
+                            <td>${NKB.formatDate(cp.cheque_date)}</td>
+                            <td class="font-bold">${cp.payee_name}</td>
+                            <td>${cp.category}</td>
+                            <td>${cp.bank_name || '—'}</td>
+                            <td class="font-mono">${cp.cheque_number || '—'}</td>
+                            <td>${cp.purpose || '—'}</td>
+                            <td class="text-right font-bold">${NKB.formatCurrency(cp.amount)}</td>
+                            <td>${(cp.status || '').replace(/_/g, ' ')}</td>
+                            <td>${cp.coo_confirmed_by || '—'}</td>
+                        </tr>
+                    `).join('')}
+                    <tr class="total-row">
+                        <td colspan="8" class="text-right">TOTAL CHEQUE AMOUNT:</td>
+                        <td class="text-right font-bold" style="font-size: 11px;">${NKB.formatCurrency(totalAmt)}</td>
+                        <td colspan="2"></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="footer">
+                <div>Prepared by: Senior Accountant</div>
+                <div>Approved by: Chief Operating Officer (COO)</div>
+                <div>Confidential Financial Document • NKB ERP System</div>
+            </div>
+
+            <script>
+                window.onload = function() {
+                    window.addEventListener('beforeprint', function() { document.title = ''; });
+                    window.addEventListener('afterprint', function() { document.title = 'NKB Cheque Payables Report'; });
+                    window.focus();
+                    window.print();
+                };
+            </script>
+        </body>
+        </html>
+    `);
+    doc.close();
+    setTimeout(() => {
+        if (printIframe.contentWindow) {
+            printIframe.contentWindow.focus();
+            printIframe.contentWindow.print();
+        }
+    }, 400);
+}
+
+// Print Single Cheque Disbursement Voucher (CDV)
+function printSingleChequeVoucher(payableId) {
+    const cp = cachedPayables.find(item => item.id === payableId || item.request_number === payableId);
+    if (!cp) {
+        NKB.showToast('Cheque payable record not found.', 'error');
+        return;
+    }
+
+    let printIframe = document.getElementById('print-voucher-iframe');
+    if (!printIframe) {
+        printIframe = document.createElement('iframe');
+        printIframe.id = 'print-voucher-iframe';
+        printIframe.style.display = 'none';
+        document.body.appendChild(printIframe);
+    }
+
+    const doc = printIframe.contentWindow.document;
+    doc.open();
+    doc.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Cheque Disbursement Voucher - ${cp.request_number}</title>
+            <style>
+                @page { margin: 15mm; size: portrait; }
+                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 11px; color: #1e293b; margin: 0; padding: 15px; }
+                .voucher-box { border: 2px solid #0f172a; border-radius: 8px; padding: 20px; }
+                .top-header { display: flex; justify-content: space-between; border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 16px; }
+                h1 { margin: 0; font-size: 18px; font-weight: 900; }
+                .voucher-title { font-size: 13px; font-weight: 800; color: #b45309; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+                .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; font-size: 11px; }
+                .meta-item { display: flex; gap: 6px; }
+                .meta-label { font-weight: bold; color: #475569; width: 110px; }
+                .meta-val { font-weight: bold; color: #0f172a; }
+                .particulars-box { border: 1px solid #cbd5e1; border-radius: 6px; padding: 12px; margin-bottom: 16px; background: #f8fafc; }
+                .particulars-title { font-size: 10px; font-weight: bold; text-transform: uppercase; color: #64748b; margin-bottom: 4px; }
+                .accounting-table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+                .accounting-table th { background: #0f172a; color: white; padding: 6px 10px; font-size: 10px; text-align: left; }
+                .accounting-table td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; font-size: 11px; }
+                .signatures { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-top: 40px; }
+                .sig-box { text-align: center; border-top: 1px solid #0f172a; padding-top: 6px; }
+                .sig-role { font-size: 10px; font-weight: bold; color: #64748b; text-transform: uppercase; }
+                .sig-name { font-weight: 800; color: #0f172a; margin-top: 2px; }
+                .api-badge { display: inline-block; padding: 3px 8px; background: #f1f5f9; border-radius: 4px; font-size: 9px; font-family: monospace; color: #4338ca; }
+                @media print {
+                    .no-print { display: none !important; }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="voucher-box">
+                <div class="top-header">
+                    <div>
+                        <h1>NKB MANUFACTURING CORPORATION</h1>
+                        <div class="voucher-title">Cheque Disbursement Voucher (CDV)</div>
+                        <div style="font-size: 10px; color: #64748b; margin-top: 2px;">Quezon City, Metro Manila • Operations & Finance</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-size: 13px; font-weight: 900; font-family: monospace; color: #4338ca;">${cp.request_number}</div>
+                        <div style="font-size: 10px; color: #64748b; margin-top: 4px;">Date: ${NKB.formatDate(cp.cheque_date)}</div>
+                        <button class="no-print" onclick="window.print()" style="margin-top: 8px; padding: 4px 10px; background: #0f172a; color: white; border: none; border-radius: 4px; font-size: 10px; font-weight: bold; cursor: pointer;">🖨️ Print Voucher</button>
+                    </div>
+                </div>
+
+                <div class="meta-grid">
+                    <div class="meta-item"><span class="meta-label">Payee:</span><span class="meta-val" style="font-size: 13px;">${cp.payee_name}</span></div>
+                    <div class="meta-item"><span class="meta-label">Amount:</span><span class="meta-val" style="font-size: 13px; color: #047857;">${NKB.formatCurrency(cp.amount)}</span></div>
+                    <div class="meta-item"><span class="meta-label">Drawee Bank:</span><span class="meta-val">${cp.bank_name}</span></div>
+                    <div class="meta-item"><span class="meta-label">Cheque Number:</span><span class="meta-val font-mono">${cp.cheque_number || 'Pending Check Release'}</span></div>
+                    <div class="meta-item"><span class="meta-label">Account No:</span><span class="meta-val font-mono">${cp.bank_account_number || '—'}</span></div>
+                    <div class="meta-item"><span class="meta-label">Invoice Ref:</span><span class="meta-val font-mono">${cp.invoice_reference || '—'}</span></div>
+                </div>
+
+                <div class="particulars-box">
+                    <div class="particulars-title">Particulars & Utilization Justification:</div>
+                    <div style="font-size: 11px; line-height: 1.5; color: #1e293b;">${cp.purpose || 'No description provided.'}</div>
+                </div>
+
+                <table class="accounting-table">
+                    <thead>
+                        <tr>
+                            <th>Account Classification / Description</th>
+                            <th>Category</th>
+                            <th style="text-align: right;">Debit (PHP)</th>
+                            <th style="text-align: right;">Credit (PHP)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="font-bold">${cp.category} Expense</td>
+                            <td>${cp.category}</td>
+                            <td style="text-align: right; font-weight: bold;">${(parseFloat(cp.amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                            <td style="text-align: right;">—</td>
+                        </tr>
+                        <tr>
+                            <td class="font-bold">Cash in Bank (${cp.bank_name})</td>
+                            <td>Current Asset</td>
+                            <td style="text-align: right;">—</td>
+                            <td style="text-align: right; font-weight: bold;">${(parseFloat(cp.amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div style="font-size: 10px; color: #64748b; margin-bottom: 20px;">
+                    <div>COO Authorization Status: <strong>${(cp.status || '').replace(/_/g, ' ')}</strong></div>
+                    ${cp.coo_confirmed_at ? `<div>Confirmed by: <strong>${cp.coo_confirmed_by || 'COO'}</strong> on ${cp.coo_confirmed_at}</div>` : ''}
+                    ${cp.coo_notes ? `<div>COO Notes: <em>${cp.coo_notes}</em></div>` : ''}
+                </div>
+
+                <div class="signatures">
+                    <div class="sig-box">
+                        <div class="sig-name">${cp.requestor_name || 'Senior Accountant'}</div>
+                        <div class="sig-role">Prepared by (Accounting)</div>
+                    </div>
+                    <div class="sig-box">
+                        <div class="sig-name">Finance Manager</div>
+                        <div class="sig-role">Checked & Verified by</div>
+                    </div>
+                    <div class="sig-box">
+                        <div class="sig-name">${cp.coo_confirmed_by || 'Chief Operating Officer'}</div>
+                        <div class="sig-role">Approved by (COO)</div>
+                    </div>
+                </div>
+            </div>
+
+            <script>
+                window.onload = function() {
+                    window.addEventListener('beforeprint', function() { document.title = ''; });
+                    window.addEventListener('afterprint', function() { document.title = 'NKB Cheque Voucher - ${cp.request_number}'; });
+                    window.focus();
+                    window.print();
+                };
+            </script>
+        </body>
+        </html>
+    `);
+    doc.close();
+    setTimeout(() => {
+        if (printIframe.contentWindow) {
+            printIframe.contentWindow.focus();
+            printIframe.contentWindow.print();
+        }
+    }, 400);
+}
 async function loadBufferStock() {
     const res = await NKB.api('/api/buffer-stock');
     const tbody = document.getElementById('table-buffer-body');
@@ -5602,49 +6784,160 @@ async function submitEditInvoiceDates(e, invoiceId) {
 }
 window.submitEditInvoiceDates = submitEditInvoiceDates;
 
-// 8. Record Payment Modal
+// 8. Record Payment Modal with Check Attachment & Bank Details
+let currentPaymentAttachmentBase64 = null;
+
+function handlePaymentAttachmentSelect(input) {
+    const previewContainer = document.getElementById('pay-attachment-preview');
+    const previewImg = document.getElementById('pay-attachment-img');
+    const previewName = document.getElementById('pay-attachment-name');
+    const dropText = document.getElementById('pay-attachment-droptext');
+
+    if (!input.files || !input.files[0]) {
+        currentPaymentAttachmentBase64 = null;
+        if (previewContainer) previewContainer.classList.add('hidden');
+        if (dropText) dropText.classList.remove('hidden');
+        return;
+    }
+
+    const file = input.files[0];
+    if (file.size > 10 * 1024 * 1024) {
+        NKB.showToast('File size must be under 10MB.', 'warning');
+        input.value = '';
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        currentPaymentAttachmentBase64 = e.target.result;
+        if (previewContainer) previewContainer.classList.remove('hidden');
+        if (dropText) dropText.classList.add('hidden');
+        if (previewName) previewName.textContent = file.name;
+        if (previewImg) {
+            if (file.type.startsWith('image/')) {
+                previewImg.src = currentPaymentAttachmentBase64;
+                previewImg.classList.remove('hidden');
+            } else {
+                previewImg.classList.add('hidden');
+            }
+        }
+    };
+    reader.readAsDataURL(file);
+}
+window.handlePaymentAttachmentSelect = handlePaymentAttachmentSelect;
+
+function clearPaymentAttachment() {
+    currentPaymentAttachmentBase64 = null;
+    const input = document.getElementById('pay-attachment-file');
+    if (input) input.value = '';
+    const previewContainer = document.getElementById('pay-attachment-preview');
+    if (previewContainer) previewContainer.classList.add('hidden');
+    const dropText = document.getElementById('pay-attachment-droptext');
+    if (dropText) dropText.classList.remove('hidden');
+}
+window.clearPaymentAttachment = clearPaymentAttachment;
+
 function openRecordPaymentModal(invoiceId, invoiceNumber, balanceDue, clientName) {
+    currentPaymentAttachmentBase64 = null;
     const root = document.getElementById('modals-root');
     root.innerHTML = `
-        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
-            <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50 overflow-y-auto">
+            <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 my-8">
                 <div class="flex justify-between items-center border-b border-slate-100 pb-3">
-                    <h3 class="text-lg font-bold text-slate-900">Record Payment</h3>
-                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold">&times;</button>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xl">💵</span>
+                        <h3 class="text-lg font-bold text-slate-900">Record Payment</h3>
+                    </div>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg cursor-pointer">&times;</button>
                 </div>
                 <form onsubmit="submitRecordPayment(event, '${invoiceId}', ${balanceDue})" class="space-y-4 text-xs font-semibold">
-                    <div class="p-3 bg-slate-50 rounded-xl space-y-1 text-slate-700">
-                        <div>Invoice: <strong class="text-indigo-600">${invoiceNumber}</strong></div>
-                        <div>Client: <strong>${clientName}</strong></div>
-                        <div class="text-sm font-extrabold text-rose-700">Balance Due: ${NKB.formatCurrency(balanceDue)}</div>
+                    <div class="p-3 bg-slate-50 rounded-xl space-y-1 text-slate-700 border border-slate-200/80">
+                        <div class="flex justify-between">
+                            <span>Invoice: <strong class="text-indigo-600 font-mono">${invoiceNumber}</strong></span>
+                            <span>Client: <strong>${clientName}</strong></span>
+                        </div>
+                        <div class="text-sm font-extrabold text-rose-700 pt-1 border-t border-slate-200">Balance Due: ${NKB.formatCurrency(balanceDue)}</div>
                     </div>
-                    <div>
-                        <label class="block text-slate-600 mb-1">Payment Amount (₱)</label>
-                        <input type="number" id="pay-amount" step="0.01" min="0.01" max="${Number(balanceDue).toFixed(2)}" value="${Number(balanceDue).toFixed(2)}" inputmode="decimal" onblur="if(this.value && !isNaN(this.value)) this.value = parseFloat(this.value).toFixed(2)" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-emerald-800">
-                    </div>
-                    <div class="grid grid-cols-2 gap-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-slate-600 mb-1">Payment Method</label>
-                            <select id="pay-method" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-medium">
+                            <label class="block text-slate-600 mb-1">Payment Amount (₱) *</label>
+                            <input type="number" id="pay-amount" step="0.01" min="0.01" max="${Number(balanceDue).toFixed(2)}" value="${Number(balanceDue).toFixed(2)}" inputmode="decimal" onblur="if(this.value && !isNaN(this.value)) this.value = parseFloat(this.value).toFixed(2)" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-emerald-800 focus:bg-white focus:ring-2 focus:ring-emerald-500">
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 mb-1">Payment Date</label>
+                            <input type="date" id="pay-date" value="${NKB.getManilaDate()}" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-medium">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-slate-600 mb-1">Payment Method *</label>
+                            <select id="pay-method" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-medium focus:bg-white">
                                 <option value="BANK_TRANSFER">Bank Transfer</option>
-                                <option value="CHECK">Check</option>
+                                <option value="CHECK" selected>Check / Cheque</option>
                                 <option value="ONLINE_BANKING">Online Banking</option>
                                 <option value="GCASH">GCash</option>
                                 <option value="CASH">Cash</option>
                             </select>
                         </div>
                         <div>
-                            <label class="block text-slate-600 mb-1">Reference Number</label>
+                            <label class="block text-slate-600 mb-1">Issuing / Depository Bank</label>
+                            <select id="pay-bank-name" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-medium focus:bg-white">
+                                <option value="">Select or leave blank...</option>
+                                <option value="BDO Unibank">BDO Unibank</option>
+                                <option value="Bank of the Philippine Islands (BPI)">Bank of the Philippine Islands (BPI)</option>
+                                <option value="Metrobank">Metrobank</option>
+                                <option value="Security Bank">Security Bank</option>
+                                <option value="UnionBank of the Philippines">UnionBank of the Philippines</option>
+                                <option value="RCBC">RCBC</option>
+                                <option value="China Bank">China Bank</option>
+                                <option value="PNB">PNB</option>
+                                <option value="Landbank">Landbank</option>
+                                <option value="Other Bank">Other Bank</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-slate-600 mb-1">Check Number / Slip #</label>
+                            <input type="text" id="pay-check-number" placeholder="e.g. 0001289456" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 mb-1">Reference / Transaction Ref</label>
                             <input type="text" id="pay-ref" placeholder="Ref # / Check # / OR # / Txn ID (Optional/Freeform)" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-mono">
                         </div>
                     </div>
+
+                    <!-- Check Attachment & Proof Section -->
+                    <div class="space-y-1.5">
+                        <label class="block text-slate-600">Attachment / Check Image / Deposit Proof</label>
+                        <div class="border-2 border-dashed border-slate-300 hover:border-indigo-400 rounded-xl p-3 bg-slate-50 transition relative text-center">
+                            <input type="file" id="pay-attachment-file" accept="image/*,.pdf" onchange="handlePaymentAttachmentSelect(this)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                            <div id="pay-attachment-droptext" class="space-y-1 py-1 pointer-events-none">
+                                <div class="text-xl">📷</div>
+                                <div class="text-xs text-slate-600 font-bold">Click or drag & drop check image here</div>
+                                <div class="text-[10px] text-slate-400">Supports PNG, JPG, WEBP, or PDF up to 10MB</div>
+                            </div>
+                            <div id="pay-attachment-preview" class="hidden flex items-center justify-between gap-3 p-2 bg-white rounded-lg border border-slate-200 text-left">
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <img id="pay-attachment-img" src="" alt="Check Preview" class="w-12 h-10 object-cover rounded border border-slate-200 hidden">
+                                    <div class="min-w-0">
+                                        <div id="pay-attachment-name" class="text-xs font-bold text-slate-800 truncate">check.jpg</div>
+                                        <div class="text-[10px] text-emerald-600 font-bold">Ready to upload</div>
+                                    </div>
+                                </div>
+                                <button type="button" onclick="clearPaymentAttachment()" class="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded text-[10px] font-bold border border-rose-200 cursor-pointer">Remove</button>
+                            </div>
+                        </div>
+                    </div>
+
                     <div>
                         <label class="block text-slate-600 mb-1">Notes / Remarks</label>
-                        <textarea id="pay-notes" rows="2" placeholder="e.g. Cleared check, BDO branch deposit, payment terms, or receipt details" class="w-full px-3 py-2 border rounded-xl bg-slate-50 text-slate-800 font-normal"></textarea>
+                        <textarea id="pay-notes" rows="2" placeholder="e.g. Physical check verified, post-dated check details, branch deposit" class="w-full px-3 py-2 border rounded-xl bg-slate-50 text-slate-800 font-normal focus:bg-white"></textarea>
                     </div>
+
                     <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl">Cancel</button>
-                        <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold">Record Payment</button>
+                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold cursor-pointer">Cancel</button>
+                        <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow-md shadow-emerald-600/20 cursor-pointer">Record Payment</button>
                     </div>
                 </form>
             </div>
@@ -5659,20 +6952,27 @@ async function submitRecordPayment(e, invoiceId, balanceDue) {
     const method = document.getElementById('pay-method')?.value;
     const ref = document.getElementById('pay-ref')?.value?.trim() || '';
     const notes = document.getElementById('pay-notes')?.value?.trim() || '';
+    const paymentDate = document.getElementById('pay-date')?.value || NKB.getManilaDate();
+    const bankName = document.getElementById('pay-bank-name')?.value?.trim() || null;
+    const checkNumber = document.getElementById('pay-check-number')?.value?.trim() || null;
 
     const res = await NKB.api('/api/payments', {
         method: 'POST',
         body: JSON.stringify({
             invoice_id: invoiceId,
             amount,
+            payment_date: paymentDate,
             payment_method: method,
             reference_number: ref,
-            notes
+            notes,
+            bank_name: bankName,
+            check_number: checkNumber,
+            attachment_data: currentPaymentAttachmentBase64
         })
     });
 
     if (res.success) {
-        NKB.showToast(res.message, 'success');
+        NKB.showToast(res.message || 'Payment recorded successfully.', 'success');
         closeModal();
         loadInvoices();
         loadPayments();
@@ -5680,6 +6980,206 @@ async function submitRecordPayment(e, invoiceId, balanceDue) {
         NKB.showToast(res.error || 'Failed to record payment.', 'error');
     }
 }
+
+// Check Attachment Preview & Update Modals
+function openViewCheckModal(paymentId) {
+    const payment = cachedPayments ? cachedPayments.find(p => p.id === paymentId || p.payment_number === paymentId) : null;
+    if (!payment) {
+        NKB.showToast('Payment record not found.', 'error');
+        return;
+    }
+
+    const root = document.getElementById('modals-root');
+    const attachmentUrl = payment.attachment_url || '';
+    const isPdf = attachmentUrl.toLowerCase().endsWith('.pdf');
+
+    root.innerHTML = `
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50 overflow-y-auto">
+            <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 my-8">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xl">🖼️</span>
+                        <div>
+                            <h3 class="text-base font-bold text-slate-900">Check / Payment Attachment</h3>
+                            <div class="text-[11px] text-slate-500 font-mono">${payment.payment_number} • ${payment.invoice_number}</div>
+                        </div>
+                    </div>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg cursor-pointer">&times;</button>
+                </div>
+
+                <!-- Info Badges -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-slate-50 rounded-xl text-xs border border-slate-200/80">
+                    <div>
+                        <div class="text-[10px] text-slate-400 font-bold uppercase">Client</div>
+                        <div class="font-bold text-slate-800 truncate">${payment.company_name}</div>
+                    </div>
+                    <div>
+                        <div class="text-[10px] text-slate-400 font-bold uppercase">Amount Paid</div>
+                        <div class="font-black text-emerald-700">${NKB.formatCurrency(payment.amount)}</div>
+                    </div>
+                    <div>
+                        <div class="text-[10px] text-slate-400 font-bold uppercase">Bank Name</div>
+                        <div class="font-semibold text-slate-700">${payment.bank_name || '—'}</div>
+                    </div>
+                    <div>
+                        <div class="text-[10px] text-slate-400 font-bold uppercase">Check Number</div>
+                        <div class="font-mono font-bold text-indigo-600">${payment.check_number || payment.reference_number || '—'}</div>
+                    </div>
+                </div>
+
+                <!-- Attachment Preview Area -->
+                <div class="rounded-xl border border-slate-200 bg-slate-950 p-2 overflow-hidden flex items-center justify-center min-h-[280px] max-h-[500px]">
+                    ${attachmentUrl ? (
+                        isPdf ? `
+                            <div class="text-center p-6 space-y-3">
+                                <span class="text-4xl">📄</span>
+                                <div class="text-sm font-bold text-white">PDF Document Attached</div>
+                                <a href="${attachmentUrl}" target="_blank" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold inline-block text-xs">
+                                    Open / Download PDF ↗
+                                </a>
+                            </div>
+                        ` : `
+                            <img src="${attachmentUrl}" alt="Check Image" class="max-w-full max-h-[480px] object-contain rounded cursor-zoom-in" onclick="window.open('${attachmentUrl}', '_blank')" title="Click to view full resolution in new tab">
+                        `
+                    ) : `
+                        <div class="text-center text-slate-400 py-10">
+                            <span class="text-3xl block mb-1">📭</span>
+                            <span>No check image has been attached to this payment record yet.</span>
+                        </div>
+                    `}
+                </div>
+
+                ${payment.notes ? `
+                    <div class="p-2.5 bg-amber-50 rounded-xl text-xs text-amber-900 border border-amber-200/80">
+                        <strong class="font-bold">Remarks:</strong> ${payment.notes}
+                    </div>
+                ` : ''}
+
+                <div class="flex items-center justify-between pt-2 border-t border-slate-100">
+                    <button type="button" onclick="openAttachCheckModal('${payment.id}')" class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition inline-flex items-center gap-1 cursor-pointer">
+                        <span>🔄</span>
+                        <span>Update / Replace Check</span>
+                    </button>
+                    <button type="button" onclick="closeModal()" class="px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+window.openViewCheckModal = openViewCheckModal;
+
+let currentUpdateCheckAttachmentBase64 = null;
+
+function handleUpdateCheckAttachmentSelect(input) {
+    if (!input.files || !input.files[0]) {
+        currentUpdateCheckAttachmentBase64 = null;
+        return;
+    }
+    const file = input.files[0];
+    if (file.size > 10 * 1024 * 1024) {
+        NKB.showToast('File size must be under 10MB.', 'warning');
+        input.value = '';
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        currentUpdateCheckAttachmentBase64 = e.target.result;
+        const nameEl = document.getElementById('update-check-preview-name');
+        if (nameEl) nameEl.textContent = `Selected: ${file.name}`;
+    };
+    reader.readAsDataURL(file);
+}
+window.handleUpdateCheckAttachmentSelect = handleUpdateCheckAttachmentSelect;
+
+function openAttachCheckModal(paymentId) {
+    const payment = cachedPayments ? cachedPayments.find(p => p.id === paymentId || p.payment_number === paymentId) : null;
+    if (!payment) {
+        NKB.showToast('Payment record not found.', 'error');
+        return;
+    }
+
+    currentUpdateCheckAttachmentBase64 = null;
+    const root = document.getElementById('modals-root');
+    root.innerHTML = `
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
+            <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xl">📎</span>
+                        <h3 class="text-base font-bold text-slate-900">Attach / Update Check</h3>
+                    </div>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold">&times;</button>
+                </div>
+
+                <form onsubmit="submitAttachCheck(event, '${payment.id}')" class="space-y-4 text-xs font-semibold">
+                    <div class="p-3 bg-slate-50 rounded-xl space-y-1 text-slate-700 border border-slate-200">
+                        <div>Payment: <strong class="text-indigo-600">${payment.payment_number}</strong> (${NKB.formatCurrency(payment.amount)})</div>
+                        <div>Invoice: <strong>${payment.invoice_number}</strong> • Client: <strong>${payment.company_name}</strong></div>
+                    </div>
+
+                    <div>
+                        <label class="block text-slate-600 mb-1">Check Number</label>
+                        <input type="text" id="update-check-number" value="${payment.check_number || ''}" placeholder="e.g. 0001289456" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-mono">
+                    </div>
+
+                    <div>
+                        <label class="block text-slate-600 mb-1">Issuing / Depository Bank</label>
+                        <input type="text" id="update-check-bank" value="${payment.bank_name || ''}" placeholder="e.g. BDO Unibank, BPI, Metrobank" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
+                    </div>
+
+                    <div>
+                        <label class="block text-slate-600 mb-1">Upload Check Image / Proof *</label>
+                        <div class="border-2 border-dashed border-slate-300 rounded-xl p-3 bg-slate-50 text-center relative hover:border-indigo-400 transition">
+                            <input type="file" id="update-check-file" accept="image/*,.pdf" onchange="handleUpdateCheckAttachmentSelect(this)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                            <div class="space-y-1 pointer-events-none">
+                                <span class="text-xl">📷</span>
+                                <div class="text-xs text-slate-600 font-bold">Select new check photo / PDF</div>
+                                <div id="update-check-preview-name" class="text-[10px] text-indigo-600 font-medium">Click to browse or drop file</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold cursor-pointer">Cancel</button>
+                        <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow-md shadow-emerald-600/20 cursor-pointer">Save Check Attachment</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+}
+window.openAttachCheckModal = openAttachCheckModal;
+
+async function submitAttachCheck(e, paymentId) {
+    e.preventDefault();
+    const checkNumber = document.getElementById('update-check-number')?.value?.trim() || null;
+    const bankName = document.getElementById('update-check-bank')?.value?.trim() || null;
+
+    if (!currentUpdateCheckAttachmentBase64 && !checkNumber && !bankName) {
+        NKB.showToast('Please provide a file or updated check details.', 'warning');
+        return;
+    }
+
+    const res = await NKB.api(`/api/payments/${paymentId}/attachment`, {
+        method: 'POST',
+        body: JSON.stringify({
+            check_number: checkNumber,
+            bank_name: bankName,
+            attachment_data: currentUpdateCheckAttachmentBase64
+        })
+    });
+
+    if (res.success) {
+        NKB.showToast(res.message || 'Check attachment updated.', 'success');
+        closeModal();
+        loadPayments();
+    } else {
+        NKB.showToast(res.error || 'Failed to update check attachment.', 'error');
+    }
+}
+window.submitAttachCheck = submitAttachCheck;
 
 // 9. Release Buffer Stock Modal
 function openReleaseBufferModal(bufferId, remainingQty, clientName, productName) {
@@ -7707,5 +9207,29 @@ window.copyRawApiKey = copyRawApiKey;
 window.revokeApiKey = revokeApiKey;
 window.deleteApiKey = deleteApiKey;
 window.openCreatePOModal = openCreatePOModal;
+
+// Cheque Payables & Payments Check Attachments Exports
+window.loadPayables = loadPayables;
+window.renderPayablesRows = renderPayablesRows;
+window.filterPayablesTable = filterPayablesTable;
+window.setPayablesDatePreset = setPayablesDatePreset;
+window.resetPayablesFilters = resetPayablesFilters;
+window.quickFilterPayablesStatus = quickFilterPayablesStatus;
+window.openRequestPayableModal = openRequestPayableModal;
+window.handlePayableAttachmentSelect = handlePayableAttachmentSelect;
+window.clearPayableAttachment = clearPayableAttachment;
+window.onPayableBankChange = onPayableBankChange;
+window.submitRequestPayable = submitRequestPayable;
+window.openViewPayableDetailsModal = openViewPayableDetailsModal;
+window.openCooConfirmPayableModal = openCooConfirmPayableModal;
+window.submitCooConfirmPayable = submitCooConfirmPayable;
+window.exportPayablesToExcel = exportPayablesToExcel;
+window.printPayablesReport = printPayablesReport;
+window.printSingleChequeVoucher = printSingleChequeVoucher;
+window.openViewCheckModal = openViewCheckModal;
+window.openAttachCheckModal = openAttachCheckModal;
+window.submitAttachCheck = submitAttachCheck;
+window.handlePaymentAttachmentSelect = handlePaymentAttachmentSelect;
+window.clearPaymentAttachment = clearPaymentAttachment;
 
 

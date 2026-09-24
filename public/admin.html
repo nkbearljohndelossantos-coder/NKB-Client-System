@@ -8,7 +8,7 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <link rel="stylesheet" href="/css/tailwind.min.css">
     <script src="/js/chart.umd.min.js"></script>
-    <link rel="stylesheet" href="/css/style.css?v=2.1.6">
+    <link rel="stylesheet" href="/css/style.css?v=2.1.7">
 </head>
 <body class="bg-slate-50 text-slate-800 antialiased min-h-screen flex flex-col">
 
@@ -119,6 +119,13 @@
                         <button onclick="switchTab('payments')" id="tab-btn-payments" class="sidebar-btn w-full flex items-center gap-3 px-3 py-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 transition">
                             <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
                             <span>Payments & AR</span>
+                        </button>
+                        <button onclick="switchTab('payables')" id="tab-btn-payables" class="sidebar-btn w-full flex items-center justify-between px-3 py-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 transition" title="Cheque Payables & COO Approvals">
+                            <div class="flex items-center gap-3">
+                                <svg class="w-4 h-4 flex-shrink-0 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+                                <span>Cheque Payables</span>
+                            </div>
+                            <span class="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-extrabold border border-amber-500/30">COO</span>
                         </button>
                         <button onclick="switchTab('buffer')" id="tab-btn-buffer" class="sidebar-btn w-full flex items-center gap-3 px-3 py-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 transition">
                             <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
@@ -653,6 +660,10 @@
                             <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                             <span>Refresh</span>
                         </button>
+                        <button onclick="openRequestPayableModal()" class="px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-600/20 transition inline-flex items-center gap-1.5" title="Accountant Cheque Request Form for Disbursal to COO">
+                            <span>📝</span>
+                            <span>Request Payables</span>
+                        </button>
                         <button onclick="printPaymentsReport()" class="px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 shadow-sm transition inline-flex items-center gap-1.5">
                             <svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
                             <span>Print Report</span>
@@ -731,18 +742,172 @@
                                     <th class="py-3 px-4">Method</th>
                                     <th class="py-3 px-4">Reference</th>
                                     <th class="py-3 px-4 text-right">Amount Paid</th>
+                                    <th class="py-3 px-4 text-center">Attachment / Check</th>
                                     <th class="py-3 px-4">Invoice Status</th>
                                     <th class="py-3 px-4">Recorded By</th>
                                 </tr>
                             </thead>
                             <tbody id="table-payments-body" class="divide-y divide-slate-100 font-medium">
-                                <tr><td colspan="9" class="py-6 text-center text-slate-400">Loading payments...</td></tr>
+                                <tr><td colspan="10" class="py-6 text-center text-slate-400">Loading payments...</td></tr>
                             </tbody>
                             <tfoot id="table-payments-footer" class="bg-slate-50/90 border-t-2 border-slate-200 text-xs font-bold text-slate-800">
                                 <tr>
                                     <td colspan="6" class="py-3.5 px-4 text-right uppercase tracking-wider text-slate-600">Total Amount of Paid:</td>
                                     <td id="table-footer-total-paid" class="py-3.5 px-4 text-right font-black text-emerald-700 text-sm">₱0.00</td>
-                                    <td colspan="2"></td>
+                                    <td colspan="3"></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB: CHEQUE PAYABLES & COO APPROVALS -->
+            <section id="view-payables" class="space-y-6 hidden">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h2 class="text-2xl font-black text-slate-900">Cheque Payables & COO Approvals</h2>
+                            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 border border-amber-300">Live API Integrated</span>
+                        </div>
+                        <p class="text-sm text-slate-500">Accountant cheque requisitions, designated bank accounts, expense classification, and COO approval audit trail.</p>
+                        <div class="mt-1 flex items-center gap-2 text-[11px] text-slate-500 font-mono">
+                            <span>Integration Key:</span>
+                            <span class="px-2 py-0.5 rounded bg-slate-100 text-indigo-700 font-bold border border-slate-200">nkb_inv_live_6ae6965c1ca61aef54939d6b1ecfac1b</span>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button onclick="loadPayables()" class="px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 shadow-sm transition inline-flex items-center gap-1.5 cursor-pointer">
+                            <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                            <span>Refresh</span>
+                        </button>
+                        <button onclick="openRequestPayableModal()" class="px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-600/30 transition inline-flex items-center gap-1.5 cursor-pointer">
+                            <span>📝</span>
+                            <span>Request Payables</span>
+                        </button>
+                        <button onclick="printPayablesReport()" class="px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 shadow-sm transition inline-flex items-center gap-1.5 cursor-pointer">
+                            <svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                            <span>Print Report</span>
+                        </button>
+                        <button onclick="exportPayablesToExcel()" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition inline-flex items-center gap-1.5 cursor-pointer">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                            <span>Export to Excel (.xlsx)</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- KPI Cards for Cheque Payables -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="kpi-card border-t-4 border-indigo-500 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Requisitioned</span>
+                            <span class="p-1.5 rounded-lg bg-indigo-50 text-indigo-600 text-xs font-bold">ALL CHEQUES</span>
+                        </div>
+                        <div id="payables-kpi-total-amount" class="text-3xl font-black text-slate-900 mt-2">₱0.00</div>
+                        <div id="payables-kpi-total-count" class="text-xs text-indigo-600 font-semibold mt-1">0 total requests</div>
+                    </div>
+                    <div class="kpi-card border-t-4 border-amber-500 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:bg-amber-50/30 transition" onclick="quickFilterPayablesStatus('PENDING_COO_APPROVAL')" title="Filter Pending COO Approval">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Pending COO Approval</span>
+                            <span class="p-1.5 rounded-lg bg-amber-50 text-amber-600 text-xs font-bold">PENDING COO</span>
+                        </div>
+                        <div id="payables-kpi-pending-amount" class="text-3xl font-black text-amber-600 mt-2">₱0.00</div>
+                        <div id="payables-kpi-pending-count" class="text-xs text-amber-700 font-semibold mt-1">0 awaiting authorization</div>
+                    </div>
+                    <div class="kpi-card border-t-4 border-emerald-500 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:bg-emerald-50/30 transition" onclick="quickFilterPayablesStatus('CONFIRMED')" title="Filter Confirmed Cheques">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Confirmed by COO</span>
+                            <span class="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 text-xs font-bold">COO APPROVED</span>
+                        </div>
+                        <div id="payables-kpi-confirmed-amount" class="text-3xl font-black text-emerald-600 mt-2">₱0.00</div>
+                        <div id="payables-kpi-confirmed-count" class="text-xs text-emerald-700 font-semibold mt-1">0 confirmed for release</div>
+                    </div>
+                    <div class="kpi-card border-t-4 border-blue-500 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:bg-blue-50/30 transition" onclick="quickFilterPayablesStatus('ISSUED')" title="Filter Issued Cheques">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Issued & Disbursed</span>
+                            <span class="p-1.5 rounded-lg bg-blue-50 text-blue-600 text-xs font-bold">DISBURSED</span>
+                        </div>
+                        <div id="payables-kpi-disbursed-amount" class="text-3xl font-black text-blue-600 mt-2">₱0.00</div>
+                        <div id="payables-kpi-disbursed-count" class="text-xs text-blue-700 font-semibold mt-1">0 cheques released</div>
+                    </div>
+                </div>
+
+                <!-- Cheque Payables Filter Bar & Table Card -->
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+                    <!-- Filters Grid -->
+                    <div class="space-y-3 pb-3 border-b border-slate-100">
+                        <div class="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+                            <!-- Search -->
+                            <div class="relative flex-1">
+                                <input type="text" id="payables-search-input" oninput="filterPayablesTable()" placeholder="Search payee, cheque #, purpose, bank, or req #..." class="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 transition">
+                                <svg class="w-4 h-4 text-slate-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                            </div>
+                            <!-- Status Dropdown -->
+                            <select id="payables-status-filter" onchange="filterPayablesTable()" class="px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 text-slate-700 font-semibold focus:bg-white">
+                                <option value="">All Statuses</option>
+                                <option value="PENDING_COO_APPROVAL">Pending COO Approval</option>
+                                <option value="CONFIRMED">Confirmed / Approved</option>
+                                <option value="ISSUED">Issued to Payee</option>
+                                <option value="CLEARED">Cleared in Bank</option>
+                                <option value="REJECTED">Rejected by COO</option>
+                                <option value="CANCELLED">Cancelled</option>
+                            </select>
+                            <!-- Category Dropdown -->
+                            <select id="payables-category-filter" onchange="filterPayablesTable()" class="px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 text-slate-700 font-semibold focus:bg-white">
+                                <option value="">All Categories</option>
+                            </select>
+                            <!-- Bank Dropdown -->
+                            <select id="payables-bank-filter" onchange="filterPayablesTable()" class="px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 text-slate-700 font-semibold focus:bg-white">
+                                <option value="">All Banks</option>
+                            </select>
+                        </div>
+
+                        <!-- Date Range & Preset Row -->
+                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-2">
+                            <div class="flex flex-wrap items-center gap-2 text-xs">
+                                <span class="font-bold text-slate-500">Cheque Date Range:</span>
+                                <input type="date" id="payables-date-from" onchange="filterPayablesTable()" class="px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 text-slate-700 font-medium">
+                                <span class="text-slate-400">to</span>
+                                <input type="date" id="payables-date-to" onchange="filterPayablesTable()" class="px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 text-slate-700 font-medium">
+                                <div class="flex items-center gap-1 ml-2">
+                                    <button type="button" onclick="setPayablesDatePreset('today')" class="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-[11px] transition">Today</button>
+                                    <button type="button" onclick="setPayablesDatePreset('week')" class="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-[11px] transition">This Week</button>
+                                    <button type="button" onclick="setPayablesDatePreset('month')" class="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-[11px] transition">This Month</button>
+                                    <button type="button" onclick="setPayablesDatePreset('all')" class="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-[11px] transition">All Time</button>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <button type="button" onclick="resetPayablesFilters()" class="text-xs text-rose-600 hover:text-rose-800 font-bold hover:underline">Clear Filters</button>
+                                <span id="payables-visible-count" class="text-xs font-semibold text-slate-500 whitespace-nowrap">Showing all</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cheques Table -->
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-50 border-y border-slate-200 text-slate-600 font-bold uppercase tracking-wider">
+                                <tr>
+                                    <th class="py-3 px-4">Req / Cheque No.</th>
+                                    <th class="py-3 px-4">Date</th>
+                                    <th class="py-3 px-4">Payee / Beneficiary</th>
+                                    <th class="py-3 px-4">Category</th>
+                                    <th class="py-3 px-4">Bank & Account</th>
+                                    <th class="py-3 px-4 min-w-[200px]">Purpose / Usage</th>
+                                    <th class="py-3 px-4 text-right">Amount (₱)</th>
+                                    <th class="py-3 px-4 text-center">Attachment</th>
+                                    <th class="py-3 px-4">COO Approval</th>
+                                    <th class="py-3 px-4 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-payables-body" class="divide-y divide-slate-100 font-medium">
+                                <tr><td colspan="10" class="py-8 text-center text-slate-400 font-medium">Loading cheque payables...</td></tr>
+                            </tbody>
+                            <tfoot id="table-payables-footer" class="bg-slate-50/90 border-t-2 border-slate-200 text-xs font-bold text-slate-800">
+                                <tr>
+                                    <td colspan="6" class="py-3.5 px-4 text-right uppercase tracking-wider text-slate-600">Total Filtered Amount:</td>
+                                    <td id="table-payables-footer-total" class="py-3.5 px-4 text-right font-black text-amber-700 text-sm">₱0.00</td>
+                                    <td colspan="3"></td>
                                 </tr>
                             </tfoot>
                         </table>
@@ -1304,8 +1469,8 @@
     <div id="modals-root"></div>
 
     <script src="/js/xlsx.full.min.js"></script>
-    <script src="/js/app.js?v=2.2.6"></script>
-    <script src="/js/admin.js?v=2.2.6"></script>
-    <script src="/js/agent-widgets.js?v=2.2.6"></script>
+    <script src="/js/app.js?v=2.2.7"></script>
+    <script src="/js/admin.js?v=2.2.7"></script>
+    <script src="/js/agent-widgets.js?v=2.2.7"></script>
 </body>
 </html>

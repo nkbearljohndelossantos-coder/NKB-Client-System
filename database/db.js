@@ -51,6 +51,85 @@ function runMigrations(dbInstance, isMysql) {
         try {
             dbInstance.exec(`ALTER TABLE users ADD COLUMN avatar_url ${textType};`);
         } catch (_) {}
+        try {
+            dbInstance.exec(`ALTER TABLE payments ADD COLUMN attachment_url ${textType};`);
+        } catch (_) {}
+        try {
+            dbInstance.exec(`ALTER TABLE payments ADD COLUMN check_number ${textType};`);
+        } catch (_) {}
+        try {
+            dbInstance.exec(`ALTER TABLE payments ADD COLUMN bank_name ${textType};`);
+        } catch (_) {}
+
+        // Cheque Payables & COO Integration table
+        if (isMysql) {
+            try {
+                dbInstance.exec(`
+                    CREATE TABLE IF NOT EXISTS cheque_payables (
+                        id VARCHAR(36) PRIMARY KEY,
+                        request_number VARCHAR(50) UNIQUE NOT NULL,
+                        payee_name VARCHAR(255) NOT NULL,
+                        amount DECIMAL(14,4) NOT NULL,
+                        cheque_date VARCHAR(50) NOT NULL,
+                        bank_name VARCHAR(100) NOT NULL,
+                        bank_account_number VARCHAR(100) NULL,
+                        cheque_number VARCHAR(100) NULL,
+                        category VARCHAR(100) NOT NULL,
+                        purpose TEXT NOT NULL,
+                        invoice_reference VARCHAR(100) NULL,
+                        attachment_url TEXT NULL,
+                        status ENUM('PENDING_COO_APPROVAL', 'CONFIRMED', 'ISSUED', 'CLEARED', 'REJECTED', 'VOIDED') NOT NULL DEFAULT 'PENDING_COO_APPROVAL',
+                        requested_by VARCHAR(36) NOT NULL,
+                        requested_by_name VARCHAR(255) NOT NULL,
+                        coo_decision VARCHAR(50) NULL,
+                        coo_confirmed_by VARCHAR(255) NULL,
+                        coo_confirmed_at VARCHAR(50) NULL,
+                        coo_notes TEXT NULL,
+                        api_key_used VARCHAR(100) DEFAULT 'nkb_inv_live_6ae6965c1ca61aef54939d6b1ecfac1b',
+                        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        INDEX idx_payables_status (status),
+                        INDEX idx_payables_category (category),
+                        INDEX idx_payables_date (cheque_date)
+                    );
+                `);
+            } catch (_) {}
+        } else {
+            try {
+                dbInstance.exec(`
+                    CREATE TABLE IF NOT EXISTS cheque_payables (
+                        id TEXT PRIMARY KEY,
+                        request_number TEXT UNIQUE NOT NULL,
+                        payee_name TEXT NOT NULL,
+                        amount REAL NOT NULL CHECK (amount > 0),
+                        cheque_date TEXT NOT NULL,
+                        bank_name TEXT NOT NULL,
+                        bank_account_number TEXT,
+                        cheque_number TEXT,
+                        category TEXT NOT NULL,
+                        purpose TEXT NOT NULL,
+                        invoice_reference TEXT,
+                        attachment_url TEXT,
+                        status TEXT NOT NULL DEFAULT 'PENDING_COO_APPROVAL' CHECK (status IN ('PENDING_COO_APPROVAL', 'CONFIRMED', 'ISSUED', 'CLEARED', 'REJECTED', 'VOIDED')),
+                        requested_by TEXT NOT NULL,
+                        requested_by_name TEXT NOT NULL,
+                        coo_decision TEXT,
+                        coo_confirmed_by TEXT,
+                        coo_confirmed_at TEXT,
+                        coo_notes TEXT,
+                        api_key_used TEXT DEFAULT 'nkb_inv_live_6ae6965c1ca61aef54939d6b1ecfac1b',
+                        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                        updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                        FOREIGN KEY (requested_by) REFERENCES users(id)
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_payables_status ON cheque_payables(status);
+                    CREATE INDEX IF NOT EXISTS idx_payables_category ON cheque_payables(category);
+                    CREATE INDEX IF NOT EXISTS idx_payables_date ON cheque_payables(cheque_date);
+                `);
+            } catch (payablesErr) {
+                console.warn('cheque_payables migration notice:', payablesErr.message);
+            }
+        }
         if (isMysql) {
             try {
                 dbInstance.exec("ALTER TABLE purchase_orders MODIFY COLUMN status ENUM('DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'IN_PRODUCTION', 'PARTIALLY_DELIVERED', 'COMPLETED', 'CANCELLED', 'VOIDED') NOT NULL DEFAULT 'PENDING_APPROVAL';");
