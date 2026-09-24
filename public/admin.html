@@ -159,13 +159,19 @@
                         <svg id="chevron-management" class="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-300 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                     </button>
                     <div id="section-management" class="space-y-1">
-                        <button onclick="switchTab('clients')" id="tab-btn-clients" class="sidebar-btn w-full flex items-center gap-3 px-3 py-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 transition">
-                            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
-                            <span>Clients</span>
+                        <button onclick="switchTab('clients')" id="tab-btn-clients" title="Clients Directory (Alt+C)" class="sidebar-btn w-full flex items-center justify-between px-3 py-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 transition">
+                            <div class="flex items-center gap-3">
+                                <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+                                <span>Clients</span>
+                            </div>
+                            <kbd class="hidden md:inline-block text-[9px] bg-slate-800 text-slate-400 px-1 py-0.2 rounded border border-slate-700 font-mono">Alt+C</kbd>
                         </button>
-                        <button onclick="switchTab('products')" id="tab-btn-products" class="sidebar-btn w-full flex items-center gap-3 px-3 py-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 transition">
-                            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
-                            <span>Cosmetic Products</span>
+                        <button onclick="switchTab('products')" id="tab-btn-products" title="Cosmetic Products (Alt+P)" class="sidebar-btn w-full flex items-center justify-between px-3 py-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 transition">
+                            <div class="flex items-center gap-3">
+                                <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
+                                <span>Cosmetic Products</span>
+                            </div>
+                            <kbd class="hidden md:inline-block text-[9px] bg-slate-800 text-slate-400 px-1 py-0.2 rounded border border-slate-700 font-mono">Alt+P</kbd>
                         </button>
                         <button onclick="switchTab('users')" id="tab-btn-users" class="sidebar-btn w-full flex items-center gap-3 px-3 py-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 transition">
                             <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
@@ -783,8 +789,9 @@
                         <h2 class="text-2xl font-black text-slate-900">B2B Clients Directory</h2>
                         <p class="text-sm text-slate-500">Manage client accounts, default tolerance %, and billing policies.</p>
                     </div>
-                    <button onclick="openCreateClientModal()" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/30 transition flex items-center gap-1.5">
+                    <button onclick="openCreateClientModal()" title="Add New Client (Alt+C)" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/30 transition flex items-center gap-2">
                         <span>➕ Add New Client</span>
+                        <kbd class="hidden md:inline-block px-1.5 py-0.5 text-[10px] bg-indigo-700/80 text-indigo-100 rounded border border-indigo-400/40 font-mono">Alt+C</kbd>
                     </button>
                 </div>
 
@@ -822,8 +829,9 @@
                         <button onclick="promptAddNewCategory()" class="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm" title="Add a new cosmetic category">
                             <span>🏷️ Add Category</span>
                         </button>
-                        <button onclick="openCreateProductModal()" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/30 transition flex items-center gap-1.5">
+                        <button onclick="openCreateProductModal()" title="Add Cosmetic Product (Alt+P)" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/30 transition flex items-center gap-2">
                             <span>➕ Add Cosmetic Product</span>
+                            <kbd class="hidden md:inline-block px-1.5 py-0.5 text-[10px] bg-indigo-700/80 text-indigo-100 rounded border border-indigo-400/40 font-mono">Alt+P</kbd>
                         </button>
                     </div>
                 </div>

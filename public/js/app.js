@@ -1578,8 +1578,10 @@ window.toggleCustomPOTerm = toggleCustomPOTerm;
 // -------------------------------------------------------------
 // GLOBAL KEYBOARD SHORTCUTS & EVENT LISTENERS
 // 1. Ctrl+K (or Cmd+K): Universal Command Palette & Search
-// 2. Ctrl+O (or Cmd+O, Ctrl+Shift+O, Alt+P): Create / Place Purchase Order
-// 3. Escape: Exit table menus, command palette, mini tabs, modals, docked chats, flyouts
+// 2. Ctrl+O (or Cmd+O): Create / Place Purchase Order
+// 3. Alt+C (or Ctrl+Alt+C): Add New B2B Client
+// 4. Alt+P (or Ctrl+Alt+P): Add Cosmetic Product
+// 5. Escape: Exit table menus, command palette, mini tabs, modals, docked chats, flyouts
 // -------------------------------------------------------------
 
 // Dismiss table action dropdown menus when clicking outside
@@ -1697,11 +1699,10 @@ document.addEventListener('keydown', function (e) {
         return;
     }
 
-    // 3. CTRL+O / CMD+O / ALT+P: Open / Create Purchase Order
+    // 3. CTRL+O / CMD+O: Open / Create Purchase Order
     const isKeyO = e.key && (e.key === 'o' || e.key === 'O');
-    const isAltP = e.altKey && (e.key === 'p' || e.key === 'P');
 
-    if ((isCtrlOrCmd && isKeyO) || isAltP) {
+    if (isCtrlOrCmd && isKeyO) {
         e.preventDefault();
         e.stopPropagation();
 
@@ -1727,6 +1728,54 @@ document.addEventListener('keydown', function (e) {
             fn('place-order');
             if (typeof NKB !== 'undefined' && NKB.showToast) {
                 NKB.showToast('Place Order tab opened (Ctrl+O)', 'info');
+            }
+            return;
+        }
+    }
+
+    // 4. ALT+C / CTRL+ALT+C / CTRL+SHIFT+C: Add New B2B Client
+    const isKeyC = e.key && (e.key === 'c' || e.key === 'C');
+    const isAddClientShortcut = (e.altKey && isKeyC) || (isCtrlOrCmd && e.altKey && isKeyC) || (isCtrlOrCmd && e.shiftKey && isKeyC);
+
+    if (isAddClientShortcut) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (typeof window.openCreateClientModal === 'function' || typeof openCreateClientModal === 'function') {
+            if (typeof switchTab === 'function') {
+                const clientsSec = document.getElementById('view-clients');
+                if (clientsSec && clientsSec.classList.contains('hidden')) {
+                    switchTab('clients');
+                }
+            }
+            const fn = window.openCreateClientModal || openCreateClientModal;
+            fn();
+            if (typeof NKB !== 'undefined' && NKB.showToast) {
+                NKB.showToast('Add Client window opened (Alt+C)', 'info');
+            }
+            return;
+        }
+    }
+
+    // 5. ALT+P / CTRL+ALT+P / CTRL+SHIFT+P: Add Cosmetic Product
+    const isKeyP = e.key && (e.key === 'p' || e.key === 'P');
+    const isAddProductShortcut = (e.altKey && isKeyP) || (isCtrlOrCmd && e.altKey && isKeyP) || (isCtrlOrCmd && e.shiftKey && isKeyP);
+
+    if (isAddProductShortcut) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (typeof window.openCreateProductModal === 'function' || typeof openCreateProductModal === 'function') {
+            if (typeof switchTab === 'function') {
+                const prodsSec = document.getElementById('view-products');
+                if (prodsSec && prodsSec.classList.contains('hidden')) {
+                    switchTab('products');
+                }
+            }
+            const fn = window.openCreateProductModal || openCreateProductModal;
+            fn();
+            if (typeof NKB !== 'undefined' && NKB.showToast) {
+                NKB.showToast('Add Cosmetic Product window opened (Alt+P)', 'info');
             }
             return;
         }
@@ -1846,7 +1895,8 @@ function getCommandPaletteData() {
             group: 'Quick Actions',
             icon: '🏢',
             title: 'Add New B2B Client',
-            subtitle: 'Register new client profile & pricing',
+            subtitle: 'Register new client profile & pricing (Alt+C)',
+            badge: 'Alt+C',
             action: () => {
                 if (typeof openCreateClientModal === 'function') openCreateClientModal();
                 else if (typeof switchTab === 'function') switchTab('clients');
@@ -1855,8 +1905,9 @@ function getCommandPaletteData() {
         items.push({
             group: 'Quick Actions',
             icon: '🧴',
-            title: 'Add New Product',
-            subtitle: 'Register cosmetic SKU to catalog',
+            title: 'Add Cosmetic Product',
+            subtitle: 'Register cosmetic SKU to catalog (Alt+P)',
+            badge: 'Alt+P',
             action: () => {
                 if (typeof openCreateProductModal === 'function') openCreateProductModal();
                 else if (typeof switchTab === 'function') switchTab('products');

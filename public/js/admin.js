@@ -5819,7 +5819,13 @@ function openCreateClientModal() {
             </div>
         </div>
     `;
+
+    setTimeout(() => {
+        const input = document.getElementById('client-name');
+        if (input) input.focus();
+    }, 50);
 }
+window.openCreateClientModal = openCreateClientModal;
 
 async function submitCreateClient(e) {
     e.preventDefault();
@@ -6097,7 +6103,13 @@ async function openCreateProductModal(preselectedClientId = null) {
             </div>
         </div>
     `;
+
+    setTimeout(() => {
+        const input = document.getElementById('prod-name');
+        if (input) input.focus();
+    }, 50);
 }
+window.openCreateProductModal = openCreateProductModal;
 
 async function submitCreateProduct(e) {
     e.preventDefault();
