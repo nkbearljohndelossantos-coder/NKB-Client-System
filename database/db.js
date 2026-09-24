@@ -559,6 +559,51 @@ function runMigrations(dbInstance, isMysql) {
             console.warn('Chat messages table init note:', cmErr.message);
         }
 
+        // Create support_inquiries table for Online Inquiries & IT Support
+        try {
+            if (isMysql) {
+                dbInstance.exec(`
+                    CREATE TABLE IF NOT EXISTS support_inquiries (
+                        id VARCHAR(36) NOT NULL PRIMARY KEY,
+                        name VARCHAR(255) NOT NULL,
+                        email VARCHAR(255) NOT NULL,
+                        phone VARCHAR(50) NULL,
+                        company_name VARCHAR(255) NULL,
+                        subject VARCHAR(255) NULL,
+                        message TEXT NOT NULL,
+                        status VARCHAR(50) NOT NULL DEFAULT 'NEW',
+                        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        resolved_at DATETIME NULL,
+                        notes TEXT NULL,
+                        INDEX idx_inq_email (email),
+                        INDEX idx_inq_status (status),
+                        INDEX idx_inq_created (created_at)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+                `);
+            } else {
+                dbInstance.exec(`
+                    CREATE TABLE IF NOT EXISTS support_inquiries (
+                        id TEXT PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        email TEXT NOT NULL,
+                        phone TEXT,
+                        company_name TEXT,
+                        subject TEXT,
+                        message TEXT NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'NEW',
+                        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                        resolved_at TEXT,
+                        notes TEXT
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_inq_email ON support_inquiries(email);
+                    CREATE INDEX IF NOT EXISTS idx_inq_status ON support_inquiries(status);
+                    CREATE INDEX IF NOT EXISTS idx_inq_created ON support_inquiries(created_at);
+                `);
+            }
+        } catch (inqErr) {
+            console.warn('Support inquiries table init note:', inqErr.message);
+        }
+
         // Seed IT Admin, Inventory & Purchasing users if not already present
         try {
             const itAdminEmail = 'itadmin@nkbmanufacturing.com';

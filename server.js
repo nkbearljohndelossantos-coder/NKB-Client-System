@@ -87,6 +87,17 @@ app.use((req, res, next) => {
 });
 
 app.use(cookieParser());
+
+// 1. Root path serves Client Portal first
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'client.html'));
+});
+
+// 2. Dedicated Staff Login endpoints
+app.get(['/login', '/staff', '/staff-login'], (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/favicon.ico', (req, res) => {

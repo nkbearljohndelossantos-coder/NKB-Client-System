@@ -41,6 +41,35 @@ router.get('/pending', authenticateToken, (req, res) => {
                     }
                 });
             }
+
+            // Online Inquiries pending IT / Admin response
+            try {
+                const pendingInquiries = db.prepare(`
+                    SELECT id, name, email, subject, message, created_at
+                    FROM support_inquiries
+                    WHERE status = 'NEW'
+                    ORDER BY created_at DESC
+                    LIMIT 5
+                `).all();
+
+                for (const inq of pendingInquiries) {
+                    items.push({
+                        id: `inq-${inq.id}`,
+                        category: 'SUPPORT',
+                        title: `Online Inquiry from ${inq.name}`,
+                        description: `Subject: ${inq.subject || 'General'} • "${inq.message.substring(0, 50)}${inq.message.length > 50 ? '...' : ''}"`,
+                        urgency: 'HIGH',
+                        icon: '💬',
+                        target: {
+                            tab: 'chat',
+                            channel: 'support',
+                            inquiryId: inq.id
+                        }
+                    });
+                }
+            } catch (e) {
+                // Table may not exist yet in certain test mocks
+            }
         }
 
         // 2. Orders pending Accounting Confirmation (Downpayment / Credit terms check)

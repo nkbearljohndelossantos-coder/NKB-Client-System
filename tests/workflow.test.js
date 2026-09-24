@@ -2081,6 +2081,76 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         db.prepare('DELETE FROM api_keys WHERE id IN (?, ?)').run(otherClientKeyId, readOnlyKeyId);
     });
 
+    test('31. Client Portal First Routing, Staff Login Redirection, and Online Inquiry to IT Admin', async () => {
+        // 1. Root route '/' serves client.html with Guest Cosmetics Catalog
+        const rootRes = await request(app).get('/');
+        assert.strictEqual(rootRes.status, 200);
+        assert.ok(rootRes.text.includes('Client Portal'));
+        assert.ok(rootRes.text.includes('Place New Order'));
+        assert.ok(rootRes.text.includes('Log In as Staff'));
+        assert.ok(rootRes.text.includes('Contact Support'));
+
+        // 2. Staff routes (/login, /staff, /staff-login) serve index.html
+        const loginRes = await request(app).get('/login');
+        assert.strictEqual(loginRes.status, 200);
+        assert.ok(loginRes.text.includes('Portal Login'));
+
+        const staffRes = await request(app).get('/staff');
+        assert.strictEqual(staffRes.status, 200);
+        assert.ok(staffRes.text.includes('Portal Login'));
+
+        // 3. Guest Online Inquiry submission to IT Admin
+        const guestInquiryRes = await request(app)
+            .post('/api/chat/inquiry')
+            .send({
+                name: 'Maria Clarisse',
+                email: 'maria.clarisse@testbrand.ph',
+                phone: '+63 917 555 1234',
+                company_name: 'Clarisse Skincare Co.',
+                subject: 'Product Formulation & Ingredients',
+                message: 'Inquiring about SPF 50 sunscreen formulation MOQ and batch testing.'
+            });
+
+        assert.strictEqual(guestInquiryRes.status, 201);
+        assert.strictEqual(guestInquiryRes.body.success, true);
+        assert.ok(guestInquiryRes.body.inquiryId);
+
+        // 4. Verify in database: support_inquiries & chat_messages
+        const savedInquiry = db.prepare('SELECT * FROM support_inquiries WHERE id = ?').get(guestInquiryRes.body.inquiryId);
+        assert.ok(savedInquiry);
+        assert.strictEqual(savedInquiry.email, 'maria.clarisse@testbrand.ph');
+        assert.strictEqual(savedInquiry.status, 'NEW');
+
+        const chatMsg = db.prepare(`
+            SELECT * FROM chat_messages 
+            WHERE is_support = 1 AND target_role = 'IT_ADMIN' AND message LIKE ?
+        `).get('%maria.clarisse@testbrand.ph%');
+        assert.ok(chatMsg, 'Chat message must be dispatched to IT Admin');
+        assert.strictEqual(chatMsg.channel_type, 'SUPPORT');
+
+        // 5. IT Admin can view inquiries
+        const itAdminToken = getAuthToken('IT_ADMIN');
+        const listInquiriesRes = await request(app)
+            .get('/api/chat/inquiries')
+            .set('Authorization', `Bearer ${itAdminToken}`);
+        assert.strictEqual(listInquiriesRes.status, 200);
+        assert.strictEqual(listInquiriesRes.body.success, true);
+        assert.ok(listInquiriesRes.body.data.some(i => i.id === guestInquiryRes.body.inquiryId));
+
+        // 6. IT Admin receives notification for pending inquiries
+        const notifRes = await request(app)
+            .get('/api/notifications/pending')
+            .set('Authorization', `Bearer ${itAdminToken}`);
+        assert.strictEqual(notifRes.status, 200);
+        assert.strictEqual(notifRes.body.success, true);
+        const inquiryNotif = notifRes.body.items.find(n => n.category === 'SUPPORT');
+        assert.ok(inquiryNotif, 'IT Admin must have SUPPORT inquiry notification');
+
+        // Clean up test inquiry records
+        db.prepare('DELETE FROM chat_messages WHERE id = ?').run(chatMsg.id);
+        db.prepare('DELETE FROM support_inquiries WHERE id = ?').run(guestInquiryRes.body.inquiryId);
+    });
+
     after(() => {
         // Automatically delete all test decoys and temporary test database
         try {

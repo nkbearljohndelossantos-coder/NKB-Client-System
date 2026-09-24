@@ -1,8 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
+const bcrypt = require('bcryptjs');
 const db = require('../database/db');
-const { authenticateToken, normalizeRole, ROLES } = require('../middleware/auth');
+const { authenticateToken, optionalAuthenticateToken, normalizeRole, ROLES } = require('../middleware/auth');
 
 const activeTypingTracker = new Map();
 
@@ -534,6 +535,138 @@ router.get('/status', authenticateToken, (req, res) => {
         });
     } catch (err) {
         return res.json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/chat/inquiry
+ * Submit an online inquiry / support message from Client Portal (works for guests and clients)
+ * Dispatches to IT Administrator (and Super Admin) chat thread & saves in support_inquiries
+ */
+router.post('/inquiry', optionalAuthenticateToken, (req, res) => {
+    try {
+        const { name, email, phone, company_name, subject, message } = req.body;
+
+        if (!message || !message.trim()) {
+            return res.status(400).json({ success: false, error: 'EMPTY_MESSAGE', message: 'Inquiry message cannot be blank.' });
+        }
+
+        const cleanName = (name || req.user?.name || 'Guest Visitor').trim();
+        const cleanEmail = (email || req.user?.email || '').trim().toLowerCase();
+        const cleanPhone = (phone || req.user?.phone || '').trim();
+        const cleanCompany = (company_name || req.user?.companyName || '').trim();
+        const cleanSubject = (subject || 'Online General Inquiry').trim();
+        const cleanMessage = message.trim();
+
+        if (!cleanEmail) {
+            return res.status(400).json({ success: false, error: 'EMAIL_REQUIRED', message: 'Email address is required so support can respond to you.' });
+        }
+
+        const inquiryId = uuidv4();
+        db.prepare(`
+            INSERT INTO support_inquiries (id, name, email, phone, company_name, subject, message, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'NEW', datetime('now', 'localtime'))
+        `).run(inquiryId, cleanName, cleanEmail, cleanPhone || null, cleanCompany || null, cleanSubject, cleanMessage);
+
+        // Find or create sender user for chat_messages table (to satisfy sender_id FK)
+        let senderId = req.user ? req.user.id : null;
+        if (!senderId) {
+            const existingUser = db.prepare('SELECT id FROM users WHERE LOWER(email) = ?').get(cleanEmail);
+            if (existingUser) {
+                senderId = existingUser.id;
+            } else {
+                // Auto-create guest client & user account so IT Admin can chat directly with them
+                const newUserId = uuidv4();
+                const newClientId = uuidv4();
+                db.prepare(`
+                    INSERT INTO clients (id, company_name, contact_person, email, phone, address, default_billing_policy, default_tolerance_percent, is_active, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, 'Online Guest Inquiry', 'ACTUAL_DELIVERY', 10.0, 1, datetime('now', 'localtime'), datetime('now', 'localtime'))
+                `).run(newClientId, cleanCompany || `${cleanName}'s Brand`, cleanName, cleanEmail, cleanPhone || 'N/A');
+
+                const salt = bcrypt.genSaltSync(10);
+                const randomPassHash = bcrypt.hashSync(uuidv4(), salt);
+                db.prepare(`
+                    INSERT INTO users (id, name, email, password_hash, plain_password, role, client_id, phone, auth_provider, is_active, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, 'Client123!', 'CLIENT', ?, ?, 'inquiry', 1, datetime('now', 'localtime'), datetime('now', 'localtime'))
+                `).run(newUserId, cleanName, cleanEmail, randomPassHash, newClientId, cleanPhone);
+
+                senderId = newUserId;
+            }
+        }
+
+        // Find IT Admin
+        const itAdmin = db.prepare(`
+            SELECT id FROM users 
+            WHERE role = 'IT_ADMIN' OR LOWER(email) = 'itadmin@nkbmanufacturing.com' 
+            ORDER BY CASE WHEN role = 'IT_ADMIN' THEN 0 ELSE 1 END LIMIT 1
+        `).get();
+        const itAdminId = itAdmin ? itAdmin.id : null;
+
+        // Dispatch into chat_messages
+        const msgId = uuidv4();
+        const formattedChat = `📋 [ONLINE INQUIRY: ${cleanSubject}]\n👤 From: ${cleanName} (${cleanEmail}${cleanPhone ? `, ${cleanPhone}` : ''})${cleanCompany ? `\n🏢 Company: ${cleanCompany}` : ''}\n\n💬 Message:\n${cleanMessage}`;
+
+        db.prepare(`
+            INSERT INTO chat_messages (id, sender_id, receiver_id, channel_type, target_role, message, is_support, is_read, created_at)
+            VALUES (?, ?, ?, 'SUPPORT', 'IT_ADMIN', ?, 1, 0, datetime('now', 'localtime'))
+        `).run(msgId, senderId, itAdminId, formattedChat);
+
+        return res.status(201).json({
+            success: true,
+            inquiryId,
+            message: 'Your inquiry has been sent directly to the IT Administrator and Support Team. We will contact you shortly!'
+        });
+    } catch (err) {
+        console.error('Error submitting support inquiry:', err);
+        return res.status(500).json({ success: false, error: 'FAILED_INQUIRY', message: err.message });
+    }
+});
+
+/**
+ * GET /api/chat/inquiries
+ * View list of online inquiries (IT Admin / Super Admin only)
+ */
+router.get('/inquiries', authenticateToken, (req, res) => {
+    try {
+        const role = normalizeRole(req.user.role);
+        if (role !== ROLES.IT_ADMIN && role !== ROLES.SUPER_ADMIN && role !== ROLES.ADMIN) {
+            return res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Access restricted to IT and Executive Administration.' });
+        }
+        const inquiries = db.prepare('SELECT * FROM support_inquiries ORDER BY created_at DESC LIMIT 100').all();
+        return res.json({ success: true, data: inquiries });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: 'FAILED_FETCH_INQUIRIES', message: err.message });
+    }
+});
+
+/**
+ * PATCH /api/chat/inquiries/:id
+ * Update status of an inquiry (e.g. RESOLVED, IN_PROGRESS)
+ */
+router.patch('/inquiries/:id', authenticateToken, (req, res) => {
+    try {
+        const role = normalizeRole(req.user.role);
+        if (role !== ROLES.IT_ADMIN && role !== ROLES.SUPER_ADMIN && role !== ROLES.ADMIN) {
+            return res.status(403).json({ success: false, error: 'FORBIDDEN' });
+        }
+        const { status, notes } = req.body;
+        const inquiry = db.prepare('SELECT * FROM support_inquiries WHERE id = ?').get(req.params.id);
+        if (!inquiry) {
+            return res.status(404).json({ success: false, error: 'NOT_FOUND', message: 'Inquiry not found.' });
+        }
+
+        const newStatus = status || inquiry.status;
+        const resolvedAt = (newStatus === 'RESOLVED' && !inquiry.resolved_at) ? new Date().toISOString() : inquiry.resolved_at;
+
+        db.prepare(`
+            UPDATE support_inquiries 
+            SET status = ?, notes = COALESCE(?, notes), resolved_at = ?
+            WHERE id = ?
+        `).run(newStatus, notes, resolvedAt, req.params.id);
+
+        return res.json({ success: true, message: 'Inquiry updated successfully.' });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
     }
 });
 

@@ -104,11 +104,13 @@ function seedDatabase() {
         `);
 
         insertUser.run(adminId, 'Executive Admin', 'admin@nkbmanufacturing.com', adminPasswordHash, 'Admin123!', 'SUPER_ADMIN', null, '+63 917 000 0001');
+        insertUser.run(uuidv4(), 'IT Administrator', 'itadmin@nkbmanufacturing.com', adminPasswordHash, 'ITAdminPassword@2026!', 'IT_ADMIN', null, '+63 917 000 0008');
         insertUser.run(uuidv4(), 'Chief Executive Officer', 'ceo@nkbmanufacturing.com', staffPasswordHash, 'Executive123!', 'CEO', null, '+63 917 000 0006');
         insertUser.run(uuidv4(), 'Quality Control Inspector', 'qc@nkbmanufacturing.com', staffPasswordHash, 'Staff123!', 'QC', null, '+63 917 000 0007');
         insertUser.run(prodUserId, 'Production Supervisor', 'production@nkbmanufacturing.com', staffPasswordHash, 'Staff123!', 'PRODUCTION', null, '+63 917 000 0002');
         insertUser.run(whUserId, 'Warehouse Officer', 'warehouse@nkbmanufacturing.com', staffPasswordHash, 'Staff123!', 'WAREHOUSE', null, '+63 917 000 0003');
         insertUser.run(acctUserId, 'Senior Accountant', 'accounting@nkbmanufacturing.com', staffPasswordHash, 'Staff123!', 'ACCOUNTING', null, '+63 917 000 0004');
+        insertUser.run(uuidv4(), 'Inventory Officer', 'inventory@nkbmanufacturing.com', staffPasswordHash, 'Staff123!', 'INVENTORY', null, '+63 917 000 0009');
         insertUser.run(uuidv4(), 'Purchasing Officer', 'purchasing@nkbmanufacturing.com', staffPasswordHash, 'Staff123!', 'PURCHASING', null, '+63 917 000 0005');
         insertUser.run(clientUserId, 'Maria Santos (ABC Cosmetics)', 'client@example.com', clientPasswordHash, 'Client123!', 'CLIENT', clientId, '+63 917 123 4567');
         insertUser.run(client2UserId, 'John Michael Reyes (Glow Essence)', 'glow@example.com', clientPasswordHash, 'Client123!', 'CLIENT', client2Id, '+63 918 987 6543');

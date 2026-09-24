@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     await loadClientProducts();
-    loadClientDashboard();
+    switchClientTab('dashboard');
 });
 
 // Setup UI for Guest Mode vs Authenticated User
@@ -37,6 +37,7 @@ function setupGuestModeUI(isGuest) {
     const guestBanner = document.getElementById('client-guest-catalog-banner');
     const lockPills = document.querySelectorAll('.guest-lock-pill');
     const publicPills = document.querySelectorAll('.guest-public-pill');
+    const companyOnlyNav = document.querySelectorAll('.company-only-nav');
 
     if (isGuest) {
         if (guestHeader) guestHeader.classList.remove('hidden');
@@ -45,6 +46,7 @@ function setupGuestModeUI(isGuest) {
         if (guestBanner) guestBanner.classList.remove('hidden');
         lockPills.forEach(p => p.classList.remove('hidden'));
         publicPills.forEach(p => p.classList.remove('hidden'));
+        companyOnlyNav.forEach(el => el.classList.add('hidden'));
     } else {
         if (guestHeader) guestHeader.classList.add('hidden');
         if (authHeader) authHeader.classList.remove('hidden');
@@ -52,6 +54,7 @@ function setupGuestModeUI(isGuest) {
         if (guestBanner) guestBanner.classList.add('hidden');
         lockPills.forEach(p => p.classList.add('hidden'));
         publicPills.forEach(p => p.classList.add('hidden'));
+        companyOnlyNav.forEach(el => el.classList.remove('hidden'));
 
         // Update nav company and user names
         const compEl = document.getElementById('nav-company-name');
@@ -597,12 +600,119 @@ function closeClientModal() {
         closeCompanyLoginModal();
         return;
     }
-    const dynamicModals = document.querySelectorAll('#client-modals-root > div:not(#modal-google-verify):not(#modal-company-login)');
+    const sModal = document.getElementById('modal-contact-support');
+    if (sModal && !sModal.classList.contains('hidden')) {
+        closeContactSupportModal();
+        return;
+    }
+    const dynamicModals = document.querySelectorAll('#client-modals-root > div:not(#modal-google-verify):not(#modal-company-login):not(#modal-contact-support)');
     if (dynamicModals.length > 0) {
         dynamicModals.forEach(m => m.remove());
     }
 }
 window.closeClientModal = closeClientModal;
+
+// Contact Support & Online Inquiries Handlers
+function openContactSupportModal() {
+    const modal = document.getElementById('modal-contact-support');
+    if (modal) {
+        modal.classList.remove('hidden');
+        const alertEl = document.getElementById('contact-support-alert');
+        if (alertEl) alertEl.classList.add('hidden');
+
+        // Prepopulate if logged in
+        if (NKB.user) {
+            const nameEl = document.getElementById('support-name');
+            const emailEl = document.getElementById('support-email');
+            const compEl = document.getElementById('support-company');
+            const phoneEl = document.getElementById('support-phone');
+            if (nameEl && !nameEl.value) nameEl.value = NKB.user.name || '';
+            if (emailEl && !emailEl.value) emailEl.value = NKB.user.email || '';
+            if (compEl && !compEl.value) compEl.value = NKB.user.companyName || '';
+            if (phoneEl && !phoneEl.value) phoneEl.value = NKB.user.phone || '';
+        }
+
+        const msgInput = document.getElementById('support-message');
+        if (msgInput) msgInput.focus();
+    }
+}
+window.openContactSupportModal = openContactSupportModal;
+
+function closeContactSupportModal() {
+    const modal = document.getElementById('modal-contact-support');
+    if (modal) modal.classList.add('hidden');
+}
+window.closeContactSupportModal = closeContactSupportModal;
+
+async function submitContactSupportInquiry(e) {
+    e.preventDefault();
+    const name = document.getElementById('support-name')?.value.trim();
+    const email = document.getElementById('support-email')?.value.trim();
+    const company_name = document.getElementById('support-company')?.value.trim();
+    const phone = document.getElementById('support-phone')?.value.trim();
+    const subject = document.getElementById('support-subject')?.value.trim();
+    const message = document.getElementById('support-message')?.value.trim();
+
+    const alertEl = document.getElementById('contact-support-alert');
+    const submitBtn = document.getElementById('btn-submit-support');
+
+    if (!email || !message) {
+        if (alertEl) {
+            alertEl.className = 'p-3 rounded-xl text-xs font-bold bg-rose-50 border border-rose-200 text-rose-700';
+            alertEl.textContent = 'Please provide both your email address and message.';
+            alertEl.classList.remove('hidden');
+        }
+        return;
+    }
+
+    if (alertEl) alertEl.classList.add('hidden');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.dataset.origHtml = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<span class="inline-block animate-pulse">⏳ Sending to IT Admin...</span>';
+    }
+
+    try {
+        const res = await NKB.api('/api/chat/inquiry', {
+            method: 'POST',
+            body: JSON.stringify({ name, email, phone, company_name, subject, message })
+        });
+
+        if (res.success) {
+            if (alertEl) {
+                alertEl.className = 'p-3 rounded-xl text-xs font-bold bg-emerald-50 border border-emerald-200 text-emerald-800';
+                alertEl.textContent = res.message || 'Your inquiry has been sent to IT Support! We will contact you shortly.';
+                alertEl.classList.remove('hidden');
+            }
+            NKB.showToast('Inquiry sent successfully to IT Support!', 'success');
+            const msgInput = document.getElementById('support-message');
+            if (msgInput) msgInput.value = '';
+
+            setTimeout(() => {
+                closeContactSupportModal();
+                if (alertEl) alertEl.classList.add('hidden');
+            }, 2500);
+        } else {
+            if (alertEl) {
+                alertEl.className = 'p-3 rounded-xl text-xs font-bold bg-rose-50 border border-rose-200 text-rose-700';
+                alertEl.textContent = res.error || res.message || 'Failed to submit inquiry.';
+                alertEl.classList.remove('hidden');
+            }
+        }
+    } catch (err) {
+        if (alertEl) {
+            alertEl.className = 'p-3 rounded-xl text-xs font-bold bg-rose-50 border border-rose-200 text-rose-700';
+            alertEl.textContent = err.message || 'Failed to submit inquiry.';
+            alertEl.classList.remove('hidden');
+        }
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            if (submitBtn.dataset.origHtml) submitBtn.innerHTML = submitBtn.dataset.origHtml;
+        }
+    }
+}
+window.submitContactSupportInquiry = submitContactSupportInquiry;
 
 // -------------------------------------------------------------
 // 3. MY PURCHASE ORDERS
