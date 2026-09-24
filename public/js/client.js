@@ -64,6 +64,7 @@ function switchClientTab(tabId) {
     else if (tabId === 'invoices') loadClientInvoices();
     else if (tabId === 'buffer') loadClientBuffer();
 }
+window.switchClientTab = switchClientTab;
 
 // -------------------------------------------------------------
 // 1. DASHBOARD

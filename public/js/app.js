@@ -1575,5 +1575,130 @@ function toggleCustomPOTerm(prefix = 'edit') {
 }
 window.toggleCustomPOTerm = toggleCustomPOTerm;
 
+// -------------------------------------------------------------
+// GLOBAL KEYBOARD SHORTCUTS
+// 1. Ctrl+O (or Cmd+O, Ctrl+Shift+O, Alt+P): Create / Place Purchase Order
+// 2. Escape: Exit mini tabs, modals, docked chats, flyouts, and dropdowns
+// -------------------------------------------------------------
+document.addEventListener('keydown', function (e) {
+    // 1. ESCAPE KEY: Exit mini tabs, modals, flyouts, dropdowns
+    if (e.key === 'Escape' || e.key === 'Esc' || e.keyCode === 27) {
+        let handled = false;
+
+        // A. Autocomplete / Search suggestions dropdowns
+        const editSuggestions = document.getElementById('edit-po-suggestions-container');
+        if (editSuggestions && !editSuggestions.classList.contains('hidden')) {
+            editSuggestions.classList.add('hidden');
+            handled = true;
+        }
+        const poSuggestions = document.getElementById('po-suggestions-container');
+        if (poSuggestions && !poSuggestions.classList.contains('hidden')) {
+            poSuggestions.classList.add('hidden');
+            handled = true;
+        }
+
+        // B. Active Modals (#modals-root and #client-modals-root)
+        const modalsRoot = document.getElementById('modals-root');
+        if (!handled && modalsRoot && modalsRoot.children.length > 0 && modalsRoot.innerHTML.trim() !== '') {
+            if (typeof closeModal === 'function') {
+                closeModal();
+            } else {
+                modalsRoot.innerHTML = '';
+            }
+            handled = true;
+        }
+
+        const clientModalsRoot = document.getElementById('client-modals-root');
+        if (!handled && clientModalsRoot && clientModalsRoot.children.length > 0 && clientModalsRoot.innerHTML.trim() !== '') {
+            if (typeof closeClientModal === 'function') {
+                closeClientModal();
+            } else if (typeof closeModal === 'function') {
+                closeModal();
+            } else {
+                clientModalsRoot.innerHTML = '';
+            }
+            handled = true;
+        }
+
+        // C. Notification & Messenger Flyouts
+        const bellFlyout = document.getElementById('agent-bell-flyout');
+        if (!handled && bellFlyout && !bellFlyout.classList.contains('hidden')) {
+            bellFlyout.classList.add('hidden');
+            handled = true;
+        }
+
+        const chatFlyout = document.getElementById('agent-chat-flyout');
+        if (!handled && chatFlyout && !chatFlyout.classList.contains('hidden')) {
+            chatFlyout.classList.add('hidden');
+            handled = true;
+        }
+
+        // D. Messenger Docked Mini-Tabs / Chat Windows
+        if (!handled && window.NKB_Agents && typeof window.NKB_Agents.closeTopDockedChat === 'function') {
+            handled = window.NKB_Agents.closeTopDockedChat();
+        }
+
+        // E. Mobile Sidebars (if open on mobile)
+        if (!handled) {
+            const adminSidebar = document.getElementById('sidebar');
+            if (adminSidebar && !adminSidebar.classList.contains('-translate-x-full') && typeof toggleMobileSidebar === 'function') {
+                if (window.innerWidth < 1024) {
+                    toggleMobileSidebar(false);
+                    handled = true;
+                }
+            }
+            const clientSidebar = document.getElementById('client-sidebar');
+            if (clientSidebar && !clientSidebar.classList.contains('-translate-x-full') && typeof toggleClientMobileSidebar === 'function') {
+                if (window.innerWidth < 1024) {
+                    toggleClientMobileSidebar(false);
+                    handled = true;
+                }
+            }
+        }
+
+        if (handled) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+        }
+    }
+
+    // 2. CTRL+O / CMD+O / ALT+P: Open / Create Purchase Order
+    const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+    const isKeyO = e.key && (e.key === 'o' || e.key === 'O');
+    const isAltP = e.altKey && (e.key === 'p' || e.key === 'P');
+
+    if ((isCtrlOrCmd && isKeyO) || isAltP) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // 1. Admin Portal: Open PO Creation Modal
+        if (typeof window.openCreatePOModal === 'function' || typeof openCreatePOModal === 'function') {
+            if (typeof switchTab === 'function') {
+                const ordersSec = document.getElementById('view-orders');
+                if (ordersSec && ordersSec.classList.contains('hidden')) {
+                    switchTab('orders');
+                }
+            }
+            const fn = window.openCreatePOModal || openCreatePOModal;
+            fn();
+            if (typeof NKB !== 'undefined' && NKB.showToast) {
+                NKB.showToast('Purchase Order window opened (Ctrl+O)', 'info');
+            }
+            return;
+        }
+
+        // 2. Client Portal: Switch to Place Order Tab
+        if (typeof window.switchClientTab === 'function' || typeof switchClientTab === 'function') {
+            const fn = window.switchClientTab || switchClientTab;
+            fn('place-order');
+            if (typeof NKB !== 'undefined' && NKB.showToast) {
+                NKB.showToast('Place Order tab opened (Ctrl+O)', 'info');
+            }
+            return;
+        }
+    }
+});
+
 
 

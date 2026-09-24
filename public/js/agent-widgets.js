@@ -408,6 +408,21 @@
         }
     }
 
+    function closeTopDockedChat() {
+        if (!openDockedChats || openDockedChats.length === 0) return false;
+        // Close the last non-minimized chat if any
+        for (let i = openDockedChats.length - 1; i >= 0; i--) {
+            if (!openDockedChats[i].isMinimized) {
+                closeDockedChat(openDockedChats[i].contactId);
+                return true;
+            }
+        }
+        // If all are minimized, close the last one
+        const last = openDockedChats[openDockedChats.length - 1];
+        closeDockedChat(last.contactId);
+        return true;
+    }
+
     function toggleMinimizeDockedChat(contactId) {
         const chat = openDockedChats.find(c => c.contactId === contactId);
         if (chat) {
@@ -926,6 +941,7 @@
         executePendingAction,
         openDockedChat,
         closeDockedChat,
+        closeTopDockedChat,
         toggleMinimizeDockedChat,
         toggleChatHead,
         sendDockedChatMessage,

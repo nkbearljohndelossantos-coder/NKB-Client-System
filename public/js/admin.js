@@ -3044,7 +3044,10 @@ async function openCreatePOModal() {
                         <h3 class="text-lg font-bold text-slate-900">Create Multi-Item Purchase Order (PO)</h3>
                         <p class="text-xs text-slate-500">Order multiple cosmetic products with client-specific pricing</p>
                     </div>
-                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
+                    <button onclick="closeModal()" title="Close (Esc)" class="text-slate-400 hover:text-slate-600 font-bold text-lg flex items-center gap-1.5">
+                        <kbd class="text-[10px] font-mono text-slate-400 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded font-normal">Esc</kbd>
+                        <span>&times;</span>
+                    </button>
                 </div>
                 <form id="form-create-po" onsubmit="submitCreatePO(event)" class="space-y-4 text-xs font-semibold flex-1 overflow-y-auto pr-1">
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -7290,5 +7293,6 @@ window.openRawKeyRevealModal = openRawKeyRevealModal;
 window.copyRawApiKey = copyRawApiKey;
 window.revokeApiKey = revokeApiKey;
 window.deleteApiKey = deleteApiKey;
+window.openCreatePOModal = openCreatePOModal;
 
 
