@@ -138,6 +138,8 @@ async function loadClientDashboard() {
         };
         setElText('client-kpi-open-pos', NKB.formatNumber(d.openPOs));
         setElText('client-kpi-pending-drs', NKB.formatNumber(d.ongoingDeliveries != null ? d.ongoingDeliveries : d.pendingDRs));
+        setElText('client-kpi-purchased-month', NKB.formatCurrency(d.purchasedThisMonth || 0));
+        setElText('client-kpi-purchased-month-sub', `${NKB.formatCurrency(d.purchasedPaidThisMonth || 0)} paid this month`);
         setElText('client-kpi-unpaid-invoices', NKB.formatCurrency(d.outstandingBalance));
         setElText('client-kpi-buffer-units', `${NKB.formatNumber(d.availableBufferUnits)} pcs`);
     }

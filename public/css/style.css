@@ -602,22 +602,38 @@ textarea:focus {
         padding: 0.875rem !important;
     }
 
-    /* Modals on Phones */
+    /* Modals on Phones - match both modal- prefix and -modal suffix */
     .modal-backdrop > div,
-    [id$="-modal"] > div {
+    [id$="-modal"] > div,
+    [id^="modal-"] > div,
+    div[id*="modal"] > div {
         width: 95vw !important;
         max-width: 95vw !important;
-        max-height: 88vh !important;
+        max-height: 90vh !important;
+        overflow-y: auto !important;
         margin: auto !important;
         border-radius: 1rem !important;
         padding: 1.25rem !important;
+        -webkit-overflow-scrolling: touch !important;
     }
 
-    /* Tables on Phones */
+    /* Forms and inputs on mobile: prevent iOS Safari auto-zoom on focus */
+    input, select, textarea {
+        font-size: 16px !important;
+    }
+
+    /* Tables & Horizontal scroll on Phones */
+    .overflow-x-auto,
     .table-responsive-wrapper,
     .po-scroll-container,
     table {
-        -webkit-overflow-scrolling: touch;
+        -webkit-overflow-scrolling: touch !important;
+        max-width: 100% !important;
+    }
+
+    /* Fast touch actions */
+    button, a {
+        touch-action: manipulation;
     }
 
     /* Floating Agent Widgets on Mobile Phones */

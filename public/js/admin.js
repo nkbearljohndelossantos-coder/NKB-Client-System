@@ -447,6 +447,40 @@ async function loadDashboard() {
         setElText('kpi-ar-total', NKB.formatCurrency(d.arTotal));
         setElText('kpi-overdue-ar', `${NKB.formatCurrency(d.overdueAR)} overdue`);
         setElText('kpi-ar-overdue', `${NKB.formatCurrency(d.overdueAR)} overdue`);
+
+        // Monthly Sales Performance & Statistics
+        const sm = d.salesThisMonth || {};
+        const totalSold = sm.totalSold != null ? sm.totalSold : (d.soldThisMonth || 0);
+        setElText('kpi-sold-this-month', NKB.formatCurrency(totalSold));
+        setElText('kpi-sold-mom', `${sm.invoiceCount || 0} invoices this month · ${sm.momGrowthPercent >= 0 ? '+' : ''}${sm.momGrowthPercent || 0}% MoM`);
+
+        // Sub-stat cards
+        setElText('stat-sales-collected', NKB.formatCurrency(sm.totalCollected || 0));
+        const collectionRate = totalSold > 0 ? Math.round(((sm.totalCollected || 0) / totalSold) * 100) : 0;
+        setElText('stat-sales-collection-rate', `${collectionRate}% collection rate`);
+
+        setElText('stat-sales-balance', NKB.formatCurrency(sm.totalBalance || 0));
+        setElText('stat-sales-balance-sub', `${NKB.formatCurrency(sm.totalBalance || 0)} outstanding this month`);
+
+        const momSign = (sm.momGrowthPercent || 0) >= 0 ? '+' : '';
+        setElText('stat-sales-mom-growth', `${momSign}${sm.momGrowthPercent || 0}%`);
+        setElText('stat-sales-last-month', `vs Last Month (${NKB.formatCurrency(sm.lastMonthSold || 0)})`);
+
+        setElText('stat-sales-units', `${NKB.formatNumber(sm.totalUnitsSold || 0)} pcs`);
+        setElText('stat-sales-invoice-count', `across ${sm.invoiceCount || 0} invoice${(sm.invoiceCount || 0) === 1 ? '' : 's'}`);
+
+        // Badge
+        if (sm.monthStr) {
+            setElText('dashboard-sales-month-badge', `Month: ${sm.monthStr}`);
+        }
+
+        // Render Top Invoiced Products
+        renderDashboardTopProducts(sm.topProducts || []);
+
+        // Render 6-Month Sales Trend Chart
+        if (sm.salesTrend && sm.salesTrend.length > 0) {
+            renderMonthlySalesChart(sm.salesTrend);
+        }
     }
 
     if (arRes.success && arRes.data && arRes.data.summary) {
@@ -491,6 +525,112 @@ async function loadDashboard() {
     if (yieldRes.success && yieldRes.data && yieldRes.data.batches) {
         renderYieldChart(yieldRes.data.batches.slice(0, 8).reverse());
     }
+}
+
+function renderDashboardTopProducts(products) {
+    const container = document.getElementById('dashboard-top-products');
+    if (!container) return;
+
+    if (!products || products.length === 0) {
+        container.innerHTML = `<div class="p-4 text-center text-slate-400 bg-slate-50 rounded-xl">No invoiced sales recorded this month yet.</div>`;
+        return;
+    }
+
+    container.innerHTML = products.slice(0, 5).map((p, idx) => `
+        <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100 hover:bg-slate-100/70 transition">
+            <div class="flex items-center gap-2.5 min-w-0">
+                <span class="w-5 h-5 flex-shrink-0 flex items-center justify-center rounded-full ${idx === 0 ? 'bg-amber-100 text-amber-700 font-black' : 'bg-slate-200 text-slate-600 font-bold'} text-[10px]">
+                    ${idx + 1}
+                </span>
+                <div class="truncate">
+                    <div class="font-bold text-slate-800 truncate">${p.product_name || 'Cosmetic Item'}</div>
+                    <div class="text-[10px] text-slate-500">${NKB.formatNumber(p.units_sold || 0)} pcs sold</div>
+                </div>
+            </div>
+            <div class="text-right font-extrabold text-slate-900 ml-2 whitespace-nowrap">
+                ${NKB.formatCurrency(p.revenue || 0)}
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderMonthlySalesChart(trend) {
+    const ctx = document.getElementById('chart-monthly-sales');
+    if (!ctx) return;
+
+    const labels = trend.map(t => t.month);
+    const salesData = trend.map(t => t.totalSold);
+    const collectedData = trend.map(t => t.totalCollected);
+
+    if (monthlySalesChart) monthlySalesChart.destroy();
+
+    monthlySalesChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: 'Invoiced Sales (₱)',
+                    data: salesData,
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                    fill: true,
+                    tension: 0.35,
+                    borderWidth: 2.5,
+                    pointBackgroundColor: '#10b981',
+                    pointRadius: 4,
+                    pointHoverRadius: 6
+                },
+                {
+                    label: 'Collected (₱)',
+                    data: collectedData,
+                    borderColor: '#6366f1',
+                    backgroundColor: 'rgba(99, 102, 241, 0.05)',
+                    fill: false,
+                    tension: 0.35,
+                    borderWidth: 2,
+                    borderDash: [4, 4],
+                    pointBackgroundColor: '#6366f1',
+                    pointRadius: 3
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: { boxWidth: 12, font: { size: 11, weight: 'bold' } }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.dataset.label}: ₱${(context.raw || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            if (value >= 1000000) return '₱' + (value / 1000000).toFixed(1) + 'M';
+                            if (value >= 1000) return '₱' + (value / 1000).toFixed(0) + 'k';
+                            return '₱' + value;
+                        },
+                        font: { size: 10 }
+                    },
+                    grid: { color: 'rgba(226, 232, 240, 0.6)' }
+                },
+                x: {
+                    ticks: { font: { size: 11 } },
+                    grid: { display: false }
+                }
+            }
+        }
+    });
 }
 
 function renderYieldChart(batches) {
@@ -1660,6 +1800,9 @@ async function loadInvoices() {
                                             <span>💵</span><span>Record Payment</span>
                                         </button>
                                     ` : ''}
+                                    <button onclick="openEditInvoiceDatesModal('${si.id}', '${si.invoice_number}', '${si.invoice_date || ''}', '${si.due_date || ''}')" class="w-full flex items-center gap-2 px-3 py-1.5 text-slate-700 hover:bg-slate-50 transition text-left cursor-pointer">
+                                        <span>📅</span><span>Edit Dates (Late Encoding)</span>
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -5314,11 +5457,19 @@ window.submitClientReceiving = submitClientReceiving;
 // 7. Generate Invoice Modal
 function openGenerateInvoiceModal(drId, drNumber, clientName, totalAccepted) {
     const root = document.getElementById('modals-root');
+    const today = NKB.getManilaDate();
+    const d = new Date();
+    d.setDate(d.getDate() + 30);
+    const defaultDueDate = NKB.getManilaDate(d);
+
     root.innerHTML = `
         <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
-            <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
                 <div class="flex justify-between items-center border-b border-slate-100 pb-3">
-                    <h3 class="text-lg font-bold text-slate-900">Generate Sales Invoice (SI)</h3>
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-900">Generate Sales Invoice (SI)</h3>
+                        <p class="text-xs text-slate-500">Supports custom issuance date for late-encoding</p>
+                    </div>
                     <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold">&times;</button>
                 </div>
                 <form onsubmit="submitGenerateInvoice(event, '${drId}')" class="space-y-4 text-xs font-semibold">
@@ -5332,37 +5483,54 @@ function openGenerateInvoiceModal(drId, drNumber, clientName, totalAccepted) {
                             Core Rule: Sales Invoice will be strictly computed from the accepted DR quantity (${totalAccepted} pcs).
                         </div>
                     </div>
-                    <div>
-                        <label class="block text-slate-600 mb-1">Invoice Due Date</label>
-                        <input type="date" id="inv-due-date" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-slate-700 font-bold mb-1">Invoice Date <span class="text-indigo-600 font-normal">(Late Encoding)</span></label>
+                            <input type="date" id="inv-date" value="${today}" onchange="autoUpdateInvoiceDueDate(this.value)" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500">
+                            <span class="text-[10px] text-slate-500 block mt-0.5">Specify actual date if late-encoded</span>
+                        </div>
+                        <div>
+                            <label class="block text-slate-700 font-bold mb-1">Payment Due Date</label>
+                            <input type="date" id="inv-due-date" value="${defaultDueDate}" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500">
+                            <span class="text-[10px] text-slate-500 block mt-0.5">Payment term due date</span>
+                        </div>
                     </div>
                     <div>
                         <label class="block text-slate-600 mb-1">Invoice Notes / Terms</label>
                         <textarea id="inv-notes" rows="2" class="w-full px-3 py-2 border rounded-xl bg-slate-50">Standard payment term: 30 days upon DR acceptance.</textarea>
                     </div>
                     <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl">Cancel</button>
-                        <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold">Generate Official Invoice</button>
+                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl cursor-pointer">Cancel</button>
+                        <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold cursor-pointer">Generate Official Invoice</button>
                     </div>
                 </form>
             </div>
         </div>
     `;
-
-    // Set default due date to 30 days from today
-    const d = new Date();
-    d.setDate(d.getDate() + 30);
-    document.getElementById('inv-due-date').value = NKB.getManilaDate(d);
 }
+window.openGenerateInvoiceModal = openGenerateInvoiceModal;
+
+function autoUpdateInvoiceDueDate(invDateVal) {
+    if (!invDateVal) return;
+    try {
+        const d = new Date(invDateVal);
+        d.setDate(d.getDate() + 30);
+        const dueEl = document.getElementById('inv-due-date');
+        if (dueEl) dueEl.value = NKB.getManilaDate(d);
+    } catch (_) {}
+}
+window.autoUpdateInvoiceDueDate = autoUpdateInvoiceDueDate;
 
 async function submitGenerateInvoice(e, drId) {
     e.preventDefault();
-    const dueDate = document.getElementById('inv-due-date').value;
-    const notes = document.getElementById('inv-notes').value;
+    const invoiceDate = document.getElementById('inv-date')?.value || null;
+    const dueDate = document.getElementById('inv-due-date')?.value || null;
+    const notes = document.getElementById('inv-notes')?.value || '';
 
     const res = await NKB.api(`/api/invoices/from-dr/${drId}`, {
         method: 'POST',
         body: JSON.stringify({
+            invoice_date: invoiceDate,
             due_date: dueDate,
             notes
         })
@@ -5376,6 +5544,63 @@ async function submitGenerateInvoice(e, drId) {
         NKB.showToast(res.error || 'Failed to generate invoice.', 'error');
     }
 }
+window.submitGenerateInvoice = submitGenerateInvoice;
+
+function openEditInvoiceDatesModal(invoiceId, invoiceNumber, currentInvoiceDate, currentDueDate) {
+    const root = document.getElementById('modals-root');
+    root.innerHTML = `
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
+            <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-900">Edit Invoice Dates</h3>
+                        <p class="text-xs text-slate-500">Late Encoding Correction for ${invoiceNumber}</p>
+                    </div>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold">&times;</button>
+                </div>
+                <form onsubmit="submitEditInvoiceDates(event, '${invoiceId}')" class="space-y-4 text-xs font-semibold">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-slate-700 font-bold mb-1">Invoice Issuance Date</label>
+                            <input type="date" id="edit-inv-date" value="${currentInvoiceDate || ''}" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500">
+                            <span class="text-[10px] text-slate-500 block mt-0.5">Official transaction / billing date</span>
+                        </div>
+                        <div>
+                            <label class="block text-slate-700 font-bold mb-1">Due Date</label>
+                            <input type="date" id="edit-inv-due-date" value="${currentDueDate || ''}" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500">
+                            <span class="text-[10px] text-slate-500 block mt-0.5">Payment due date</span>
+                        </div>
+                    </div>
+                    <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl cursor-pointer">Cancel</button>
+                        <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold cursor-pointer">Save Dates</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+}
+window.openEditInvoiceDatesModal = openEditInvoiceDatesModal;
+
+async function submitEditInvoiceDates(e, invoiceId) {
+    e.preventDefault();
+    const invoiceDate = document.getElementById('edit-inv-date')?.value;
+    const dueDate = document.getElementById('edit-inv-due-date')?.value;
+
+    const res = await NKB.api(`/api/invoices/${invoiceId}/dates`, {
+        method: 'PATCH',
+        body: JSON.stringify({ invoice_date: invoiceDate, due_date: dueDate })
+    });
+
+    if (res.success) {
+        NKB.showToast(res.message || 'Invoice dates updated successfully!', 'success');
+        closeModal();
+        loadInvoices();
+    } else {
+        NKB.showToast(res.error || 'Failed to update invoice dates.', 'error');
+    }
+}
+window.submitEditInvoiceDates = submitEditInvoiceDates;
 
 // 8. Record Payment Modal
 function openRecordPaymentModal(invoiceId, invoiceNumber, balanceDue, clientName) {

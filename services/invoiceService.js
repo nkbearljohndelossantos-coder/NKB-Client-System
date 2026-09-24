@@ -8,7 +8,7 @@ const { getManilaDate } = require('../helpers/timezone');
 /**
  * Generate Sales Invoice from an ACCEPTED Delivery Receipt
  */
-function createInvoiceFromDR({ drId, createdBy, userId, userRole, userName, notes = '', dueDate = null }) {
+function createInvoiceFromDR({ drId, createdBy, userId, userRole, userName, notes = '', dueDate = null, invoiceDate = null }) {
     // 1. Fetch DR and associated PO, Client, and Items
     const dr = db.prepare(`
         SELECT dr.*, 
@@ -69,10 +69,15 @@ function createInvoiceFromDR({ drId, createdBy, userId, userRole, userName, note
         const invoiceId = uuidv4();
         const invoiceNumber = getNextDocumentNumber('SI');
         
-        // Due date: default 30 days from now if not provided
+        // Invoice Date: support late encoding
+        const finalInvoiceDate = (invoiceDate && typeof invoiceDate === 'string' && invoiceDate.trim())
+            ? invoiceDate.trim()
+            : getManilaDate();
+
+        // Due date: default 30 days from invoice date if not provided
         let invoiceDueDate = dueDate;
         if (!invoiceDueDate) {
-            const d = new Date();
+            const d = new Date(finalInvoiceDate);
             d.setDate(d.getDate() + 30);
             invoiceDueDate = getManilaDate(d);
         }
@@ -161,17 +166,18 @@ function createInvoiceFromDR({ drId, createdBy, userId, userRole, userName, note
         const totalAmount = totalSubtotal; // taxes / discounts can be adjusted if configured
         const balanceDue = totalAmount;
 
-        // Insert Sales Invoice
+        // Insert Sales Invoice with custom / late encoded invoice_date
         db.prepare(`
             INSERT INTO sales_invoices
             (id, invoice_number, client_id, dr_id, po_id, invoice_date, due_date, billing_policy, subtotal, tax_percent, tax_amount, discount_amount, total_amount, paid_amount, balance_due, status, notes, created_by)
-            VALUES (?, ?, ?, ?, ?, date('now', 'localtime'), ?, ?, ?, 0.0, 0.0, 0.0, ?, 0.0, ?, 'UNPAID', ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, 0.0, ?, 0.0, ?, 'UNPAID', ?, ?)
         `).run(
             invoiceId,
             invoiceNumber,
             dr.client_id,
             drId,
             dr.po_id,
+            finalInvoiceDate,
             invoiceDueDate,
             dr.billing_policy,
             totalSubtotal,

@@ -2151,6 +2151,114 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         db.prepare('DELETE FROM support_inquiries WHERE id = ?').run(guestInquiryRes.body.inquiryId);
     });
 
+    test('32. Late Encoding Invoice Date, Date Adjustment & Dashboard Monthly Sales Statistics', async () => {
+        // 1. Create a PO, Batch, DR, and Accept it to test late-encoding invoice generation
+        const poRes = await request(app)
+            .post('/api/orders')
+            .set('Authorization', `Bearer ${clientToken}`)
+            .send({
+                client_id: demoClient.id,
+                tolerance_percent: 5.0,
+                billing_policy: 'ACTUAL_DELIVERY',
+                items: [{ product_id: lotionProduct.id, target_quantity: 200, unit_price: 150.0 }]
+            });
+        assert.strictEqual(poRes.status, 201);
+        const poId = poRes.body.data.id;
+
+        await request(app).post(`/api/orders/${poId}/approve`).set('Authorization', `Bearer ${adminToken}`);
+
+        const joRes = await request(app)
+            .post('/api/job-orders')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({ po_id: poId, product_id: lotionProduct.id, target_quantity: 200 });
+        const joId = joRes.body.data.id;
+
+        const batchRes = await request(app)
+            .post('/api/production/batches')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({ jo_id: joId, target_quantity: 200 });
+        const batchId = batchRes.body.data.id;
+
+        await request(app)
+            .post(`/api/production/batches/${batchId}/yield`)
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({ actual_yield: 200 });
+
+        const drRes = await request(app)
+            .post('/api/deliveries')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                po_id: poId,
+                jo_id: joId,
+                items: [{ product_id: lotionProduct.id, batch_id: batchId, delivered_quantity: 200, unit_price: 150.0 }]
+            });
+        const drId = drRes.body.data.id;
+
+        const acceptRes = await request(app)
+            .post(`/api/deliveries/${drId}/accept`)
+            .set('Authorization', `Bearer ${clientToken}`)
+            .send({
+                signer_name: 'Late Encoding Tester',
+                signer_title: 'Finance Manager',
+                signature_data: 'Digitally Approved - Late Encoding Tester'
+            });
+        assert.strictEqual(acceptRes.status, 200);
+
+        // 2. Generate Invoice with Late Encoding Date (Backdated to 2026-09-05)
+        const customDate = '2026-09-05';
+        const invRes = await request(app)
+            .post(`/api/invoices/from-dr/${drId}`)
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({ invoice_date: customDate });
+        assert.strictEqual(invRes.status, 201);
+        assert.strictEqual(invRes.body.success, true);
+        const invoice = invRes.body.data;
+        assert.strictEqual(invoice.invoice_date, customDate, 'Invoice must respect late-encoding date');
+
+        // 3. Edit Invoice Date via PATCH /api/invoices/:id/dates
+        const editedDate = '2026-09-08';
+        const editedDueDate = '2026-10-08';
+        const patchRes = await request(app)
+            .patch(`/api/invoices/${invoice.id}/dates`)
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                invoice_date: editedDate,
+                due_date: editedDueDate,
+                reason: 'Accounting late encoding correction'
+            });
+        assert.strictEqual(patchRes.status, 200);
+        assert.strictEqual(patchRes.body.success, true);
+        assert.strictEqual(patchRes.body.data.invoice_date, editedDate);
+        assert.strictEqual(patchRes.body.data.due_date, editedDueDate);
+
+        // 4. Verify Dashboard Overview API returns Monthly Sales Statistics
+        const overviewRes = await request(app)
+            .get('/api/reports/overview')
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(overviewRes.status, 200);
+        assert.strictEqual(overviewRes.body.success, true);
+        const overview = overviewRes.body.data;
+
+        assert.ok(overview.salesThisMonth, 'Must contain salesThisMonth statistics');
+        assert.ok(typeof overview.salesThisMonth.totalSold === 'number', 'totalSold must be a number');
+        assert.ok(typeof overview.salesThisMonth.totalCollected === 'number', 'totalCollected must be a number');
+        assert.ok(typeof overview.salesThisMonth.totalBalance === 'number', 'totalBalance must be a number');
+        assert.ok(typeof overview.salesThisMonth.invoiceCount === 'number', 'invoiceCount must be a number');
+        assert.ok(typeof overview.salesThisMonth.totalUnitsSold === 'number', 'totalUnitsSold must be a number');
+        assert.ok(Array.isArray(overview.salesThisMonth.salesTrend), 'salesTrend must be an array');
+        assert.strictEqual(overview.salesThisMonth.salesTrend.length, 6, 'salesTrend must have 6 months');
+        assert.ok(Array.isArray(overview.salesThisMonth.topProducts), 'topProducts must be an array');
+
+        // 5. Verify Client Overview API returns Monthly Purchases
+        const clientOverviewRes = await request(app)
+            .get('/api/reports/overview')
+            .set('Authorization', `Bearer ${clientToken}`);
+        assert.strictEqual(clientOverviewRes.status, 200);
+        assert.strictEqual(clientOverviewRes.body.success, true);
+        assert.ok(typeof clientOverviewRes.body.data.purchasedThisMonth === 'number', 'purchasedThisMonth must be a number');
+        assert.ok(typeof clientOverviewRes.body.data.purchasedPaidThisMonth === 'number', 'purchasedPaidThisMonth must be a number');
+    });
+
     after(() => {
         // Automatically delete all test decoys and temporary test database
         try {

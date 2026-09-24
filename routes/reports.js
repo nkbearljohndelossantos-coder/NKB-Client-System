@@ -2,12 +2,18 @@ const express = require('express');
 const router = express.Router();
 const db = require('../database/db');
 const { authenticateToken, requireRoles, enforceClientIsolation } = require('../middleware/auth');
+const { getManilaDate } = require('../helpers/timezone');
 
 /**
  * GET /api/reports/overview
  * KPI metrics for Admin / Client dashboards
  */
 router.get('/overview', authenticateToken, enforceClientIsolation, (req, res) => {
+    const now = new Date();
+    const currentMonth = getManilaDate(now).slice(0, 7);
+    const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonth = getManilaDate(prevDate).slice(0, 7);
+
     if (req.user.role === 'CLIENT') {
         const clientId = req.clientId;
 
@@ -48,6 +54,15 @@ router.get('/overview', authenticateToken, enforceClientIsolation, (req, res) =>
             WHERE client_id = ? AND status IN ('DISPATCHED', 'PENDING_CLIENT_ACCEPTANCE')
         `).get(clientId).count;
 
+        const clientMonthPurchases = db.prepare(`
+            SELECT 
+                COALESCE(SUM(total_amount), 0) as total_purchased,
+                COALESCE(SUM(paid_amount), 0) as total_paid,
+                COUNT(*) as invoice_count
+            FROM sales_invoices
+            WHERE client_id = ? AND SUBSTR(invoice_date, 1, 7) = ? AND status != 'VOID'
+        `).get(clientId, currentMonth);
+
         return res.json({
             success: true,
             data: {
@@ -58,7 +73,9 @@ router.get('/overview', authenticateToken, enforceClientIsolation, (req, res) =>
                 unpaidInvoices: unpaidInvoices.count,
                 outstandingBalance: unpaidInvoices.total_balance,
                 availableBufferUnits: availableBuffer.total_units,
-                activeProduction: activeProduction.count
+                activeProduction: activeProduction.count,
+                purchasedThisMonth: clientMonthPurchases.total_purchased,
+                purchasedPaidThisMonth: clientMonthPurchases.total_paid
             }
         });
     }
@@ -81,6 +98,82 @@ router.get('/overview', authenticateToken, enforceClientIsolation, (req, res) =>
 
     const totalBufferUnits = db.prepare("SELECT COALESCE(SUM(quantity_remaining), 0) as total FROM client_buffer_stock WHERE status IN ('AVAILABLE', 'PARTIALLY_RELEASED', 'RESERVED')").get().total;
 
+    // Monthly Sales & Revenue Statistics
+    const monthSales = db.prepare(`
+        SELECT 
+            COALESCE(SUM(total_amount), 0) as total_sold,
+            COALESCE(SUM(paid_amount), 0) as total_collected,
+            COALESCE(SUM(balance_due), 0) as total_balance,
+            COUNT(*) as invoice_count
+        FROM sales_invoices
+        WHERE SUBSTR(invoice_date, 1, 7) = ? AND status != 'VOID'
+    `).get(currentMonth);
+
+    const lastMonthSales = db.prepare(`
+        SELECT 
+            COALESCE(SUM(total_amount), 0) as total_sold,
+            COUNT(*) as invoice_count
+        FROM sales_invoices
+        WHERE SUBSTR(invoice_date, 1, 7) = ? AND status != 'VOID'
+    `).get(lastMonth);
+
+    let momGrowthPercent = 0.0;
+    if (lastMonthSales && lastMonthSales.total_sold > 0) {
+        momGrowthPercent = parseFloat((((monthSales.total_sold - lastMonthSales.total_sold) / lastMonthSales.total_sold) * 100).toFixed(1));
+    } else if (monthSales.total_sold > 0) {
+        momGrowthPercent = 100.0;
+    }
+
+    const monthUnits = db.prepare(`
+        SELECT COALESCE(SUM(ii.billable_quantity), 0) as total_units
+        FROM invoice_items ii
+        JOIN sales_invoices si ON ii.invoice_id = si.id
+        WHERE SUBSTR(si.invoice_date, 1, 7) = ? AND si.status != 'VOID'
+    `).get(currentMonth);
+
+    const topProducts = db.prepare(`
+        SELECT p.name, p.sku, 
+               COALESCE(SUM(ii.billable_quantity), 0) as total_qty, 
+               COALESCE(SUM(ii.line_total), 0) as total_amount
+        FROM invoice_items ii
+        JOIN sales_invoices si ON ii.invoice_id = si.id
+        JOIN products p ON ii.product_id = p.id
+        WHERE SUBSTR(si.invoice_date, 1, 7) = ? AND si.status != 'VOID'
+        GROUP BY p.id, p.name, p.sku
+        ORDER BY total_amount DESC
+        LIMIT 5
+    `).all(currentMonth);
+
+    // Generate last 6 continuous calendar months
+    const trendMap = {};
+    const trendList = [];
+    for (let i = 5; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const key = `${y}-${m}`;
+        trendMap[key] = { month: key, totalSold: 0, totalCollected: 0 };
+        trendList.push(key);
+    }
+
+    const rawTrend = db.prepare(`
+        SELECT SUBSTR(invoice_date, 1, 7) as month,
+               COALESCE(SUM(total_amount), 0) as total_invoiced,
+               COALESCE(SUM(paid_amount), 0) as total_collected
+        FROM sales_invoices
+        WHERE status != 'VOID'
+        GROUP BY SUBSTR(invoice_date, 1, 7)
+    `).all();
+
+    rawTrend.forEach(r => {
+        if (trendMap[r.month]) {
+            trendMap[r.month].totalSold = Number(r.total_invoiced || 0);
+            trendMap[r.month].totalCollected = Number(r.total_collected || 0);
+        }
+    });
+
+    const salesTrend = trendList.map(k => trendMap[k]);
+
     return res.json({
         success: true,
         data: {
@@ -93,7 +186,20 @@ router.get('/overview', authenticateToken, enforceClientIsolation, (req, res) =>
             unbilledAcceptedDRs,
             arTotal,
             overdueAR,
-            totalBufferUnits
+            totalBufferUnits,
+            salesThisMonth: {
+                month: currentMonth,
+                totalSold: monthSales.total_sold,
+                totalCollected: monthSales.total_collected,
+                totalBalance: monthSales.total_balance,
+                invoiceCount: monthSales.invoice_count,
+                totalUnitsSold: monthUnits.total_units,
+                lastMonthSold: lastMonthSales ? lastMonthSales.total_sold : 0,
+                lastMonthInvoiceCount: lastMonthSales ? lastMonthSales.invoice_count : 0,
+                momGrowthPercent,
+                topProducts,
+                salesTrend
+            }
         }
     });
 });

@@ -14,43 +14,43 @@
     <!-- Top Header -->
     <!-- Top Header -->
     <header class="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-40">
-        <div class="px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
-            <div class="flex items-center gap-3">
+        <div class="px-3 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
+            <div class="flex items-center gap-2 sm:gap-3 min-w-0">
                 <button type="button" id="client-mobile-sidebar-toggle" onclick="toggleClientMobileSidebar()" class="md:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500" aria-label="Open Navigation Menu">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
                 </button>
-                <img src="/images/nkb-logo.png" alt="NKB Logo" class="h-8 w-auto object-contain">
-                <div class="flex items-center gap-2">
-                    <span class="font-bold tracking-tight text-white text-sm">NKB MANUFACTURING CORPORATION</span>
-                    <span class="text-[11px] text-slate-400 font-medium hidden sm:inline-block pl-2 border-l border-slate-700">Client Portal</span>
+                <img src="/images/nkb-logo.png" alt="NKB Logo" class="h-7 sm:h-8 w-auto object-contain flex-shrink-0">
+                <div class="flex items-center gap-1.5 min-w-0">
+                    <span class="font-bold tracking-tight text-white text-xs sm:text-sm truncate">NKB <span class="hidden sm:inline">MANUFACTURING CORPORATION</span></span>
+                    <span class="text-[11px] text-slate-400 font-medium hidden md:inline-block pl-2 border-l border-slate-700">Client Portal</span>
                 </div>
             </div>
             
-            <div class="flex items-center gap-2 sm:gap-2.5">
+            <div class="flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0">
                 <!-- Contact Support Button (Header) -->
-                <button type="button" onclick="openContactSupportModal()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 border border-indigo-500/30 shadow-sm cursor-pointer" title="Send Online Inquiry or Message IT Support">
+                <button type="button" onclick="openContactSupportModal()" class="px-2 sm:px-3 py-1 sm:py-1.5 bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-white rounded-lg sm:rounded-xl text-xs font-bold transition flex items-center gap-1 border border-indigo-500/30 shadow-sm cursor-pointer" title="Send Online Inquiry or Message IT Support">
                     <span class="text-sm">💬</span>
-                    <span class="hidden sm:inline">Contact</span><span>Support</span>
+                    <span class="hidden md:inline">Contact</span><span>Support</span>
                 </button>
 
                 <!-- GUEST HEADER ACTIONS (When browsing without an account) -->
-                <div id="guest-header-actions" class="hidden flex items-center gap-2">
-                    <button type="button" onclick="openCompanyLoginModal()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm shadow-indigo-600/30 cursor-pointer" title="Sign In for B2B Corporate Clients">
+                <div id="guest-header-actions" class="hidden flex items-center gap-1.5 sm:gap-2">
+                    <button type="button" onclick="openCompanyLoginModal()" class="px-2 sm:px-3 py-1 sm:py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg sm:rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm shadow-indigo-600/30 cursor-pointer" title="Sign In for B2B Corporate Clients">
                         <span>🏢</span><span class="hidden sm:inline">Company</span><span>Sign In</span>
                     </button>
                     <!-- LOG IN AS STAFF BUTTON (Upper Right Corner) -->
-                    <a href="/login" class="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black rounded-xl text-xs transition flex items-center gap-1.5 shadow-md shadow-amber-500/20 whitespace-nowrap" title="Operations & Staff Sign In Portal">
-                        <span>🛡️</span><span>Log In as Staff</span>
+                    <a href="/login" class="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black rounded-lg sm:rounded-xl text-xs transition flex items-center gap-1 shadow-md shadow-amber-500/20 whitespace-nowrap" title="Operations & Staff Sign In Portal">
+                        <span>🛡️</span><span class="hidden sm:inline">Log In as</span><span>Staff</span>
                     </a>
                 </div>
 
                 <!-- AUTHENTICATED HEADER ACTIONS (When logged in as company/staff) -->
-                <div id="auth-header-actions" class="flex items-center gap-2">
+                <div id="auth-header-actions" class="flex items-center gap-1.5 sm:gap-2">
                     <a href="/admin.html" id="link-admin-view" class="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 border border-slate-700 transition">
                         <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                         <span>Operations View</span>
                     </a>
-                    <button id="btn-change-password" onclick="openClientChangePasswordModal()" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-amber-300 border border-slate-700 transition">
+                    <button id="btn-change-password" onclick="openClientChangePasswordModal()" class="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-amber-300 border border-slate-700 transition">
                         <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
                         <span class="hidden sm:inline">Change Password</span>
                     </button>
@@ -59,7 +59,7 @@
                             <div id="nav-company-name" class="text-xs font-semibold text-slate-200 leading-tight">ABC Cosmetics Trading</div>
                             <div id="nav-user-name" class="text-[10px] text-slate-400 font-medium">Maria Santos</div>
                         </div>
-                        <button onclick="NKB.logout()" class="px-2.5 py-1 bg-slate-800 hover:bg-rose-950/40 text-slate-300 hover:text-rose-300 border border-slate-700 hover:border-rose-700/50 rounded-lg text-xs font-medium transition cursor-pointer">
+                        <button onclick="NKB.logout()" class="px-2 sm:px-2.5 py-1 bg-slate-800 hover:bg-rose-950/40 text-slate-300 hover:text-rose-300 border border-slate-700 hover:border-rose-700/50 rounded-lg text-xs font-medium transition cursor-pointer">
                             Logout
                         </button>
                     </div>
@@ -195,38 +195,46 @@
                 </div>
 
                 <!-- Modern KPI Metric Cards Grid -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div class="kpi-card border-t-4 border-indigo-500 cursor-pointer hover:border-indigo-400 hover:shadow-md transition" onclick="switchClientTab('my-orders')" title="Click to view My Purchase Orders">
+                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+                    <div class="kpi-card border-t-4 border-indigo-500 cursor-pointer hover:border-indigo-400 hover:shadow-md transition p-4 sm:p-5" onclick="switchClientTab('my-orders')" title="Click to view My Purchase Orders">
                         <div class="flex items-center justify-between">
-                            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Active Orders</span>
-                            <span class="p-1.5 rounded-lg bg-indigo-50 text-indigo-600 text-xs font-bold">PO</span>
+                            <span class="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">Active Orders</span>
+                            <span class="p-1 sm:p-1.5 rounded-lg bg-indigo-50 text-indigo-600 text-[10px] sm:text-xs font-bold">PO</span>
                         </div>
-                        <div id="client-kpi-open-pos" class="text-3xl font-black text-slate-900 mt-2">0</div>
-                        <div class="text-xs text-indigo-600 font-semibold mt-1">Orders in production →</div>
+                        <div id="client-kpi-open-pos" class="text-2xl sm:text-3xl font-black text-slate-900 mt-2">0</div>
+                        <div class="text-[11px] sm:text-xs text-indigo-600 font-semibold mt-1">In production →</div>
                     </div>
-                    <div class="kpi-card border-t-4 border-amber-500 cursor-pointer hover:border-amber-400 hover:shadow-md transition" onclick="switchClientTab('dr-acceptance')" title="Click to view Delivery Receipts pending sign-off">
+                    <div class="kpi-card border-t-4 border-amber-500 cursor-pointer hover:border-amber-400 hover:shadow-md transition p-4 sm:p-5" onclick="switchClientTab('dr-acceptance')" title="Click to view Delivery Receipts pending sign-off">
                         <div class="flex items-center justify-between">
-                            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Pending DR Acceptance</span>
-                            <span class="p-1.5 rounded-lg bg-amber-50 text-amber-600 text-xs font-bold">DR</span>
+                            <span class="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">Pending DRs</span>
+                            <span class="p-1 sm:p-1.5 rounded-lg bg-amber-50 text-amber-600 text-[10px] sm:text-xs font-bold">DR</span>
                         </div>
-                        <div id="client-kpi-pending-drs" class="text-3xl font-black text-amber-600 mt-2">0</div>
-                        <div class="text-xs text-amber-700 font-semibold mt-1">Waiting for your sign-off →</div>
+                        <div id="client-kpi-pending-drs" class="text-2xl sm:text-3xl font-black text-amber-600 mt-2">0</div>
+                        <div class="text-[11px] sm:text-xs text-amber-700 font-semibold mt-1">Waiting for sign-off →</div>
                     </div>
-                    <div class="kpi-card border-t-4 border-rose-500 cursor-pointer hover:border-rose-400 hover:shadow-md transition" onclick="switchClientTab('invoices')" title="Click to view Outstanding Invoices">
+                    <div class="kpi-card border-t-4 border-teal-500 cursor-pointer hover:border-teal-400 hover:shadow-md transition p-4 sm:p-5" onclick="switchClientTab('invoices')" title="Click to view Purchases This Month">
                         <div class="flex items-center justify-between">
-                            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Outstanding Invoices</span>
-                            <span class="p-1.5 rounded-lg bg-rose-50 text-rose-600 text-xs font-bold">AR</span>
+                            <span class="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">Purchased (MTD)</span>
+                            <span class="p-1 sm:p-1.5 rounded-lg bg-teal-50 text-teal-600 text-[10px] sm:text-xs font-bold">MTD</span>
                         </div>
-                        <div id="client-kpi-unpaid-invoices" class="text-3xl font-black text-rose-600 mt-2">₱0.00</div>
-                        <div class="text-xs text-slate-500 mt-1">Total balance due →</div>
+                        <div id="client-kpi-purchased-month" class="text-2xl sm:text-3xl font-black text-teal-600 mt-2">₱0.00</div>
+                        <div id="client-kpi-purchased-month-sub" class="text-[11px] sm:text-xs text-slate-500 mt-1">₱0.00 paid this month</div>
                     </div>
-                    <div class="kpi-card border-t-4 border-emerald-500 cursor-pointer hover:border-emerald-400 hover:shadow-md transition" onclick="switchClientTab('buffer')" title="Click to view Reserved Buffer Stock">
+                    <div class="kpi-card border-t-4 border-rose-500 cursor-pointer hover:border-rose-400 hover:shadow-md transition p-4 sm:p-5" onclick="switchClientTab('invoices')" title="Click to view Outstanding Invoices">
                         <div class="flex items-center justify-between">
-                            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Reserved Buffer Stock</span>
-                            <span class="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 text-xs font-bold">STK</span>
+                            <span class="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">Outstanding</span>
+                            <span class="p-1 sm:p-1.5 rounded-lg bg-rose-50 text-rose-600 text-[10px] sm:text-xs font-bold">AR</span>
                         </div>
-                        <div id="client-kpi-buffer-units" class="text-3xl font-black text-emerald-600 mt-2">0 pcs</div>
-                        <div class="text-xs text-emerald-700 font-semibold mt-1">Ready for drawdown →</div>
+                        <div id="client-kpi-unpaid-invoices" class="text-2xl sm:text-3xl font-black text-rose-600 mt-2">₱0.00</div>
+                        <div class="text-[11px] sm:text-xs text-slate-500 mt-1">Total balance due →</div>
+                    </div>
+                    <div class="kpi-card border-t-4 border-emerald-500 cursor-pointer hover:border-emerald-400 hover:shadow-md transition p-4 sm:p-5" onclick="switchClientTab('buffer')" title="Click to view Reserved Buffer Stock">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">Reserved Buffer</span>
+                            <span class="p-1 sm:p-1.5 rounded-lg bg-emerald-50 text-emerald-600 text-[10px] sm:text-xs font-bold">STK</span>
+                        </div>
+                        <div id="client-kpi-buffer-units" class="text-2xl sm:text-3xl font-black text-emerald-600 mt-2">0 pcs</div>
+                        <div class="text-[11px] sm:text-xs text-emerald-700 font-semibold mt-1">Ready for drawdown →</div>
                     </div>
                 </div>
 

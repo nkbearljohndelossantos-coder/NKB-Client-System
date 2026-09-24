@@ -124,11 +124,11 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
 
 /**
  * POST /api/invoices/from-dr/:drId
- * Generate Invoice from an Accepted DR
+ * Generate Invoice from an Accepted DR (supports custom invoice_date for late encoding)
  */
 router.post('/from-dr/:drId', authenticateToken, requireRoles('ADMIN', 'ACCOUNTING'), (req, res) => {
     const { drId } = req.params;
-    const { due_date, notes } = req.body;
+    const { invoice_date, due_date, notes } = req.body;
 
     try {
         const result = createInvoiceFromDR({
@@ -136,6 +136,7 @@ router.post('/from-dr/:drId', authenticateToken, requireRoles('ADMIN', 'ACCOUNTI
             userId: req.user.id,
             userName: req.user.name,
             userRole: req.user.role,
+            invoiceDate: invoice_date,
             dueDate: due_date,
             notes
         });
@@ -153,6 +154,58 @@ router.post('/from-dr/:drId', authenticateToken, requireRoles('ADMIN', 'ACCOUNTI
             code: err.code || 'INVOICE_GENERATION_FAILED'
         });
     }
+});
+
+/**
+ * PATCH /api/invoices/:id/dates
+ * Update Invoice Date and Due Date (for late encoding adjustments)
+ */
+router.patch('/:id/dates', authenticateToken, requireRoles('ADMIN', 'ACCOUNTING', 'SUPER_ADMIN', 'IT_ADMIN'), (req, res) => {
+    const { id } = req.params;
+    const { invoice_date, due_date } = req.body;
+
+    if (!invoice_date) {
+        return res.status(400).json({ success: false, error: 'invoice_date is required.' });
+    }
+
+    const invoice = db.prepare('SELECT * FROM sales_invoices WHERE id = ?').get(id);
+    if (!invoice) {
+        return res.status(404).json({ success: false, error: 'Sales Invoice not found.' });
+    }
+
+    if (invoice.status === 'VOID') {
+        return res.status(400).json({ success: false, error: 'Cannot modify voided invoice.' });
+    }
+
+    const newDueDate = due_date || invoice.due_date;
+    db.prepare(`
+        UPDATE sales_invoices 
+        SET invoice_date = ?, due_date = ?, updated_at = datetime('now', 'localtime') 
+        WHERE id = ?
+    `).run(invoice_date, newDueDate, id);
+
+    logAudit({
+        userId: req.user.id,
+        userName: req.user.name,
+        userRole: req.user.role,
+        action: 'UPDATE_INVOICE_DATE',
+        entityType: 'SALES_INVOICE',
+        entityId: invoice.invoice_number,
+        details: {
+            invoiceId: id,
+            oldInvoiceDate: invoice.invoice_date,
+            newInvoiceDate: invoice_date,
+            oldDueDate: invoice.due_date,
+            newDueDate
+        }
+    });
+
+    const updated = db.prepare('SELECT * FROM sales_invoices WHERE id = ?').get(id);
+    return res.json({
+        success: true,
+        message: `Invoice dates updated: Issued ${invoice_date}, Due ${newDueDate}`,
+        data: updated
+    });
 });
 
 /**
