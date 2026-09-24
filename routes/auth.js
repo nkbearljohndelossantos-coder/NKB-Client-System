@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { v4: uuidv4 } = require('uuid');
 const db = require('../database/db');
 const { JWT_SECRET, authenticateToken } = require('../middleware/auth');
 const { logAudit } = require('../services/auditService');
@@ -338,6 +339,160 @@ router.post('/change-password', authenticateToken, (req, res) => {
         success: true,
         message: 'Password changed successfully.'
     });
+});
+
+/**
+ * POST /api/auth/google-verify
+ * Verifies or provisions a client account using Google Sign-In
+ */
+router.post('/google-verify', (req, res) => {
+    try {
+        let { email, name, google_id, avatar_url, company_name, phone } = req.body;
+
+        if (!email) {
+            return res.status(400).json({
+                success: false,
+                error: 'Valid Google email is required for verification.',
+                code: 'MISSING_EMAIL'
+            });
+        }
+
+        const cleanEmail = String(email).trim().toLowerCase();
+        if (!cleanEmail.includes('@') || !cleanEmail.includes('.')) {
+            return res.status(400).json({
+                success: false,
+                error: 'Please provide a valid Google email address.',
+                code: 'INVALID_EMAIL'
+            });
+        }
+
+        const cleanName = String(name || '').trim() || cleanEmail.split('@')[0];
+        const cleanCompanyName = String(company_name || '').trim() || `${cleanName}'s Cosmetics`;
+        const cleanPhone = String(phone || '').trim();
+
+        // 1. Check if user already exists
+        let user = db.prepare(`
+            SELECT u.id, u.name, u.email, u.role, u.client_id, u.is_active,
+                   c.company_name, c.default_billing_policy, c.default_tolerance_percent
+            FROM users u
+            LEFT JOIN clients c ON u.client_id = c.id
+            WHERE LOWER(u.email) = ?
+        `).get(cleanEmail);
+
+        if (user) {
+            // User already exists: update Google auth details
+            try {
+                db.prepare(`
+                    UPDATE users 
+                    SET google_id = COALESCE(?, google_id),
+                        auth_provider = 'google',
+                        avatar_url = COALESCE(?, avatar_url)
+                    WHERE id = ?
+                `).run(google_id || null, avatar_url || null, user.id);
+            } catch (_) {}
+        } else {
+            // 2. New client: Provision client and user accounts
+            const clientId = uuidv4();
+            const userId = uuidv4();
+            const dummyPasswordHash = bcrypt.hashSync(uuidv4(), 10);
+
+            const tx = db.transaction(() => {
+                db.prepare(`
+                    INSERT INTO clients (
+                        id, company_name, contact_person, email, phone, address,
+                        default_billing_policy, default_tolerance_percent, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, 'ACTUAL_DELIVERY', 10.0, datetime('now', 'localtime'), datetime('now', 'localtime'))
+                `).run(clientId, cleanCompanyName, cleanName, cleanEmail, cleanPhone, 'Phils.');
+
+                db.prepare(`
+                    INSERT INTO users (
+                        id, name, email, password_hash, role, client_id, phone,
+                        google_id, auth_provider, avatar_url, is_active, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, 'CLIENT', ?, ?, ?, 'google', ?, 1, datetime('now', 'localtime'), datetime('now', 'localtime'))
+                `).run(userId, cleanName, cleanEmail, dummyPasswordHash, clientId, cleanPhone, google_id || null, avatar_url || null);
+            });
+            tx();
+
+            user = db.prepare(`
+                SELECT u.id, u.name, u.email, u.role, u.client_id, u.is_active,
+                       c.company_name, c.default_billing_policy, c.default_tolerance_percent
+                FROM users u
+                LEFT JOIN clients c ON u.client_id = c.id
+                WHERE u.id = ?
+            `).get(userId);
+
+            try {
+                logAudit({
+                    userId: user.id,
+                    userName: user.name,
+                    userRole: user.role,
+                    action: 'GOOGLE_SIGNUP',
+                    entityType: 'CLIENT',
+                    entityId: clientId,
+                    ipAddress: req.ip
+                });
+            } catch (_) {}
+        }
+
+        if (!isActiveFlag(user.is_active)) {
+            return res.status(401).json({
+                success: false,
+                error: 'Account has been disabled. Please contact administration.',
+                code: 'ACCOUNT_DISABLED'
+            });
+        }
+
+        const payload = {
+            id: user.id,
+            email: user.email,
+            role: user.role,
+            clientId: user.client_id
+        };
+
+        const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+
+        res.cookie('nkb_token', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 7 * 24 * 60 * 60 * 1000
+        });
+
+        try {
+            logAudit({
+                userId: user.id,
+                userName: user.name,
+                userRole: user.role,
+                action: 'USER_LOGIN_GOOGLE',
+                entityType: 'USER',
+                entityId: user.id,
+                ipAddress: req.ip
+            });
+        } catch (_) {}
+
+        return res.json({
+            success: true,
+            message: 'Google verification successful.',
+            token,
+            user: {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                clientId: user.client_id,
+                companyName: user.company_name,
+                authProvider: 'google',
+                defaultBillingPolicy: user.default_billing_policy,
+                defaultTolerancePercent: user.default_tolerance_percent
+            }
+        });
+    } catch (err) {
+        console.error('Google verify error:', err);
+        return res.status(500).json({
+            success: false,
+            error: err.message || 'Google verification failed.'
+        });
+    }
 });
 
 module.exports = router;

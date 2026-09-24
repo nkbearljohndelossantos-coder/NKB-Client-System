@@ -75,9 +75,53 @@ function enforceClientIsolation(req, res, next) {
     next();
 }
 
+/**
+ * Optional authentication: attaches user if valid token exists, otherwise sets req.user = null
+ */
+function optionalAuthenticateToken(req, res, next) {
+    let token = null;
+
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+        token = req.headers.authorization.split(' ')[1];
+    } else if (req.cookies && req.cookies.nkb_token) {
+        token = req.cookies.nkb_token;
+    }
+
+    if (!token) {
+        req.user = null;
+        return next();
+    }
+
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        const user = db.prepare(`
+            SELECT u.id, u.name, u.email, u.role, u.client_id, u.is_active,
+                   c.company_name, c.default_billing_policy, c.default_tolerance_percent
+            FROM users u
+            LEFT JOIN clients c ON u.client_id = c.id
+            WHERE u.id = ?
+        `).get(decoded.id);
+
+        const active = user && (user.is_active === 1 || user.is_active === true || user.is_active === '1');
+        if (user && active) {
+            req.user = user;
+            if (user.role === 'CLIENT') {
+                req.clientId = user.client_id;
+            }
+        } else {
+            req.user = null;
+        }
+        next();
+    } catch (err) {
+        req.user = null;
+        next();
+    }
+}
+
 module.exports = {
     JWT_SECRET,
     authenticateToken,
+    optionalAuthenticateToken,
     requireRoles,
     requirePermission,
     enforceClientIsolation,

@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const db = require('../database/db');
-const { authenticateToken, requireRoles } = require('../middleware/auth');
+const { authenticateToken, optionalAuthenticateToken, requireRoles } = require('../middleware/auth');
 const { logAudit } = require('../services/auditService');
 
 /**
@@ -91,11 +91,11 @@ router.get('/generate-sku', authenticateToken, (req, res) => {
  * Accessible by all authenticated users (Client & Admin)
  * When requested by a client (or with ?clientId=...), automatically applies client custom pricing
  */
-router.get('/', authenticateToken, (req, res) => {
+router.get('/', optionalAuthenticateToken, (req, res) => {
     const { search, activeOnly, clientId } = req.query;
     
     // Determine if client context applies
-    const targetClientId = req.user.role === 'CLIENT' ? (req.clientId || req.user.client_id) : (clientId || null);
+    const targetClientId = req.user?.role === 'CLIENT' ? (req.clientId || req.user.client_id) : (clientId || null);
 
     let query = '';
     const params = [];
@@ -174,7 +174,7 @@ router.get('/', authenticateToken, (req, res) => {
         `;
     }
 
-    if (activeOnly === 'true' && req.user.role !== 'CLIENT') {
+    if (activeOnly === 'true' && (!req.user || req.user.role !== 'CLIENT')) {
         query += ' AND p.is_active = 1';
     }
 

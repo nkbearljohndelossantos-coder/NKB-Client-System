@@ -6,10 +6,17 @@ let clientProducts = [];
 let selectedProductId = null;
 let signaturePad = null;
 
+let pendingGuestOrder = null;
+
 document.addEventListener('DOMContentLoaded', async () => {
     await NKB.init();
-    if (!NKB.user) {
-        window.location.href = '/index.html';
+
+    const isGuest = !NKB.user;
+    setupGuestModeUI(isGuest);
+
+    if (isGuest) {
+        await loadClientProducts();
+        switchClientTab('place-order');
         return;
     }
 
@@ -21,6 +28,39 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadClientProducts();
     loadClientDashboard();
 });
+
+// Setup UI for Guest Mode vs Authenticated User
+function setupGuestModeUI(isGuest) {
+    const guestHeader = document.getElementById('guest-header-actions');
+    const authHeader = document.getElementById('auth-header-actions');
+    const guestNotice = document.getElementById('sidebar-guest-notice');
+    const guestBanner = document.getElementById('client-guest-catalog-banner');
+    const lockPills = document.querySelectorAll('.guest-lock-pill');
+    const publicPills = document.querySelectorAll('.guest-public-pill');
+
+    if (isGuest) {
+        if (guestHeader) guestHeader.classList.remove('hidden');
+        if (authHeader) authHeader.classList.add('hidden');
+        if (guestNotice) guestNotice.classList.remove('hidden');
+        if (guestBanner) guestBanner.classList.remove('hidden');
+        lockPills.forEach(p => p.classList.remove('hidden'));
+        publicPills.forEach(p => p.classList.remove('hidden'));
+    } else {
+        if (guestHeader) guestHeader.classList.add('hidden');
+        if (authHeader) authHeader.classList.remove('hidden');
+        if (guestNotice) guestNotice.classList.add('hidden');
+        if (guestBanner) guestBanner.classList.add('hidden');
+        lockPills.forEach(p => p.classList.add('hidden'));
+        publicPills.forEach(p => p.classList.add('hidden'));
+
+        // Update nav company and user names
+        const compEl = document.getElementById('nav-company-name');
+        const userEl = document.getElementById('nav-user-name');
+        if (compEl && NKB.user?.companyName) compEl.textContent = NKB.user.companyName;
+        if (userEl && NKB.user?.name) userEl.textContent = NKB.user.name;
+    }
+}
+window.setupGuestModeUI = setupGuestModeUI;
 
 // Mobile Sidebar Drawer Toggle
 function toggleClientMobileSidebar(show) {
@@ -38,23 +78,34 @@ function toggleClientMobileSidebar(show) {
 }
 window.toggleClientMobileSidebar = toggleClientMobileSidebar;
 
-// Tab Switching
+// Tab Switching with Guest Lock Guard
 function switchClientTab(tabId) {
     toggleClientMobileSidebar(false);
+    const isGuest = !NKB.user;
+
+    const lockedView = document.getElementById('client-guest-locked-view');
     document.querySelectorAll('main > section').forEach(sec => sec.classList.add('hidden'));
+    if (lockedView) lockedView.classList.add('hidden');
+
     document.querySelectorAll('.client-sidebar-btn').forEach(btn => {
         btn.classList.remove('bg-indigo-600', 'text-white', 'font-bold', 'shadow-md', 'shadow-indigo-600/30', 'bg-slate-800');
         btn.classList.add('text-slate-400');
     });
 
-    const targetSec = document.getElementById(`client-view-${tabId}`);
     const targetBtn = document.getElementById(`tab-btn-${tabId}`);
-
-    if (targetSec) targetSec.classList.remove('hidden');
     if (targetBtn) {
         targetBtn.classList.add('bg-indigo-600', 'text-white', 'font-bold', 'shadow-md', 'shadow-indigo-600/30');
         targetBtn.classList.remove('text-slate-400');
     }
+
+    // If guest clicks any protected corporate tab, display the locked screen
+    if (isGuest && tabId !== 'place-order') {
+        if (lockedView) lockedView.classList.remove('hidden');
+        return;
+    }
+
+    const targetSec = document.getElementById(`client-view-${tabId}`);
+    if (targetSec) targetSec.classList.remove('hidden');
 
     if (tabId === 'dashboard') loadClientDashboard();
     else if (tabId === 'place-order') renderProductCards();
@@ -294,7 +345,28 @@ async function submitClientPO(e) {
     const policy = document.querySelector('input[name="client_billing_policy"]:checked')?.value || 'ACTUAL_DELIVERY';
     const notes = document.getElementById('client-order-notes')?.value || '';
 
-    const submitBtn = e.target.querySelector('button[type="submit"]') || document.querySelector('#client-order-form button[type="submit"]');
+    const orderPayload = {
+        billing_policy: policy,
+        notes,
+        items: clientCartItems.map(item => ({
+            product_id: item.product_id,
+            target_quantity: item.target_quantity,
+            unit_price: Math.round(Number(item.unit_price || 0) * 100) / 100
+        }))
+    };
+
+    // If user is not signed in (Guest Mode), save order and prompt Google verification!
+    if (!NKB.user) {
+        pendingGuestOrder = orderPayload;
+        openGoogleVerifyModal();
+        return;
+    }
+
+    await executeSubmitPO(orderPayload, e.target);
+}
+
+async function executeSubmitPO(orderPayload, formEl) {
+    const submitBtn = (formEl && formEl.querySelector) ? formEl.querySelector('button[type="submit"]') : document.querySelector('#form-client-po button[type="submit"]');
     if (submitBtn) {
         if (submitBtn.disabled) return;
         submitBtn.disabled = true;
@@ -305,15 +377,7 @@ async function submitClientPO(e) {
     try {
         const res = await NKB.api('/api/orders', {
             method: 'POST',
-            body: JSON.stringify({
-                billing_policy: policy,
-                notes,
-                items: clientCartItems.map(item => ({
-                    product_id: item.product_id,
-                    target_quantity: item.target_quantity,
-                    unit_price: Math.round(Number(item.unit_price || 0) * 100) / 100
-                }))
-            })
+            body: JSON.stringify(orderPayload)
         });
 
         if (res.success) {
@@ -327,6 +391,8 @@ async function submitClientPO(e) {
         } else {
             NKB.showToast(res.error || 'Failed to submit order.', 'error');
         }
+    } catch (err) {
+        NKB.showToast(err.message || 'Error submitting order.', 'error');
     } finally {
         if (submitBtn) {
             submitBtn.disabled = false;
@@ -334,6 +400,209 @@ async function submitClientPO(e) {
         }
     }
 }
+window.submitClientPO = submitClientPO;
+
+// -------------------------------------------------------------
+// GOOGLE VERIFICATION & COMPANY LOGIN MODALS
+// -------------------------------------------------------------
+function openGoogleVerifyModal() {
+    const modal = document.getElementById('modal-google-verify');
+    if (modal) {
+        modal.classList.remove('hidden');
+        const errEl = document.getElementById('google-verify-error');
+        if (errEl) errEl.classList.add('hidden');
+        const emailInput = document.getElementById('gverify-email');
+        if (emailInput) emailInput.focus();
+    }
+}
+window.openGoogleVerifyModal = openGoogleVerifyModal;
+
+function closeGoogleVerifyModal() {
+    const modal = document.getElementById('modal-google-verify');
+    if (modal) modal.classList.add('hidden');
+}
+window.closeGoogleVerifyModal = closeGoogleVerifyModal;
+
+function quickFillGoogle(name, email, company, phone) {
+    const nEl = document.getElementById('gverify-name');
+    const eEl = document.getElementById('gverify-email');
+    const cEl = document.getElementById('gverify-company');
+    const pEl = document.getElementById('gverify-phone');
+    if (nEl) nEl.value = name;
+    if (eEl) eEl.value = email;
+    if (cEl) cEl.value = company;
+    if (pEl) pEl.value = phone;
+}
+window.quickFillGoogle = quickFillGoogle;
+
+async function submitGoogleVerification(e) {
+    e.preventDefault();
+    const email = document.getElementById('gverify-email')?.value.trim();
+    const name = document.getElementById('gverify-name')?.value.trim();
+    const company_name = document.getElementById('gverify-company')?.value.trim();
+    const phone = document.getElementById('gverify-phone')?.value.trim();
+    const errEl = document.getElementById('google-verify-error');
+    const submitBtn = document.getElementById('btn-submit-google-verify');
+
+    if (!email || !name) {
+        if (errEl) {
+            errEl.textContent = 'Please enter both your Google email and full name.';
+            errEl.classList.remove('hidden');
+        }
+        return;
+    }
+
+    if (errEl) errEl.classList.add('hidden');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.dataset.origHtml = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Verifying...';
+    }
+
+    try {
+        const res = await NKB.api('/api/auth/google-verify', {
+            method: 'POST',
+            body: JSON.stringify({
+                email,
+                name,
+                company_name: company_name || `${name}'s Brand`,
+                phone: phone || '',
+                google_id: `g_${Date.now()}`
+            })
+        });
+
+        if (res.success && res.token) {
+            localStorage.setItem('nkb_token', res.token);
+            await NKB.init();
+            setupGuestModeUI(false);
+            closeGoogleVerifyModal();
+            NKB.showToast(`Google Account verified! Welcome, ${res.user.name}.`, 'success');
+
+            // If there's a pending order, dispatch it immediately!
+            if (pendingGuestOrder) {
+                const orderToSubmit = pendingGuestOrder;
+                pendingGuestOrder = null;
+                await executeSubmitPO(orderToSubmit);
+            }
+        } else {
+            if (errEl) {
+                errEl.textContent = res.error || 'Google verification failed.';
+                errEl.classList.remove('hidden');
+            }
+        }
+    } catch (err) {
+        if (errEl) {
+            errEl.textContent = err.message || 'Network error during Google verification.';
+            errEl.classList.remove('hidden');
+        }
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            if (submitBtn.dataset.origHtml) submitBtn.innerHTML = submitBtn.dataset.origHtml;
+        }
+    }
+}
+window.submitGoogleVerification = submitGoogleVerification;
+
+function openCompanyLoginModal() {
+    const modal = document.getElementById('modal-company-login');
+    if (modal) {
+        modal.classList.remove('hidden');
+        const errEl = document.getElementById('company-login-error');
+        if (errEl) errEl.classList.add('hidden');
+        const emailInput = document.getElementById('company-email');
+        if (emailInput) emailInput.focus();
+    }
+}
+window.openCompanyLoginModal = openCompanyLoginModal;
+
+function closeCompanyLoginModal() {
+    const modal = document.getElementById('modal-company-login');
+    if (modal) modal.classList.add('hidden');
+}
+window.closeCompanyLoginModal = closeCompanyLoginModal;
+
+function quickFillCompany(email, password) {
+    const eEl = document.getElementById('company-email');
+    const pEl = document.getElementById('company-password');
+    if (eEl) eEl.value = email;
+    if (pEl) pEl.value = password;
+}
+window.quickFillCompany = quickFillCompany;
+
+async function submitCompanyLogin(e) {
+    e.preventDefault();
+    const email = document.getElementById('company-email')?.value.trim();
+    const password = document.getElementById('company-password')?.value;
+    const errEl = document.getElementById('company-login-error');
+    const submitBtn = document.getElementById('btn-submit-company-login');
+
+    if (!email || !password) {
+        if (errEl) {
+            errEl.textContent = 'Please enter both email and password.';
+            errEl.classList.remove('hidden');
+        }
+        return;
+    }
+
+    if (errEl) errEl.classList.add('hidden');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.dataset.origHtml = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Signing in...';
+    }
+
+    try {
+        const res = await NKB.api('/api/auth/login', {
+            method: 'POST',
+            body: JSON.stringify({ email, password })
+        });
+
+        if (res.success && res.token) {
+            localStorage.setItem('nkb_token', res.token);
+            await NKB.init();
+            setupGuestModeUI(false);
+            closeCompanyLoginModal();
+            NKB.showToast(`Welcome back, ${res.user.name}!`, 'success');
+            await loadClientProducts();
+            switchClientTab('dashboard');
+        } else {
+            if (errEl) {
+                errEl.textContent = res.error || 'Invalid corporate credentials.';
+                errEl.classList.remove('hidden');
+            }
+        }
+    } catch (err) {
+        if (errEl) {
+            errEl.textContent = err.message || 'Network error.';
+            errEl.classList.remove('hidden');
+        }
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            if (submitBtn.dataset.origHtml) submitBtn.innerHTML = submitBtn.dataset.origHtml;
+        }
+    }
+}
+window.submitCompanyLogin = submitCompanyLogin;
+
+function closeClientModal() {
+    const gModal = document.getElementById('modal-google-verify');
+    if (gModal && !gModal.classList.contains('hidden')) {
+        closeGoogleVerifyModal();
+        return;
+    }
+    const cModal = document.getElementById('modal-company-login');
+    if (cModal && !cModal.classList.contains('hidden')) {
+        closeCompanyLoginModal();
+        return;
+    }
+    const dynamicModals = document.querySelectorAll('#client-modals-root > div:not(#modal-google-verify):not(#modal-company-login)');
+    if (dynamicModals.length > 0) {
+        dynamicModals.forEach(m => m.remove());
+    }
+}
+window.closeClientModal = closeClientModal;
 
 // -------------------------------------------------------------
 // 3. MY PURCHASE ORDERS
