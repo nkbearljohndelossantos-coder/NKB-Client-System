@@ -165,6 +165,60 @@ const NKB = {
         return dateObj.toLocaleString('en-PH', { timeZone: 'Asia/Manila' });
     },
 
+    // High-Efficiency Client-Side Image Optimizer
+    // Scales large camera photos (e.g. 5MB–12MB) to high-resolution ~200KB–350KB JPEG
+    compressImage: function(file, options = {}) {
+        return new Promise((resolve, reject) => {
+            if (!file) {
+                return reject(new Error('No file provided.'));
+            }
+            if (!(file instanceof Blob)) {
+                // If it's already a base64 or url string, return as-is
+                return resolve(file);
+            }
+            if (!file.type || !file.type.startsWith('image/') || file.type === 'image/svg+xml') {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+                return;
+            }
+
+            const maxWidth = options.maxWidth || 1600;
+            const maxHeight = options.maxHeight || 1600;
+            const quality = options.quality !== undefined ? options.quality : 0.82;
+            const mimeType = options.mimeType || 'image/jpeg';
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    let { width, height } = img;
+                    if (width > maxWidth || height > maxHeight) {
+                        const ratio = Math.min(maxWidth / width, maxHeight / height);
+                        width = Math.round(width * ratio);
+                        height = Math.round(height * ratio);
+                    }
+
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.fillRect(0, 0, width, height);
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    const dataUrl = canvas.toDataURL(mimeType, quality);
+                    resolve(dataUrl);
+                };
+                img.onerror = () => resolve(e.target.result);
+                img.src = e.target.result;
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    },
+
     // Delivery Progress Bar Helper
     // Renders visual progress bar indicating delivered quantity vs ordered quantity
     renderDeliveryProgressBar: function(delivered, target, options = {}) {

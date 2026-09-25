@@ -505,6 +505,41 @@
                         </table>
                     </div>
                 </div>
+
+                <!-- Client Submitted Payment Proofs Table -->
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-base font-black text-slate-900 flex items-center gap-2">
+                                <span>🧾</span><span>Submitted Payment & Cheque Proofs</span>
+                            </h3>
+                            <p class="text-xs text-slate-500">Track check and bank deposit submissions pending accounting verification.</p>
+                        </div>
+                        <button onclick="loadClientSubmissions()" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition">
+                            Refresh Status
+                        </button>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-50 border-y border-slate-200 text-slate-600 font-bold uppercase tracking-wider">
+                                <tr>
+                                    <th class="py-3 px-4">Sub #</th>
+                                    <th class="py-3 px-4">Invoice No.</th>
+                                    <th class="py-3 px-4">Date</th>
+                                    <th class="py-3 px-4">Amount</th>
+                                    <th class="py-3 px-4">Method & Bank</th>
+                                    <th class="py-3 px-4">Check / Ref #</th>
+                                    <th class="py-3 px-4">Attachment</th>
+                                    <th class="py-3 px-4">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="client-table-submissions" class="divide-y divide-slate-100 font-medium">
+                                <tr><td colspan="8" class="py-6 text-center text-slate-400">No payment proofs submitted yet.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </section>
 
             <!-- TAB: MY RESERVED BUFFER -->

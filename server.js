@@ -114,6 +114,16 @@ app.get(['/test', '/qa'], (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'test.html'));
 });
 
+// COO Mobile Approval Web App
+app.get(['/coo-approval', '/coo', '/executive-approval'], (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'coo-approval.html'));
+});
+
+// Official Receipt / Collection Receipt Generator
+app.get(['/print-receipt', '/receipt'], (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'print-receipt.html'));
+});
+
 // Developer Documentation Portal
 app.get(['/api/docs', '/docs', '/developers'], (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'api-docs.html'));
@@ -161,6 +171,7 @@ function mountApiRoutes() {
     app.use('/api/formulations', require('./routes/formulations'));
     app.use('/api/api-keys', require('./routes/apiKeys'));
     app.use('/api/cheque-payables', require('./routes/chequePayables'));
+    app.use('/api/bank-accounts', require('./routes/bankAccounts'));
     app.use('/api/v1', require('./routes/v1/apiV1'));
 }
 

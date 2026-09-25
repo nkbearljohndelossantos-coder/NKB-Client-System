@@ -808,14 +808,15 @@ router.get('/payables/:id', (req, res) => {
  */
 router.post('/payables/:id/confirm', (req, res) => {
     try {
-        const { decision = 'CONFIRMED', cheque_number, notes, confirmed_by } = req.body;
+        const { decision, action, cheque_number, notes, confirmed_by } = req.body;
+        const rawDecision = decision || action || 'CONFIRMED';
         const item = db.prepare('SELECT * FROM cheque_payables WHERE id = ? OR request_number = ?').get(req.params.id, req.params.id);
 
         if (!item) {
             return res.status(404).json({ success: false, error: 'Cheque payable record not found.' });
         }
 
-        const isApproved = decision.toUpperCase() === 'CONFIRMED' || decision.toUpperCase() === 'APPROVED';
+        const isApproved = rawDecision.toUpperCase() === 'CONFIRMED' || rawDecision.toUpperCase() === 'APPROVED';
         const newStatus = isApproved ? 'CONFIRMED' : 'REJECTED';
         const finalChequeNum = cheque_number ? String(cheque_number).trim() : item.cheque_number;
         const approverName = confirmed_by ? String(confirmed_by).trim() : 'COO Executive Office (External Portal)';
@@ -833,7 +834,7 @@ router.post('/payables/:id/confirm', (req, res) => {
             WHERE id = ?
         `).run(
             newStatus,
-            decision.toUpperCase(),
+            rawDecision.toUpperCase(),
             finalChequeNum,
             approverName,
             confirmedAt,
@@ -879,6 +880,58 @@ router.post('/payables/:id/confirm', (req, res) => {
         return res.json({
             success: true,
             message: `Cheque payable ${item.request_number} has been ${isApproved ? 'CONFIRMED' : 'REJECTED'} successfully.`,
+            data: updated
+        });
+    } catch (err) {
+        return res.status(400).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/v1/payables/:id/clear
+ * Mark cheque payable as CLEARED via REST API and debit depository bank
+ */
+router.post('/payables/:id/clear', (req, res) => {
+    try {
+        const item = db.prepare('SELECT * FROM cheque_payables WHERE id = ? OR request_number = ?').get(req.params.id, req.params.id);
+        if (!item) {
+            return res.status(404).json({ success: false, error: 'Cheque payable record not found.' });
+        }
+
+        if (item.status === 'CLEARED') {
+            return res.status(400).json({ success: false, error: 'Cheque has already been marked as cleared.' });
+        }
+
+        const clearedAt = new Date().toISOString().replace('T', ' ').substring(0, 19);
+
+        // Debit the bank balance
+        try {
+            const bankAcc = db.prepare(`
+                SELECT id, current_balance FROM bank_accounts 
+                WHERE is_active = 1 AND (LOWER(bank_name) LIKE LOWER(?) OR LOWER(?) LIKE '%' || LOWER(bank_name) || '%')
+                LIMIT 1
+            `).get(`%${item.bank_name}%`, item.bank_name);
+            if (bankAcc) {
+                db.prepare(`
+                    UPDATE bank_accounts
+                    SET current_balance = current_balance - ?, updated_at = datetime('now', 'localtime')
+                    WHERE id = ?
+                `).run(item.amount, bankAcc.id);
+            }
+        } catch (_) {}
+
+        db.prepare(`
+            UPDATE cheque_payables
+            SET status = 'CLEARED',
+                cleared_at = ?,
+                updated_at = datetime('now', 'localtime')
+            WHERE id = ?
+        `).run(clearedAt, item.id);
+
+        const updated = db.prepare('SELECT * FROM cheque_payables WHERE id = ?').get(item.id);
+        return res.json({
+            success: true,
+            message: `Cheque ${item.request_number} marked as CLEARED.`,
             data: updated
         });
     } catch (err) {

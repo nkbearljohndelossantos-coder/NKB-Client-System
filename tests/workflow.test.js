@@ -2439,6 +2439,151 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         db.prepare('DELETE FROM cheque_payables WHERE id = ?').run(payable.id);
     });
 
+    test('34. Live Bank Accounts, Overdraft Warning, PDC Maturity, Cheque Clearance & Client Payment Submission Workflow', async () => {
+        const acctToken = getAuthToken('ACCOUNTING');
+        const COO_KEY = 'nkb_inv_live_6ae6965c1ca61aef54939d6b1ecfac1b';
+
+        // 1. Live Bank Accounts endpoint
+        const banksRes = await request(app)
+            .get('/api/bank-accounts')
+            .set('Authorization', `Bearer ${acctToken}`);
+        assert.strictEqual(banksRes.status, 200);
+        assert.strictEqual(banksRes.body.success, true);
+        assert.ok(Array.isArray(banksRes.body.data));
+        assert.ok(banksRes.body.data.length >= 5);
+        assert.ok(banksRes.body.summary.totalLiquidBalance > 0);
+
+        const bdoAccount = banksRes.body.data.find(b => b.id === 'ba-bdo-01' || (b.bank_name && b.bank_name.includes('BDO')));
+        assert.ok(bdoAccount, 'BDO bank account must exist');
+        const initialBdoBalance = parseFloat(bdoAccount.current_balance);
+
+        // 2. Cheque payable with overdraft warning test
+        const hugeAmount = initialBdoBalance + 1000000; // exceeding balance
+        const overdrawnReqRes = await request(app)
+            .post('/api/cheque-payables')
+            .set('Authorization', `Bearer ${acctToken}`)
+            .send({
+                payee_name: 'Overdraft Supplier Corp.',
+                amount: hugeAmount,
+                cheque_date: '2026-10-15',
+                bank_name: 'BDO Unibank',
+                category: 'Raw Materials',
+                purpose: 'Emergency bulk stock acquisition'
+            });
+        assert.strictEqual(overdrawnReqRes.status, 201);
+        assert.strictEqual(overdrawnReqRes.body.success, true);
+        assert.strictEqual(overdrawnReqRes.body.data.is_overdrawn_warning, true);
+        assert.strictEqual(overdrawnReqRes.body.data.bank_account_id, bdoAccount.id);
+
+        const overdrawnId = overdrawnReqRes.body.data.id;
+
+        // 3. Normal Cheque payable creation with PDC check & clearing test
+        const chequeAmt = 25000;
+        const reqRes = await request(app)
+            .post('/api/cheque-payables')
+            .set('Authorization', `Bearer ${acctToken}`)
+            .send({
+                payee_name: 'Pacific Chemical Logistics Inc.',
+                amount: chequeAmt,
+                cheque_date: '2026-09-26', // near-term PDC
+                bank_name: 'BDO Unibank',
+                category: 'Logistics & Freight Delivery',
+                purpose: 'Freight and port clearance for imported silicone oils'
+            });
+        assert.strictEqual(reqRes.status, 201);
+        const payable = reqRes.body.data;
+        assert.strictEqual(payable.is_overdrawn_warning, false);
+
+        // Verify PDC list calculations
+        const listRes = await request(app)
+            .get('/api/cheque-payables')
+            .set('Authorization', `Bearer ${acctToken}`);
+        assert.strictEqual(listRes.status, 200);
+        const foundPayable = listRes.body.data.find(p => p.id === payable.id);
+        assert.ok(foundPayable);
+        assert.ok(foundPayable.maturity_status !== undefined);
+
+        // 4. COO confirms the cheque
+        const cooRes = await request(app)
+            .post(`/api/v1/payables/${payable.id}/confirm`)
+            .set('x-api-key', COO_KEY)
+            .send({
+                action: 'CONFIRMED',
+                confirmed_by: 'COO Mobile Portal',
+                notes: 'Approved via executive mobile view'
+            });
+        assert.strictEqual(cooRes.status, 200);
+        assert.strictEqual(cooRes.body.data.status, 'CONFIRMED');
+
+        // 5. Accounting marks the cheque as CLEARED -> Debits bank balance
+        const clearRes = await request(app)
+            .post(`/api/cheque-payables/${payable.id}/clear`)
+            .set('Authorization', `Bearer ${acctToken}`)
+            .send({ notes: 'Cleared at BDO bank branch' });
+        assert.strictEqual(clearRes.status, 200);
+        assert.strictEqual(clearRes.body.success, true);
+        assert.strictEqual(clearRes.body.data.status, 'CLEARED');
+        assert.ok(clearRes.body.data.cleared_at);
+
+        // Verify bank balance debited
+        const updatedBdo = db.prepare('SELECT current_balance FROM bank_accounts WHERE id = ?').get(bdoAccount.id);
+        assert.strictEqual(parseFloat(updatedBdo.current_balance), initialBdoBalance - chequeAmt);
+
+        // 6. Client submits payment proof for an invoice
+        let invoice = db.prepare("SELECT * FROM sales_invoices WHERE client_id = ? AND status != 'PAID' LIMIT 1").get(demoClient.id);
+        if (!invoice) {
+            invoice = db.prepare("SELECT * FROM sales_invoices WHERE client_id = ? LIMIT 1").get(demoClient.id);
+            if (invoice) {
+                db.prepare("UPDATE sales_invoices SET status = 'UNPAID', balance_due = 50000 WHERE id = ?").run(invoice.id);
+                invoice = db.prepare("SELECT * FROM sales_invoices WHERE id = ?").get(invoice.id);
+            }
+        }
+        if (invoice) {
+            const submitRes = await request(app)
+                .post('/api/payments/client-submit')
+                .set('Authorization', `Bearer ${clientToken}`)
+                .send({
+                    invoice_id: invoice.id,
+                    amount: 15000,
+                    payment_date: '2026-09-25',
+                    payment_method: 'CHECK',
+                    check_number: 'CHK-991204',
+                    bank_name: 'BDO Unibank',
+                    reference_number: 'BDO-REF-4821',
+                    client_notes: 'Cheque issued for partial billing'
+                });
+            assert.strictEqual(submitRes.status, 201);
+            assert.strictEqual(submitRes.body.success, true);
+            const submission = submitRes.body.data;
+            assert.strictEqual(submission.status, 'PENDING_REVIEW');
+
+            // Admin / Accountant reviews and approves payment submission
+            const reviewRes = await request(app)
+                .post(`/api/payments/client-submissions/${submission.id}/review`)
+                .set('Authorization', `Bearer ${acctToken}`)
+                .send({
+                    action: 'APPROVE',
+                    reviewer_notes: 'Payment verified with bank online credit'
+                });
+            assert.strictEqual(reviewRes.status, 200);
+            assert.strictEqual(reviewRes.body.success, true);
+            assert.strictEqual(reviewRes.body.data.submission.status, 'APPROVED');
+            assert.ok(reviewRes.body.data.payment_id);
+
+            // 7. Verify Official Receipt (OR) endpoint
+            const orRes = await request(app)
+                .get(`/api/payments/${reviewRes.body.data.payment_id}`)
+                .set('Authorization', `Bearer ${acctToken}`);
+            assert.strictEqual(orRes.status, 200);
+            assert.strictEqual(orRes.body.success, true);
+            assert.ok(orRes.body.data.amount_in_words, 'Receipt must have amount in words');
+            assert.ok(orRes.body.data.client_name, 'Receipt must have client name');
+        }
+
+        // Clean up test payables
+        db.prepare('DELETE FROM cheque_payables WHERE id IN (?, ?)').run(overdrawnId, payable.id);
+    });
+
     after(() => {
         // Automatically delete all test decoys and temporary test database
         try {

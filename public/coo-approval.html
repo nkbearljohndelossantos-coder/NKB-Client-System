@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>COO Mobile Executive Portal - NKB Manufacturing</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="stylesheet" href="/css/tailwind.min.css">
+    <link rel="stylesheet" href="/css/style.css?v=2.2.0">
+    <style>
+        body { -webkit-tap-highlight-color: transparent; }
+        .tab-active { background-color: #4f46e5; color: #ffffff; font-weight: 700; }
+        .modal-zoom-img { max-width: 100%; max-height: 80vh; object-fit: contain; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen antialiased flex flex-col font-sans">
+
+    <!-- Mobile Top Navigation Header -->
+    <header class="bg-slate-950/95 backdrop-blur border-b border-slate-800 sticky top-0 z-40 px-4 py-3">
+        <div class="max-w-2xl mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <img src="/images/nkb-logo.png" alt="NKB Logo" class="h-8 w-auto object-contain">
+                <div>
+                    <h1 class="text-sm font-black text-white tracking-wide flex items-center gap-1.5">
+                        <span>NKB EXECUTIVE</span>
+                        <span class="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-amber-500/20 text-amber-400 border border-amber-500/30">COO</span>
+                    </h1>
+                    <div class="text-[10px] text-slate-400">Mobile Cheque Requisition Approval</div>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <button onclick="loadCooPayables()" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer" title="Refresh Requests">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                </button>
+                <button onclick="openApiKeyModal()" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 hover:text-amber-300 transition cursor-pointer" title="API Key Settings">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+                </button>
+                <a href="/admin.html" class="text-xs text-slate-400 hover:text-white px-2 py-1 rounded bg-slate-800/80 border border-slate-700">Admin</a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-2xl w-full mx-auto p-4 space-y-4 pb-20">
+
+        <!-- Executive Metrics Card -->
+        <div class="grid grid-cols-2 gap-3">
+            <div class="bg-slate-800/90 border border-slate-700/80 rounded-2xl p-4 shadow-lg cursor-pointer hover:border-amber-500/50 transition" onclick="switchFilter('PENDING_COO_APPROVAL')">
+                <div class="text-[11px] font-bold uppercase tracking-wider text-amber-400 flex items-center justify-between">
+                    <span>Pending COO</span>
+                    <span id="metric-pending-count" class="px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 text-[10px] font-black">0</span>
+                </div>
+                <div id="metric-pending-amount" class="text-xl sm:text-2xl font-black text-white mt-1">₱0.00</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">Awaiting your approval</div>
+            </div>
+
+            <div class="bg-slate-800/90 border border-slate-700/80 rounded-2xl p-4 shadow-lg cursor-pointer hover:border-emerald-500/50 transition" onclick="switchFilter('CONFIRMED')">
+                <div class="text-[11px] font-bold uppercase tracking-wider text-emerald-400 flex items-center justify-between">
+                    <span>Approved</span>
+                    <span id="metric-confirmed-count" class="px-2 py-0.5 rounded-full bg-emerald-400/20 text-emerald-300 text-[10px] font-black">0</span>
+                </div>
+                <div id="metric-confirmed-amount" class="text-xl sm:text-2xl font-black text-white mt-1">₱0.00</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">Authorized for release</div>
+            </div>
+        </div>
+
+        <!-- Filter Navigation Pills -->
+        <div class="flex items-center gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-800 overflow-x-auto">
+            <button onclick="switchFilter('PENDING_COO_APPROVAL')" id="pill-PENDING_COO_APPROVAL" class="tab-active flex-1 py-2 px-3 text-xs rounded-lg transition whitespace-nowrap text-center">
+                Pending <span id="badge-pending" class="ml-1 px-1.5 py-0.2 rounded-full bg-white/20 text-[10px]">0</span>
+            </button>
+            <button onclick="switchFilter('CONFIRMED')" id="pill-CONFIRMED" class="flex-1 py-2 px-3 text-xs text-slate-400 hover:text-white rounded-lg transition whitespace-nowrap text-center">
+                Approved
+            </button>
+            <button onclick="switchFilter('REJECTED')" id="pill-REJECTED" class="flex-1 py-2 px-3 text-xs text-slate-400 hover:text-white rounded-lg transition whitespace-nowrap text-center">
+                Rejected
+            </button>
+            <button onclick="switchFilter('ALL')" id="pill-ALL" class="flex-1 py-2 px-3 text-xs text-slate-400 hover:text-white rounded-lg transition whitespace-nowrap text-center">
+                All
+            </button>
+        </div>
+
+        <!-- Search Bar -->
+        <div class="relative">
+            <input type="text" id="coo-search" oninput="renderCooList()" placeholder="Search payee, bank, amount, purpose..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500">
+            <span class="absolute right-3 top-2.5 text-slate-500 text-sm">🔍</span>
+        </div>
+
+        <!-- Payables List Feed -->
+        <div id="coo-payables-feed" class="space-y-3.5">
+            <div class="py-12 text-center text-slate-500 text-xs">
+                <div class="animate-spin inline-block w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full mb-2"></div>
+                <div>Loading cheque requisitions...</div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal: Image Zoom / Attachment Preview -->
+    <div id="image-zoom-modal" class="fixed inset-0 z-50 bg-black/90 backdrop-blur-md hidden flex items-center justify-center p-4">
+        <div class="relative max-w-2xl w-full flex flex-col items-center">
+            <button onclick="closeImageModal()" class="absolute -top-10 right-0 text-white bg-slate-800 hover:bg-slate-700 rounded-full w-8 h-8 flex items-center justify-center font-bold text-sm">
+                ✕
+            </button>
+            <img id="image-zoom-target" src="" alt="Proof Attachment" class="modal-zoom-img rounded-xl shadow-2xl border border-slate-700">
+            <div id="image-zoom-caption" class="text-xs text-slate-300 mt-3 text-center"></div>
+        </div>
+    </div>
+
+    <!-- Modal: Confirm Approval -->
+    <div id="approve-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 class="font-black text-white text-base flex items-center gap-2">
+                    <span class="text-emerald-400">✅</span>
+                    <span>Approve Cheque Requisition</span>
+                </h3>
+                <button onclick="closeApproveModal()" class="text-slate-400 hover:text-white">&times;</button>
+            </div>
+
+            <div class="space-y-3 text-xs">
+                <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                    <div class="text-slate-400 font-medium" id="modal-app-req-no">REQ-XXXX</div>
+                    <div class="text-base font-black text-white" id="modal-app-payee">Payee Name</div>
+                    <div class="text-lg font-black text-emerald-400" id="modal-app-amount">₱0.00</div>
+                    <div class="text-slate-400" id="modal-app-bank">Bank Name</div>
+                </div>
+
+                <div>
+                    <label class="block text-slate-300 font-bold mb-1">Cheque Number (Optional / Assigned)</label>
+                    <input type="text" id="modal-app-check-no" placeholder="e.g. BDO-CHQ-104928" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500">
+                </div>
+
+                <div>
+                    <label class="block text-slate-300 font-bold mb-1">COO Authorization Remarks / Notes</label>
+                    <textarea id="modal-app-notes" rows="2" placeholder="e.g. Approved for release. Match invoice specs." class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500">Approved for disbursement by COO.</textarea>
+                </div>
+
+                <div>
+                    <label class="block text-slate-300 font-bold mb-1">Approver Name</label>
+                    <input type="text" id="modal-app-name" value="Engr. Glen Nobleza (COO)" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500">
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2 pt-2 border-t border-slate-800">
+                <button onclick="closeApproveModal()" class="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition">
+                    Cancel
+                </button>
+                <button id="btn-confirm-approve" onclick="executeApprove()" class="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-lg shadow-emerald-600/30">
+                    Confirm & Approve
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Reject Request -->
+    <div id="reject-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 class="font-black text-white text-base flex items-center gap-2">
+                    <span class="text-rose-400">❌</span>
+                    <span>Reject Cheque Requisition</span>
+                </h3>
+                <button onclick="closeRejectModal()" class="text-slate-400 hover:text-white">&times;</button>
+            </div>
+
+            <div class="space-y-3 text-xs">
+                <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                    <div class="text-slate-400 font-medium" id="modal-rej-req-no">REQ-XXXX</div>
+                    <div class="text-base font-black text-white" id="modal-rej-payee">Payee Name</div>
+                    <div class="text-lg font-black text-rose-400" id="modal-rej-amount">₱0.00</div>
+                </div>
+
+                <div>
+                    <label class="block text-slate-300 font-bold mb-1">Reason for Rejection *</label>
+                    <textarea id="modal-rej-reason" rows="3" placeholder="Provide specific reason (e.g. Amount requires revised supplier quotation, wrong bank account, etc.)" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-rose-500"></textarea>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2 pt-2 border-t border-slate-800">
+                <button onclick="closeRejectModal()" class="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition">
+                    Cancel
+                </button>
+                <button id="btn-confirm-reject" onclick="executeReject()" class="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition shadow-lg shadow-rose-600/30">
+                    Confirm Rejection
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: API Key Settings -->
+    <div id="apikey-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 class="font-black text-white text-base flex items-center gap-2">
+                    <span>🔑</span><span>COO Integration Key</span>
+                </h3>
+                <button onclick="closeApiKeyModal()" class="text-slate-400 hover:text-white">&times;</button>
+            </div>
+            <div class="space-y-3 text-xs">
+                <p class="text-slate-400">Authenticated with the live corporate key for instant COO approval synchronization:</p>
+                <input type="text" id="coo-api-key-input" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-amber-400 font-mono text-xs focus:outline-none focus:border-amber-500">
+            </div>
+            <div class="flex items-center gap-2 pt-2 border-t border-slate-800">
+                <button onclick="saveApiKey()" class="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition">
+                    Save Key
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Script -->
+    <script>
+        const DEFAULT_API_KEY = 'nkb_inv_live_6ae6965c1ca61aef54939d6b1ecfac1b';
+        let apiKey = localStorage.getItem('nkb_coo_api_key') || DEFAULT_API_KEY;
+        let payablesList = [];
+        let currentFilter = 'PENDING_COO_APPROVAL';
+        let activePayableId = null;
+
+        function formatCurrency(val) {
+            return '₱' + Number(val || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function formatDate(str) {
+            if (!str) return '-';
+            const d = new Date(str + (str.includes('T') ? '' : 'T00:00:00+08:00'));
+            if (isNaN(d.getTime())) return str;
+            return d.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
+        }
+
+        async function fetchApi(url, options = {}) {
+            options.headers = options.headers || {};
+            options.headers['x-api-key'] = apiKey;
+            if (options.body && typeof options.body === 'object') {
+                options.headers['Content-Type'] = 'application/json';
+                options.body = JSON.stringify(options.body);
+            }
+            const res = await fetch(url, options);
+            return res.json();
+        }
+
+        async function loadCooPayables() {
+            const feed = document.getElementById('coo-payables-feed');
+            feed.innerHTML = `
+                <div class="py-12 text-center text-slate-500 text-xs">
+                    <div class="animate-spin inline-block w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full mb-2"></div>
+                    <div>Connecting to live API...</div>
+                </div>
+            `;
+            try {
+                const res = await fetchApi('/api/v1/payables?limit=100');
+                if (res.success && res.data) {
+                    payablesList = res.data;
+                    updateMetrics();
+                    renderCooList();
+                } else {
+                    feed.innerHTML = `<div class="p-6 text-center text-rose-400 text-xs">Failed to load requests: ${res.error || 'Access denied'}</div>`;
+                }
+            } catch (err) {
+                feed.innerHTML = `<div class="p-6 text-center text-rose-400 text-xs">Network error connecting to API: ${err.message}</div>`;
+            }
+        }
+
+        function updateMetrics() {
+            const pending = payablesList.filter(p => p.status === 'PENDING_COO_APPROVAL');
+            const confirmed = payablesList.filter(p => ['CONFIRMED', 'ISSUED', 'CLEARED'].includes(p.status));
+
+            const pendingAmt = pending.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+            const confirmedAmt = confirmed.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+
+            document.getElementById('metric-pending-count').textContent = pending.length;
+            document.getElementById('metric-pending-amount').textContent = formatCurrency(pendingAmt);
+            document.getElementById('metric-confirmed-count').textContent = confirmed.length;
+            document.getElementById('metric-confirmed-amount').textContent = formatCurrency(confirmedAmt);
+            document.getElementById('badge-pending').textContent = pending.length;
+        }
+
+        function switchFilter(status) {
+            currentFilter = status;
+            ['PENDING_COO_APPROVAL', 'CONFIRMED', 'REJECTED', 'ALL'].forEach(s => {
+                const el = document.getElementById(`pill-${s}`);
+                if (el) {
+                    if (s === status) {
+                        el.className = 'tab-active flex-1 py-2 px-3 text-xs rounded-lg transition whitespace-nowrap text-center';
+                    } else {
+                        el.className = 'flex-1 py-2 px-3 text-xs text-slate-400 hover:text-white rounded-lg transition whitespace-nowrap text-center';
+                    }
+                }
+            });
+            renderCooList();
+        }
+
+        function renderCooList() {
+            const query = (document.getElementById('coo-search')?.value || '').toLowerCase().trim();
+            const feed = document.getElementById('coo-payables-feed');
+
+            let filtered = payablesList.filter(p => {
+                const matchesStatus = (currentFilter === 'ALL') || 
+                    (currentFilter === 'PENDING_COO_APPROVAL' && p.status === 'PENDING_COO_APPROVAL') ||
+                    (currentFilter === 'CONFIRMED' && ['CONFIRMED', 'ISSUED', 'CLEARED'].includes(p.status)) ||
+                    (currentFilter === 'REJECTED' && p.status === 'REJECTED');
+
+                const matchesQuery = !query || 
+                    (p.payee_name && p.payee_name.toLowerCase().includes(query)) ||
+                    (p.request_number && p.request_number.toLowerCase().includes(query)) ||
+                    (p.bank_name && p.bank_name.toLowerCase().includes(query)) ||
+                    (p.purpose && p.purpose.toLowerCase().includes(query)) ||
+                    (p.category && p.category.toLowerCase().includes(query));
+
+                return matchesStatus && matchesQuery;
+            });
+
+            if (filtered.length === 0) {
+                feed.innerHTML = `
+                    <div class="py-12 text-center text-slate-500 text-xs bg-slate-950/60 rounded-2xl border border-slate-800 p-6">
+                        <div class="text-2xl mb-2">📋</div>
+                        <div class="font-bold text-slate-400">No cheque requisitions in this view</div>
+                        <div class="mt-1">All pending items have been addressed or no matching records found.</div>
+                    </div>
+                `;
+                return;
+            }
+
+            feed.innerHTML = filtered.map(item => {
+                const isPending = item.status === 'PENDING_COO_APPROVAL';
+                const isConfirmed = item.status === 'CONFIRMED';
+                const isCleared = item.status === 'CLEARED';
+                const isRejected = item.status === 'REJECTED';
+
+                return `
+                    <div class="bg-slate-950/90 border ${isPending ? 'border-amber-500/40 shadow-amber-950/20' : 'border-slate-800'} rounded-2xl p-4 shadow-xl space-y-3 transition">
+                        <!-- Top Meta Header -->
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <span class="font-mono text-xs font-bold text-indigo-400 bg-indigo-950/80 px-2 py-0.5 rounded border border-indigo-800/40">${item.request_number}</span>
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                    isPending ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
+                                    (isConfirmed || isCleared) ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' :
+                                    'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                                }">${item.status.replace(/_/g, ' ')}</span>
+                            </div>
+                            <div class="text-right text-[11px] text-slate-400 font-medium">
+                                <span>📅 Due: </span><span class="text-slate-200 font-bold">${formatDate(item.cheque_date)}</span>
+                            </div>
+                        </div>
+
+                        <!-- Payee & Amount -->
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0">
+                                <h2 class="text-base sm:text-lg font-black text-white truncate">${item.payee_name}</h2>
+                                <div class="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
+                                    <span class="px-2 py-0.5 rounded bg-slate-800 text-[10px] font-semibold text-slate-300">${item.category}</span>
+                                    <span>•</span>
+                                    <span>${item.bank_name}</span>
+                                </div>
+                            </div>
+                            <div class="text-right flex-shrink-0">
+                                <div class="text-lg sm:text-xl font-black text-emerald-400">${formatCurrency(item.amount)}</div>
+                                ${item.cheque_number ? `<div class="text-[10px] font-mono text-amber-300">Chq: ${item.cheque_number}</div>` : ''}
+                            </div>
+                        </div>
+
+                        <!-- Purpose / Where Money Will Be Used -->
+                        <div class="p-3 bg-slate-900/90 rounded-xl border border-slate-800/80 text-xs text-slate-300 leading-relaxed">
+                            <div class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-0.5">Where the money will be used:</div>
+                            ${item.purpose}
+                            ${item.invoice_reference ? `<div class="text-[11px] text-indigo-400 font-mono mt-1">Invoice Ref: ${item.invoice_reference}</div>` : ''}
+                        </div>
+
+                        <!-- Voucher Attachment Proof (if uploaded) -->
+                        ${item.attachment_url ? `
+                            <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-lg">🧾</span>
+                                    <div class="text-[11px]">
+                                        <div class="font-bold text-slate-200">Payment Voucher / Invoice Proof</div>
+                                        <div class="text-slate-500">Tap to inspect full-size</div>
+                                    </div>
+                                </div>
+                                <button onclick="openImageModal('${item.attachment_url}', '${item.request_number} - ${item.payee_name}')" class="px-2.5 py-1 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/30 rounded-lg text-xs font-bold transition">
+                                    🔍 View Proof
+                                </button>
+                            </div>
+                        ` : ''}
+
+                        <!-- Audit Footnote -->
+                        <div class="text-[10px] text-slate-500 flex items-center justify-between pt-1 border-t border-slate-900">
+                            <div>Requested by: <span class="text-slate-400 font-medium">${item.requested_by_name || 'Accountant'}</span></div>
+                            ${item.coo_confirmed_by ? `<div>COO: <span class="text-emerald-400 font-medium">${item.coo_confirmed_by}</span></div>` : ''}
+                        </div>
+
+                        <!-- One-Tap Action Buttons for Pending Items -->
+                        ${isPending ? `
+                            <div class="grid grid-cols-2 gap-2 pt-1">
+                                <button onclick="openRejectModal('${item.id}')" class="py-2.5 px-3 rounded-xl bg-rose-950/40 hover:bg-rose-900/50 border border-rose-800/40 text-rose-300 font-bold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer">
+                                    <span>❌</span><span>Reject</span>
+                                </button>
+                                <button onclick="openApproveModal('${item.id}')" class="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-1.5 cursor-pointer">
+                                    <span>✅</span><span>Approve Cheque</span>
+                                </button>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Image Zoom Modal
+        function openImageModal(url, caption) {
+            document.getElementById('image-zoom-target').src = url;
+            document.getElementById('image-zoom-caption').textContent = caption;
+            document.getElementById('image-zoom-modal').classList.remove('hidden');
+        }
+        function closeImageModal() {
+            document.getElementById('image-zoom-modal').classList.add('hidden');
+        }
+
+        // Approval Modal
+        function openApproveModal(id) {
+            activePayableId = id;
+            const item = payablesList.find(p => p.id === id);
+            if (!item) return;
+
+            document.getElementById('modal-app-req-no').textContent = item.request_number;
+            document.getElementById('modal-app-payee').textContent = item.payee_name;
+            document.getElementById('modal-app-amount').textContent = formatCurrency(item.amount);
+            document.getElementById('modal-app-bank').textContent = `${item.bank_name} ${item.bank_account_number ? '• Acc: ' + item.bank_account_number : ''}`;
+            document.getElementById('modal-app-check-no').value = item.cheque_number || '';
+            document.getElementById('approve-modal').classList.remove('hidden');
+        }
+        function closeApproveModal() {
+            document.getElementById('approve-modal').classList.add('hidden');
+        }
+
+        async function executeApprove() {
+            if (!activePayableId) return;
+            const btn = document.getElementById('btn-confirm-approve');
+            btn.disabled = true;
+            btn.textContent = 'Approving...';
+
+            const checkNo = document.getElementById('modal-app-check-no').value.trim();
+            const notes = document.getElementById('modal-app-notes').value.trim();
+            const name = document.getElementById('modal-app-name').value.trim();
+
+            try {
+                const res = await fetchApi(`/api/v1/payables/${activePayableId}/confirm`, {
+                    method: 'POST',
+                    body: {
+                        action: 'CONFIRMED',
+                        cheque_number: checkNo || null,
+                        notes,
+                        confirmed_by: name
+                    }
+                });
+
+                if (res.success) {
+                    closeApproveModal();
+                    await loadCooPayables();
+                } else {
+                    alert('Error approving request: ' + (res.error || 'Server error'));
+                }
+            } catch (err) {
+                alert('Connection error: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Confirm & Approve';
+            }
+        }
+
+        // Rejection Modal
+        function openRejectModal(id) {
+            activePayableId = id;
+            const item = payablesList.find(p => p.id === id);
+            if (!item) return;
+
+            document.getElementById('modal-rej-req-no').textContent = item.request_number;
+            document.getElementById('modal-rej-payee').textContent = item.payee_name;
+            document.getElementById('modal-rej-amount').textContent = formatCurrency(item.amount);
+            document.getElementById('modal-rej-reason').value = '';
+            document.getElementById('reject-modal').classList.remove('hidden');
+        }
+        function closeRejectModal() {
+            document.getElementById('reject-modal').classList.add('hidden');
+        }
+
+        async function executeReject() {
+            if (!activePayableId) return;
+            const reason = document.getElementById('modal-rej-reason').value.trim();
+            if (!reason) {
+                alert('Please state a reason for rejecting the requisition.');
+                return;
+            }
+
+            const btn = document.getElementById('btn-confirm-reject');
+            btn.disabled = true;
+            btn.textContent = 'Rejecting...';
+
+            try {
+                const res = await fetchApi(`/api/v1/payables/${activePayableId}/confirm`, {
+                    method: 'POST',
+                    body: {
+                        action: 'REJECTED',
+                        notes: reason,
+                        confirmed_by: 'Engr. Glen Nobleza (COO)'
+                    }
+                });
+
+                if (res.success) {
+                    closeRejectModal();
+                    await loadCooPayables();
+                } else {
+                    alert('Error rejecting request: ' + (res.error || 'Server error'));
+                }
+            } catch (err) {
+                alert('Connection error: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Confirm Rejection';
+            }
+        }
+
+        // API Key Modal
+        function openApiKeyModal() {
+            document.getElementById('coo-api-key-input').value = apiKey;
+            document.getElementById('apikey-modal').classList.remove('hidden');
+        }
+        function closeApiKeyModal() {
+            document.getElementById('apikey-modal').classList.add('hidden');
+        }
+        function saveApiKey() {
+            const val = document.getElementById('coo-api-key-input').value.trim();
+            if (val) {
+                apiKey = val;
+                localStorage.setItem('nkb_coo_api_key', val);
+                closeApiKeyModal();
+                loadCooPayables();
+            }
+        }
+
+        // Initial Load
+        loadCooPayables();
+    </script>
+</body>
+</html>

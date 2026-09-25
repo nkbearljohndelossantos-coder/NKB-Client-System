@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Official Collection Receipt - NKB Manufacturing Corporation</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="stylesheet" href="/css/tailwind.min.css">
+    <style>
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white !important; padding: 0 !important; color: black !important; }
+            .receipt-container { box-shadow: none !important; border: 1px solid #1e293b !important; margin: 0 !important; width: 100% !important; max-width: 100% !important; }
+        }
+        .dotted-line { border-bottom: 1.5px dotted #475569; }
+        .solid-underline { border-bottom: 1.5px solid #0f172a; }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-900 min-h-screen py-8 px-4 font-sans antialiased">
+
+    <!-- Action Toolbar (Hidden in print) -->
+    <div class="max-w-3xl mx-auto mb-4 flex items-center justify-between no-print">
+        <div class="flex items-center gap-2">
+            <a href="/admin.html" class="px-3 py-1.5 rounded-xl bg-slate-800 text-white text-xs font-bold hover:bg-slate-700 transition">
+                ← Back to Portal
+            </a>
+            <span class="text-xs text-slate-500">Official BIR-Compliant Collection Receipt Preview</span>
+        </div>
+        <div class="flex items-center gap-2">
+            <button onclick="window.print()" class="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md transition flex items-center gap-1.5 cursor-pointer">
+                <span>🖨️</span><span>Print Receipt</span>
+            </button>
+            <button onclick="window.close()" class="px-3 py-1.5 rounded-xl bg-white border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-50 transition cursor-pointer">
+                Close
+            </button>
+        </div>
+    </div>
+
+    <!-- Official Receipt Sheet Container -->
+    <div class="max-w-3xl mx-auto bg-white border-2 border-slate-900 rounded-lg p-8 sm:p-10 shadow-xl receipt-container space-y-6">
+
+        <!-- Top Header & Bureau of Internal Revenue Identification -->
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b-2 border-slate-900 pb-5">
+            <div class="flex items-center gap-3.5">
+                <img src="/images/nkb-logo.png" alt="NKB Logo" class="h-14 w-auto object-contain">
+                <div>
+                    <h1 class="text-xl sm:text-2xl font-black tracking-tight text-slate-950 uppercase leading-none">
+                        NKB Manufacturing Corporation
+                    </h1>
+                    <div class="text-xs text-slate-600 font-semibold mt-1">Cosmetics, Skincare Formulation & Toll Manufacturing</div>
+                    <div class="text-[11px] text-slate-500">123 Industrial Compound, Quezon City, Metro Manila, Philippines</div>
+                    <div class="text-[11px] text-slate-500">VAT Reg. TIN: 009-876-543-000 | Tel: (02) 8921-5500</div>
+                </div>
+            </div>
+
+            <div class="text-right sm:border-l-2 sm:border-slate-900 sm:pl-6 w-full sm:w-auto">
+                <div class="inline-block px-3 py-1 rounded bg-slate-900 text-white font-black text-xs uppercase tracking-wider">
+                    Collection Receipt
+                </div>
+                <div class="mt-2">
+                    <div class="text-[10px] uppercase font-bold text-slate-500">Receipt No.</div>
+                    <div id="receipt-no" class="font-mono text-base font-black text-indigo-950">OR-2026-00000</div>
+                </div>
+                <div class="mt-1">
+                    <div class="text-[10px] uppercase font-bold text-slate-500">Date Issued</div>
+                    <div id="receipt-date" class="text-xs font-bold text-slate-900">September 25, 2026</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Receipt Main Statement Block -->
+        <div class="space-y-4 text-xs sm:text-sm leading-relaxed text-slate-800">
+            <div class="flex flex-col sm:flex-row items-baseline gap-2">
+                <span class="font-bold text-slate-900 uppercase whitespace-nowrap">Received From:</span>
+                <span id="receipt-client-name" class="flex-1 font-black text-slate-950 solid-underline pb-0.5 text-sm sm:text-base">ABC Cosmetics Trading Corporation</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="flex items-baseline gap-2">
+                    <span class="font-bold text-slate-900 uppercase whitespace-nowrap">Taxpayer ID (TIN):</span>
+                    <span id="receipt-tin" class="flex-1 dotted-line pb-0.5 font-mono text-slate-900">000-123-456-000</span>
+                </div>
+                <div class="flex items-baseline gap-2">
+                    <span class="font-bold text-slate-900 uppercase whitespace-nowrap">Business Style:</span>
+                    <span class="flex-1 dotted-line pb-0.5 text-slate-900">Commercial / Cosmetics Reseller</span>
+                </div>
+            </div>
+
+            <div class="flex items-baseline gap-2">
+                <span class="font-bold text-slate-900 uppercase whitespace-nowrap">Address:</span>
+                <span id="receipt-address" class="flex-1 dotted-line pb-0.5 text-slate-900">Unit 502, Ortigas Center, Pasig City, Metro Manila</span>
+            </div>
+
+            <!-- Amount in Words -->
+            <div class="p-3 bg-slate-50 border border-slate-300 rounded-md">
+                <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">The Sum of (in words):</div>
+                <div id="receipt-amount-words" class="text-sm sm:text-base font-black text-slate-950 tracking-wide mt-0.5">
+                    FIFTEEN THOUSAND PESOS ONLY
+                </div>
+            </div>
+
+            <!-- Amount in Figures -->
+            <div class="flex items-center justify-between p-3 bg-indigo-50/70 border border-indigo-200 rounded-md">
+                <span class="font-bold text-indigo-950 uppercase text-xs">Amount Received (in figures):</span>
+                <span id="receipt-amount-figures" class="text-xl font-black text-indigo-950">₱15,000.00</span>
+            </div>
+
+            <!-- In Full / Partial Payment Of -->
+            <div class="space-y-2 pt-2">
+                <span class="font-bold text-slate-900 uppercase text-xs">In Full / Partial Settlement Of The Following:</span>
+                <div class="border border-slate-300 rounded overflow-hidden">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-100 border-b border-slate-300 font-bold text-slate-700">
+                            <tr>
+                                <th class="p-2">Sales Invoice No.</th>
+                                <th class="p-2">PO Reference</th>
+                                <th class="p-2">Delivery (DR)</th>
+                                <th class="p-2 text-right">Invoice Total</th>
+                                <th class="p-2 text-right">Amount Paid</th>
+                                <th class="p-2 text-right">Balance Due</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-200">
+                            <tr>
+                                <td id="tbl-si-no" class="p-2 font-bold text-indigo-700">INV-2026-0001</td>
+                                <td id="tbl-po-no" class="p-2">PO-2026-0001</td>
+                                <td id="tbl-dr-no" class="p-2">DR-2026-0001</td>
+                                <td id="tbl-si-total" class="p-2 text-right font-medium">₱30,000.00</td>
+                                <td id="tbl-si-paid" class="p-2 text-right font-bold text-emerald-700">₱15,000.00</td>
+                                <td id="tbl-si-balance" class="p-2 text-right font-black text-rose-700">₱15,000.00</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Mode of Settlement Table -->
+            <div class="space-y-1.5 pt-2">
+                <span class="font-bold text-slate-900 uppercase text-xs">Form of Payment Details:</span>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                    <div class="p-2 bg-slate-50 border border-slate-200 rounded">
+                        <div class="text-[10px] text-slate-500 font-semibold uppercase">Payment Method</div>
+                        <div id="settle-method" class="font-bold text-slate-900 mt-0.5">CHECK</div>
+                    </div>
+                    <div class="p-2 bg-slate-50 border border-slate-200 rounded">
+                        <div class="text-[10px] text-slate-500 font-semibold uppercase">Drawee Bank</div>
+                        <div id="settle-bank" class="font-bold text-slate-900 mt-0.5">BDO Unibank</div>
+                    </div>
+                    <div class="p-2 bg-slate-50 border border-slate-200 rounded">
+                        <div class="text-[10px] text-slate-500 font-semibold uppercase">Check / Ref No.</div>
+                        <div id="settle-ref" class="font-mono font-bold text-slate-900 mt-0.5">BDO-CHQ-998877</div>
+                    </div>
+                    <div class="p-2 bg-slate-50 border border-slate-200 rounded">
+                        <div class="text-[10px] text-slate-500 font-semibold uppercase">Payment Date</div>
+                        <div id="settle-date" class="font-bold text-slate-900 mt-0.5">2026-09-25</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Authorized Signature & Official Acknowledgment Block -->
+        <div class="pt-8 border-t border-slate-300 grid grid-cols-1 sm:grid-cols-2 gap-8 items-end text-xs">
+            <div class="space-y-1 text-slate-500 text-[11px] leading-relaxed">
+                <div class="font-bold text-slate-700 uppercase text-xs">Official Notice:</div>
+                <p>This Collection Receipt is issued to acknowledge receipt of payment for manufacturing toll services. For check payments, receipt is valid subject to final clearance with drawee bank.</p>
+                <div class="font-mono text-[10px] text-slate-400 mt-2">
+                    System Ref: <span id="footer-ref">PAY-XXXX</span> • Recorded: <span id="footer-recorded">Admin</span>
+                </div>
+            </div>
+
+            <div class="text-center space-y-1">
+                <div class="h-10"></div>
+                <div class="w-64 mx-auto solid-underline"></div>
+                <div id="receipt-signatory" class="font-black text-slate-950 uppercase text-xs pt-1">Finance & Accounting Officer</div>
+                <div class="text-[10px] text-slate-500 uppercase tracking-wider">Authorized Representative / Collector</div>
+            </div>
+        </div>
+
+        <!-- BIR Compliance Footer -->
+        <div class="text-center text-[10px] text-slate-400 border-t border-slate-200 pt-3">
+            "THIS DOCUMENT IS AN OFFICIAL ACKNOWLEDGMENT RECEIPT OF NKB MANUFACTURING CORPORATION"
+        </div>
+    </div>
+
+    <!-- Script to Load Data -->
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const paymentId = urlParams.get('id') || urlParams.get('payment_id');
+
+        function formatCurrency(val) {
+            return '₱' + Number(val || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function formatDate(str) {
+            if (!str) return '-';
+            const d = new Date(str + (str.includes('T') ? '' : 'T00:00:00+08:00'));
+            if (isNaN(d.getTime())) return str;
+            return d.toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
+        }
+
+        async function loadPaymentReceipt() {
+            if (!paymentId) {
+                alert('No payment ID specified in URL query (?id=...).');
+                return;
+            }
+
+            const token = localStorage.getItem('nkb_token');
+            const headers = {};
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            try {
+                const res = await fetch(`/api/payments/${paymentId}`, { headers });
+                const json = await res.json();
+
+                if (!json.success || !json.data) {
+                    alert('Error loading payment: ' + (json.error || 'Payment not found'));
+                    return;
+                }
+
+                const p = json.data;
+                document.getElementById('receipt-no').textContent = p.payment_number ? p.payment_number.replace('PAY-', 'CR-') : 'CR-2026-00001';
+                document.getElementById('receipt-date').textContent = formatDate(p.payment_date || p.created_at);
+                document.getElementById('receipt-client-name').textContent = p.company_name || 'Valued Client';
+                document.getElementById('receipt-tin').textContent = p.client_tin || '000-000-000-000';
+                document.getElementById('receipt-address').textContent = p.client_address || 'Philippines';
+
+                document.getElementById('receipt-amount-words').textContent = p.amount_in_words || 'PESOS ONLY';
+                document.getElementById('receipt-amount-figures').textContent = formatCurrency(p.amount);
+
+                // Table
+                document.getElementById('tbl-si-no').textContent = p.invoice_number || 'N/A';
+                document.getElementById('tbl-po-no').textContent = p.po_number || 'N/A';
+                document.getElementById('tbl-dr-no').textContent = p.dr_number || 'N/A';
+                document.getElementById('tbl-si-total').textContent = formatCurrency(p.invoice_total_amount);
+                document.getElementById('tbl-si-paid').textContent = formatCurrency(p.amount);
+                document.getElementById('tbl-si-balance').textContent = formatCurrency(p.invoice_balance_due);
+
+                // Settlement mode
+                document.getElementById('settle-method').textContent = (p.payment_method || 'CASH').replace(/_/g, ' ');
+                document.getElementById('settle-bank').textContent = p.bank_name || 'N/A';
+                document.getElementById('settle-ref').textContent = p.check_number || p.reference_number || 'N/A';
+                document.getElementById('settle-date').textContent = p.payment_date || '-';
+
+                document.getElementById('footer-ref').textContent = p.payment_number;
+                document.getElementById('footer-recorded').textContent = p.recorded_by_name || 'Accounting Department';
+                document.getElementById('receipt-signatory').textContent = p.recorded_by_name || 'Senior Accountant';
+
+                // Auto-print option if ?print=true
+                if (urlParams.get('print') === 'true') {
+                    setTimeout(() => window.print(), 500);
+                }
+            } catch (err) {
+                alert('Connection error: ' + err.message);
+            }
+        }
+
+        loadPaymentReceipt();
+    </script>
+</body>
+</html>

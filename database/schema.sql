@@ -635,7 +635,82 @@ CREATE TABLE IF NOT EXISTS webhooks (
     FOREIGN KEY (api_key_id) REFERENCES api_keys(id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_webhooks_key ON webhooks(api_key_id);
+-- Cheque Payables & COO Approval Table
+CREATE TABLE IF NOT EXISTS cheque_payables (
+    id TEXT PRIMARY KEY,
+    request_number TEXT UNIQUE NOT NULL,
+    payee_name TEXT NOT NULL,
+    amount REAL NOT NULL CHECK (amount > 0),
+    cheque_date TEXT NOT NULL,
+    bank_name TEXT NOT NULL,
+    bank_account_number TEXT,
+    bank_account_id TEXT,
+    cheque_number TEXT,
+    category TEXT NOT NULL,
+    purpose TEXT NOT NULL,
+    invoice_reference TEXT,
+    attachment_url TEXT,
+    status TEXT NOT NULL DEFAULT 'PENDING_COO_APPROVAL' CHECK (status IN ('PENDING_COO_APPROVAL', 'CONFIRMED', 'ISSUED', 'CLEARED', 'REJECTED', 'VOIDED')),
+    cleared_at TEXT,
+    requested_by TEXT NOT NULL,
+    requested_by_name TEXT NOT NULL,
+    coo_decision TEXT,
+    coo_confirmed_by TEXT,
+    coo_confirmed_at TEXT,
+    coo_notes TEXT,
+    api_key_used TEXT DEFAULT 'nkb_inv_live_6ae6965c1ca61aef54939d6b1ecfac1b',
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    FOREIGN KEY (requested_by) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_payables_status ON cheque_payables(status);
+CREATE INDEX IF NOT EXISTS idx_payables_category ON cheque_payables(category);
+CREATE INDEX IF NOT EXISTS idx_payables_date ON cheque_payables(cheque_date);
+
+-- Company Bank Accounts Table
+CREATE TABLE IF NOT EXISTS bank_accounts (
+    id TEXT PRIMARY KEY,
+    bank_name TEXT NOT NULL,
+    account_number TEXT NOT NULL,
+    account_name TEXT NOT NULL,
+    account_type TEXT NOT NULL DEFAULT 'Checking',
+    current_balance REAL NOT NULL DEFAULT 0.0,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_ba_bank ON bank_accounts(bank_name);
+
+-- Client Payment Submissions Table
+CREATE TABLE IF NOT EXISTS client_payment_submissions (
+    id TEXT PRIMARY KEY,
+    submission_number TEXT UNIQUE NOT NULL,
+    invoice_id TEXT NOT NULL,
+    client_id TEXT NOT NULL,
+    amount REAL NOT NULL CHECK (amount > 0),
+    payment_method TEXT NOT NULL,
+    bank_name TEXT,
+    check_number TEXT,
+    check_date TEXT,
+    reference_number TEXT,
+    attachment_url TEXT,
+    notes TEXT,
+    status TEXT NOT NULL DEFAULT 'PENDING_REVIEW' CHECK (status IN ('PENDING_REVIEW', 'APPROVED', 'REJECTED')),
+    reviewed_by TEXT,
+    reviewed_at TEXT,
+    rejection_reason TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    FOREIGN KEY (invoice_id) REFERENCES sales_invoices(id),
+    FOREIGN KEY (client_id) REFERENCES clients(id),
+    FOREIGN KEY (reviewed_by) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_cps_status ON client_payment_submissions(status);
+CREATE INDEX IF NOT EXISTS idx_cps_invoice ON client_payment_submissions(invoice_id);
+CREATE INDEX IF NOT EXISTS idx_cps_client ON client_payment_submissions(client_id);
 
 -- Initial Executive Super Admin Account (Email: admin@nkbmanufacturing.com | Password: Admin123!)
 INSERT OR REPLACE INTO users (id, name, email, password_hash, plain_password, role, is_active) VALUES

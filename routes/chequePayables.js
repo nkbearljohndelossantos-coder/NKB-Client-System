@@ -120,6 +120,42 @@ router.get('/', authenticateToken, (req, res) => {
 
         const rows = db.prepare(query).all(...params);
 
+        const todayStr = getManilaDate();
+        const todayDate = new Date(todayStr + 'T00:00:00+08:00');
+
+        function getPdcDetails(chequeDateStr, status) {
+            if (status === 'CLEARED') {
+                return { is_pdc: false, days_until_maturity: 0, maturity_status: 'CLEARED', maturity_label: 'Cleared' };
+            }
+            if (status === 'REJECTED' || status === 'VOIDED') {
+                return { is_pdc: false, days_until_maturity: 0, maturity_status: status, maturity_label: status };
+            }
+            const chequeD = new Date(chequeDateStr + 'T00:00:00+08:00');
+            const diffTime = chequeD.getTime() - todayDate.getTime();
+            const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+            if (diffDays < 0) {
+                return { is_pdc: false, days_until_maturity: diffDays, maturity_status: 'OVERDUE', maturity_label: `Matured (${Math.abs(diffDays)}d ago)` };
+            } else if (diffDays === 0) {
+                return { is_pdc: true, days_until_maturity: 0, maturity_status: 'DUE_TODAY', maturity_label: 'Due Today' };
+            } else if (diffDays <= 2) {
+                return { is_pdc: true, days_until_maturity: diffDays, maturity_status: 'MATURING_48H', maturity_label: `Maturing in ${diffDays}d (≤48h)` };
+            } else if (diffDays <= 7) {
+                return { is_pdc: true, days_until_maturity: diffDays, maturity_status: 'MATURING_7D', maturity_label: `Maturing in ${diffDays}d` };
+            } else {
+                return { is_pdc: true, days_until_maturity: diffDays, maturity_status: 'FUTURE_PDC', maturity_label: `Post-Dated (${diffDays}d)` };
+            }
+        }
+
+        // Enrich rows with PDC details
+        const enrichedRows = rows.map(r => {
+            const pdc = getPdcDetails(r.cheque_date, r.status);
+            return {
+                ...r,
+                ...pdc
+            };
+        });
+
         // Calculate summary metrics across all records
         const allRecords = db.prepare('SELECT * FROM cheque_payables').all();
 
@@ -130,6 +166,29 @@ router.get('/', authenticateToken, (req, res) => {
         const totalConfirmed = confirmedRecords.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0);
         const disbursedRecords = allRecords.filter(r => ['ISSUED', 'CLEARED'].includes(r.status));
         const totalDisbursed = disbursedRecords.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0);
+        const clearedRecords = allRecords.filter(r => r.status === 'CLEARED');
+        const totalCleared = clearedRecords.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0);
+
+        // PDC Maturity counters (for uncleared, approved/pending cheques)
+        let countMaturing48h = 0;
+        let totalMaturing48h = 0;
+        let countMaturing7d = 0;
+        let totalMaturing7d = 0;
+
+        allRecords.forEach(r => {
+            if (!['CLEARED', 'REJECTED', 'VOIDED'].includes(r.status)) {
+                const pdc = getPdcDetails(r.cheque_date, r.status);
+                const amt = parseFloat(r.amount) || 0;
+                if (pdc.maturity_status === 'MATURING_48H' || pdc.maturity_status === 'DUE_TODAY') {
+                    countMaturing48h++;
+                    totalMaturing48h += amt;
+                }
+                if (pdc.days_until_maturity >= 0 && pdc.days_until_maturity <= 7) {
+                    countMaturing7d++;
+                    totalMaturing7d += amt;
+                }
+            }
+        });
 
         // Group by category
         const categoryCounts = {};
@@ -147,7 +206,7 @@ router.get('/', authenticateToken, (req, res) => {
 
         return res.json({
             success: true,
-            data: rows,
+            data: enrichedRows,
             summary: {
                 totalCount: allRecords.length,
                 totalRequested,
@@ -157,6 +216,12 @@ router.get('/', authenticateToken, (req, res) => {
                 countConfirmed: confirmedRecords.length,
                 totalDisbursed,
                 countDisbursed: disbursedRecords.length,
+                totalCleared,
+                countCleared: clearedRecords.length,
+                countMaturing48h,
+                totalMaturing48h,
+                countMaturing7d,
+                totalMaturing7d,
                 categoryBreakdown: categoryCounts,
                 bankBreakdown: bankCounts
             },
@@ -327,15 +392,34 @@ router.post('/', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER_A
             `Submitted for COO review via API Key: ${LIVE_API_KEY.slice(0, 15)}...`
         ].filter(Boolean).join(' | ');
 
+        // Check available bank balance & link bank account ID
+        let linkedBankId = null;
+        let availableBankBalance = null;
+        let isOverdrawnWarning = false;
+        try {
+            const bankAcc = db.prepare(`
+                SELECT id, current_balance FROM bank_accounts 
+                WHERE is_active = 1 AND (LOWER(bank_name) LIKE LOWER(?) OR LOWER(?) LIKE '%' || LOWER(bank_name) || '%')
+                LIMIT 1
+            `).get(`%${bank_name}%`, bank_name);
+            if (bankAcc) {
+                linkedBankId = bankAcc.id;
+                availableBankBalance = bankAcc.current_balance;
+                if (numAmount > bankAcc.current_balance) {
+                    isOverdrawnWarning = true;
+                }
+            }
+        } catch (_) {}
+
         db.prepare(`
             INSERT INTO cheque_payables (
                 id, request_number, payee_name, amount, cheque_date, bank_name,
-                bank_account_number, cheque_number, category, purpose,
+                bank_account_number, bank_account_id, cheque_number, category, purpose,
                 invoice_reference, attachment_url, status, requested_by,
                 requested_by_name, coo_notes, api_key_used, created_at, updated_at
             ) VALUES (
                 ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?,
+                ?, ?, ?, ?, ?,
                 ?, ?, 'PENDING_COO_APPROVAL', ?,
                 ?, ?, ?, datetime('now', 'localtime'), datetime('now', 'localtime')
             )
@@ -347,6 +431,7 @@ router.post('/', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER_A
             cheque_date,
             String(bank_name).trim(),
             finalAccountNum,
+            linkedBankId,
             finalChequeNumber,
             String(category).trim(),
             String(purpose).trim(),
@@ -374,7 +459,9 @@ router.post('/', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER_A
                 bankName: bank_name,
                 category,
                 purpose,
-                apiKeyUsed: LIVE_API_KEY
+                apiKeyUsed: LIVE_API_KEY,
+                isOverdrawnWarning,
+                availableBankBalance
             }
         });
 
@@ -383,8 +470,12 @@ router.post('/', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER_A
 
         return res.status(201).json({
             success: true,
-            message: `Cheque payable request ${requestNumber} for ${payee_name} (₱${numAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}) has been submitted and sent to the COO API for confirmation.`,
-            data: createdRecord
+            message: `Cheque payable request ${requestNumber} for ${payee_name} (₱${numAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}) has been submitted and sent to the COO API for confirmation.${isOverdrawnWarning ? ` ⚠️ Note: Cheque amount exceeds available liquid balance in ${bank_name} (₱${Number(availableBankBalance).toFixed(2)}).` : ''}`,
+            data: {
+                ...createdRecord,
+                available_balance: availableBankBalance,
+                is_overdrawn_warning: isOverdrawnWarning
+            }
         });
     } catch (err) {
         return res.status(400).json({ success: false, error: err.message });
@@ -531,6 +622,76 @@ router.patch('/:id/status', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN
         return res.json({
             success: true,
             message: `Cheque payable ${item.request_number} updated to ${status}.`,
+            data: updated
+        });
+    } catch (err) {
+        return res.status(400).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/cheque-payables/:id/clear
+ * Mark cheque payable as CLEARED upon presentation/encashment and debit depository bank
+ */
+router.post('/:id/clear', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER_ADMIN', 'CEO'), (req, res) => {
+    try {
+        const item = db.prepare('SELECT * FROM cheque_payables WHERE id = ? OR request_number = ?').get(req.params.id, req.params.id);
+        if (!item) {
+            return res.status(404).json({ success: false, error: 'Cheque payable record not found.' });
+        }
+
+        if (item.status === 'CLEARED') {
+            return res.status(400).json({ success: false, error: 'Cheque has already been marked as cleared.' });
+        }
+
+        const clearedAt = new Date().toISOString().replace('T', ' ').substring(0, 19);
+
+        // Debit the depository bank balance if bank is recognized
+        let bankDeducted = false;
+        try {
+            const bankAcc = db.prepare(`
+                SELECT id, current_balance FROM bank_accounts 
+                WHERE is_active = 1 AND (LOWER(bank_name) LIKE LOWER(?) OR LOWER(?) LIKE '%' || LOWER(bank_name) || '%')
+                LIMIT 1
+            `).get(`%${item.bank_name}%`, item.bank_name);
+            if (bankAcc) {
+                db.prepare(`
+                    UPDATE bank_accounts
+                    SET current_balance = current_balance - ?, updated_at = datetime('now', 'localtime')
+                    WHERE id = ?
+                `).run(item.amount, bankAcc.id);
+                bankDeducted = true;
+            }
+        } catch (_) {}
+
+        db.prepare(`
+            UPDATE cheque_payables
+            SET status = 'CLEARED',
+                cleared_at = ?,
+                updated_at = datetime('now', 'localtime')
+            WHERE id = ?
+        `).run(clearedAt, item.id);
+
+        logAudit({
+            userId: req.user.id,
+            userName: req.user.name,
+            userRole: req.user.role,
+            action: 'CLEAR_CHEQUE_PAYABLE',
+            entityType: 'PAYABLE',
+            entityId: item.request_number,
+            details: {
+                requestNumber: item.request_number,
+                amount: item.amount,
+                bankName: item.bank_name,
+                clearedAt,
+                bankDeducted
+            }
+        });
+
+        const updated = db.prepare('SELECT * FROM cheque_payables WHERE id = ?').get(item.id);
+        return res.json({
+            success: true,
+            message: `Cheque ${item.request_number} (${item.cheque_number || 'N/A'}) has cleared bank presentation.`,
             data: updated
         });
     } catch (err) {

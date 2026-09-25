@@ -1859,6 +1859,7 @@ async function loadPayments() {
     if (methodFilter) methodFilter.value = '';
 
     renderPaymentsRows(cachedPayments, totalPaid);
+    checkClientPaymentSubmissionsAlert();
 }
 
 function renderPaymentsRows(paymentsList, currentTotal) {
@@ -1913,6 +1914,11 @@ function renderPaymentsRows(paymentsList, currentTotal) {
             </td>
             <td class="py-3 px-4">${NKB.renderStatusBadge(p.invoice_status || 'PAID')}</td>
             <td class="py-3 px-4 text-slate-500 whitespace-nowrap">${p.recorded_by_name || 'Accounting Staff'}</td>
+            <td class="py-3 px-4 text-right whitespace-nowrap">
+                <a href="/print-receipt.html?id=${p.id}" target="_blank" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-lg border border-indigo-200 text-xs inline-flex items-center gap-1 shadow-2xs transition cursor-pointer" title="Print Official BIR Collection Receipt">
+                    <span>🖨️</span><span>Receipt</span>
+                </a>
+            </td>
         </tr>
     `).join('');
 }
@@ -1945,6 +1951,199 @@ function filterPaymentsTable() {
     }
 
     renderPaymentsRows(filtered, filteredTotal);
+}
+
+/**
+ * Check and display client payment submissions pending review
+ */
+async function checkClientPaymentSubmissionsAlert() {
+    const alertEl = document.getElementById('payments-client-submissions-alert');
+    const textEl = document.getElementById('payments-client-submissions-text');
+    if (!alertEl) return;
+
+    try {
+        const res = await NKB.api('/api/payments/client-submissions/list?status=PENDING_REVIEW');
+        if (res.success && res.data && res.data.length > 0) {
+            const count = res.data.length;
+            const amt = res.summary?.pendingAmount || 0;
+            if (textEl) {
+                textEl.textContent = `You have ${count} client payment proof${count === 1 ? '' : 's'} totaling ${NKB.formatCurrency(amt)} waiting for accounting verification.`;
+            }
+            alertEl.classList.remove('hidden');
+        } else {
+            alertEl.classList.add('hidden');
+        }
+    } catch (_) {
+        alertEl.classList.add('hidden');
+    }
+}
+
+/**
+ * Open Client Payment Submissions Review Modal
+ */
+async function openClientSubmissionsReviewModal() {
+    const root = document.getElementById('modals-root');
+    const modalId = 'modal-client-submissions-review';
+
+    let existing = document.getElementById(modalId);
+    if (existing) existing.remove();
+
+    const res = await NKB.api('/api/payments/client-submissions/list');
+    const submissions = (res.success && Array.isArray(res.data)) ? res.data : [];
+
+    const wrapper = document.createElement('div');
+    wrapper.id = modalId;
+    wrapper.className = 'fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fadeIn';
+    wrapper.innerHTML = `
+        <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-scaleIn">
+            <div class="p-6 bg-gradient-to-r from-emerald-950 via-slate-900 to-indigo-950 text-white flex items-center justify-between flex-shrink-0">
+                <div>
+                    <h3 class="text-base font-black flex items-center gap-2">
+                        <span>🧾</span><span>Client Payment Proofs Verification Queue</span>
+                    </h3>
+                    <p class="text-xs text-slate-300 mt-0.5">Inspect client uploaded checks and deposit slips, verify bank details, and post payment to ledger with 1-click.</p>
+                </div>
+                <button type="button" onclick="closeClientSubmissionsReviewModal()" class="text-slate-400 hover:text-white p-1 rounded-xl hover:bg-white/10 transition text-xl font-bold">&times;</button>
+            </div>
+
+            <div class="p-6 overflow-y-auto flex-1 space-y-4 text-xs">
+                ${submissions.length === 0 ? `
+                    <div class="py-12 text-center text-slate-400">
+                        <span class="text-3xl block mb-2">📋</span>
+                        <div class="font-bold text-slate-600">No client payment submissions found.</div>
+                    </div>
+                ` : submissions.map(s => {
+                    const isPending = s.status === 'PENDING_REVIEW';
+                    const isApproved = s.status === 'APPROVED';
+
+                    return `
+                        <div class="p-4 rounded-2xl border ${isPending ? 'border-emerald-300 bg-emerald-50/20' : 'border-slate-200 bg-white'} shadow-sm space-y-3">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">${s.submission_number}</span>
+                                    <span class="font-bold text-slate-800">${s.company_name}</span>
+                                    <span class="text-slate-400">•</span>
+                                    <span class="font-mono text-slate-600">Invoice: ${s.invoice_number}</span>
+                                </div>
+                                <div>
+                                    ${isPending ? '<span class="badge bg-amber-100 text-amber-800 border border-amber-300 font-bold">Pending Review</span>' :
+                                      isApproved ? '<span class="badge bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold">Approved & Recorded</span>' :
+                                      '<span class="badge bg-rose-100 text-rose-800 border border-rose-300 font-bold">Rejected</span>'}
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                                <div class="p-2 bg-slate-50 border border-slate-200 rounded-lg">
+                                    <div class="text-[10px] text-slate-500 uppercase font-semibold">Amount Submitted</div>
+                                    <div class="text-base font-black text-emerald-700 mt-0.5">${NKB.formatCurrency(s.amount)}</div>
+                                </div>
+                                <div class="p-2 bg-slate-50 border border-slate-200 rounded-lg">
+                                    <div class="text-[10px] text-slate-500 uppercase font-semibold">Payment Method</div>
+                                    <div class="font-bold text-slate-800 mt-0.5">${(s.payment_method || '').replace(/_/g, ' ')}</div>
+                                </div>
+                                <div class="p-2 bg-slate-50 border border-slate-200 rounded-lg">
+                                    <div class="text-[10px] text-slate-500 uppercase font-semibold">Bank Name</div>
+                                    <div class="font-bold text-slate-800 mt-0.5">${s.bank_name || '—'}</div>
+                                </div>
+                                <div class="p-2 bg-slate-50 border border-slate-200 rounded-lg">
+                                    <div class="text-[10px] text-slate-500 uppercase font-semibold">Check / Ref #</div>
+                                    <div class="font-mono font-bold text-slate-800 mt-0.5">${s.check_number || s.reference_number || '—'}</div>
+                                </div>
+                            </div>
+
+                            ${s.notes ? `
+                                <div class="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-600">
+                                    <span class="font-bold text-slate-700">Client Note:</span> ${s.notes}
+                                </div>
+                            ` : ''}
+
+                            ${s.attachment_url ? `
+                                <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between gap-3">
+                                    <div class="flex items-center gap-2 min-w-0">
+                                        <img src="${s.attachment_url}" alt="Check Proof" class="h-14 w-20 object-cover rounded-lg border border-slate-300 flex-shrink-0 cursor-pointer" onclick="window.open('${s.attachment_url}', '_blank')">
+                                        <div class="text-xs">
+                                            <div class="font-bold text-slate-800">Uploaded Check / Slip Proof</div>
+                                            <div class="text-[11px] text-slate-500">Click to view in high resolution</div>
+                                        </div>
+                                    </div>
+                                    <a href="${s.attachment_url}" target="_blank" class="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold border border-indigo-200 text-xs">
+                                        Full Image ↗
+                                    </a>
+                                </div>
+                            ` : ''}
+
+                            ${isPending ? `
+                                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                                    <button onclick="handleRejectSubmissionPrompt('${s.id}')" class="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold border border-rose-200 text-xs transition">
+                                        ❌ Reject
+                                    </button>
+                                    <button onclick="handleApproveSubmission('${s.id}')" class="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-md shadow-emerald-600/20">
+                                        ✅ Approve & Credit Invoice
+                                    </button>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+
+            <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end flex-shrink-0">
+                <button type="button" onclick="closeClientSubmissionsReviewModal()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition">
+                    Close
+                </button>
+            </div>
+        </div>
+    `;
+
+    root.appendChild(wrapper);
+}
+
+function closeClientSubmissionsReviewModal() {
+    const el = document.getElementById('modal-client-submissions-review');
+    if (el) el.remove();
+}
+
+async function handleApproveSubmission(id) {
+    if (!confirm('Approve this client payment submission? This will automatically record the official payment, update the invoice balance, and credit the depository bank account.')) return;
+
+    try {
+        const res = await NKB.api(`/api/payments/client-submissions/${id}/review`, {
+            method: 'POST',
+            body: { action: 'APPROVE' }
+        });
+
+        if (res.success) {
+            NKB.showToast(res.message || 'Payment submission approved and applied to invoice!', 'success');
+            closeClientSubmissionsReviewModal();
+            loadPayments();
+        } else {
+            NKB.showToast(res.error || 'Failed to approve submission.', 'error');
+        }
+    } catch (err) {
+        NKB.showToast('Server error approving payment.', 'error');
+    }
+}
+
+async function handleRejectSubmissionPrompt(id) {
+    const reason = prompt('Please enter a reason for rejecting this payment submission:');
+    if (!reason) return;
+
+    try {
+        const res = await NKB.api(`/api/payments/client-submissions/${id}/review`, {
+            method: 'POST',
+            body: { action: 'REJECT', rejection_reason: reason }
+        });
+
+        if (res.success) {
+            NKB.showToast('Submission rejected.', 'info');
+            closeClientSubmissionsReviewModal();
+            loadPayments();
+        } else {
+            NKB.showToast(res.error || 'Failed to reject submission.', 'error');
+        }
+    } catch (err) {
+        NKB.showToast('Server error rejecting payment.', 'error');
+    }
 }
 
 function exportPaymentsToExcel() {
@@ -2275,8 +2474,73 @@ function printPaymentsReport() {
 let cachedPayables = [];
 let cachedPayablesSummary = {};
 let cachedPayablesMeta = { banks: [], categories: [] };
+let cachedBankAccounts = [];
 let currentPayableAttachmentBase64 = null;
 const LIVE_COO_API_KEY = 'nkb_inv_live_6ae6965c1ca61aef54939d6b1ecfac1b';
+
+async function loadBankBalances() {
+    try {
+        const res = await NKB.api('/api/bank-accounts');
+        if (!res.success) return;
+
+        cachedBankAccounts = Array.isArray(res.data) ? res.data : [];
+        const summary = res.summary || {};
+
+        const totalEl = document.getElementById('bank-balances-total');
+        if (totalEl) {
+            totalEl.textContent = NKB.formatCurrency(summary.totalLiquidBalance || 0);
+        }
+
+        const grid = document.getElementById('bank-balances-grid');
+        if (!grid) return;
+
+        if (cachedBankAccounts.length === 0) {
+            grid.innerHTML = `<div class="text-center py-4 text-xs text-slate-500 col-span-full">No active bank accounts found.</div>`;
+            return;
+        }
+
+        grid.innerHTML = cachedBankAccounts.map(acc => {
+            const bal = parseFloat(acc.current_balance) || 0;
+            const isLow = bal < 100000;
+            const bankInitials = (acc.bank_name || 'BK')
+                .split(' ')
+                .filter(w => !['and', '&', 'of', 'the', 'co.', 'corp.'].includes(w.toLowerCase()))
+                .map(w => w[0])
+                .slice(0, 3)
+                .join('');
+
+            return `
+                <div class="bg-slate-900/90 border border-slate-800 hover:border-slate-700 rounded-xl p-3 flex flex-col justify-between transition group shadow-sm">
+                    <div>
+                        <div class="flex items-center justify-between gap-1 mb-1">
+                            <span class="px-1.5 py-0.5 rounded text-[10px] font-black bg-slate-800 text-amber-400 font-mono tracking-wider">${bankInitials}</span>
+                            <span class="text-[10px] font-mono text-slate-500">${acc.account_number ? acc.account_number.slice(-4) : '—'}</span>
+                        </div>
+                        <div class="font-bold text-xs text-slate-200 truncate" title="${acc.bank_name}">
+                            ${acc.bank_name}
+                        </div>
+                        <div class="text-[10px] text-slate-400 font-mono truncate">
+                            ${acc.account_number || ''}
+                        </div>
+                    </div>
+                    <div class="mt-2.5 pt-2 border-t border-slate-800/80">
+                        <div class="text-[9px] uppercase font-bold text-slate-400">Available Balance</div>
+                        <div class="text-sm font-black ${isLow ? 'text-amber-400' : 'text-emerald-400'}">
+                            ${NKB.formatCurrency(bal)}
+                        </div>
+                        ${acc.pending_outflows > 0 ? `
+                            <div class="text-[9px] text-slate-400 mt-0.5">
+                                Pending: <span class="text-amber-400 font-semibold">-${NKB.formatCurrency(acc.pending_outflows)}</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } catch (err) {
+        console.error('loadBankBalances failed:', err);
+    }
+}
 
 async function loadPayables() {
     try {
@@ -2292,6 +2556,9 @@ async function loadPayables() {
             banks: Array.isArray(res.banks) ? res.banks : [],
             categories: Array.isArray(res.categories) ? res.categories : []
         };
+
+        // Also fetch live bank balances
+        loadBankBalances();
 
         // Update KPI Cards
         const setEl = (id, text) => {
@@ -2317,6 +2584,31 @@ async function loadPayables() {
         setEl('payables-kpi-disbursed-amount', NKB.formatCurrency(disbAmt));
         setEl('payables-kpi-disbursed-count', `${disbCount} cheques released`);
         setEl('payables-visible-count', `Showing all (${cachedPayables.length})`);
+
+        // Update Post-Dated Cheque (PDC) Maturity Alert Banner
+        const pdcBanner = document.getElementById('payables-pdc-alert-banner');
+        if (pdcBanner) {
+            const m48Count = cachedPayablesSummary.countMaturing48h || 0;
+            const m48Total = cachedPayablesSummary.totalMaturing48h || 0;
+            const m7dCount = cachedPayablesSummary.countMaturing7d || 0;
+            const m7dTotal = cachedPayablesSummary.totalMaturing7d || 0;
+
+            if (m48Count > 0) {
+                pdcBanner.classList.remove('hidden');
+                const titleEl = document.getElementById('pdc-alert-title');
+                const descEl = document.getElementById('pdc-alert-desc');
+                if (titleEl) titleEl.textContent = `⚠️ ${m48Count} Cheque${m48Count === 1 ? '' : 's'} Maturing within 48 Hours!`;
+                if (descEl) descEl.textContent = `${m48Count} cheque(s) maturing within 48 hours totaling ${NKB.formatCurrency(m48Total)}. (Next 7 days total: ${m7dCount} cheques totaling ${NKB.formatCurrency(m7dTotal)}). Please verify adequate depository account balances.`;
+            } else if (m7dCount > 0) {
+                pdcBanner.classList.remove('hidden');
+                const titleEl = document.getElementById('pdc-alert-title');
+                const descEl = document.getElementById('pdc-alert-desc');
+                if (titleEl) titleEl.textContent = `🗓️ ${m7dCount} Cheque${m7dCount === 1 ? '' : 's'} Maturing in Next 7 Days`;
+                if (descEl) descEl.textContent = `${m7dCount} cheque(s) scheduled for encashment totaling ${NKB.formatCurrency(m7dTotal)}. Monitor your liquid depository balances.`;
+            } else {
+                pdcBanner.classList.add('hidden');
+            }
+        }
 
         // Populate Category Filter Dropdown if needed
         const catSelect = document.getElementById('payables-category-filter');
@@ -2401,6 +2693,26 @@ function renderPayablesRows(payablesList, currentTotal) {
         }
     };
 
+    const getPdcBadge = (cp) => {
+        if (['CLEARED', 'REJECTED', 'VOIDED'].includes(cp.status)) return '';
+        if (cp.maturity_status === 'DUE_TODAY') {
+            return `<span class="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300 animate-pulse">DUE TODAY</span>`;
+        }
+        if (cp.maturity_status === 'MATURING_48H') {
+            return `<span class="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300">≤48H</span>`;
+        }
+        if (cp.maturity_status === 'MATURING_7D') {
+            return `<span class="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-800 border border-blue-200">${cp.days_until_maturity}d</span>`;
+        }
+        if (cp.days_until_maturity < 0) {
+            return `<span class="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-200 text-slate-700">Matured</span>`;
+        }
+        if (cp.is_pdc) {
+            return `<span class="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-50 text-indigo-700">PDC</span>`;
+        }
+        return '';
+    };
+
     tbody.innerHTML = payablesList.map(cp => {
         const hasAttachment = !!cp.attachment_url;
         const isPdf = hasAttachment && cp.attachment_url.toLowerCase().endsWith('.pdf');
@@ -2411,7 +2723,12 @@ function renderPayablesRows(payablesList, currentTotal) {
                     <div>${cp.request_number}</div>
                     ${cp.cheque_number ? `<div class="text-[10px] text-slate-500 font-normal">Chq: ${cp.cheque_number}</div>` : ''}
                 </td>
-                <td class="py-3.5 px-4 text-slate-600 whitespace-nowrap">${NKB.formatDate(cp.cheque_date)}</td>
+                <td class="py-3.5 px-4 text-slate-600 whitespace-nowrap">
+                    <div class="flex items-center">
+                        <span>${NKB.formatDate(cp.cheque_date)}</span>
+                        ${getPdcBadge(cp)}
+                    </div>
+                </td>
                 <td class="py-3.5 px-4">
                     <div class="font-bold text-slate-900 leading-tight">${cp.payee_name}</div>
                     ${cp.invoice_reference ? `<div class="text-[10px] text-indigo-600 font-mono mt-0.5 font-semibold">Ref: ${cp.invoice_reference}</div>` : ''}
@@ -2448,6 +2765,12 @@ function renderPayablesRows(payablesList, currentTotal) {
                         <button onclick="printSingleChequeVoucher('${cp.id}')" class="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition cursor-pointer" title="Print Cheque Disbursement Voucher (CDV)">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
                         </button>
+                        ${['CONFIRMED', 'ISSUED'].includes(cp.status) ? `
+                            <button onclick="markChequeAsCleared('${cp.id}')" class="px-2 py-1 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-[11px] font-bold shadow-2xs transition inline-flex items-center gap-1 cursor-pointer" title="Mark Cheque Cleared at Bank & Debit Account">
+                                <span>🏦</span>
+                                <span>Clear</span>
+                            </button>
+                        ` : ''}
                         ${cp.status === 'PENDING_COO_APPROVAL' ? `
                             <button onclick="openCooConfirmPayableModal('${cp.id}')" class="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-[11px] font-bold shadow-2xs transition inline-flex items-center gap-1 cursor-pointer" title="Confirm via COO Integration">
                                 <span>⚡</span>
@@ -2480,7 +2803,15 @@ function filterPayablesTable() {
             (cp.invoice_reference && cp.invoice_reference.toLowerCase().includes(query)) ||
             (cp.internal_notes && cp.internal_notes.toLowerCase().includes(query));
 
-        const matchesStatus = !status || cp.status === status;
+        let matchesStatus = true;
+        if (status === 'MATURING_48H') {
+            matchesStatus = (cp.maturity_status === 'MATURING_48H' || cp.maturity_status === 'DUE_TODAY') && !['CLEARED', 'REJECTED', 'VOIDED'].includes(cp.status);
+        } else if (status === 'MATURING_7D') {
+            matchesStatus = (cp.days_until_maturity >= 0 && cp.days_until_maturity <= 7) && !['CLEARED', 'REJECTED', 'VOIDED'].includes(cp.status);
+        } else if (status) {
+            matchesStatus = cp.status === status;
+        }
+
         const matchesCategory = !category || cp.category === category;
         const matchesBank = !bank || (cp.bank_name && cp.bank_name.toLowerCase().includes(bank));
         const matchesDateFrom = !dateFrom || cp.cheque_date >= dateFrom;
@@ -2552,8 +2883,44 @@ function quickFilterPayablesStatus(status) {
     }
 }
 
+function quickFilterPayablesPDC(code) {
+    const stSelect = document.getElementById('payables-status-filter');
+    if (stSelect) {
+        stSelect.value = code;
+        filterPayablesTable();
+    }
+}
+
+async function markChequeAsCleared(payableId) {
+    const cp = cachedPayables.find(item => item.id === payableId);
+    const payee = cp ? cp.payee_name : 'this cheque';
+    const amtStr = cp ? NKB.formatCurrency(cp.amount) : '';
+
+    if (!confirm(`Mark cheque for ${payee} (${amtStr}) as CLEARED in depository bank?\n\nThis will debit the company bank account ledger balance.`)) {
+        return;
+    }
+
+    try {
+        const res = await NKB.api(`/api/cheque-payables/${payableId}/clear`, {
+            method: 'POST',
+            body: JSON.stringify({ notes: 'Cleared at depository bank' })
+        });
+
+        if (res.success) {
+            NKB.showToast(`Cheque marked as CLEARED. Bank account debited.`, 'success');
+            loadPayables();
+            loadBankBalances();
+        } else {
+            NKB.showToast(res.error || 'Failed to clear cheque.', 'error');
+        }
+    } catch (err) {
+        console.error('markChequeAsCleared error:', err);
+        NKB.showToast('Server error clearing cheque.', 'error');
+    }
+}
+
 // Accountant Cheque Payable Requisition Modal
-function handlePayableAttachmentSelect(input) {
+async function handlePayableAttachmentSelect(input) {
     const previewContainer = document.getElementById('req-payable-preview-container');
     const previewImg = document.getElementById('req-payable-preview-img');
     const previewName = document.getElementById('req-payable-preview-name');
@@ -2573,22 +2940,32 @@ function handlePayableAttachmentSelect(input) {
         return;
     }
 
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        currentPayableAttachmentBase64 = e.target.result;
-        if (previewContainer) previewContainer.classList.remove('hidden');
-        if (dropText) dropText.classList.add('hidden');
-        if (previewName) previewName.textContent = file.name;
-        if (previewImg) {
-            if (file.type.startsWith('image/')) {
+    try {
+        if (file.type && file.type.startsWith('image/')) {
+            const compressed = await NKB.compressImage(file, { maxWidth: 1600, quality: 0.82 });
+            currentPayableAttachmentBase64 = compressed;
+            if (previewContainer) previewContainer.classList.remove('hidden');
+            if (dropText) dropText.classList.add('hidden');
+            if (previewName) previewName.textContent = `${file.name} (Optimized)`;
+            if (previewImg) {
                 previewImg.src = currentPayableAttachmentBase64;
                 previewImg.classList.remove('hidden');
-            } else {
-                previewImg.classList.add('hidden');
             }
+        } else {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                currentPayableAttachmentBase64 = e.target.result;
+                if (previewContainer) previewContainer.classList.remove('hidden');
+                if (dropText) dropText.classList.add('hidden');
+                if (previewName) previewName.textContent = file.name;
+                if (previewImg) previewImg.classList.add('hidden');
+            };
+            reader.readAsDataURL(file);
         }
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+        console.error('handlePayableAttachmentSelect error:', err);
+        NKB.showToast('Error processing attachment.', 'error');
+    }
 }
 
 function clearPayableAttachment() {
@@ -2601,17 +2978,42 @@ function clearPayableAttachment() {
     if (dropText) dropText.classList.remove('hidden');
 }
 
+function checkPayableOverdraft() {
+    const bankSelect = document.getElementById('req-payable-bank');
+    const amountInput = document.getElementById('req-payable-amount');
+    const warnBox = document.getElementById('req-payable-overdraft-warn');
+    const warnText = document.getElementById('req-payable-overdraft-text');
+    if (!bankSelect || !amountInput || !warnBox) return;
+
+    const opt = bankSelect.options[bankSelect.selectedIndex];
+    const balance = opt ? parseFloat(opt.getAttribute('data-balance') || 0) : 0;
+    const amount = parseFloat(amountInput.value || 0);
+
+    if (amount > 0 && balance > 0 && amount > balance) {
+        warnBox.classList.remove('hidden');
+        if (warnText) {
+            warnText.textContent = `Warning: Cheque amount (${NKB.formatCurrency(amount)}) exceeds available funds in ${bankSelect.value} (${NKB.formatCurrency(balance)})! You may still submit, but account will overdraft unless funded.`;
+        }
+    } else {
+        warnBox.classList.add('hidden');
+    }
+}
+
 function onPayableBankChange(selectEl) {
     const selectedBankName = selectEl.value;
     const bankAccountInput = document.getElementById('req-payable-bank-acct');
     if (!bankAccountInput) return;
 
-    const bankObj = cachedPayablesMeta.banks.find(b => b.name === selectedBankName);
+    const bankObj = (cachedBankAccounts && cachedBankAccounts.length > 0)
+        ? cachedBankAccounts.find(b => b.bank_name === selectedBankName || b.name === selectedBankName)
+        : cachedPayablesMeta.banks.find(b => b.name === selectedBankName);
+
     if (bankObj && bankObj.account_number) {
         bankAccountInput.value = `${bankObj.account_number} (${bankObj.account_name || 'NKB Corp.'})`;
     } else {
         bankAccountInput.value = '';
     }
+    checkPayableOverdraft();
 }
 
 function openRequestPayableModal() {
@@ -2625,13 +3027,15 @@ function openRequestPayableModal() {
         'Government Taxes & Licensing', 'Laboratory & Quality Testing', 'Office Supplies & Administrative', 'Miscellaneous & Contingency'
     ];
 
-    const banks = cachedPayablesMeta.banks.length > 0 ? cachedPayablesMeta.banks : [
-        { id: 'bdo', name: 'BDO Unibank', account_number: '1029-3847-4821', account_name: 'NKB Manufacturing Corp.' },
-        { id: 'bpi', name: 'Bank of the Philippine Islands (BPI)', account_number: '0982-3712-9104', account_name: 'NKB Manufacturing Corp.' },
-        { id: 'metrobank', name: 'Metropolitan Bank & Trust Co. (Metrobank)', account_number: '4562-8901-3372', account_name: 'NKB Manufacturing Corp.' },
-        { id: 'security_bank', name: 'Security Bank', account_number: '3128-4902-1855', account_name: 'NKB Manufacturing Corp.' },
-        { id: 'unionbank', name: 'UnionBank of the Philippines', account_number: '1094-8273-6290', account_name: 'NKB Manufacturing Corp.' }
-    ];
+    const banks = (cachedBankAccounts && cachedBankAccounts.length > 0)
+        ? cachedBankAccounts
+        : (cachedPayablesMeta.banks.length > 0 ? cachedPayablesMeta.banks : [
+            { id: 'bdo', name: 'BDO Unibank', bank_name: 'BDO Unibank', account_number: '1029-3847-4821', current_balance: 3250000 },
+            { id: 'bpi', name: 'Bank of the Philippine Islands (BPI)', bank_name: 'Bank of the Philippine Islands (BPI)', account_number: '0982-3712-9104', current_balance: 1840000 },
+            { id: 'metrobank', name: 'Metropolitan Bank & Trust Co. (Metrobank)', bank_name: 'Metropolitan Bank & Trust Co. (Metrobank)', account_number: '4562-8901-3372', current_balance: 920000 },
+            { id: 'security_bank', name: 'Security Bank', bank_name: 'Security Bank', account_number: '3128-4902-1855', current_balance: 650000 },
+            { id: 'unionbank', name: 'UnionBank of the Philippines', bank_name: 'UnionBank of the Philippines', account_number: '1094-8273-6290', current_balance: 1450000 }
+        ]);
 
     root.innerHTML = `
         <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50 overflow-y-auto">
@@ -2670,8 +3074,14 @@ function openRequestPayableModal() {
                         </div>
                         <div>
                             <label class="block text-slate-700 mb-1">Cheque Amount (₱) *</label>
-                            <input type="number" id="req-payable-amount" step="0.01" min="0.01" required placeholder="0.00" inputmode="decimal" class="w-full px-3 py-2 border rounded-xl bg-slate-50 text-emerald-800 font-black text-sm focus:bg-white focus:ring-2 focus:ring-emerald-500">
+                            <input type="number" id="req-payable-amount" step="0.01" min="0.01" oninput="checkPayableOverdraft()" required placeholder="0.00" inputmode="decimal" class="w-full px-3 py-2 border rounded-xl bg-slate-50 text-emerald-800 font-black text-sm focus:bg-white focus:ring-2 focus:ring-emerald-500">
                         </div>
+                    </div>
+
+                    <!-- Overdraft Warning Notice -->
+                    <div id="req-payable-overdraft-warn" class="hidden p-3 rounded-xl bg-rose-50 border border-rose-300 text-rose-800 text-[11px] font-semibold flex items-center gap-2">
+                        <span class="text-base">⚠️</span>
+                        <span id="req-payable-overdraft-text"></span>
                     </div>
 
                     <!-- Row 2: Cheque Date & Category -->
@@ -2694,8 +3104,12 @@ function openRequestPayableModal() {
                             <label class="block text-slate-700 mb-1">Bank to Use for Cheque *</label>
                             <select id="req-payable-bank" onchange="onPayableBankChange(this)" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-800 focus:bg-white">
                                 <option value="">Select Bank Account...</option>
-                                ${banks.map(b => `<option value="${b.name}">${b.name}</option>`).join('')}
-                                <option value="Other Bank Account">Other Bank Account</option>
+                                ${banks.map(b => {
+                                    const bName = b.bank_name || b.name;
+                                    const balStr = b.current_balance != null ? ` (Avail: ${NKB.formatCurrency(b.current_balance)})` : '';
+                                    return `<option value="${bName}" data-balance="${b.current_balance || 0}">${bName}${balStr}</option>`;
+                                }).join('')}
+                                <option value="Other Bank Account" data-balance="0">Other Bank Account</option>
                             </select>
                         </div>
                         <div>
@@ -2785,12 +3199,17 @@ async function submitRequestPayable(e) {
     }
 
     try {
+        const linkedAcc = (cachedBankAccounts && cachedBankAccounts.length > 0)
+            ? cachedBankAccounts.find(b => b.bank_name === bankName || b.name === bankName)
+            : null;
+
         const payload = {
             payee_name: payee,
             amount,
             cheque_date: chequeDate,
             category,
             bank_name: bankName,
+            bank_account_id: linkedAcc ? linkedAcc.id : null,
             bank_account_number: bankAccount,
             cheque_number: chequeNumber,
             invoice_reference: invoiceRef,
@@ -2805,9 +3224,10 @@ async function submitRequestPayable(e) {
         });
 
         if (res.success) {
-            NKB.showToast(`Cheque request ${res.data?.request_number || ''} submitted successfully! COO notified.`, 'success');
+            NKB.showToast(`Cheque request ${res.data?.request_number || ''} submitted successfully! COO notified.${res.data?.is_overdrawn_warning ? ' (Overdraft warning noted)' : ''}`, 'success');
             closeModal();
             loadPayables();
+            loadBankBalances();
         } else {
             NKB.showToast(res.error || 'Failed to submit cheque request.', 'error');
         }

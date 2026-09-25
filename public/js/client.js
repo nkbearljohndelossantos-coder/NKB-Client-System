@@ -1191,6 +1191,11 @@ async function loadClientInvoices() {
                 <td class="py-3 px-4 font-extrabold text-rose-700">${NKB.formatCurrency(si.balance_due)}</td>
                 <td class="py-3 px-4">${NKB.renderStatusBadge(si.status)}</td>
                 <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                    ${si.balance_due > 0.01 && si.status !== 'PAID' ? `
+                        <button onclick="openClientPaymentModal('${si.id}', '${si.invoice_number}', ${si.balance_due})" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition inline-flex items-center gap-1 shadow-sm shadow-emerald-600/30 cursor-pointer" title="Submit Check Photo or Bank Deposit Slip">
+                            <span>💳</span><span>Submit Proof</span>
+                        </button>
+                    ` : ''}
                     ${si.po_id ? `
                         <button onclick="openViewPOModal('${si.po_id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-block" title="View Purchase Order Details">
                             👁️ View PO
@@ -1204,6 +1209,239 @@ async function loadClientInvoices() {
         `).join('');
     } else {
         tbody.innerHTML = `<tr><td colspan="9" class="py-6 text-center text-slate-400">No invoices issued yet.</td></tr>`;
+    }
+
+    loadClientSubmissions();
+}
+
+/**
+ * Load Client Payment Submissions Table
+ */
+async function loadClientSubmissions() {
+    const tbody = document.getElementById('client-table-submissions');
+    if (!tbody) return;
+
+    const res = await NKB.api('/api/payments/client-submissions/list');
+    if (res.success && res.data && res.data.length > 0) {
+        tbody.innerHTML = res.data.map(sub => {
+            let statusBadge = '<span class="badge bg-amber-50 text-amber-700 border border-amber-200 font-bold">Pending Review</span>';
+            if (sub.status === 'APPROVED') {
+                statusBadge = '<span class="badge bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">Verified & Applied</span>';
+            } else if (sub.status === 'REJECTED') {
+                statusBadge = `<span class="badge bg-rose-50 text-rose-700 border border-rose-200 font-bold" title="${sub.rejection_reason || 'Rejected'}">Rejected</span>`;
+            }
+
+            return `
+                <tr class="hover:bg-slate-50 transition">
+                    <td class="py-3 px-4 font-mono font-bold text-slate-900">${sub.submission_number}</td>
+                    <td class="py-3 px-4 font-bold text-indigo-600">${sub.invoice_number}</td>
+                    <td class="py-3 px-4 text-slate-600">${NKB.formatDate(sub.created_at)}</td>
+                    <td class="py-3 px-4 font-extrabold text-slate-900">${NKB.formatCurrency(sub.amount)}</td>
+                    <td class="py-3 px-4">
+                        <span class="font-bold text-slate-800">${(sub.payment_method || '').replace(/_/g, ' ')}</span>
+                        ${sub.bank_name ? `<div class="text-[11px] text-slate-500">${sub.bank_name}</div>` : ''}
+                    </td>
+                    <td class="py-3 px-4 font-mono text-slate-700">${sub.check_number || sub.reference_number || '—'}</td>
+                    <td class="py-3 px-4">
+                        ${sub.attachment_url ? `
+                            <a href="${sub.attachment_url}" target="_blank" class="px-2 py-0.5 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[11px] inline-flex items-center gap-1 border border-indigo-200">
+                                <span>🖼️</span><span>View</span>
+                            </a>
+                        ` : '<span class="text-slate-400">None</span>'}
+                    </td>
+                    <td class="py-3 px-4">${statusBadge}</td>
+                </tr>
+            `;
+        }).join('');
+    } else {
+        tbody.innerHTML = `<tr><td colspan="8" class="py-6 text-center text-slate-400">No payment proofs submitted yet.</td></tr>`;
+    }
+}
+
+/**
+ * Open Client Payment Submission Modal
+ */
+let clientPaymentCompressedData = null;
+
+function openClientPaymentModal(invoiceId, invoiceNumber, balanceDue) {
+    clientPaymentCompressedData = null;
+    const root = document.getElementById('client-modals-root');
+    const modalId = 'modal-client-payment-upload';
+
+    let existing = document.getElementById(modalId);
+    if (existing) existing.remove();
+
+    const wrapper = document.createElement('div');
+    wrapper.id = modalId;
+    wrapper.className = 'fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fadeIn';
+    wrapper.innerHTML = `
+        <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden animate-scaleIn">
+            <div class="p-6 bg-gradient-to-r from-emerald-900 via-teal-900 to-slate-900 text-white flex items-center justify-between">
+                <div>
+                    <h3 class="text-base font-black flex items-center gap-2">
+                        <span>💳</span><span>Submit Payment / Check Proof</span>
+                    </h3>
+                    <p class="text-xs text-emerald-200 mt-0.5">Upload bank transfer slip or photo of company check for invoice verification.</p>
+                </div>
+                <button type="button" onclick="closeClientPaymentModal()" class="text-slate-400 hover:text-white p-1 rounded-xl hover:bg-white/10 transition text-xl font-bold">&times;</button>
+            </div>
+
+            <form id="form-client-submit-payment" onsubmit="handleClientPaymentSubmit(event, '${invoiceId}')" class="p-6 space-y-4 text-xs">
+                <!-- Invoice Info Banner -->
+                <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between">
+                    <div>
+                        <div class="text-[10px] text-emerald-800 font-bold uppercase tracking-wider">Invoice Reference</div>
+                        <div class="text-sm font-black text-emerald-950 font-mono">${invoiceNumber}</div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-[10px] text-emerald-800 font-bold uppercase tracking-wider">Balance Due</div>
+                        <div class="text-base font-black text-rose-700">${NKB.formatCurrency(balanceDue)}</div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-slate-700 font-bold mb-1">Amount Paid (₱) *</label>
+                        <input type="number" step="0.01" min="1" id="cps-amount" value="${balanceDue}" required class="w-full px-3 py-2 border border-slate-300 rounded-xl font-black text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-slate-700 font-bold mb-1">Payment Method *</label>
+                        <select id="cps-method" required class="w-full px-3 py-2 border border-slate-300 rounded-xl font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                            <option value="CHECK" selected>Cheque / Check</option>
+                            <option value="BANK_TRANSFER">Bank Deposit / Online Transfer</option>
+                            <option value="GCASH">GCash / Maya / Digital</option>
+                            <option value="CASH">Cash</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-slate-700 font-bold mb-1">Drawee Bank Name *</label>
+                        <input type="text" id="cps-bank" placeholder="e.g. BDO, BPI, Metrobank" required class="w-full px-3 py-2 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-slate-700 font-bold mb-1">Check # or Txn Ref # *</label>
+                        <input type="text" id="cps-ref" placeholder="e.g. 0048192 / FT2026-99" required class="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-slate-700 font-bold mb-1">Check Date / Transfer Date</label>
+                    <input type="date" id="cps-check-date" value="${NKB.getManilaDate()}" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                </div>
+
+                <!-- Proof Image Upload with Client-Side Auto-Compression -->
+                <div>
+                    <label class="block text-slate-700 font-bold mb-1">Attach Check Photo / Bank Slip *</label>
+                    <input type="file" id="cps-file" accept="image/*,.pdf" required onchange="handleClientProofFile(event)" class="w-full text-xs text-slate-600 file:mr-2 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer">
+                    <div id="cps-compression-status" class="text-[11px] text-slate-500 mt-1 flex items-center gap-1.5">
+                        <span>⚡ Smart Image Optimizer will automatically compress photo for instant upload.</span>
+                    </div>
+                    <div id="cps-preview-container" class="hidden mt-2 p-2 bg-slate-50 border border-slate-200 rounded-xl text-center">
+                        <img id="cps-preview-img" src="" alt="Proof Preview" class="max-h-40 mx-auto rounded-lg object-contain border border-slate-200">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-slate-700 font-bold mb-1">Notes / Remarks (Optional)</label>
+                    <textarea id="cps-notes" rows="2" placeholder="e.g. Deposited via BDO Online Banking, check cleared on..." class="w-full px-3 py-2 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:outline-none"></textarea>
+                </div>
+
+                <div class="flex items-center gap-2 pt-2 border-t border-slate-200">
+                    <button type="button" onclick="closeClientPaymentModal()" class="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition">
+                        Cancel
+                    </button>
+                    <button type="submit" id="btn-submit-payment-proof" class="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-1.5 cursor-pointer">
+                        <span>🚀</span><span>Submit Payment Proof</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    `;
+
+    root.appendChild(wrapper);
+}
+
+function closeClientPaymentModal() {
+    const el = document.getElementById('modal-client-payment-upload');
+    if (el) el.remove();
+}
+
+async function handleClientProofFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const statusEl = document.getElementById('cps-compression-status');
+    const previewContainer = document.getElementById('cps-preview-container');
+    const previewImg = document.getElementById('cps-preview-img');
+
+    statusEl.innerHTML = '<span class="text-indigo-600 font-bold">⏳ Optimizing image on client-side...</span>';
+
+    try {
+        const origSizeKb = Math.round(file.size / 1024);
+        const compressedBase64 = await NKB.compressImage(file, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
+        clientPaymentCompressedData = compressedBase64;
+
+        // Calculate approximate compressed size from base64 length
+        const compSizeKb = Math.round((compressedBase64.length * 3 / 4) / 1024);
+
+        statusEl.innerHTML = `
+            <span class="text-emerald-600 font-bold">✅ Optimized:</span>
+            <span>${origSizeKb} KB → <strong>${compSizeKb} KB</strong> (Ready for high-speed upload)</span>
+        `;
+
+        if (previewImg && previewContainer) {
+            previewImg.src = compressedBase64;
+            previewContainer.classList.remove('hidden');
+        }
+    } catch (err) {
+        console.error('Compression error:', err);
+        statusEl.innerHTML = '<span class="text-amber-600">Original file loaded.</span>';
+    }
+}
+
+async function handleClientPaymentSubmit(e, invoiceId) {
+    e.preventDefault();
+    const btn = document.getElementById('btn-submit-payment-proof');
+    btn.disabled = true;
+    btn.textContent = 'Submitting...';
+
+    const amount = parseFloat(document.getElementById('cps-amount').value);
+    const paymentMethod = document.getElementById('cps-method').value;
+    const bankName = document.getElementById('cps-bank').value.trim();
+    const refNumber = document.getElementById('cps-ref').value.trim();
+    const checkDate = document.getElementById('cps-check-date').value;
+    const notes = document.getElementById('cps-notes').value.trim();
+
+    try {
+        const res = await NKB.api('/api/payments/client-submit', {
+            method: 'POST',
+            body: {
+                invoice_id: invoiceId,
+                amount,
+                payment_method: paymentMethod,
+                bank_name: bankName,
+                check_number: paymentMethod === 'CHECK' ? refNumber : null,
+                check_date: checkDate,
+                reference_number: refNumber,
+                attachment_data: clientPaymentCompressedData,
+                notes
+            }
+        });
+
+        if (res.success) {
+            NKB.showToast(res.message || 'Payment proof submitted successfully!', 'success');
+            closeClientPaymentModal();
+            loadClientInvoices();
+        } else {
+            NKB.showToast(res.error || 'Failed to submit payment proof.', 'error');
+        }
+    } catch (err) {
+        NKB.showToast('Server error submitting proof.', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Submit Payment Proof';
     }
 }
 

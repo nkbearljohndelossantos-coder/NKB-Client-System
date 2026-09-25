@@ -130,6 +130,134 @@ function runMigrations(dbInstance, isMysql) {
                 console.warn('cheque_payables migration notice:', payablesErr.message);
             }
         }
+
+        // Columns for cheque_payables
+        try {
+            dbInstance.exec(`ALTER TABLE cheque_payables ADD COLUMN cleared_at ${textType};`);
+        } catch (_) {}
+        try {
+            dbInstance.exec(`ALTER TABLE cheque_payables ADD COLUMN bank_account_id ${textType};`);
+        } catch (_) {}
+
+        // Bank Accounts table
+        if (isMysql) {
+            try {
+                dbInstance.exec(`
+                    CREATE TABLE IF NOT EXISTS bank_accounts (
+                        id VARCHAR(36) PRIMARY KEY,
+                        bank_name VARCHAR(100) NOT NULL,
+                        account_number VARCHAR(100) NOT NULL,
+                        account_name VARCHAR(255) NOT NULL,
+                        account_type VARCHAR(50) DEFAULT 'Checking',
+                        current_balance DECIMAL(14,4) NOT NULL DEFAULT 0.00,
+                        is_active TINYINT(1) NOT NULL DEFAULT 1,
+                        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        INDEX idx_ba_bank (bank_name)
+                    );
+                `);
+            } catch (_) {}
+        } else {
+            try {
+                dbInstance.exec(`
+                    CREATE TABLE IF NOT EXISTS bank_accounts (
+                        id TEXT PRIMARY KEY,
+                        bank_name TEXT NOT NULL,
+                        account_number TEXT NOT NULL,
+                        account_name TEXT NOT NULL,
+                        account_type TEXT NOT NULL DEFAULT 'Checking',
+                        current_balance REAL NOT NULL DEFAULT 0.0,
+                        is_active INTEGER NOT NULL DEFAULT 1,
+                        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                        updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_ba_bank ON bank_accounts(bank_name);
+                `);
+            } catch (_) {}
+        }
+
+        // Seed Initial Bank Accounts if empty
+        try {
+            const count = dbInstance.prepare("SELECT COUNT(*) as count FROM bank_accounts").get()?.count || 0;
+            if (count === 0) {
+                const initialBanks = [
+                    { id: 'ba-bdo-01', bank_name: 'BDO Unibank', account_number: '1029-3847-4821', account_name: 'NKB Manufacturing & Trading Corp.', account_type: 'Checking (Disbursement)', balance: 1850000.00 },
+                    { id: 'ba-bpi-02', bank_name: 'Bank of the Philippine Islands (BPI)', account_number: '0982-3712-9104', account_name: 'NKB Manufacturing Corp.', account_type: 'Checking (Collections)', balance: 1420000.00 },
+                    { id: 'ba-mb-03', bank_name: 'Metropolitan Bank & Trust Co. (Metrobank)', account_number: '4562-8901-3372', account_name: 'NKB Manufacturing Corp.', account_type: 'Checking', balance: 980000.00 },
+                    { id: 'ba-sec-04', bank_name: 'Security Bank', account_number: '3128-4902-1855', account_name: 'NKB Manufacturing & Trading Corp.', account_type: 'Checking', balance: 750000.00 },
+                    { id: 'ba-ub-05', bank_name: 'UnionBank of the Philippines', account_number: '1094-8273-6290', account_name: 'NKB Manufacturing Corp.', account_type: 'Digital / Checking', balance: 520000.00 }
+                ];
+                const insertStmt = dbInstance.prepare(`
+                    INSERT INTO bank_accounts (id, bank_name, account_number, account_name, account_type, current_balance, is_active, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, 1, datetime('now', 'localtime'), datetime('now', 'localtime'))
+                `);
+                for (const b of initialBanks) {
+                    insertStmt.run(b.id, b.bank_name, b.account_number, b.account_name, b.account_type, b.balance);
+                }
+            }
+        } catch (_) {}
+
+        // Client Payment Submissions (Payment Proofs uploaded by Clients)
+        if (isMysql) {
+            try {
+                dbInstance.exec(`
+                    CREATE TABLE IF NOT EXISTS client_payment_submissions (
+                        id VARCHAR(36) PRIMARY KEY,
+                        submission_number VARCHAR(50) UNIQUE NOT NULL,
+                        invoice_id VARCHAR(36) NOT NULL,
+                        client_id VARCHAR(36) NOT NULL,
+                        amount DECIMAL(14,4) NOT NULL,
+                        payment_method VARCHAR(50) NOT NULL,
+                        bank_name VARCHAR(100) NULL,
+                        check_number VARCHAR(100) NULL,
+                        check_date VARCHAR(50) NULL,
+                        reference_number VARCHAR(100) NULL,
+                        attachment_url TEXT NULL,
+                        notes TEXT NULL,
+                        status ENUM('PENDING_REVIEW', 'APPROVED', 'REJECTED') NOT NULL DEFAULT 'PENDING_REVIEW',
+                        reviewed_by VARCHAR(36) NULL,
+                        reviewed_at VARCHAR(50) NULL,
+                        rejection_reason TEXT NULL,
+                        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        INDEX idx_cps_status (status),
+                        INDEX idx_cps_invoice (invoice_id),
+                        INDEX idx_cps_client (client_id)
+                    );
+                `);
+            } catch (_) {}
+        } else {
+            try {
+                dbInstance.exec(`
+                    CREATE TABLE IF NOT EXISTS client_payment_submissions (
+                        id TEXT PRIMARY KEY,
+                        submission_number TEXT UNIQUE NOT NULL,
+                        invoice_id TEXT NOT NULL,
+                        client_id TEXT NOT NULL,
+                        amount REAL NOT NULL CHECK (amount > 0),
+                        payment_method TEXT NOT NULL,
+                        bank_name TEXT,
+                        check_number TEXT,
+                        check_date TEXT,
+                        reference_number TEXT,
+                        attachment_url TEXT,
+                        notes TEXT,
+                        status TEXT NOT NULL DEFAULT 'PENDING_REVIEW' CHECK (status IN ('PENDING_REVIEW', 'APPROVED', 'REJECTED')),
+                        reviewed_by TEXT,
+                        reviewed_at TEXT,
+                        rejection_reason TEXT,
+                        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                        updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                        FOREIGN KEY (invoice_id) REFERENCES sales_invoices(id),
+                        FOREIGN KEY (client_id) REFERENCES clients(id),
+                        FOREIGN KEY (reviewed_by) REFERENCES users(id)
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_cps_status ON client_payment_submissions(status);
+                    CREATE INDEX IF NOT EXISTS idx_cps_invoice ON client_payment_submissions(invoice_id);
+                    CREATE INDEX IF NOT EXISTS idx_cps_client ON client_payment_submissions(client_id);
+                `);
+            } catch (_) {}
+        }
         if (isMysql) {
             try {
                 dbInstance.exec("ALTER TABLE purchase_orders MODIFY COLUMN status ENUM('DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'IN_PRODUCTION', 'PARTIALLY_DELIVERED', 'COMPLETED', 'CANCELLED', 'VOIDED') NOT NULL DEFAULT 'PENDING_APPROVAL';");
