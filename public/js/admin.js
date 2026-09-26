@@ -2759,6 +2759,9 @@ function renderPayablesRows(payablesList, currentTotal) {
                 <td class="py-3.5 px-4 whitespace-nowrap">${getStatusBadge(cp.status)}</td>
                 <td class="py-3.5 px-4 text-right whitespace-nowrap">
                     <div class="flex items-center justify-end gap-1.5">
+                        <button onclick="openRequestPayableModal('${cp.id}')" class="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-slate-100 rounded-lg transition cursor-pointer" title="Edit Payable Request">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                        </button>
                         <button onclick="openViewPayableDetailsModal('${cp.id}')" class="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition cursor-pointer" title="View Full Cheque Details & Audit">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                         </button>
@@ -2978,16 +2981,78 @@ function clearPayableAttachment() {
     if (dropText) dropText.classList.remove('hidden');
 }
 
-function checkPayableOverdraft() {
+let currentEditingPayableId = null;
+
+const PAYABLE_COMPANY_BANK_MAP = {
+    'NKB Manufacturing Corporation': 'BDO: NKB Manufacturing Corporation - 0080-5801-0547',
+    'NKB Cosmetics Manufacturing': 'BDO: NKB Cosmetics Manufacturing - 0105-4800-4829',
+    'Vyuceutical OPC': 'BDO: Vyuceutical - 0080-5801-0717',
+    'NKB Manufacturing Coorporation - COOP': 'BDO: Norvin Bella (COOP) - 0080-5801-0563',
+    'New Yra Enterprises': 'BDO: New Yra Enterprises - 0036-8801-3196',
+    'NKB Cosmetic Products Trading': 'BDO: NKB Cosmetic Products Trading - 0105-4800-3245'
+};
+
+const DEFAULT_PAYABLE_CATEGORIES_LIST = [
+    'Commission',
+    'Returned of Borrow Funds',
+    'Contribution - SSS',
+    'Contribution - PhilHealth',
+    'Contribution - Pag-ibig',
+    'BIR Tax Payment',
+    'City Hall Tax Payment',
+    'City Hall Expenses',
+    'Investment Payout',
+    'Marketing Expenses',
+    'Office Expenses',
+    'Petty Cash',
+    'Raw Materials',
+    'Vehicle Payment',
+    'Salaries',
+    'TDF',
+    'TDF(COOP)',
+    'Personal Expenses',
+    'Repair Expenses',
+    'Construction',
+    'Insurance (Personal)'
+];
+
+const DEFAULT_PAYABLE_COMPANIES_LIST = [
+    'NKB Manufacturing Corporation',
+    'NKB Cosmetics Manufacturing',
+    'Vyuceutical OPC',
+    'NKB Manufacturing Coorporation - COOP',
+    'New Yra Enterprises',
+    'NKB Cosmetic Products Trading'
+];
+
+const DEFAULT_PAYABLE_BANKS_LIST = [
+    { id: 'ba-bdo-coop', name: 'BDO: Norvin Bella (COOP) - 0080-5801-0563', bank_name: 'BDO: Norvin Bella (COOP) - 0080-5801-0563', account_name: 'Norvin Bella (COOP)', account_number: '0080-5801-0563', balance: 650000 },
+    { id: 'ba-bdo-nkb-mfg', name: 'BDO: NKB Manufacturing Corporation - 0080-5801-0547', bank_name: 'BDO: NKB Manufacturing Corporation - 0080-5801-0547', account_name: 'NKB Manufacturing Corporation', account_number: '0080-5801-0547', balance: 950000 },
+    { id: 'ba-bdo-nkb-cosm', name: 'BDO: NKB Cosmetics Manufacturing - 0105-4800-4829', bank_name: 'BDO: NKB Cosmetics Manufacturing - 0105-4800-4829', account_name: 'NKB Cosmetics Manufacturing', account_number: '0105-4800-4829', balance: 800000 },
+    { id: 'ba-bdo-nkb-cpt', name: 'BDO: NKB Cosmetic Products Trading - 0105-4800-3245', bank_name: 'BDO: NKB Cosmetic Products Trading - 0105-4800-3245', account_name: 'NKB Cosmetic Products Trading', account_number: '0105-4800-3245', balance: 700000 },
+    { id: 'ba-bdo-new-yra', name: 'BDO: New Yra Enterprises - 0036-8801-3196', bank_name: 'BDO: New Yra Enterprises - 0036-8801-3196', account_name: 'New Yra Enterprises', account_number: '0036-8801-3196', balance: 600000 },
+    { id: 'ba-bdo-vyu', name: 'BDO: Vyuceutical - 0080-5801-0717', bank_name: 'BDO: Vyuceutical - 0080-5801-0717', account_name: 'Vyuceutical OPC', account_number: '0080-5801-0717', balance: 550000 },
+    { id: 'ba-sec-nkb-mfg', name: 'Security Bank: NKB Manufacturing Corporation', bank_name: 'Security Bank: NKB Manufacturing Corporation', account_name: 'NKB Manufacturing Corporation', account_number: '3128-4902-1855', balance: 500000 }
+];
+
+function checkPayableOverdraft(overrideAmount = null) {
     const bankSelect = document.getElementById('req-payable-bank');
-    const amountInput = document.getElementById('req-payable-amount');
     const warnBox = document.getElementById('req-payable-overdraft-warn');
     const warnText = document.getElementById('req-payable-overdraft-text');
-    if (!bankSelect || !amountInput || !warnBox) return;
+    if (!bankSelect || !warnBox) return;
 
     const opt = bankSelect.options[bankSelect.selectedIndex];
     const balance = opt ? parseFloat(opt.getAttribute('data-balance') || 0) : 0;
-    const amount = parseFloat(amountInput.value || 0);
+    
+    let amount = overrideAmount != null ? overrideAmount : 0;
+    if (overrideAmount == null) {
+        const rows = document.querySelectorAll('#payable-items-table-body tr');
+        rows.forEach(r => {
+            const qty = parseFloat(r.querySelector('.payable-item-qty')?.value) || 0;
+            const cost = parseFloat(r.querySelector('.payable-item-cost')?.value) || 0;
+            amount += (qty * cost);
+        });
+    }
 
     if (amount > 0 && balance > 0 && amount > balance) {
         warnBox.classList.remove('hidden');
@@ -2999,82 +3064,369 @@ function checkPayableOverdraft() {
     }
 }
 
+function onPayableCompanyChange(selectEl) {
+    const compName = selectEl.value;
+    const targetBank = PAYABLE_COMPANY_BANK_MAP[compName];
+    const bankSelect = document.getElementById('req-payable-bank');
+    if (targetBank && bankSelect) {
+        for (let i = 0; i < bankSelect.options.length; i++) {
+            if (bankSelect.options[i].value === targetBank || bankSelect.options[i].text.includes(targetBank)) {
+                bankSelect.selectedIndex = i;
+                onPayableBankChange(bankSelect);
+                break;
+            }
+        }
+    }
+}
+
+async function openAddPayableCompanyModal() {
+    const compName = prompt('Enter new company name:');
+    if (!compName || !compName.trim()) return;
+
+    try {
+        const res = await NKB.api('/api/cheque-payables/companies', {
+            method: 'POST',
+            body: JSON.stringify({ name: compName.trim() })
+        });
+        if (res.success) {
+            NKB.showToast(`Company "${res.data.name}" added successfully!`, 'success');
+            const select = document.getElementById('req-payable-company');
+            if (select) {
+                const opt = document.createElement('option');
+                opt.value = res.data.name;
+                opt.textContent = res.data.name;
+                select.appendChild(opt);
+                select.value = res.data.name;
+                onPayableCompanyChange(select);
+            }
+        } else {
+            NKB.showToast(res.error || 'Failed to add company.', 'error');
+        }
+    } catch (err) {
+        console.error('Add company error:', err);
+        NKB.showToast('Server error adding company.', 'error');
+    }
+}
+
+function onPayableTermChange(selectEl) {
+    if (!selectEl) return;
+    const term = selectEl.value;
+    const invDateInput = document.getElementById('req-payable-invoice-date');
+    const dueDateInput = document.getElementById('req-payable-due-date');
+    if (!invDateInput || !dueDateInput) return;
+    const baseDateStr = invDateInput.value || NKB.getManilaDate();
+    const baseDate = new Date(baseDateStr + 'T00:00:00+08:00');
+    if (isNaN(baseDate.getTime())) return;
+
+    let daysToAdd = 30;
+    if (term === 'Net 15') daysToAdd = 15;
+    else if (term === 'Net 30') daysToAdd = 30;
+    else if (term === 'Net 60') daysToAdd = 60;
+    else if (term === 'COD' || term === 'Due upon receipt') daysToAdd = 0;
+
+    baseDate.setDate(baseDate.getDate() + daysToAdd);
+    dueDateInput.value = baseDate.toISOString().split('T')[0];
+}
+
 function onPayableBankChange(selectEl) {
     const selectedBankName = selectEl.value;
     const bankAccountInput = document.getElementById('req-payable-bank-acct');
-    if (!bankAccountInput) return;
-
+    
     const bankObj = (cachedBankAccounts && cachedBankAccounts.length > 0)
         ? cachedBankAccounts.find(b => b.bank_name === selectedBankName || b.name === selectedBankName)
-        : cachedPayablesMeta.banks.find(b => b.name === selectedBankName);
+        : (cachedPayablesMeta?.banks || []).find(b => b.name === selectedBankName || b.bank_name === selectedBankName);
 
-    if (bankObj && bankObj.account_number) {
-        bankAccountInput.value = `${bankObj.account_number} (${bankObj.account_name || 'NKB Corp.'})`;
-    } else {
-        bankAccountInput.value = '';
+    if (bankAccountInput) {
+        if (bankObj && bankObj.account_number) {
+            bankAccountInput.value = bankObj.account_number;
+        } else {
+            const match = selectedBankName.match(/\d{4}-\d{4}-\d{4}/);
+            bankAccountInput.value = match ? match[0] : '';
+        }
     }
     checkPayableOverdraft();
 }
 
-function openRequestPayableModal() {
+function recalcPayableItem(el) {
+    const row = el.closest('tr');
+    if (!row) return;
+    const qtyInput = row.querySelector('.payable-item-qty');
+    const costInput = row.querySelector('.payable-item-cost');
+    const subtotalEl = row.querySelector('.payable-item-subtotal');
+    
+    const qty = parseFloat(qtyInput?.value) || 0;
+    const cost = parseFloat(costInput?.value) || 0;
+    const sub = qty * cost;
+    
+    if (subtotalEl) {
+        subtotalEl.value = sub.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    recalcPayableTotals();
+}
+
+function recalcPayableTotals() {
+    const rows = document.querySelectorAll('#payable-items-table-body tr');
+    let total = 0;
+    rows.forEach(row => {
+        const qty = parseFloat(row.querySelector('.payable-item-qty')?.value) || 0;
+        const cost = parseFloat(row.querySelector('.payable-item-cost')?.value) || 0;
+        total += (qty * cost);
+    });
+
+    const subtotalDisplay = document.getElementById('req-payable-summary-subtotal');
+    const totalDisplay = document.getElementById('req-payable-summary-total');
+    if (subtotalDisplay) subtotalDisplay.textContent = NKB.formatCurrency(total);
+    if (totalDisplay) totalDisplay.textContent = NKB.formatCurrency(total);
+
+    checkPayableOverdraft(total);
+}
+
+function addPayableItemRow(item = null) {
+    const tbody = document.getElementById('payable-items-table-body');
+    if (!tbody) return;
+
+    const desc = item ? (item.description || '') : '';
+    const cat = item ? (item.category || 'Raw Materials') : 'Raw Materials';
+    const qty = item && item.quantity != null ? parseFloat(item.quantity) : 1;
+    const cost = item && item.cost != null ? parseFloat(item.cost) : 0;
+    const subtotal = qty * cost;
+
+    const categories = (cachedPayablesMeta?.categories?.length > 0)
+        ? cachedPayablesMeta.categories
+        : DEFAULT_PAYABLE_CATEGORIES_LIST;
+
+    const tr = document.createElement('tr');
+    tr.className = 'border-b border-slate-100 hover:bg-slate-50/50';
+    tr.innerHTML = `
+        <td class="p-2">
+            <input type="text" class="payable-item-desc w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-medium focus:bg-white focus:ring-1 focus:ring-blue-500" placeholder="e.g. PERFUME BOTTLES" value="${desc.replace(/"/g, '&quot;')}">
+        </td>
+        <td class="p-2">
+            <select class="payable-item-cat w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold focus:bg-white focus:ring-1 focus:ring-blue-500">
+                ${categories.map(c => `<option value="${c}" ${c === cat ? 'selected' : ''}>${c}</option>`).join('')}
+            </select>
+        </td>
+        <td class="p-2">
+            <input type="number" step="any" min="0" class="payable-item-qty w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs font-bold text-center focus:bg-white" value="${qty}" oninput="recalcPayableItem(this)">
+        </td>
+        <td class="p-2">
+            <input type="number" step="0.01" min="0" class="payable-item-cost w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs font-bold text-right focus:bg-white" value="${cost.toFixed(2)}" oninput="recalcPayableItem(this)">
+        </td>
+        <td class="p-2">
+            <input type="text" readonly class="payable-item-subtotal w-full px-2 py-1.5 bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 text-right font-mono" value="${subtotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}">
+        </td>
+        <td class="p-2 text-center">
+            <button type="button" onclick="removePayableItemRow(this)" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded text-xs font-bold transition cursor-pointer">Delete</button>
+        </td>
+    `;
+    tbody.appendChild(tr);
+    recalcPayableTotals();
+}
+
+function removePayableItemRow(btn) {
+    const row = btn.closest('tr');
+    const tbody = document.getElementById('payable-items-table-body');
+    if (!row || !tbody) return;
+    if (tbody.children.length > 1) {
+        row.remove();
+        recalcPayableTotals();
+    } else {
+        const descInput = row.querySelector('.payable-item-desc');
+        const qtyInput = row.querySelector('.payable-item-qty');
+        const costInput = row.querySelector('.payable-item-cost');
+        const subInput = row.querySelector('.payable-item-subtotal');
+        if (descInput) descInput.value = '';
+        if (qtyInput) qtyInput.value = '1';
+        if (costInput) costInput.value = '0.00';
+        if (subInput) subInput.value = '0.00';
+        recalcPayableTotals();
+    }
+}
+
+function printCurrentPayableForm() {
+    if (currentEditingPayableId) {
+        printSingleChequeVoucher(currentEditingPayableId);
+    } else {
+        NKB.showToast('Please click Save first before printing the official voucher.', 'info');
+    }
+}
+
+function openRequestPayableModal(payableId = null) {
     currentPayableAttachmentBase64 = null;
+    currentEditingPayableId = payableId;
     const root = document.getElementById('modals-root');
     const today = NKB.getManilaDate();
 
-    const categories = cachedPayablesMeta.categories.length > 0 ? cachedPayablesMeta.categories : [
-        'Raw Materials', 'Packaging Supplies', 'Factory Utilities & Power', 'Facility Rent & Lease',
-        'Payroll & Labor Advances', 'Machine Maintenance & Repairs', 'Logistics & Freight Delivery',
-        'Government Taxes & Licensing', 'Laboratory & Quality Testing', 'Office Supplies & Administrative', 'Miscellaneous & Contingency'
-    ];
+    // Check if editing
+    let cp = null;
+    if (payableId && window.cachedPayables) {
+        cp = window.cachedPayables.find(item => item.id === payableId || item.request_number === payableId);
+    }
 
-    const banks = (cachedBankAccounts && cachedBankAccounts.length > 0)
-        ? cachedBankAccounts
-        : (cachedPayablesMeta.banks.length > 0 ? cachedPayablesMeta.banks : [
-            { id: 'bdo', name: 'BDO Unibank', bank_name: 'BDO Unibank', account_number: '1029-3847-4821', current_balance: 3250000 },
-            { id: 'bpi', name: 'Bank of the Philippine Islands (BPI)', bank_name: 'Bank of the Philippine Islands (BPI)', account_number: '0982-3712-9104', current_balance: 1840000 },
-            { id: 'metrobank', name: 'Metropolitan Bank & Trust Co. (Metrobank)', bank_name: 'Metropolitan Bank & Trust Co. (Metrobank)', account_number: '4562-8901-3372', current_balance: 920000 },
-            { id: 'security_bank', name: 'Security Bank', bank_name: 'Security Bank', account_number: '3128-4902-1855', current_balance: 650000 },
-            { id: 'unionbank', name: 'UnionBank of the Philippines', bank_name: 'UnionBank of the Philippines', account_number: '1094-8273-6290', current_balance: 1450000 }
-        ]);
+    const isEdit = !!cp;
+    const modalTitle = isEdit ? 'Editing Payable' : 'Payable Request Form';
+
+    const companies = (window.cachedPayablesMeta?.companies?.length > 0)
+        ? window.cachedPayablesMeta.companies
+        : DEFAULT_PAYABLE_COMPANIES_LIST;
+
+    const banksList = (window.cachedBankAccounts && window.cachedBankAccounts.length > 0)
+        ? window.cachedBankAccounts
+        : ((window.cachedPayablesMeta?.banks?.length > 0) ? window.cachedPayablesMeta.banks : DEFAULT_PAYABLE_BANKS_LIST);
+
+    const selectedCompany = cp?.company_name || companies[0];
+    const defaultBankName = PAYABLE_COMPANY_BANK_MAP[selectedCompany] || banksList[0]?.bank_name || banksList[0]?.name;
+
+    // Formatting date created
+    let dateCreatedFormatted = today;
+    if (cp?.created_at) {
+        try {
+            const d = new Date(cp.created_at);
+            if (!isNaN(d.getTime())) {
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                const yyyy = d.getFullYear();
+                dateCreatedFormatted = `${mm}/${dd}/${yyyy}`;
+            }
+        } catch (_) {}
+    } else {
+        const parts = today.split('-');
+        if (parts.length === 3) dateCreatedFormatted = `${parts[1]}/${parts[2]}/${parts[0]}`;
+    }
+
+    const payableNumberDisplay = cp?.request_number || 'PB-Auto';
+    const currentUser = (typeof NKB !== 'undefined' && NKB.getUser) ? NKB.getUser() : null;
+    const createdByDisplay = cp?.requested_by_name || currentUser?.name || 'Accountant';
+    const statusDisplay = cp ? (cp.status || '').replace(/_/g, ' ') : 'Submitted For Approval';
+
+    // Due date default: 30 days from today
+    let dueDateVal = cp?.due_date;
+    if (!dueDateVal) {
+        const d = new Date(today + 'T00:00:00+08:00');
+        d.setDate(d.getDate() + 30);
+        dueDateVal = d.toISOString().split('T')[0];
+    }
 
     root.innerHTML = `
-        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50 overflow-y-auto">
-            <div class="bg-white rounded-2xl max-w-2xl w-full p-6 sm:p-7 shadow-2xl space-y-4 my-8">
-                <!-- Header -->
-                <div class="flex justify-between items-start border-b border-slate-100 pb-3">
-                    <div>
-                        <div class="flex items-center gap-2">
-                            <span class="text-2xl">📝</span>
-                            <h3 class="text-lg font-bold text-slate-900">Request Cheque Payable (Accountant Form)</h3>
-                        </div>
-                        <p class="text-xs text-slate-500 mt-0.5">Submit cheque requisition with designated bank account and expenditure breakdown for external COO authorization.</p>
-                    </div>
-                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-xl cursor-pointer">&times;</button>
-                </div>
-
-                <!-- Live Integration Banner -->
-                <div class="p-3 bg-gradient-to-r from-amber-50 to-indigo-50/60 rounded-xl border border-amber-200/80 flex items-start gap-3 text-xs">
-                    <span class="text-lg">📡</span>
-                    <div class="flex-1 min-w-0">
-                        <div class="font-bold text-amber-900">External COO Approval Gateway Integration</div>
-                        <div class="text-[11px] text-slate-600 mt-0.5 leading-relaxed">
-                            This request will be dispatched to the COO authorization portal via API key:
-                            <code class="px-1.5 py-0.5 rounded bg-white font-mono text-[10px] font-bold text-indigo-700 border border-slate-200">${LIVE_COO_API_KEY}</code>.
-                            Once approved by the COO, the record will return to your accounting ledger with a verified timestamp.
-                        </div>
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-3 sm:p-4 z-50 overflow-y-auto">
+            <div class="bg-white rounded-2xl max-w-6xl w-full p-5 sm:p-7 shadow-2xl space-y-5 my-6">
+                <!-- Header matching Reference Image -->
+                <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <h3 class="text-xl font-bold text-slate-800 tracking-tight">${modalTitle}</h3>
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="printCurrentPayableForm()" class="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition cursor-pointer" title="Print Cheque Disbursement Voucher">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                        </button>
+                        <button type="button" onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-2xl leading-none cursor-pointer">&times;</button>
                     </div>
                 </div>
 
                 <form onsubmit="submitRequestPayable(event)" class="space-y-4 text-xs font-semibold">
-                    <!-- Row 1: Payee & Amount -->
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <!-- Top 4-Column Grid matching Reference Image -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        <!-- Row 1: Company (with Add button) -->
                         <div>
-                            <label class="block text-slate-700 mb-1">Payee / Beneficiary Name *</label>
-                            <input type="text" id="req-payable-payee" required placeholder="e.g. Chemical Master Supplies Corp." class="w-full px-3 py-2 border rounded-xl bg-slate-50 text-slate-900 font-bold focus:bg-white focus:ring-2 focus:ring-amber-500">
+                            <label class="block text-slate-600 mb-1">Company</label>
+                            <div class="flex items-center gap-1.5">
+                                <select id="req-payable-company" onchange="onPayableCompanyChange(this)" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 font-bold text-slate-800 focus:bg-white focus:ring-1 focus:ring-blue-500">
+                                    ${companies.map(c => `<option value="${c}" ${c === selectedCompany ? 'selected' : ''}>${c}</option>`).join('')}
+                                </select>
+                                <button type="button" onclick="openAddPayableCompanyModal()" class="px-2.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-sm transition whitespace-nowrap cursor-pointer" title="Add New Company">+ Add</button>
+                            </div>
                         </div>
+
+                        <!-- Row 1: Invoice Number -->
                         <div>
-                            <label class="block text-slate-700 mb-1">Cheque Amount (₱) *</label>
-                            <input type="number" id="req-payable-amount" step="0.01" min="0.01" oninput="checkPayableOverdraft()" required placeholder="0.00" inputmode="decimal" class="w-full px-3 py-2 border rounded-xl bg-slate-50 text-emerald-800 font-black text-sm focus:bg-white focus:ring-2 focus:ring-emerald-500">
+                            <label class="block text-slate-600 mb-1">Invoice Number</label>
+                            <input type="text" id="req-payable-invoice-no" value="${cp?.invoice_number || ''}" placeholder="e.g. 239683" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 font-mono text-slate-800 focus:bg-white">
+                        </div>
+
+                        <!-- Row 1: Date Created -->
+                        <div>
+                            <label class="block text-slate-600 mb-1">Date Created</label>
+                            <input type="text" id="req-payable-created-date" readonly value="${dateCreatedFormatted}" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-100 text-slate-600 font-medium cursor-not-allowed">
+                        </div>
+
+                        <!-- Row 1: Payable Number (Blue label in reference) -->
+                        <div>
+                            <label class="block text-blue-600 mb-1 font-bold">Payable Number</label>
+                            <input type="text" id="req-payable-number" readonly value="${payableNumberDisplay}" class="w-full px-3 py-2 border border-blue-200 rounded-xl bg-blue-50/60 text-blue-700 font-black font-mono cursor-not-allowed">
+                        </div>
+
+                        <!-- Row 2: Payable Category -->
+                        <div>
+                            <label class="block text-slate-600 mb-1">Payable Category</label>
+                            <input type="text" id="req-payable-category-type" value="${cp?.payable_category || 'Trade payable'}" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 font-medium focus:bg-white">
+                        </div>
+
+                        <!-- Row 2: Invoice Date -->
+                        <div>
+                            <label class="block text-slate-600 mb-1">Invoice Date</label>
+                            <input type="date" id="req-payable-invoice-date" value="${cp?.invoice_date || today}" onchange="onPayableTermChange(document.getElementById('req-payable-terms'))" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 font-medium focus:bg-white">
+                        </div>
+
+                        <!-- Row 2: Created By -->
+                        <div>
+                            <label class="block text-slate-600 mb-1">Created By</label>
+                            <input type="text" id="req-payable-created-by" readonly value="${createdByDisplay}" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-100 text-slate-700 font-semibold cursor-not-allowed">
+                        </div>
+
+                        <!-- Row 2: Control Number -->
+                        <div>
+                            <label class="block text-slate-600 mb-1">Control Number</label>
+                            <input type="text" id="req-payable-control-no" value="${cp?.control_number || ''}" placeholder="e.g. 1993" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 font-mono text-slate-800 focus:bg-white">
+                        </div>
+
+                        <!-- Row 3: Vendor -->
+                        <div>
+                            <label class="block text-slate-600 mb-1">Vendor *</label>
+                            <input type="text" id="req-payable-payee" required value="${cp?.payee_name || ''}" placeholder="e.g. MARK JOSEPH Q. REALUYO" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 font-bold text-slate-900 focus:bg-white">
+                        </div>
+
+                        <!-- Row 3: Term -->
+                        <div>
+                            <label class="block text-slate-600 mb-1">Term</label>
+                            <select id="req-payable-terms" onchange="onPayableTermChange(this)" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 font-medium focus:bg-white">
+                                <option value="Net 30" ${(cp?.terms === 'Net 30' || !cp) ? 'selected' : ''}>Net 30</option>
+                                <option value="Net 15" ${cp?.terms === 'Net 15' ? 'selected' : ''}>Net 15</option>
+                                <option value="Net 60" ${cp?.terms === 'Net 60' ? 'selected' : ''}>Net 60</option>
+                                <option value="COD" ${cp?.terms === 'COD' ? 'selected' : ''}>COD</option>
+                                <option value="Due upon receipt" ${cp?.terms === 'Due upon receipt' ? 'selected' : ''}>Due upon receipt</option>
+                            </select>
+                        </div>
+
+                        <!-- Row 3: Due Date -->
+                        <div>
+                            <label class="block text-slate-600 mb-1">Due Date</label>
+                            <input type="date" id="req-payable-due-date" value="${dueDateVal}" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 font-medium focus:bg-white">
+                        </div>
+
+                        <!-- Row 3: Status -->
+                        <div>
+                            <label class="block text-slate-600 mb-1">Status</label>
+                            <input type="text" id="req-payable-status" readonly value="${statusDisplay}" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-100 font-bold text-amber-700 cursor-not-allowed">
+                        </div>
+
+                        <!-- Row 4: Description -->
+                        <div class="sm:col-span-2">
+                            <label class="block text-slate-600 mb-1">Description</label>
+                            <input type="text" id="req-payable-description" value="${cp?.purpose || ''}" placeholder="e.g. RAW MATERIALS" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 font-semibold text-slate-800 focus:bg-white">
+                        </div>
+
+                        <!-- Row 4: Bank to use for check -->
+                        <div class="sm:col-span-2">
+                            <label class="block text-slate-600 mb-1">Bank to use for check *</label>
+                            <select id="req-payable-bank" onchange="onPayableBankChange(this)" required class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 font-bold text-slate-800 focus:bg-white">
+                                <option value="">Select Bank Account...</option>
+                                ${banksList.map(b => {
+                                    const bName = b.bank_name || b.name;
+                                    const balStr = b.current_balance != null ? ` (Avail: ${NKB.formatCurrency(b.current_balance)})` : (b.balance != null ? ` (Avail: ${NKB.formatCurrency(b.balance)})` : '');
+                                    const isSel = (cp && (cp.bank_name === bName || cp.bank_name === b.name)) || (!cp && bName === defaultBankName);
+                                    return `<option value="${bName}" data-balance="${b.current_balance || b.balance || 0}" ${isSel ? 'selected' : ''}>${bName}${balStr}</option>`;
+                                }).join('')}
+                            </select>
+                            <input type="hidden" id="req-payable-bank-acct" value="${cp?.bank_account_number || ''}">
+                            <input type="hidden" id="req-payable-check-no" value="${cp?.cheque_number || ''}">
                         </div>
                     </div>
 
@@ -3084,156 +3436,223 @@ function openRequestPayableModal() {
                         <span id="req-payable-overdraft-text"></span>
                     </div>
 
-                    <!-- Row 2: Cheque Date & Category -->
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-slate-700 mb-1">Cheque Issue / Maturity Date *</label>
-                            <input type="date" id="req-payable-date" value="${today}" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-medium focus:bg-white">
+                    <!-- Line Items Table (NO VAT Computations, Streamlined) -->
+                    <div class="space-y-2 pt-2">
+                        <div class="flex items-center justify-between">
+                            <div class="font-bold text-slate-800 text-xs">Itemized Expenses</div>
+                            <button type="button" onclick="addPayableItemRow()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-bold text-xs shadow-sm transition flex items-center gap-1 cursor-pointer">
+                                <span>+ Add</span>
+                            </button>
                         </div>
-                        <div>
-                            <label class="block text-slate-700 mb-1">Expenditure Category *</label>
-                            <select id="req-payable-category" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-medium focus:bg-white">
-                                ${categories.map(c => `<option value="${c}">${c}</option>`).join('')}
-                            </select>
+
+                        <div class="border border-slate-200 rounded-xl overflow-x-auto bg-white">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 text-[11px] uppercase tracking-wider font-bold">
+                                        <th class="p-2.5">Description</th>
+                                        <th class="p-2.5 w-56">Expense Category</th>
+                                        <th class="p-2.5 w-24 text-center">Quantity</th>
+                                        <th class="p-2.5 w-32 text-right">Cost</th>
+                                        <th class="p-2.5 w-32 text-right">Subtotal</th>
+                                        <th class="p-2.5 w-20 text-center">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="payable-items-table-body">
+                                    <!-- Dynamic Rows inserted via JavaScript -->
+                                </tbody>
+                            </table>
                         </div>
                     </div>
 
-                    <!-- Row 3: Bank & Account Used -->
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-slate-700 mb-1">Bank to Use for Cheque *</label>
-                            <select id="req-payable-bank" onchange="onPayableBankChange(this)" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-800 focus:bg-white">
-                                <option value="">Select Bank Account...</option>
-                                ${banks.map(b => {
-                                    const bName = b.bank_name || b.name;
-                                    const balStr = b.current_balance != null ? ` (Avail: ${NKB.formatCurrency(b.current_balance)})` : '';
-                                    return `<option value="${bName}" data-balance="${b.current_balance || 0}">${bName}${balStr}</option>`;
-                                }).join('')}
-                                <option value="Other Bank Account" data-balance="0">Other Bank Account</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-slate-700 mb-1">NKB Depository Account #</label>
-                            <input type="text" id="req-payable-bank-acct" placeholder="Auto-fills from bank selection..." class="w-full px-3 py-2 border rounded-xl bg-slate-50 text-slate-700 font-mono">
-                        </div>
-                    </div>
-
-                    <!-- Row 4: Cheque Number & Invoice Ref -->
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-slate-700 mb-1">Cheque Number (Optional / if pre-assigned)</label>
-                            <input type="text" id="req-payable-check-no" placeholder="e.g. 0004928172" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-mono">
-                        </div>
-                        <div>
-                            <label class="block text-slate-700 mb-1">Supplier Billing / Invoice Ref # (Optional)</label>
-                            <input type="text" id="req-payable-ref" placeholder="e.g. BILL-2026-904" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-mono">
-                        </div>
-                    </div>
-
-                    <!-- Row 5: Purpose / Where the money will be used -->
-                    <div>
-                        <label class="block text-slate-700 mb-1">Where will the money be used? (Purpose / Justification) *</label>
-                        <textarea id="req-payable-purpose" rows="3" required placeholder="Detailed explanation for COO review: e.g. Payment for 50 drums of cosmetic raw material stearic acid & glycerin for Batch SKC-2026-004." class="w-full px-3 py-2 border rounded-xl bg-slate-50 text-slate-800 font-normal focus:bg-white focus:ring-2 focus:ring-amber-500"></textarea>
-                    </div>
-
-                    <!-- Row 6: Attachment / Voucher / Bill Document -->
-                    <div class="space-y-1.5">
-                        <label class="block text-slate-700">Supporting Bill / Invoice / Voucher Attachment (Optional)</label>
-                        <div class="border-2 border-dashed border-slate-300 hover:border-amber-400 rounded-xl p-3.5 bg-slate-50 transition relative text-center">
-                            <input type="file" id="req-payable-file" accept="image/*,.pdf" onchange="handlePayableAttachmentSelect(this)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
-                            <div id="req-payable-droptext" class="space-y-1 pointer-events-none">
-                                <span class="text-2xl">📑</span>
-                                <div class="text-xs text-slate-700 font-bold">Attach supplier bill, invoice, or voucher proof</div>
-                                <div class="text-[10px] text-slate-400">PNG, JPG, WEBP, or PDF up to 12MB</div>
+                    <!-- Comments, Files & Totals Section -->
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 pt-1">
+                        <!-- Left Side: Comments & Files (8 cols) -->
+                        <div class="lg:col-span-8 space-y-3">
+                            <div>
+                                <label class="block text-slate-700 mb-1">Comments</label>
+                                <textarea id="req-payable-comments" rows="3" placeholder="NKB MANUFACTURING CORPORATION CHECK DETAILS..." class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 font-mono text-slate-800 focus:bg-white focus:ring-1 focus:ring-blue-500">${cp?.comments || ''}</textarea>
                             </div>
-                            <div id="req-payable-preview-container" class="hidden flex items-center justify-between gap-3 p-2 bg-white rounded-lg border border-slate-200 text-left">
-                                <div class="flex items-center gap-2 min-w-0">
-                                    <img id="req-payable-preview-img" src="" alt="Voucher Preview" class="w-12 h-10 object-cover rounded border border-slate-200 hidden">
-                                    <div class="min-w-0">
-                                        <div id="req-payable-preview-name" class="text-xs font-bold text-slate-800 truncate">voucher.pdf</div>
-                                        <div class="text-[10px] text-emerald-600 font-bold">Ready to dispatch with request</div>
+
+                            <div>
+                                <label class="block text-slate-700 mb-1">Files (Attachment / Voucher / Invoice)</label>
+                                <div class="border-2 border-dashed border-slate-200 hover:border-slate-300 rounded-xl p-3 bg-slate-50 transition relative text-center">
+                                    <input type="file" id="req-payable-file" accept="image/*,.pdf" onchange="handlePayableAttachmentSelect(this)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                                    <div id="req-payable-droptext" class="space-y-0.5 pointer-events-none">
+                                        <span class="text-xl">📁</span>
+                                        <div class="text-xs text-slate-600 font-bold">Choose File or drag & drop</div>
+                                        <div class="text-[10px] text-slate-400">PNG, JPG, WEBP, or PDF up to 12MB</div>
+                                    </div>
+                                    <div id="req-payable-preview-container" class="${cp?.attachment_url ? '' : 'hidden'} flex items-center justify-between gap-3 p-2 bg-white rounded-lg border border-slate-200 text-left">
+                                        <div class="flex items-center gap-2 min-w-0">
+                                            <span class="text-lg">📄</span>
+                                            <div class="min-w-0">
+                                                <div id="req-payable-preview-name" class="text-xs font-bold text-slate-800 truncate">${cp?.attachment_url ? 'Attached Document' : 'document'}</div>
+                                                <div class="text-[10px] text-emerald-600 font-bold">Ready to submit</div>
+                                            </div>
+                                        </div>
+                                        <button type="button" onclick="clearPayableAttachment()" class="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded text-[10px] font-bold border border-rose-200 cursor-pointer">Remove</button>
                                     </div>
                                 </div>
-                                <button type="button" onclick="clearPayableAttachment()" class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded text-[10px] font-bold border border-rose-200 cursor-pointer">Remove</button>
+                            </div>
+                        </div>
+
+                        <!-- Right Side: Clean Summary Card (4 cols) (NO VAT) -->
+                        <div class="lg:col-span-4 self-start bg-slate-50 rounded-xl border border-slate-200 p-4 space-y-3">
+                            <div class="flex justify-between items-center text-xs">
+                                <span class="text-slate-600 font-semibold">Subtotal:</span>
+                                <span id="req-payable-summary-subtotal" class="font-mono font-bold text-slate-900 text-sm">₱0.00</span>
+                            </div>
+                            <div class="border-t border-slate-200 pt-3 flex justify-between items-center text-xs">
+                                <span class="text-slate-800 font-extrabold text-sm">Total:</span>
+                                <span id="req-payable-summary-total" class="font-mono font-black text-slate-900 text-base">₱0.00</span>
+                            </div>
+                            <div class="border-t border-slate-200 pt-2 flex justify-between items-center text-xs text-indigo-700 font-bold">
+                                <span>Amount Due:</span>
+                                <span id="req-payable-summary-due" class="font-mono font-black text-indigo-700 text-base">₱0.00</span>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Row 7: Internal Notes -->
-                    <div>
-                        <label class="block text-slate-700 mb-1">Internal Accountant Notes</label>
-                        <input type="text" id="req-payable-notes" placeholder="Optional notes for internal accounting record" class="w-full px-3 py-2 border rounded-xl bg-slate-50 text-slate-800 font-normal focus:bg-white">
-                    </div>
-
-                    <!-- Actions -->
-                    <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
-                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition cursor-pointer">Cancel</button>
-                        <button type="submit" class="px-5 py-2.5 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white rounded-xl font-black shadow-md shadow-amber-600/30 transition flex items-center gap-2 cursor-pointer">
-                            <span>📤</span>
-                            <span>Submit Request to COO</span>
-                        </button>
+                    <!-- Bottom Action Buttons matching reference image -->
+                    <div class="flex items-center gap-2 pt-3 border-t border-slate-100">
+                        <button type="submit" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow transition cursor-pointer">Save</button>
+                        <button type="button" onclick="closeModal()" class="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold shadow transition cursor-pointer">Cancel</button>
+                        <button type="button" onclick="closeModal()" class="px-5 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg font-bold shadow transition cursor-pointer">Back</button>
                     </div>
                 </form>
             </div>
         </div>
     `;
+
+    // Populate line items
+    let initialItems = [];
+    if (cp?.line_items) {
+        try {
+            initialItems = typeof cp.line_items === 'string' ? JSON.parse(cp.line_items) : cp.line_items;
+        } catch (_) {}
+    }
+    if (!initialItems || initialItems.length === 0) {
+        if (cp) {
+            initialItems = [{
+                description: cp.purpose || cp.payee_name || 'RAW MATERIALS',
+                category: cp.category || 'Raw Materials',
+                quantity: 1,
+                cost: parseFloat(cp.amount) || 0,
+                subtotal: parseFloat(cp.amount) || 0
+            }];
+        } else {
+            initialItems = [{
+                description: '',
+                category: 'Raw Materials',
+                quantity: 1,
+                cost: 0,
+                subtotal: 0
+            }];
+        }
+    }
+
+    initialItems.forEach(item => addPayableItemRow(item));
+    recalcPayableTotals();
 }
 
 async function submitRequestPayable(e) {
     e.preventDefault();
 
+    const companyName = document.getElementById('req-payable-company')?.value;
+    const invoiceNumber = document.getElementById('req-payable-invoice-no')?.value?.trim() || null;
+    const invoiceDate = document.getElementById('req-payable-invoice-date')?.value || null;
+    const payableCategory = document.getElementById('req-payable-category-type')?.value?.trim() || 'Trade payable';
+    const controlNumber = document.getElementById('req-payable-control-no')?.value?.trim() || null;
     const payee = document.getElementById('req-payable-payee')?.value?.trim();
-    const amount = parseFloat(document.getElementById('req-payable-amount')?.value);
-    const chequeDate = document.getElementById('req-payable-date')?.value;
-    const category = document.getElementById('req-payable-category')?.value;
+    const terms = document.getElementById('req-payable-terms')?.value || 'Net 30';
+    const dueDate = document.getElementById('req-payable-due-date')?.value || null;
+    const description = document.getElementById('req-payable-description')?.value?.trim() || 'Payable Requisition';
     const bankName = document.getElementById('req-payable-bank')?.value;
     const bankAccount = document.getElementById('req-payable-bank-acct')?.value?.trim() || null;
     const chequeNumber = document.getElementById('req-payable-check-no')?.value?.trim() || null;
-    const invoiceRef = document.getElementById('req-payable-ref')?.value?.trim() || null;
-    const purpose = document.getElementById('req-payable-purpose')?.value?.trim();
-    const notes = document.getElementById('req-payable-notes')?.value?.trim() || null;
+    const comments = document.getElementById('req-payable-comments')?.value?.trim() || null;
 
-    if (!payee || !amount || isNaN(amount) || amount <= 0 || !chequeDate || !bankName || !purpose) {
-        NKB.showToast('Please fill in all required fields (Payee, Amount, Date, Bank, Purpose).', 'warning');
+    if (!payee || !bankName) {
+        NKB.showToast('Please fill in required fields (Vendor / Payee and Bank).', 'warning');
+        return;
+    }
+
+    // Collect line items
+    const rows = document.querySelectorAll('#payable-items-table-body tr');
+    const lineItems = [];
+    let calculatedTotal = 0;
+    rows.forEach(r => {
+        const desc = r.querySelector('.payable-item-desc')?.value?.trim() || '';
+        const cat = r.querySelector('.payable-item-cat')?.value || 'Raw Materials';
+        const qty = parseFloat(r.querySelector('.payable-item-qty')?.value) || 0;
+        const cost = parseFloat(r.querySelector('.payable-item-cost')?.value) || 0;
+        const sub = qty * cost;
+        calculatedTotal += sub;
+        if (desc || cost > 0) {
+            lineItems.push({
+                description: desc,
+                category: cat,
+                quantity: qty,
+                cost: cost,
+                subtotal: sub
+            });
+        }
+    });
+
+    if (calculatedTotal <= 0) {
+        NKB.showToast('Please enter at least one line item with a positive cost.', 'warning');
         return;
     }
 
     try {
-        const linkedAcc = (cachedBankAccounts && cachedBankAccounts.length > 0)
-            ? cachedBankAccounts.find(b => b.bank_name === bankName || b.name === bankName)
-            : null;
-
         const payload = {
+            company_name: companyName,
+            invoice_number: invoiceNumber,
+            invoice_date: invoiceDate,
+            payable_category: payableCategory,
+            control_number: controlNumber,
             payee_name: payee,
-            amount,
-            cheque_date: chequeDate,
-            category,
+            vendor: payee,
+            terms: terms,
+            due_date: dueDate,
+            cheque_date: dueDate || invoiceDate || NKB.getManilaDate(),
+            description: description,
+            purpose: description,
             bank_name: bankName,
-            bank_account_id: linkedAcc ? linkedAcc.id : null,
             bank_account_number: bankAccount,
             cheque_number: chequeNumber,
-            invoice_reference: invoiceRef,
-            purpose,
-            internal_notes: notes,
+            comments: comments,
+            line_items: lineItems,
+            amount: calculatedTotal,
+            category: lineItems[0]?.category || 'Raw Materials',
             attachment_data: currentPayableAttachmentBase64
         };
 
-        const res = await NKB.api('/api/cheque-payables', {
-            method: 'POST',
-            body: JSON.stringify(payload)
-        });
+        let res;
+        if (currentEditingPayableId) {
+            res = await NKB.api(`/api/cheque-payables/${currentEditingPayableId}`, {
+                method: 'PUT',
+                body: JSON.stringify(payload)
+            });
+        } else {
+            res = await NKB.api('/api/cheque-payables', {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+        }
 
         if (res.success) {
-            NKB.showToast(`Cheque request ${res.data?.request_number || ''} submitted successfully! COO notified.${res.data?.is_overdrawn_warning ? ' (Overdraft warning noted)' : ''}`, 'success');
+            const reqNum = res.data?.request_number || '';
+            NKB.showToast(`Cheque payable ${reqNum} ${currentEditingPayableId ? 'updated' : 'submitted'} successfully!`, 'success');
             closeModal();
             loadPayables();
             loadBankBalances();
         } else {
-            NKB.showToast(res.error || 'Failed to submit cheque request.', 'error');
+            NKB.showToast(res.error || 'Failed to save cheque payable.', 'error');
         }
     } catch (err) {
         console.error('submitRequestPayable error:', err);
-        NKB.showToast('Server error submitting cheque request.', 'error');
+        NKB.showToast('Server error saving cheque payable.', 'error');
     }
 }
 
@@ -3348,6 +3767,10 @@ function openViewPayableDetailsModal(payableId) {
                 <!-- Footer Actions -->
                 <div class="flex items-center justify-between pt-3 border-t border-slate-100">
                     <div class="flex items-center gap-2">
+                        <button type="button" onclick="closeModal(); openRequestPayableModal('${cp.id}')" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition inline-flex items-center gap-1.5 cursor-pointer" title="Edit Payable Request">
+                            <span>✏️</span>
+                            <span>Edit Request</span>
+                        </button>
                         <button type="button" onclick="printSingleChequeVoucher('${cp.id}')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition inline-flex items-center gap-1.5 cursor-pointer">
                             <span>🖨️</span>
                             <span>Print Cheque Voucher</span>
@@ -3708,10 +4131,18 @@ function printPayablesReport() {
 }
 
 // Print Single Cheque Disbursement Voucher (CDV)
-function printSingleChequeVoucher(payableId) {
-    const cp = cachedPayables.find(item => item.id === payableId || item.request_number === payableId);
+async function printSingleChequeVoucher(payableId) {
+    let cp = cachedPayables.find(item => item.id === payableId || item.request_number === payableId);
     if (!cp) {
-        NKB.showToast('Cheque payable record not found.', 'error');
+        try {
+            const res = await NKB.api(`/api/cheque-payables/${encodeURIComponent(payableId)}`);
+            if (res.success && res.data) {
+                cp = res.data;
+            }
+        } catch (_) {}
+    }
+    if (!cp) {
+        window.open('/print-payable.html?id=' + encodeURIComponent(payableId) + '&autoprint=1', '_blank');
         return;
     }
 
@@ -3722,6 +4153,24 @@ function printSingleChequeVoucher(payableId) {
         printIframe.style.display = 'none';
         document.body.appendChild(printIframe);
     }
+
+    let lineItems = [];
+    if (cp.line_items) {
+        try {
+            lineItems = typeof cp.line_items === 'string' ? JSON.parse(cp.line_items) : cp.line_items;
+        } catch (_) {}
+    }
+    if (!lineItems || lineItems.length === 0) {
+        lineItems = [{
+            description: cp.purpose || cp.payee_name || 'Payable Disbursement',
+            category: cp.category || 'General',
+            quantity: 1,
+            cost: parseFloat(cp.amount) || 0,
+            subtotal: parseFloat(cp.amount) || 0
+        }];
+    }
+
+    const companyTitle = (cp.company_name || 'NKB MANUFACTURING CORPORATION').toUpperCase();
 
     const doc = printIframe.contentWindow.document;
     doc.open();
@@ -3743,14 +4192,13 @@ function printSingleChequeVoucher(payableId) {
                 .meta-val { font-weight: bold; color: #0f172a; }
                 .particulars-box { border: 1px solid #cbd5e1; border-radius: 6px; padding: 12px; margin-bottom: 16px; background: #f8fafc; }
                 .particulars-title { font-size: 10px; font-weight: bold; text-transform: uppercase; color: #64748b; margin-bottom: 4px; }
-                .accounting-table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+                .accounting-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
                 .accounting-table th { background: #0f172a; color: white; padding: 6px 10px; font-size: 10px; text-align: left; }
                 .accounting-table td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; font-size: 11px; }
-                .signatures { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-top: 40px; }
+                .signatures { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-top: 30px; }
                 .sig-box { text-align: center; border-top: 1px solid #0f172a; padding-top: 6px; }
                 .sig-role { font-size: 10px; font-weight: bold; color: #64748b; text-transform: uppercase; }
                 .sig-name { font-weight: 800; color: #0f172a; margin-top: 2px; }
-                .api-badge { display: inline-block; padding: 3px 8px; background: #f1f5f9; border-radius: 4px; font-size: 9px; font-family: monospace; color: #4338ca; }
                 @media print {
                     .no-print { display: none !important; }
                 }
@@ -3760,7 +4208,7 @@ function printSingleChequeVoucher(payableId) {
             <div class="voucher-box">
                 <div class="top-header">
                     <div>
-                        <h1>NKB MANUFACTURING CORPORATION</h1>
+                        <h1>${companyTitle}</h1>
                         <div class="voucher-title">Cheque Disbursement Voucher (CDV)</div>
                         <div style="font-size: 10px; color: #64748b; margin-top: 2px;">Quezon City, Metro Manila • Operations & Finance</div>
                     </div>
@@ -3772,42 +4220,53 @@ function printSingleChequeVoucher(payableId) {
                 </div>
 
                 <div class="meta-grid">
-                    <div class="meta-item"><span class="meta-label">Payee:</span><span class="meta-val" style="font-size: 13px;">${cp.payee_name}</span></div>
-                    <div class="meta-item"><span class="meta-label">Amount:</span><span class="meta-val" style="font-size: 13px; color: #047857;">${NKB.formatCurrency(cp.amount)}</span></div>
+                    <div class="meta-item"><span class="meta-label">Payee / Vendor:</span><span class="meta-val" style="font-size: 13px;">${cp.payee_name}</span></div>
+                    <div class="meta-item"><span class="meta-label">Total Amount:</span><span class="meta-val" style="font-size: 13px; color: #047857;">${NKB.formatCurrency(cp.amount)}</span></div>
                     <div class="meta-item"><span class="meta-label">Drawee Bank:</span><span class="meta-val">${cp.bank_name}</span></div>
                     <div class="meta-item"><span class="meta-label">Cheque Number:</span><span class="meta-val font-mono">${cp.cheque_number || 'Pending Check Release'}</span></div>
                     <div class="meta-item"><span class="meta-label">Account No:</span><span class="meta-val font-mono">${cp.bank_account_number || '—'}</span></div>
-                    <div class="meta-item"><span class="meta-label">Invoice Ref:</span><span class="meta-val font-mono">${cp.invoice_reference || '—'}</span></div>
+                    <div class="meta-item"><span class="meta-label">Invoice Ref:</span><span class="meta-val font-mono">${cp.invoice_number || cp.invoice_reference || '—'}</span></div>
+                    ${cp.control_number ? `<div class="meta-item"><span class="meta-label">Control No:</span><span class="meta-val font-mono">${cp.control_number}</span></div>` : ''}
+                    ${cp.terms ? `<div class="meta-item"><span class="meta-label">Terms:</span><span class="meta-val">${cp.terms}</span></div>` : ''}
+                    ${cp.due_date ? `<div class="meta-item"><span class="meta-label">Due Date:</span><span class="meta-val">${NKB.formatDate(cp.due_date)}</span></div>` : ''}
+                    ${cp.payable_category ? `<div class="meta-item"><span class="meta-label">Payable Type:</span><span class="meta-val">${cp.payable_category}</span></div>` : ''}
                 </div>
 
-                <div class="particulars-box">
-                    <div class="particulars-title">Particulars & Utilization Justification:</div>
-                    <div style="font-size: 11px; line-height: 1.5; color: #1e293b;">${cp.purpose || 'No description provided.'}</div>
-                </div>
+                ${(cp.purpose || cp.comments) ? `
+                    <div class="particulars-box">
+                        <div class="particulars-title">Particulars & Remarks:</div>
+                        <div style="font-size: 11px; line-height: 1.5; color: #1e293b;">${cp.purpose ? `<div style="font-weight: 600; margin-bottom: 4px;">${cp.purpose}</div>` : ''}${cp.comments ? `<div style="color: #475569; font-style: italic;">${cp.comments}</div>` : ''}</div>
+                    </div>
+                ` : ''}
 
+                <!-- Itemized Breakdown (NO VAT) -->
                 <table class="accounting-table">
                     <thead>
                         <tr>
-                            <th>Account Classification / Description</th>
-                            <th>Category</th>
-                            <th style="text-align: right;">Debit (PHP)</th>
-                            <th style="text-align: right;">Credit (PHP)</th>
+                            <th>Description</th>
+                            <th>Expense Category</th>
+                            <th style="text-align: center;">Quantity</th>
+                            <th style="text-align: right;">Unit Cost (PHP)</th>
+                            <th style="text-align: right;">Subtotal (PHP)</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td class="font-bold">${cp.category} Expense</td>
-                            <td>${cp.category}</td>
-                            <td style="text-align: right; font-weight: bold;">${(parseFloat(cp.amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                            <td style="text-align: right;">—</td>
-                        </tr>
-                        <tr>
-                            <td class="font-bold">Cash in Bank (${cp.bank_name})</td>
-                            <td>Current Asset</td>
-                            <td style="text-align: right;">—</td>
-                            <td style="text-align: right; font-weight: bold;">${(parseFloat(cp.amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        </tr>
+                        ${lineItems.map(it => `
+                            <tr>
+                                <td style="font-weight: bold;">${it.description || 'General Item'}</td>
+                                <td>${it.category || cp.category || 'Raw Materials'}</td>
+                                <td style="text-align: center;">${parseFloat(it.quantity || 1).toFixed(2)}</td>
+                                <td style="text-align: right;">${(parseFloat(it.cost) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                <td style="text-align: right; font-weight: bold;">${(parseFloat(it.subtotal || it.quantity * it.cost) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                            </tr>
+                        `).join('')}
                     </tbody>
+                    <tfoot>
+                        <tr style="background: #f8fafc; font-weight: bold;">
+                            <td colspan="4" style="text-align: right; padding: 10px; font-size: 11px;">Total Amount Due:</td>
+                            <td style="text-align: right; font-size: 12px; font-weight: 900; color: #047857; padding: 10px;">${NKB.formatCurrency(cp.amount)}</td>
+                        </tr>
+                    </tfoot>
                 </table>
 
                 <div style="font-size: 10px; color: #64748b; margin-bottom: 20px;">
@@ -3822,12 +4281,12 @@ function printSingleChequeVoucher(payableId) {
                         <div class="sig-role">Prepared by (Accounting)</div>
                     </div>
                     <div class="sig-box">
-                        <div class="sig-name">Finance Manager</div>
+                        <div class="sig-name">Finance Officer</div>
                         <div class="sig-role">Checked & Verified by</div>
                     </div>
                     <div class="sig-box">
-                        <div class="sig-name">${cp.coo_confirmed_by || 'Chief Operating Officer'}</div>
-                        <div class="sig-role">Approved by (COO)</div>
+                        <div class="sig-name">${cp.coo_confirmed_by || 'Executive COO'}</div>
+                        <div class="sig-role">Approved by (COO / CEO)</div>
                     </div>
                 </div>
             </div>

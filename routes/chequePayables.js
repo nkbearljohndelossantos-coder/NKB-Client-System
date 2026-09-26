@@ -16,25 +16,46 @@ const { getManilaDate } = require('../helpers/timezone');
 const LIVE_API_KEY = process.env.INVENTORY_API_KEY || 'nkb_inv_live_6ae6965c1ca61aef54939d6b1ecfac1b';
 
 const DEFAULT_BANKS = [
-    { id: 'bdo', name: 'BDO Unibank', account_name: 'NKB Manufacturing & Trading Corp.', account_number: '1029-3847-4821', branch: 'Quezon City Main' },
-    { id: 'bpi', name: 'Bank of the Philippine Islands (BPI)', account_name: 'NKB Manufacturing Corp.', account_number: '0982-3712-9104', branch: 'Ortigas Center' },
-    { id: 'metrobank', name: 'Metropolitan Bank & Trust Co. (Metrobank)', account_name: 'NKB Manufacturing Corp.', account_number: '4562-8901-3372', branch: 'San Juan' },
-    { id: 'security_bank', name: 'Security Bank', account_name: 'NKB Manufacturing & Trading Corp.', account_number: '3128-4902-1855', branch: 'Greenhills' },
-    { id: 'unionbank', name: 'UnionBank of the Philippines', account_name: 'NKB Manufacturing Corp.', account_number: '1094-8273-6290', branch: 'Pasig City' }
+    { id: 'ba-bdo-coop', name: 'BDO: Norvin Bella (COOP) - 0080-5801-0563', bank_name: 'BDO', account_name: 'Norvin Bella (COOP)', account_number: '0080-5801-0563', company: 'NKB Manufacturing Coorporation - COOP' },
+    { id: 'ba-bdo-nkb-mfg', name: 'BDO: NKB Manufacturing Corporation - 0080-5801-0547', bank_name: 'BDO', account_name: 'NKB Manufacturing Corporation', account_number: '0080-5801-0547', company: 'NKB Manufacturing Corporation' },
+    { id: 'ba-bdo-nkb-cosm', name: 'BDO: NKB Cosmetics Manufacturing - 0105-4800-4829', bank_name: 'BDO', account_name: 'NKB Cosmetics Manufacturing', account_number: '0105-4800-4829', company: 'NKB Cosmetics Manufacturing' },
+    { id: 'ba-bdo-nkb-cpt', name: 'BDO: NKB Cosmetic Products Trading - 0105-4800-3245', bank_name: 'BDO', account_name: 'NKB Cosmetic Products Trading', account_number: '0105-4800-3245', company: 'NKB Cosmetic Products Trading' },
+    { id: 'ba-bdo-new-yra', name: 'BDO: New Yra Enterprises - 0036-8801-3196', bank_name: 'BDO', account_name: 'New Yra Enterprises', account_number: '0036-8801-3196', company: 'New Yra Enterprises' },
+    { id: 'ba-bdo-vyu', name: 'BDO: Vyuceutical - 0080-5801-0717', bank_name: 'BDO', account_name: 'Vyuceutical OPC', account_number: '0080-5801-0717', company: 'Vyuceutical OPC' },
+    { id: 'ba-sec-nkb-mfg', name: 'Security Bank: NKB Manufacturing Corporation', bank_name: 'Security Bank', account_name: 'NKB Manufacturing Corporation', account_number: '3128-4902-1855', company: 'NKB Manufacturing Corporation' }
+];
+
+const DEFAULT_COMPANIES = [
+    'NKB Manufacturing Corporation',
+    'NKB Cosmetics Manufacturing',
+    'Vyuceutical OPC',
+    'NKB Manufacturing Coorporation - COOP',
+    'New Yra Enterprises',
+    'NKB Cosmetic Products Trading'
 ];
 
 const DEFAULT_CATEGORIES = [
+    'Commission',
+    'Returned of Borrow Funds',
+    'Contribution - SSS',
+    'Contribution - PhilHealth',
+    'Contribution - Pag-ibig',
+    'BIR Tax Payment',
+    'City Hall Tax Payment',
+    'City Hall Expenses',
+    'Investment Payout',
+    'Marketing Expenses',
+    'Office Expenses',
+    'Petty Cash',
     'Raw Materials',
-    'Packaging Supplies',
-    'Factory Utilities & Power',
-    'Facility Rent & Lease',
-    'Payroll & Labor Advances',
-    'Machine Maintenance & Repairs',
-    'Logistics & Freight Delivery',
-    'Government Taxes & Licensing',
-    'Laboratory & Quality Testing',
-    'Office Supplies & Administrative',
-    'Miscellaneous & Contingency'
+    'Vehicle Payment',
+    'Salaries',
+    'TDF',
+    'TDF(COOP)',
+    'Personal Expenses',
+    'Repair Expenses',
+    'Construction',
+    'Insurance (Personal)'
 ];
 
 /**
@@ -235,14 +256,62 @@ router.get('/', authenticateToken, (req, res) => {
 });
 
 /**
+ * GET /api/cheque-payables/companies
+ * List all companies (built-in and user-added)
+ */
+router.get('/companies', authenticateToken, (req, res) => {
+    try {
+        let rows = [];
+        try {
+            rows = db.prepare('SELECT name FROM payable_companies ORDER BY name ASC').all();
+        } catch (_) {}
+        const dbNames = rows.map(r => r.name);
+        const unique = Array.from(new Set([...DEFAULT_COMPANIES, ...dbNames]));
+        return res.json({ success: true, data: unique });
+    } catch (err) {
+        return res.json({ success: true, data: DEFAULT_COMPANIES });
+    }
+});
+
+/**
+ * POST /api/cheque-payables/companies
+ * Add a new custom company dynamically
+ */
+router.post('/companies', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'CEO'), (req, res) => {
+    try {
+        const { name } = req.body;
+        if (!name || !String(name).trim()) {
+            return res.status(400).json({ success: false, error: 'Company name is required.' });
+        }
+        const trimmed = String(name).trim();
+        const id = 'comp-' + uuidv4().slice(0, 8);
+        try {
+            db.prepare('INSERT OR IGNORE INTO payable_companies (id, name) VALUES (?, ?)').run(id, trimmed);
+        } catch (_) {}
+        return res.status(201).json({ success: true, data: { id, name: trimmed } });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
  * GET /api/cheque-payables/meta
- * Return standard banks and expense categories
+ * Return standard banks, expense categories, and companies
  */
 router.get('/meta', authenticateToken, (req, res) => {
+    let companies = DEFAULT_COMPANIES;
+    try {
+        const rows = db.prepare('SELECT name FROM payable_companies ORDER BY name ASC').all();
+        if (rows && rows.length > 0) {
+            companies = Array.from(new Set([...DEFAULT_COMPANIES, ...rows.map(r => r.name)]));
+        }
+    } catch (_) {}
+
     return res.json({
         success: true,
         banks: DEFAULT_BANKS,
         categories: DEFAULT_CATEGORIES,
+        companies: companies,
         apiKey: LIVE_API_KEY
     });
 });
@@ -337,6 +406,7 @@ router.post('/', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER_A
     try {
         const {
             payee_name,
+            vendor,
             amount,
             cheque_date,
             bank_name,
@@ -344,22 +414,57 @@ router.post('/', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER_A
             cheque_number,
             category,
             purpose,
+            description,
             invoice_reference,
+            company_name,
+            payable_category,
+            invoice_number,
+            invoice_date,
+            terms,
+            due_date,
+            control_number,
+            line_items,
+            comments,
             attachment_url,
             attachment_data,
             notes
         } = req.body;
 
-        if (!payee_name || !String(payee_name).trim()) {
-            return res.status(400).json({ success: false, error: 'Payee / Beneficiary name is required.' });
+        const finalPayee = (payee_name || vendor || '').trim();
+        if (!finalPayee) {
+            return res.status(400).json({ success: false, error: 'Payee / Beneficiary / Vendor name is required.' });
         }
 
-        const numAmount = parseFloat(amount);
+        // Process line items if provided
+        let processedLineItems = null;
+        let lineItemsTotal = 0;
+        if (line_items) {
+            const arr = Array.isArray(line_items) ? line_items : (typeof line_items === 'string' ? JSON.parse(line_items) : []);
+            if (Array.isArray(arr) && arr.length > 0) {
+                processedLineItems = arr.map(item => {
+                    const qty = parseFloat(item.quantity) || 1;
+                    const cost = parseFloat(item.cost) || 0;
+                    const sub = parseFloat(item.subtotal) || (qty * cost);
+                    lineItemsTotal += sub;
+                    return {
+                        description: item.description || '',
+                        category: item.category || 'Raw Materials',
+                        quantity: qty,
+                        cost: cost,
+                        subtotal: sub
+                    };
+                });
+            }
+        }
+
+        const rawAmount = (lineItemsTotal > 0) ? lineItemsTotal : parseFloat(amount);
+        const numAmount = parseFloat(rawAmount);
         if (isNaN(numAmount) || numAmount <= 0) {
             return res.status(400).json({ success: false, error: 'Cheque amount must be greater than 0.' });
         }
 
-        if (!cheque_date) {
+        const finalDate = cheque_date || due_date || invoice_date || getManilaDate();
+        if (!finalDate) {
             return res.status(400).json({ success: false, error: 'Cheque date / Date needed is required.' });
         }
 
@@ -367,19 +472,14 @@ router.post('/', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER_A
             return res.status(400).json({ success: false, error: 'Bank used for cheque is required.' });
         }
 
-        if (!category || !String(category).trim()) {
-            return res.status(400).json({ success: false, error: 'Expense category is required.' });
-        }
-
-        if (!purpose || !String(purpose).trim()) {
-            return res.status(400).json({ success: false, error: 'Purpose (where the money will be used) is required.' });
-        }
+        const finalCategory = (category || (processedLineItems && processedLineItems[0]?.category) || 'Raw Materials').trim();
+        const finalPurpose = (purpose || description || 'Payable Requisition').trim();
 
         const id = uuidv4();
         const requestNumber = getNextDocumentNumber('CHQ');
         const finalChequeNumber = (cheque_number && String(cheque_number).trim()) ? String(cheque_number).trim() : null;
         const finalAccountNum = (bank_account_number && String(bank_account_number).trim()) ? String(bank_account_number).trim() : null;
-        const finalInvoiceRef = (invoice_reference && String(invoice_reference).trim()) ? String(invoice_reference).trim() : null;
+        const finalInvoiceRef = (invoice_reference || invoice_number) ? String(invoice_reference || invoice_number).trim() : null;
 
         // Process file attachment if supplied
         let savedAttachment = null;
@@ -389,6 +489,7 @@ router.post('/', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER_A
 
         const fullNotes = [
             notes ? String(notes).trim() : '',
+            comments ? `Comments: ${String(comments).trim()}` : '',
             `Submitted for COO review via API Key: ${LIVE_API_KEY.slice(0, 15)}...`
         ].filter(Boolean).join(' | ');
 
@@ -411,30 +512,45 @@ router.post('/', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER_A
             }
         } catch (_) {}
 
+        const serializedItems = processedLineItems ? JSON.stringify(processedLineItems) : null;
+
         db.prepare(`
             INSERT INTO cheque_payables (
                 id, request_number, payee_name, amount, cheque_date, bank_name,
                 bank_account_number, bank_account_id, cheque_number, category, purpose,
+                company_name, payable_category, invoice_number, invoice_date, terms, due_date,
+                control_number, line_items, comments,
                 invoice_reference, attachment_url, status, requested_by,
                 requested_by_name, coo_notes, api_key_used, created_at, updated_at
             ) VALUES (
                 ?, ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?,
+                ?, ?, ?,
                 ?, ?, 'PENDING_COO_APPROVAL', ?,
                 ?, ?, ?, datetime('now', 'localtime'), datetime('now', 'localtime')
             )
         `).run(
             id,
             requestNumber,
-            String(payee_name).trim(),
+            finalPayee,
             numAmount,
-            cheque_date,
+            finalDate,
             String(bank_name).trim(),
             finalAccountNum,
             linkedBankId,
             finalChequeNumber,
-            String(category).trim(),
-            String(purpose).trim(),
+            finalCategory,
+            finalPurpose,
+            company_name ? String(company_name).trim() : null,
+            payable_category ? String(payable_category).trim() : 'Trade payable',
+            invoice_number ? String(invoice_number).trim() : null,
+            invoice_date ? String(invoice_date).trim() : null,
+            terms ? String(terms).trim() : 'Net 30',
+            due_date ? String(due_date).trim() : null,
+            control_number ? String(control_number).trim() : null,
+            serializedItems,
+            comments ? String(comments).trim() : null,
             finalInvoiceRef,
             savedAttachment,
             req.user.id,
@@ -454,11 +570,12 @@ router.post('/', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER_A
             entityId: requestNumber,
             details: {
                 requestNumber,
-                payeeName: payee_name,
+                payeeName: finalPayee,
                 amount: numAmount,
                 bankName: bank_name,
-                category,
-                purpose,
+                category: finalCategory,
+                purpose: finalPurpose,
+                companyName: company_name,
                 apiKeyUsed: LIVE_API_KEY,
                 isOverdrawnWarning,
                 availableBankBalance
@@ -470,7 +587,7 @@ router.post('/', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER_A
 
         return res.status(201).json({
             success: true,
-            message: `Cheque payable request ${requestNumber} for ${payee_name} (₱${numAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}) has been submitted and sent to the COO API for confirmation.${isOverdrawnWarning ? ` ⚠️ Note: Cheque amount exceeds available liquid balance in ${bank_name} (₱${Number(availableBankBalance).toFixed(2)}).` : ''}`,
+            message: `Cheque payable request ${requestNumber} for ${finalPayee} (₱${numAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}) has been submitted and sent to the COO API for confirmation.${isOverdrawnWarning ? ` ⚠️ Note: Cheque amount exceeds available liquid balance in ${bank_name} (₱${Number(availableBankBalance).toFixed(2)}).` : ''}`,
             data: {
                 ...createdRecord,
                 available_balance: availableBankBalance,
@@ -500,6 +617,146 @@ router.get('/:id', authenticateToken, (req, res) => {
         }
 
         return res.json({ success: true, data: item });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * PUT /api/cheque-payables/:id
+ * Update / Edit an existing cheque payable request
+ */
+router.put('/:id', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'CEO'), async (req, res) => {
+    try {
+        const item = db.prepare('SELECT * FROM cheque_payables WHERE id = ? OR request_number = ?').get(req.params.id, req.params.id);
+        if (!item) {
+            return res.status(404).json({ success: false, error: 'Cheque payable record not found.' });
+        }
+
+        const {
+            payee_name,
+            vendor,
+            amount,
+            cheque_date,
+            bank_name,
+            bank_account_number,
+            cheque_number,
+            category,
+            purpose,
+            description,
+            company_name,
+            payable_category,
+            invoice_number,
+            invoice_date,
+            terms,
+            due_date,
+            control_number,
+            line_items,
+            comments,
+            notes,
+            attachment_data,
+            attachment_url
+        } = req.body;
+
+        const finalPayee = (payee_name || vendor || item.payee_name || '').trim();
+
+        // Process line items if provided
+        let processedLineItems = null;
+        let lineItemsTotal = 0;
+        if (line_items) {
+            const arr = Array.isArray(line_items) ? line_items : (typeof line_items === 'string' ? JSON.parse(line_items) : []);
+            if (Array.isArray(arr) && arr.length > 0) {
+                processedLineItems = arr.map(it => {
+                    const qty = parseFloat(it.quantity) || 1;
+                    const cost = parseFloat(it.cost) || 0;
+                    const sub = parseFloat(it.subtotal) || (qty * cost);
+                    lineItemsTotal += sub;
+                    return {
+                        description: it.description || '',
+                        category: it.category || 'Raw Materials',
+                        quantity: qty,
+                        cost: cost,
+                        subtotal: sub
+                    };
+                });
+            }
+        }
+
+        const rawAmount = (lineItemsTotal > 0) ? lineItemsTotal : (amount != null ? parseFloat(amount) : item.amount);
+        const numAmount = parseFloat(rawAmount);
+
+        let savedAttachment = item.attachment_url;
+        if (attachment_data) {
+            savedAttachment = saveAttachment(attachment_data, 'payables');
+        } else if (attachment_url) {
+            savedAttachment = attachment_url;
+        }
+
+        const finalSerializedItems = processedLineItems ? JSON.stringify(processedLineItems) : (line_items ? (typeof line_items === 'string' ? line_items : JSON.stringify(line_items)) : item.line_items);
+        const finalPurpose = (purpose || description || item.purpose || '').trim();
+        const finalCategory = (category || (processedLineItems && processedLineItems[0]?.category) || item.category || 'Raw Materials').trim();
+
+        db.prepare(`
+            UPDATE cheque_payables
+            SET payee_name = COALESCE(?, payee_name),
+                amount = COALESCE(?, amount),
+                cheque_date = COALESCE(?, cheque_date),
+                bank_name = COALESCE(?, bank_name),
+                bank_account_number = COALESCE(?, bank_account_number),
+                cheque_number = COALESCE(?, cheque_number),
+                category = COALESCE(?, category),
+                purpose = COALESCE(?, purpose),
+                company_name = COALESCE(?, company_name),
+                payable_category = COALESCE(?, payable_category),
+                invoice_number = COALESCE(?, invoice_number),
+                invoice_date = COALESCE(?, invoice_date),
+                terms = COALESCE(?, terms),
+                due_date = COALESCE(?, due_date),
+                control_number = COALESCE(?, control_number),
+                line_items = COALESCE(?, line_items),
+                comments = COALESCE(?, comments),
+                attachment_url = COALESCE(?, attachment_url),
+                updated_at = datetime('now', 'localtime')
+            WHERE id = ?
+        `).run(
+            finalPayee || null,
+            !isNaN(numAmount) ? numAmount : null,
+            cheque_date || due_date || null,
+            bank_name ? String(bank_name).trim() : null,
+            bank_account_number ? String(bank_account_number).trim() : null,
+            cheque_number ? String(cheque_number).trim() : null,
+            finalCategory || null,
+            finalPurpose || null,
+            company_name ? String(company_name).trim() : null,
+            payable_category ? String(payable_category).trim() : null,
+            invoice_number ? String(invoice_number).trim() : null,
+            invoice_date ? String(invoice_date).trim() : null,
+            terms ? String(terms).trim() : null,
+            due_date ? String(due_date).trim() : null,
+            control_number ? String(control_number).trim() : null,
+            finalSerializedItems,
+            comments ? String(comments).trim() : null,
+            savedAttachment,
+            item.id
+        );
+
+        const updated = db.prepare('SELECT * FROM cheque_payables WHERE id = ?').get(item.id);
+
+        logAudit({
+            userId: req.user.id,
+            userName: req.user.name,
+            userRole: req.user.role,
+            action: 'UPDATE_CHEQUE_PAYABLE',
+            entityType: 'PAYABLE',
+            entityId: item.request_number,
+            details: {
+                requestNumber: item.request_number,
+                payeeName: finalPayee,
+                amount: numAmount
+            }
+        });
+
+        return res.json({ success: true, message: 'Cheque payable record updated successfully.', data: updated });
     } catch (err) {
         return res.status(500).json({ success: false, error: err.message });
     }

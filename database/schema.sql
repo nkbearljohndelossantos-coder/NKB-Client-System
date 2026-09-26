@@ -648,6 +648,15 @@ CREATE TABLE IF NOT EXISTS cheque_payables (
     cheque_number TEXT,
     category TEXT NOT NULL,
     purpose TEXT NOT NULL,
+    company_name TEXT,
+    payable_category TEXT DEFAULT 'Trade payable',
+    invoice_number TEXT,
+    invoice_date TEXT,
+    terms TEXT DEFAULT 'Net 30',
+    due_date TEXT,
+    control_number TEXT,
+    line_items TEXT,
+    comments TEXT,
     invoice_reference TEXT,
     attachment_url TEXT,
     status TEXT NOT NULL DEFAULT 'PENDING_COO_APPROVAL' CHECK (status IN ('PENDING_COO_APPROVAL', 'CONFIRMED', 'ISSUED', 'CLEARED', 'REJECTED', 'VOIDED')),
@@ -667,6 +676,13 @@ CREATE TABLE IF NOT EXISTS cheque_payables (
 CREATE INDEX IF NOT EXISTS idx_payables_status ON cheque_payables(status);
 CREATE INDEX IF NOT EXISTS idx_payables_category ON cheque_payables(category);
 CREATE INDEX IF NOT EXISTS idx_payables_date ON cheque_payables(cheque_date);
+
+-- Payable Companies Table
+CREATE TABLE IF NOT EXISTS payable_companies (
+    id TEXT PRIMARY KEY,
+    name TEXT UNIQUE NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
 
 -- Company Bank Accounts Table
 CREATE TABLE IF NOT EXISTS bank_accounts (

@@ -570,6 +570,53 @@ CREATE TABLE IF NOT EXISTS webhooks (
     INDEX idx_webhooks_key (api_key_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 30. Cheque Payables & Requisitions
+CREATE TABLE IF NOT EXISTS cheque_payables (
+    id VARCHAR(36) PRIMARY KEY,
+    request_number VARCHAR(50) UNIQUE NOT NULL,
+    payee_name VARCHAR(255) NOT NULL,
+    amount DECIMAL(14,4) NOT NULL,
+    cheque_date VARCHAR(50) NOT NULL,
+    bank_name VARCHAR(100) NOT NULL,
+    bank_account_number VARCHAR(100) NULL,
+    bank_account_id VARCHAR(36) NULL,
+    cheque_number VARCHAR(100) NULL,
+    category VARCHAR(100) NOT NULL,
+    purpose TEXT NOT NULL,
+    company_name VARCHAR(255) NULL,
+    payable_category VARCHAR(100) DEFAULT 'Trade payable',
+    invoice_number VARCHAR(100) NULL,
+    invoice_date VARCHAR(50) NULL,
+    terms VARCHAR(50) DEFAULT 'Net 30',
+    due_date VARCHAR(50) NULL,
+    control_number VARCHAR(100) NULL,
+    line_items LONGTEXT NULL,
+    comments TEXT NULL,
+    invoice_reference VARCHAR(100) NULL,
+    attachment_url TEXT NULL,
+    status ENUM('PENDING_COO_APPROVAL', 'CONFIRMED', 'ISSUED', 'CLEARED', 'REJECTED', 'VOIDED') NOT NULL DEFAULT 'PENDING_COO_APPROVAL',
+    cleared_at VARCHAR(50) NULL,
+    requested_by VARCHAR(36) NOT NULL,
+    requested_by_name VARCHAR(255) NOT NULL,
+    coo_decision VARCHAR(50) NULL,
+    coo_confirmed_by VARCHAR(255) NULL,
+    coo_confirmed_at VARCHAR(50) NULL,
+    coo_notes TEXT NULL,
+    api_key_used VARCHAR(100) DEFAULT 'nkb_inv_live_6ae6965c1ca61aef54939d6b1ecfac1b',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_payables_status (status),
+    INDEX idx_payables_category (category),
+    INDEX idx_payables_date (cheque_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 31. Payable Companies
+CREATE TABLE IF NOT EXISTS payable_companies (
+    id VARCHAR(36) PRIMARY KEY,
+    name VARCHAR(255) UNIQUE NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- 25. Insert Initial Root Super Admin Account (Password: Admin123!)
 INSERT INTO users (id, name, email, password_hash, plain_password, role, is_active) VALUES
 ('a0000000-0000-0000-0000-000000000001', 'Executive Admin', 'admin@nkbmanufacturing.com', '$2b$10$jny3GQXy8GwL8vkYVtV4EeTH2QDo8tfg6hJO/vbpG3Xrwakfqgx2G', 'Admin123!', 'SUPER_ADMIN', 1)

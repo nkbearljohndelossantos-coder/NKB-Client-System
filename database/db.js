@@ -138,6 +138,22 @@ function runMigrations(dbInstance, isMysql) {
         try {
             dbInstance.exec(`ALTER TABLE cheque_payables ADD COLUMN bank_account_id ${textType};`);
         } catch (_) {}
+        const newPayableCols = [
+            'company_name',
+            'payable_category',
+            'invoice_number',
+            'invoice_date',
+            'terms',
+            'due_date',
+            'control_number',
+            'line_items',
+            'comments'
+        ];
+        for (const col of newPayableCols) {
+            try {
+                dbInstance.exec(`ALTER TABLE cheque_payables ADD COLUMN ${col} ${textType};`);
+            } catch (_) {}
+        }
 
         // Bank Accounts table
         if (isMysql) {
@@ -193,6 +209,75 @@ function runMigrations(dbInstance, isMysql) {
                 `);
                 for (const b of initialBanks) {
                     insertStmt.run(b.id, b.bank_name, b.account_number, b.account_name, b.account_type, b.balance);
+                }
+            }
+        } catch (_) {}
+
+        // Ensure designated cheque disbursement bank accounts exist
+        try {
+            const requestedBanks = [
+                { id: 'ba-bdo-coop', bank_name: 'BDO: Norvin Bella (COOP) - 0080-5801-0563', account_number: '0080-5801-0563', account_name: 'Norvin Bella (COOP)', account_type: 'Checking', balance: 650000.00 },
+                { id: 'ba-bdo-nkb-mfg', bank_name: 'BDO: NKB Manufacturing Corporation - 0080-5801-0547', account_number: '0080-5801-0547', account_name: 'NKB Manufacturing Corporation', account_type: 'Checking', balance: 950000.00 },
+                { id: 'ba-bdo-nkb-cosm', bank_name: 'BDO: NKB Cosmetics Manufacturing - 0105-4800-4829', account_number: '0105-4800-4829', account_name: 'NKB Cosmetics Manufacturing', account_type: 'Checking', balance: 800000.00 },
+                { id: 'ba-bdo-nkb-cpt', bank_name: 'BDO: NKB Cosmetic Products Trading - 0105-4800-3245', account_number: '0105-4800-3245', account_name: 'NKB Cosmetic Products Trading', account_type: 'Checking', balance: 700000.00 },
+                { id: 'ba-bdo-new-yra', bank_name: 'BDO: New Yra Enterprises - 0036-8801-3196', account_number: '0036-8801-3196', account_name: 'New Yra Enterprises', account_type: 'Checking', balance: 600000.00 },
+                { id: 'ba-bdo-vyu', bank_name: 'BDO: Vyuceutical - 0080-5801-0717', account_number: '0080-5801-0717', account_name: 'Vyuceutical OPC', account_type: 'Checking', balance: 550000.00 },
+                { id: 'ba-sec-nkb-mfg', bank_name: 'Security Bank: NKB Manufacturing Corporation', account_number: '3128-4902-1855', account_name: 'NKB Manufacturing Corporation', account_type: 'Checking', balance: 500000.00 }
+            ];
+
+            const checkStmt = dbInstance.prepare("SELECT id FROM bank_accounts WHERE account_number = ? OR bank_name = ?");
+            const insertStmt = dbInstance.prepare(`
+                INSERT INTO bank_accounts (id, bank_name, account_number, account_name, account_type, current_balance, is_active, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, 1, datetime('now', 'localtime'), datetime('now', 'localtime'))
+            `);
+
+            for (const b of requestedBanks) {
+                const row = checkStmt.get(b.account_number, b.bank_name);
+                if (!row) {
+                    insertStmt.run(b.id, b.bank_name, b.account_number, b.account_name, b.account_type, b.balance);
+                }
+            }
+        } catch (_) {}
+
+        // Payable Companies Table
+        if (isMysql) {
+            try {
+                dbInstance.exec(`
+                    CREATE TABLE IF NOT EXISTS payable_companies (
+                        id VARCHAR(36) PRIMARY KEY,
+                        name VARCHAR(255) UNIQUE NOT NULL,
+                        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    );
+                `);
+            } catch (_) {}
+        } else {
+            try {
+                dbInstance.exec(`
+                    CREATE TABLE IF NOT EXISTS payable_companies (
+                        id TEXT PRIMARY KEY,
+                        name TEXT UNIQUE NOT NULL,
+                        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+                    );
+                `);
+            } catch (_) {}
+        }
+
+        // Seed Default Payable Companies
+        try {
+            const defaultCompanies = [
+                'NKB Manufacturing Corporation',
+                'NKB Cosmetics Manufacturing',
+                'Vyuceutical OPC',
+                'NKB Manufacturing Coorporation - COOP',
+                'New Yra Enterprises',
+                'NKB Cosmetic Products Trading'
+            ];
+            for (const comp of defaultCompanies) {
+                const id = 'comp-' + uuidv4().slice(0, 8);
+                if (isMysql) {
+                    dbInstance.exec(`INSERT IGNORE INTO payable_companies (id, name) VALUES ('${id}', '${comp.replace(/'/g, "\\'")}');`);
+                } else {
+                    dbInstance.prepare(`INSERT OR IGNORE INTO payable_companies (id, name) VALUES (?, ?)`).run(id, comp);
                 }
             }
         } catch (_) {}

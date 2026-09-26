@@ -2592,6 +2592,92 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         db.prepare('DELETE FROM cheque_payables WHERE id IN (?, ?)').run(overdrawnId, payable.id);
     });
 
+    test('35. Streamlined Payable Request Form: Company Management, 21 Expense Categories, Bank Defaults, Line Items & Editing Lifecycle', async () => {
+        const acctToken = getAuthToken('ACCOUNTING');
+
+        // 1. Companies endpoint
+        const compRes = await request(app)
+            .get('/api/cheque-payables/companies')
+            .set('Authorization', `Bearer ${acctToken}`);
+        assert.strictEqual(compRes.status, 200);
+        assert.strictEqual(compRes.body.success, true);
+        assert.ok(Array.isArray(compRes.body.data));
+        assert.ok(compRes.body.data.includes('NKB Manufacturing Corporation'));
+        assert.ok(compRes.body.data.includes('NKB Cosmetics Manufacturing'));
+        assert.ok(compRes.body.data.includes('Vyuceutical OPC'));
+        assert.ok(compRes.body.data.includes('New Yra Enterprises'));
+
+        // 2. Add dynamic company
+        const addCompRes = await request(app)
+            .post('/api/cheque-payables/companies')
+            .set('Authorization', `Bearer ${acctToken}`)
+            .send({ name: 'Alpha Bio Labs Philippines' });
+        assert.strictEqual(addCompRes.status, 201);
+        assert.strictEqual(addCompRes.body.success, true);
+        assert.strictEqual(addCompRes.body.data.name, 'Alpha Bio Labs Philippines');
+
+        // 3. Meta endpoint contains 21 categories and 7 designated banks
+        const metaRes = await request(app)
+            .get('/api/cheque-payables/meta')
+            .set('Authorization', `Bearer ${acctToken}`);
+        assert.strictEqual(metaRes.status, 200);
+        assert.strictEqual(metaRes.body.categories.length, 21);
+        assert.ok(metaRes.body.categories.includes('Contribution - SSS'));
+        assert.ok(metaRes.body.categories.includes('Contribution - PhilHealth'));
+        assert.ok(metaRes.body.categories.includes('Contribution - Pag-ibig'));
+        assert.ok(metaRes.body.categories.includes('BIR Tax Payment'));
+        assert.ok(metaRes.body.categories.includes('City Hall Tax Payment'));
+        assert.ok(metaRes.body.categories.includes('City Hall Expenses'));
+        assert.ok(metaRes.body.banks.length >= 7);
+
+        // 4. Create payable request matching reference image fields
+        const createRes = await request(app)
+            .post('/api/cheque-payables')
+            .set('Authorization', `Bearer ${acctToken}`)
+            .send({
+                company_name: 'NKB Cosmetics Manufacturing',
+                vendor: 'MARK JOSEPH Q. REALUYO',
+                invoice_number: '239683',
+                invoice_date: '2026-09-25',
+                control_number: '1993',
+                terms: 'Net 30',
+                due_date: '2026-10-25',
+                payable_category: 'Trade payable',
+                description: 'RAW MATERIALS',
+                bank_name: 'BDO: NKB Cosmetics Manufacturing - 0105-4800-4829',
+                bank_account_number: '0105-4800-4829',
+                line_items: [
+                    { description: 'PERFUME BOTTLES', category: 'Petty Cash', quantity: 1, cost: 54000, subtotal: 54000 }
+                ],
+                comments: 'NKB COSMETICS MANUFACTURING CHECK DETAILS'
+            });
+        assert.strictEqual(createRes.status, 201);
+        assert.strictEqual(createRes.body.success, true);
+        const payableId = createRes.body.data.id;
+        assert.strictEqual(parseFloat(createRes.body.data.amount), 54000);
+        assert.strictEqual(createRes.body.data.company_name, 'NKB Cosmetics Manufacturing');
+        assert.strictEqual(createRes.body.data.invoice_number, '239683');
+        assert.strictEqual(createRes.body.data.control_number, '1993');
+
+        // 5. Update / Edit payable request (Editing Payable mode)
+        const updateRes = await request(app)
+            .put(`/api/cheque-payables/${payableId}`)
+            .set('Authorization', `Bearer ${acctToken}`)
+            .send({
+                line_items: [
+                    { description: 'PERFUME BOTTLES 50ML', category: 'Raw Materials', quantity: 2, cost: 30000, subtotal: 60000 }
+                ],
+                comments: 'Updated check particulars with batch code'
+            });
+        assert.strictEqual(updateRes.status, 200);
+        assert.strictEqual(updateRes.body.success, true);
+        assert.strictEqual(parseFloat(updateRes.body.data.amount), 60000);
+        assert.strictEqual(updateRes.body.data.comments, 'Updated check particulars with batch code');
+
+        // Clean up
+        db.prepare('DELETE FROM cheque_payables WHERE id = ?').run(payableId);
+    });
+
     after(() => {
         // Automatically delete all test decoys and temporary test database
         try {

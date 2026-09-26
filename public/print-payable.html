@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cheque Disbursement Voucher - NKB Client System</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="stylesheet" href="/css/tailwind.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, Helvetica, "Segoe UI", sans-serif;
+            color: #0f172a;
+            background: #f1f5f9;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        @page {
+            size: A4 portrait;
+            margin: 10mm;
+        }
+
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+            body {
+                background: #ffffff !important;
+                padding: 0 !important;
+            }
+            .voucher-sheet {
+                box-shadow: none !important;
+                border: 1.5px solid #0f172a !important;
+                margin: 0 !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                padding: 20px !important;
+            }
+        }
+
+        .dotted-line {
+            border-bottom: 1.5px dotted #64748b;
+        }
+        .solid-underline {
+            border-bottom: 1.5px solid #0f172a;
+        }
+    </style>
+</head>
+<body class="min-h-screen py-8 px-4 font-sans antialiased text-slate-800">
+
+    <!-- Action Toolbar (Hidden in print) -->
+    <div class="max-w-4xl mx-auto mb-4 flex items-center justify-between no-print">
+        <div class="flex items-center gap-2">
+            <a href="/admin.html" class="px-3.5 py-1.5 rounded-lg bg-slate-800 text-white text-xs font-bold hover:bg-slate-700 transition">
+                ← Back to Portal
+            </a>
+            <span class="text-xs text-slate-500 font-medium">Cheque Disbursement Voucher (CDV) / Payable Preview</span>
+        </div>
+        <div class="flex items-center gap-2">
+            <button onclick="printVoucher()" class="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md transition flex items-center gap-1.5 cursor-pointer">
+                <span>🖨️</span><span>Print Voucher</span>
+            </button>
+            <button onclick="window.close()" class="px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-50 transition cursor-pointer">
+                Close
+            </button>
+        </div>
+    </div>
+
+    <!-- Official Voucher Sheet Container -->
+    <div class="max-w-4xl mx-auto bg-white border-2 border-slate-800 rounded-xl p-8 sm:p-10 shadow-xl voucher-sheet space-y-6">
+
+        <!-- Top Header & Company Branding -->
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b-2 border-slate-800 pb-5">
+            <div class="flex items-center gap-4">
+                <img src="/images/nkb-logo.png" alt="NKB Logo" class="h-16 w-auto object-contain">
+                <div>
+                    <h1 id="v-company-name" class="text-xl sm:text-2xl font-black tracking-tight text-slate-950 uppercase leading-none">
+                        NKB Manufacturing Corporation
+                    </h1>
+                    <div class="text-xs text-amber-700 font-bold uppercase tracking-wider mt-1.5">Cheque Disbursement Voucher (CDV)</div>
+                    <div class="text-[11px] text-slate-500 font-medium">Finance & Accounting Department • Payment Authorization</div>
+                </div>
+            </div>
+
+            <div class="text-right sm:border-l-2 sm:border-slate-800 sm:pl-6 w-full sm:w-auto">
+                <div class="inline-block px-3 py-1 rounded bg-slate-900 text-white font-black text-xs uppercase tracking-wider">
+                    Payable Request
+                </div>
+                <div class="mt-2">
+                    <div class="text-[10px] uppercase font-bold text-slate-500">Payable / Voucher No.</div>
+                    <div id="v-request-no" class="font-mono text-base font-black text-indigo-700">PR-2026-00000</div>
+                </div>
+                <div class="mt-1">
+                    <div class="text-[10px] uppercase font-bold text-slate-500">Date Issued</div>
+                    <div id="v-date-issued" class="text-xs font-bold text-slate-900">—</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Meta Grid -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 bg-slate-50 rounded-lg border border-slate-200 text-xs">
+            <div>
+                <span class="text-[10px] font-bold text-slate-500 uppercase block">Payee / Vendor:</span>
+                <span id="v-payee" class="font-bold text-slate-900 text-sm block truncate">—</span>
+            </div>
+            <div>
+                <span class="text-[10px] font-bold text-slate-500 uppercase block">Bank to Use for Check:</span>
+                <span id="v-bank" class="font-bold text-slate-900 text-xs block">—</span>
+            </div>
+            <div>
+                <span class="text-[10px] font-bold text-slate-500 uppercase block">Account Number:</span>
+                <span id="v-bank-acc" class="font-mono font-bold text-slate-800 text-xs block">—</span>
+            </div>
+            <div>
+                <span class="text-[10px] font-bold text-slate-500 uppercase block">Cheque Number:</span>
+                <span id="v-cheque-no" class="font-mono font-bold text-indigo-800 text-xs block">Pending Check Release</span>
+            </div>
+            <div>
+                <span class="text-[10px] font-bold text-slate-500 uppercase block">Invoice Reference:</span>
+                <span id="v-invoice-ref" class="font-mono font-bold text-slate-800 block">—</span>
+            </div>
+            <div>
+                <span class="text-[10px] font-bold text-slate-500 uppercase block">Control Number:</span>
+                <span id="v-control-no" class="font-mono font-bold text-slate-800 block">—</span>
+            </div>
+            <div>
+                <span class="text-[10px] font-bold text-slate-500 uppercase block">Payment Term:</span>
+                <span id="v-terms" class="font-bold text-slate-800 block">—</span>
+            </div>
+            <div>
+                <span class="text-[10px] font-bold text-slate-500 uppercase block">Due Date:</span>
+                <span id="v-due-date" class="font-bold text-slate-800 block">—</span>
+            </div>
+        </div>
+
+        <!-- Particulars / Purpose & Notes -->
+        <div id="v-particulars-container" class="p-3.5 bg-white border border-slate-300 rounded-lg text-xs space-y-1">
+            <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Particulars & Description:</div>
+            <div id="v-purpose" class="text-sm font-semibold text-slate-900 leading-snug">No specific description provided.</div>
+            <div id="v-comments" class="text-xs text-slate-500 italic mt-1 hidden"></div>
+        </div>
+
+        <!-- Streamlined Itemized Breakdown (NO VAT) -->
+        <div>
+            <div class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Itemized Breakdown</div>
+            <table class="w-full text-xs border border-slate-300 border-collapse">
+                <thead>
+                    <tr class="bg-slate-900 text-white font-bold text-[11px]">
+                        <th class="py-2.5 px-3 text-left">#</th>
+                        <th class="py-2.5 px-3 text-left">Description</th>
+                        <th class="py-2.5 px-3 text-left">Expense Category</th>
+                        <th class="py-2.5 px-3 text-center">Qty</th>
+                        <th class="py-2.5 px-3 text-right">Unit Cost (₱)</th>
+                        <th class="py-2.5 px-3 text-right">Subtotal (₱)</th>
+                    </tr>
+                </thead>
+                <tbody id="v-items-tbody">
+                    <tr>
+                        <td colspan="6" class="py-4 text-center text-slate-400">Loading line items...</td>
+                    </tr>
+                </tbody>
+                <tfoot>
+                    <tr class="bg-slate-100 font-bold border-t-2 border-slate-400 text-xs">
+                        <td colspan="5" class="py-2.5 px-3 text-right text-slate-700 uppercase">Subtotal:</td>
+                        <td id="v-subtotal" class="py-2.5 px-3 text-right font-mono text-slate-900">₱0.00</td>
+                    </tr>
+                    <tr class="bg-emerald-50 font-black border-t border-slate-300 text-sm">
+                        <td colspan="5" class="py-3 px-3 text-right text-emerald-950 uppercase">Total Amount Due:</td>
+                        <td id="v-total-amount" class="py-3 px-3 text-right font-mono text-emerald-700 text-base">₱0.00</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        <!-- COO Status & Authorization Notice -->
+        <div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs flex items-center justify-between">
+            <div>
+                <span class="font-bold text-amber-900 uppercase">Authorization Status:</span>
+                <span id="v-status" class="ml-1.5 font-bold uppercase text-slate-800">Pending COO Approval</span>
+                <div id="v-coo-notes" class="text-[11px] text-amber-800 italic mt-0.5 hidden"></div>
+            </div>
+            <div id="v-coo-date" class="text-[11px] font-semibold text-slate-500">
+                —
+            </div>
+        </div>
+
+        <!-- Signatures Matrix -->
+        <div class="grid grid-cols-4 gap-4 pt-4 border-t-2 border-slate-800 text-center">
+            <div class="space-y-1">
+                <div class="h-10 border-b border-slate-800 flex items-end justify-center pb-1">
+                    <span id="v-sig-prepared" class="font-bold text-xs text-slate-900 leading-none">Accounting</span>
+                </div>
+                <div class="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Prepared by (Requestor)</div>
+            </div>
+            <div class="space-y-1">
+                <div class="h-10 border-b border-slate-800 flex items-end justify-center pb-1">
+                    <span class="font-bold text-xs text-slate-900 leading-none">Finance Officer</span>
+                </div>
+                <div class="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Checked & Verified by</div>
+            </div>
+            <div class="space-y-1">
+                <div class="h-10 border-b border-slate-800 flex items-end justify-center pb-1">
+                    <span id="v-sig-approved" class="font-bold text-xs text-slate-900 leading-none">COO / Executive</span>
+                </div>
+                <div class="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Approved by (COO)</div>
+            </div>
+            <div class="space-y-1">
+                <div class="h-10 border-b border-slate-800 flex items-end justify-center pb-1">
+                    <span class="font-bold text-xs text-slate-400 leading-none"></span>
+                </div>
+                <div class="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Received / Released To</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function formatMoney(amount) {
+            const num = parseFloat(amount) || 0;
+            return '₱' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '—';
+            const d = new Date(dateStr);
+            if (isNaN(d.getTime())) return dateStr;
+            return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        }
+
+        let _docTitle = document.title;
+        window.addEventListener('beforeprint', () => {
+            _docTitle = document.title;
+            document.title = '';
+        });
+        window.addEventListener('afterprint', () => {
+            document.title = _docTitle;
+        });
+
+        function printVoucher() {
+            _docTitle = document.title;
+            document.title = '';
+            window.print();
+            setTimeout(() => {
+                document.title = _docTitle;
+            }, 800);
+        }
+
+        async function loadPayable() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const payableId = urlParams.get('id');
+
+            if (!payableId) {
+                alert('No Payable ID specified in URL.');
+                return;
+            }
+
+            const token = localStorage.getItem('nkb_token') || sessionStorage.getItem('nkb_token');
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            try {
+                const res = await fetch(`/api/cheque-payables/${encodeURIComponent(payableId)}`, { headers });
+                const json = await res.json();
+                if (!json.success || !json.data) {
+                    alert(json.error || 'Failed to load payable record.');
+                    return;
+                }
+
+                const cp = json.data;
+                document.title = `CDV - ${cp.request_number || 'Voucher'}`;
+
+                document.getElementById('v-company-name').textContent = cp.company_name || 'NKB Manufacturing Corporation';
+                document.getElementById('v-request-no').textContent = cp.request_number || '—';
+                document.getElementById('v-date-issued').textContent = formatDate(cp.cheque_date || cp.created_at);
+                document.getElementById('v-payee').textContent = cp.payee_name || '—';
+                document.getElementById('v-bank').textContent = cp.bank_name || '—';
+                document.getElementById('v-bank-acc').textContent = cp.bank_account_number || '—';
+                document.getElementById('v-cheque-no').textContent = cp.cheque_number || 'Pending Check Release';
+                document.getElementById('v-invoice-ref').textContent = cp.invoice_number || cp.invoice_reference || '—';
+                document.getElementById('v-control-no').textContent = cp.control_number || '—';
+                document.getElementById('v-terms').textContent = cp.terms || '—';
+                document.getElementById('v-due-date').textContent = formatDate(cp.due_date);
+
+                document.getElementById('v-purpose').textContent = cp.purpose || cp.comments || 'Payment requisition for authorized company expenditures.';
+                if (cp.comments && cp.comments !== cp.purpose) {
+                    const cDiv = document.getElementById('v-comments');
+                    cDiv.textContent = `Remarks: ${cp.comments}`;
+                    cDiv.classList.remove('hidden');
+                }
+
+                // Render items
+                let items = [];
+                if (Array.isArray(cp.line_items)) {
+                    items = cp.line_items;
+                } else if (typeof cp.line_items === 'string') {
+                    try { items = JSON.parse(cp.line_items); } catch(e) { items = []; }
+                }
+
+                if (!items.length) {
+                    items = [{
+                        description: cp.purpose || 'Payment requisition',
+                        category: cp.payable_category || cp.category || 'Raw Materials',
+                        quantity: 1,
+                        cost: cp.amount,
+                        subtotal: cp.amount
+                    }];
+                }
+
+                let sum = 0;
+                const tbody = document.getElementById('v-items-tbody');
+                tbody.innerHTML = items.map((it, idx) => {
+                    const qty = parseFloat(it.quantity) || 1;
+                    const cost = parseFloat(it.cost) || 0;
+                    const sub = parseFloat(it.subtotal) || (qty * cost);
+                    sum += sub;
+                    return `
+                        <tr class="border-b border-slate-200 hover:bg-slate-50">
+                            <td class="py-2.5 px-3 text-slate-500 font-bold">${idx + 1}</td>
+                            <td class="py-2.5 px-3 font-bold text-slate-900">${it.description || 'General Item'}</td>
+                            <td class="py-2.5 px-3 text-slate-700">${it.category || cp.payable_category || 'Raw Materials'}</td>
+                            <td class="py-2.5 px-3 text-center font-mono">${qty.toFixed(2)}</td>
+                            <td class="py-2.5 px-3 text-right font-mono">${formatMoney(cost)}</td>
+                            <td class="py-2.5 px-3 text-right font-mono font-bold text-slate-900">${formatMoney(sub)}</td>
+                        </tr>
+                    `;
+                }).join('');
+
+                const finalTotal = cp.amount ? parseFloat(cp.amount) : sum;
+                document.getElementById('v-subtotal').textContent = formatMoney(sum);
+                document.getElementById('v-total-amount').textContent = formatMoney(finalTotal);
+
+                // Status & signatures
+                const statusMap = {
+                    'pending': 'Pending COO Approval',
+                    'approved': 'Approved by COO',
+                    'released': 'Cheque Released',
+                    'cleared': 'Cheque Cleared',
+                    'cancelled': 'Cancelled'
+                };
+                document.getElementById('v-status').textContent = statusMap[cp.status] || (cp.status || '').toUpperCase();
+                if (cp.coo_notes) {
+                    const notesDiv = document.getElementById('v-coo-notes');
+                    notesDiv.textContent = `COO Note: "${cp.coo_notes}"`;
+                    notesDiv.classList.remove('hidden');
+                }
+                if (cp.coo_confirmed_at) {
+                    document.getElementById('v-coo-date').textContent = `Authorized on ${formatDate(cp.coo_confirmed_at)}`;
+                }
+
+                if (cp.requestor_name) {
+                    document.getElementById('v-sig-prepared').textContent = cp.requestor_name;
+                }
+                if (cp.coo_confirmed_by) {
+                    document.getElementById('v-sig-approved').textContent = cp.coo_confirmed_by;
+                }
+
+                if (urlParams.get('autoprint') === '1') {
+                    setTimeout(printVoucher, 500);
+                }
+            } catch (err) {
+                console.error('Error fetching payable voucher:', err);
+                alert('Connection error loading payable voucher.');
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', loadPayable);
+    </script>
+</body>
+</html>
