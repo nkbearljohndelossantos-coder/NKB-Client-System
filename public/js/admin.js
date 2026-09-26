@@ -3080,31 +3080,82 @@ function onPayableCompanyChange(selectEl) {
 }
 
 async function openAddPayableCompanyModal() {
-    const compName = prompt('Enter new company name:');
-    if (!compName || !compName.trim()) return;
+    const existing = document.getElementById('add-company-mini-modal');
+    if (existing) existing.remove();
 
-    try {
-        const res = await NKB.api('/api/cheque-payables/companies', {
-            method: 'POST',
-            body: JSON.stringify({ name: compName.trim() })
-        });
-        if (res.success) {
-            NKB.showToast(`Company "${res.data.name}" added successfully!`, 'success');
-            const select = document.getElementById('req-payable-company');
-            if (select) {
-                const opt = document.createElement('option');
-                opt.value = res.data.name;
-                opt.textContent = res.data.name;
-                select.appendChild(opt);
-                select.value = res.data.name;
-                onPayableCompanyChange(select);
-            }
-        } else {
-            NKB.showToast(res.error || 'Failed to add company.', 'error');
+    const overlay = document.createElement('div');
+    overlay.id = 'add-company-mini-modal';
+    overlay.className = 'fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[9999]';
+    overlay.innerHTML = `
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full p-5 space-y-4 border border-slate-200">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                <h4 class="text-sm font-bold text-slate-800">Add New Company</h4>
+                <button type="button" onclick="document.getElementById('add-company-mini-modal').remove()" class="text-slate-400 hover:text-slate-600 text-lg font-bold leading-none cursor-pointer">&times;</button>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Company Name</label>
+                <input type="text" id="add-company-input" placeholder="e.g. Bella Skin Enterprise" class="w-full h-9 px-3 border border-slate-300 rounded-lg text-sm text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+            </div>
+            <div class="flex items-center justify-end gap-2 pt-2">
+                <button type="button" onclick="document.getElementById('add-company-mini-modal').remove()" class="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition cursor-pointer">Cancel</button>
+                <button type="button" id="btn-save-new-company" class="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg shadow-xs transition cursor-pointer">Save Company</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const input = document.getElementById('add-company-input');
+    const saveBtn = document.getElementById('btn-save-new-company');
+    if (input) input.focus();
+
+    async function handleSave() {
+        const compName = input?.value?.trim();
+        if (!compName) {
+            NKB.showToast('Please enter a company name.', 'warning');
+            return;
         }
-    } catch (err) {
-        console.error('Add company error:', err);
-        NKB.showToast('Server error adding company.', 'error');
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+        try {
+            const res = await NKB.api('/api/cheque-payables/companies', {
+                method: 'POST',
+                body: JSON.stringify({ name: compName })
+            });
+            if (res.success) {
+                NKB.showToast(`Company "${res.data.name}" added successfully!`, 'success');
+                const select = document.getElementById('req-payable-company');
+                if (select) {
+                    const opt = document.createElement('option');
+                    opt.value = res.data.name;
+                    opt.textContent = res.data.name;
+                    select.appendChild(opt);
+                    select.value = res.data.name;
+                    onPayableCompanyChange(select);
+                }
+                overlay.remove();
+            } else {
+                NKB.showToast(res.error || 'Failed to add company.', 'error');
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Save Company';
+            }
+        } catch (err) {
+            console.error('Add company error:', err);
+            NKB.showToast('Server error adding company.', 'error');
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Save Company';
+        }
+    }
+
+    if (saveBtn) saveBtn.onclick = handleSave;
+    if (input) {
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                handleSave();
+            } else if (e.key === 'Escape') {
+                overlay.remove();
+            }
+        });
     }
 }
 
@@ -3196,27 +3247,27 @@ function addPayableItemRow(item = null) {
         : DEFAULT_PAYABLE_CATEGORIES_LIST;
 
     const tr = document.createElement('tr');
-    tr.className = 'border-b border-slate-100 hover:bg-slate-50/50';
+    tr.className = 'border-b border-slate-200 hover:bg-slate-50/70 transition';
     tr.innerHTML = `
-        <td class="p-2">
-            <input type="text" class="payable-item-desc w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-medium focus:bg-white focus:ring-1 focus:ring-blue-500" placeholder="e.g. PERFUME BOTTLES" value="${desc.replace(/"/g, '&quot;')}">
+        <td class="py-1.5 px-2 sm:px-2.5">
+            <input type="text" class="payable-item-desc w-full h-8 sm:h-9 px-2 sm:px-2.5 border border-slate-300 rounded text-xs sm:text-sm font-medium focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="e.g. RAW MATERIALS" value="${desc.replace(/"/g, '&quot;')}">
         </td>
-        <td class="p-2">
-            <select class="payable-item-cat w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold focus:bg-white focus:ring-1 focus:ring-blue-500">
+        <td class="py-1.5 px-2 sm:px-2.5">
+            <select class="payable-item-cat w-full h-8 sm:h-9 px-2 sm:px-2.5 border border-slate-300 rounded text-xs sm:text-sm font-semibold focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                 ${categories.map(c => `<option value="${c}" ${c === cat ? 'selected' : ''}>${c}</option>`).join('')}
             </select>
         </td>
-        <td class="p-2">
-            <input type="number" step="any" min="0" class="payable-item-qty w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs font-bold text-center focus:bg-white" value="${qty}" oninput="recalcPayableItem(this)">
+        <td class="py-1.5 px-1.5 sm:px-2 text-center">
+            <input type="number" step="any" min="0" class="payable-item-qty w-full h-8 sm:h-9 px-1.5 sm:px-2 border border-slate-300 rounded text-xs sm:text-sm font-semibold text-center focus:border-blue-500" value="${qty}" oninput="recalcPayableItem(this)">
         </td>
-        <td class="p-2">
-            <input type="number" step="0.01" min="0" class="payable-item-cost w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs font-bold text-right focus:bg-white" value="${cost.toFixed(2)}" oninput="recalcPayableItem(this)">
+        <td class="py-1.5 px-1.5 sm:px-2 text-right">
+            <input type="number" step="0.01" min="0" class="payable-item-cost w-full h-8 sm:h-9 px-1.5 sm:px-2 border border-slate-300 rounded text-xs sm:text-sm font-semibold text-right focus:border-blue-500" value="${cost.toFixed(2)}" oninput="recalcPayableItem(this)">
         </td>
-        <td class="p-2">
-            <input type="text" readonly class="payable-item-subtotal w-full px-2 py-1.5 bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 text-right font-mono" value="${subtotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}">
+        <td class="py-1.5 px-1.5 sm:px-2 text-right">
+            <input type="text" readonly class="payable-item-subtotal w-full h-8 sm:h-9 px-1.5 sm:px-2 bg-slate-50 border border-slate-300 rounded text-xs sm:text-sm font-bold text-slate-800 text-right font-mono" value="${subtotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}">
         </td>
-        <td class="p-2 text-center">
-            <button type="button" onclick="removePayableItemRow(this)" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded text-xs font-bold transition cursor-pointer">Delete</button>
+        <td class="py-1.5 px-2 text-center">
+            <button type="button" onclick="removePayableItemRow(this)" class="h-8 sm:h-9 px-2.5 sm:px-3 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-bold transition shadow-xs cursor-pointer">Delete</button>
         </td>
     `;
     tbody.appendChild(tr);
@@ -3308,85 +3359,85 @@ function openRequestPayableModal(payableId = null) {
     }
 
     root.innerHTML = `
-        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-3 sm:p-4 z-50 overflow-y-auto">
-            <div class="bg-white rounded-2xl max-w-6xl w-full p-5 sm:p-7 shadow-2xl space-y-5 my-6">
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-2 sm:p-4 md:p-6 z-50 overflow-y-auto">
+            <div class="bg-white rounded-lg sm:rounded-xl md:rounded-2xl max-w-5xl lg:max-w-6xl w-full p-4 sm:p-6 md:p-7 shadow-2xl space-y-4 sm:space-y-5 my-auto max-h-[95vh] overflow-y-auto border border-slate-200">
                 <!-- Header matching Reference Image -->
-                <div class="flex justify-between items-center border-b border-slate-100 pb-3">
-                    <h3 class="text-xl font-bold text-slate-800 tracking-tight">${modalTitle}</h3>
+                <div class="flex justify-between items-center border-b border-slate-200 pb-3">
+                    <h3 class="text-base sm:text-lg md:text-xl font-bold text-slate-800 tracking-tight">${modalTitle}</h3>
                     <div class="flex items-center gap-2">
-                        <button type="button" onclick="printCurrentPayableForm()" class="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition cursor-pointer" title="Print Cheque Disbursement Voucher">
+                        <button type="button" onclick="printCurrentPayableForm()" class="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition cursor-pointer" title="Print Cheque Disbursement Voucher">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
                         </button>
-                        <button type="button" onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-2xl leading-none cursor-pointer">&times;</button>
+                        <button type="button" onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-2xl leading-none px-1 cursor-pointer">&times;</button>
                     </div>
                 </div>
 
-                <form onsubmit="submitRequestPayable(event)" class="space-y-4 text-xs font-semibold">
-                    <!-- Top 4-Column Grid matching Reference Image -->
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                        <!-- Row 1: Company (with Add button) -->
+                <form onsubmit="submitRequestPayable(event)" class="space-y-4">
+                    <!-- Top Grid matching Reference Image with perfect symmetry across devices -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-3.5">
+                        <!-- Row 1: Company (with Add button in label header) -->
                         <div>
-                            <label class="block text-slate-600 mb-1">Company</label>
-                            <div class="flex items-center gap-1.5">
-                                <select id="req-payable-company" onchange="onPayableCompanyChange(this)" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 font-bold text-slate-800 focus:bg-white focus:ring-1 focus:ring-blue-500">
-                                    ${companies.map(c => `<option value="${c}" ${c === selectedCompany ? 'selected' : ''}>${c}</option>`).join('')}
-                                </select>
-                                <button type="button" onclick="openAddPayableCompanyModal()" class="px-2.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-sm transition whitespace-nowrap cursor-pointer" title="Add New Company">+ Add</button>
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="text-[11px] sm:text-xs font-semibold text-slate-600">Company</label>
+                                <button type="button" onclick="openAddPayableCompanyModal()" class="text-[11px] sm:text-xs text-blue-600 hover:text-blue-800 font-bold hover:underline inline-flex items-center gap-0.5 cursor-pointer" title="Add New Company">+ Add</button>
                             </div>
+                            <select id="req-payable-company" onchange="onPayableCompanyChange(this)" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-300 rounded-md sm:rounded-lg bg-white text-xs sm:text-sm font-semibold text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                                ${companies.map(c => `<option value="${c}" ${c === selectedCompany ? 'selected' : ''}>${c}</option>`).join('')}
+                            </select>
                         </div>
 
                         <!-- Row 1: Invoice Number -->
                         <div>
-                            <label class="block text-slate-600 mb-1">Invoice Number</label>
-                            <input type="text" id="req-payable-invoice-no" value="${cp?.invoice_number || ''}" placeholder="e.g. 239683" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 font-mono text-slate-800 focus:bg-white">
+                            <label class="block text-[11px] sm:text-xs font-semibold text-slate-600 mb-1">Invoice Number</label>
+                            <input type="text" id="req-payable-invoice-no" value="${cp?.invoice_number || ''}" placeholder="e.g. 239683" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-300 rounded-md sm:rounded-lg bg-white text-xs sm:text-sm font-mono text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                         </div>
 
                         <!-- Row 1: Date Created -->
                         <div>
-                            <label class="block text-slate-600 mb-1">Date Created</label>
-                            <input type="text" id="req-payable-created-date" readonly value="${dateCreatedFormatted}" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-100 text-slate-600 font-medium cursor-not-allowed">
+                            <label class="block text-[11px] sm:text-xs font-semibold text-slate-600 mb-1">Date Created</label>
+                            <input type="text" id="req-payable-created-date" readonly value="${dateCreatedFormatted}" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-200 rounded-md sm:rounded-lg bg-slate-50 text-xs sm:text-sm text-slate-600 font-medium cursor-not-allowed">
                         </div>
 
                         <!-- Row 1: Payable Number (Blue label in reference) -->
                         <div>
-                            <label class="block text-blue-600 mb-1 font-bold">Payable Number</label>
-                            <input type="text" id="req-payable-number" readonly value="${payableNumberDisplay}" class="w-full px-3 py-2 border border-blue-200 rounded-xl bg-blue-50/60 text-blue-700 font-black font-mono cursor-not-allowed">
+                            <label class="block text-[11px] sm:text-xs font-bold text-blue-600 mb-1">Payable Number</label>
+                            <input type="text" id="req-payable-number" readonly value="${payableNumberDisplay}" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-blue-200 rounded-md sm:rounded-lg bg-blue-50/60 text-xs sm:text-sm text-blue-700 font-bold font-mono cursor-not-allowed">
                         </div>
 
                         <!-- Row 2: Payable Category -->
                         <div>
-                            <label class="block text-slate-600 mb-1">Payable Category</label>
-                            <input type="text" id="req-payable-category-type" value="${cp?.payable_category || 'Trade payable'}" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 font-medium focus:bg-white">
+                            <label class="block text-[11px] sm:text-xs font-semibold text-slate-600 mb-1">Payable Category</label>
+                            <input type="text" id="req-payable-category-type" value="${cp?.payable_category || 'Trade payable'}" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-300 rounded-md sm:rounded-lg bg-white text-xs sm:text-sm font-medium text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                         </div>
 
                         <!-- Row 2: Invoice Date -->
                         <div>
-                            <label class="block text-slate-600 mb-1">Invoice Date</label>
-                            <input type="date" id="req-payable-invoice-date" value="${cp?.invoice_date || today}" onchange="onPayableTermChange(document.getElementById('req-payable-terms'))" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 font-medium focus:bg-white">
+                            <label class="block text-[11px] sm:text-xs font-semibold text-slate-600 mb-1">Invoice Date</label>
+                            <input type="date" id="req-payable-invoice-date" value="${cp?.invoice_date || today}" onchange="onPayableTermChange(document.getElementById('req-payable-terms'))" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-300 rounded-md sm:rounded-lg bg-white text-xs sm:text-sm font-medium text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                         </div>
 
                         <!-- Row 2: Created By -->
                         <div>
-                            <label class="block text-slate-600 mb-1">Created By</label>
-                            <input type="text" id="req-payable-created-by" readonly value="${createdByDisplay}" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-100 text-slate-700 font-semibold cursor-not-allowed">
+                            <label class="block text-[11px] sm:text-xs font-semibold text-slate-600 mb-1">Created By</label>
+                            <input type="text" id="req-payable-created-by" readonly value="${createdByDisplay}" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-200 rounded-md sm:rounded-lg bg-slate-50 text-xs sm:text-sm text-slate-700 font-medium cursor-not-allowed">
                         </div>
 
                         <!-- Row 2: Control Number -->
                         <div>
-                            <label class="block text-slate-600 mb-1">Control Number</label>
-                            <input type="text" id="req-payable-control-no" value="${cp?.control_number || ''}" placeholder="e.g. 1993" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 font-mono text-slate-800 focus:bg-white">
+                            <label class="block text-[11px] sm:text-xs font-semibold text-slate-600 mb-1">Control Number</label>
+                            <input type="text" id="req-payable-control-no" value="${cp?.control_number || ''}" placeholder="e.g. 1993" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-300 rounded-md sm:rounded-lg bg-white text-xs sm:text-sm font-mono text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                         </div>
 
                         <!-- Row 3: Vendor -->
                         <div>
-                            <label class="block text-slate-600 mb-1">Vendor *</label>
-                            <input type="text" id="req-payable-payee" required value="${cp?.payee_name || ''}" placeholder="e.g. MARK JOSEPH Q. REALUYO" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 font-bold text-slate-900 focus:bg-white">
+                            <label class="block text-[11px] sm:text-xs font-semibold text-slate-600 mb-1">Vendor *</label>
+                            <input type="text" id="req-payable-payee" required value="${cp?.payee_name || ''}" placeholder="e.g. MARK JOSEPH Q. REALUYO" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-300 rounded-md sm:rounded-lg bg-white text-xs sm:text-sm font-bold text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                         </div>
 
                         <!-- Row 3: Term -->
                         <div>
-                            <label class="block text-slate-600 mb-1">Term</label>
-                            <select id="req-payable-terms" onchange="onPayableTermChange(this)" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 font-medium focus:bg-white">
+                            <label class="block text-[11px] sm:text-xs font-semibold text-slate-600 mb-1">Term</label>
+                            <select id="req-payable-terms" onchange="onPayableTermChange(this)" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-300 rounded-md sm:rounded-lg bg-white text-xs sm:text-sm font-medium text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                                 <option value="Net 30" ${(cp?.terms === 'Net 30' || !cp) ? 'selected' : ''}>Net 30</option>
                                 <option value="Net 15" ${cp?.terms === 'Net 15' ? 'selected' : ''}>Net 15</option>
                                 <option value="Net 60" ${cp?.terms === 'Net 60' ? 'selected' : ''}>Net 60</option>
@@ -3397,26 +3448,26 @@ function openRequestPayableModal(payableId = null) {
 
                         <!-- Row 3: Due Date -->
                         <div>
-                            <label class="block text-slate-600 mb-1">Due Date</label>
-                            <input type="date" id="req-payable-due-date" value="${dueDateVal}" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 font-medium focus:bg-white">
+                            <label class="block text-[11px] sm:text-xs font-semibold text-slate-600 mb-1">Due Date</label>
+                            <input type="date" id="req-payable-due-date" value="${dueDateVal}" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-300 rounded-md sm:rounded-lg bg-white text-xs sm:text-sm font-medium text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                         </div>
 
                         <!-- Row 3: Status -->
                         <div>
-                            <label class="block text-slate-600 mb-1">Status</label>
-                            <input type="text" id="req-payable-status" readonly value="${statusDisplay}" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-100 font-bold text-amber-700 cursor-not-allowed">
+                            <label class="block text-[11px] sm:text-xs font-semibold text-slate-600 mb-1">Status</label>
+                            <input type="text" id="req-payable-status" readonly value="${statusDisplay}" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-200 rounded-md sm:rounded-lg bg-slate-50 text-xs sm:text-sm font-semibold text-amber-700 cursor-not-allowed">
                         </div>
 
-                        <!-- Row 4: Description -->
+                        <!-- Row 4: Description (2 columns on tablet & desktop) -->
                         <div class="sm:col-span-2">
-                            <label class="block text-slate-600 mb-1">Description</label>
-                            <input type="text" id="req-payable-description" value="${cp?.purpose || ''}" placeholder="e.g. RAW MATERIALS" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 font-semibold text-slate-800 focus:bg-white">
+                            <label class="block text-[11px] sm:text-xs font-semibold text-slate-600 mb-1">Description</label>
+                            <input type="text" id="req-payable-description" value="${cp?.purpose || ''}" placeholder="e.g. RAW MATERIALS" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-300 rounded-md sm:rounded-lg bg-white text-xs sm:text-sm font-medium text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                         </div>
 
-                        <!-- Row 4: Bank to use for check -->
+                        <!-- Row 4: Bank to use for check (2 columns on tablet & desktop) -->
                         <div class="sm:col-span-2">
-                            <label class="block text-slate-600 mb-1">Bank to use for check *</label>
-                            <select id="req-payable-bank" onchange="onPayableBankChange(this)" required class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 font-bold text-slate-800 focus:bg-white">
+                            <label class="block text-[11px] sm:text-xs font-semibold text-slate-600 mb-1">Bank to use for check *</label>
+                            <select id="req-payable-bank" onchange="onPayableBankChange(this)" required class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-300 rounded-md sm:rounded-lg bg-white text-xs sm:text-sm font-semibold text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                                 <option value="">Select Bank Account...</option>
                                 ${banksList.map(b => {
                                     const bName = b.bank_name || b.name;
@@ -3431,30 +3482,25 @@ function openRequestPayableModal(payableId = null) {
                     </div>
 
                     <!-- Overdraft Warning Notice -->
-                    <div id="req-payable-overdraft-warn" class="hidden p-3 rounded-xl bg-rose-50 border border-rose-300 text-rose-800 text-[11px] font-semibold flex items-center gap-2">
+                    <div id="req-payable-overdraft-warn" class="hidden p-3 rounded-md sm:rounded-lg bg-rose-50 border border-rose-300 text-rose-800 text-xs font-semibold flex items-center gap-2">
                         <span class="text-base">⚠️</span>
                         <span id="req-payable-overdraft-text"></span>
                     </div>
 
                     <!-- Line Items Table (NO VAT Computations, Streamlined) -->
-                    <div class="space-y-2 pt-2">
-                        <div class="flex items-center justify-between">
-                            <div class="font-bold text-slate-800 text-xs">Itemized Expenses</div>
-                            <button type="button" onclick="addPayableItemRow()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-bold text-xs shadow-sm transition flex items-center gap-1 cursor-pointer">
-                                <span>+ Add</span>
-                            </button>
-                        </div>
-
-                        <div class="border border-slate-200 rounded-xl overflow-x-auto bg-white">
-                            <table class="w-full text-left border-collapse">
+                    <div class="space-y-1.5 pt-1">
+                        <div class="border border-slate-300 rounded-md sm:rounded-lg overflow-x-auto bg-white shadow-xs">
+                            <table class="w-full text-left border-collapse min-w-[560px] sm:min-w-[660px]">
                                 <thead>
-                                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 text-[11px] uppercase tracking-wider font-bold">
-                                        <th class="p-2.5">Description</th>
-                                        <th class="p-2.5 w-56">Expense Category</th>
-                                        <th class="p-2.5 w-24 text-center">Quantity</th>
-                                        <th class="p-2.5 w-32 text-right">Cost</th>
-                                        <th class="p-2.5 w-32 text-right">Subtotal</th>
-                                        <th class="p-2.5 w-20 text-center">Action</th>
+                                    <tr class="bg-slate-50 border-b border-slate-300 text-slate-700 text-[11px] sm:text-xs font-semibold">
+                                        <th class="py-2 px-2.5 sm:px-3">Description</th>
+                                        <th class="py-2 px-2.5 sm:px-3 w-48 sm:w-56">Expense Category</th>
+                                        <th class="py-2 px-2.5 sm:px-3 w-20 sm:w-24 text-center">Quantity</th>
+                                        <th class="py-2 px-2.5 sm:px-3 w-28 sm:w-32 text-right">Cost</th>
+                                        <th class="py-2 px-2.5 sm:px-3 w-28 sm:w-32 text-right">Subtotal</th>
+                                        <th class="py-2 px-2.5 sm:px-3 w-20 sm:w-24 text-center">
+                                            <button type="button" onclick="addPayableItemRow()" class="px-2.5 sm:px-3 py-1 bg-slate-700 hover:bg-slate-800 text-white rounded text-xs font-bold transition shadow-xs cursor-pointer" title="Add Line Item">Add</button>
+                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody id="payable-items-table-body">
@@ -3465,59 +3511,59 @@ function openRequestPayableModal(payableId = null) {
                     </div>
 
                     <!-- Comments, Files & Totals Section -->
-                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 pt-1">
-                        <!-- Left Side: Comments & Files (8 cols) -->
-                        <div class="lg:col-span-8 space-y-3">
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-3 sm:gap-4 pt-1">
+                        <!-- Left Side: Comments & Files (7 cols on md, 8 cols on lg) -->
+                        <div class="md:col-span-7 lg:col-span-8 space-y-3">
                             <div>
-                                <label class="block text-slate-700 mb-1">Comments</label>
-                                <textarea id="req-payable-comments" rows="3" placeholder="NKB MANUFACTURING CORPORATION CHECK DETAILS..." class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 font-mono text-slate-800 focus:bg-white focus:ring-1 focus:ring-blue-500">${cp?.comments || ''}</textarea>
+                                <label class="block text-[11px] sm:text-xs font-semibold text-slate-600 mb-1">Comments</label>
+                                <textarea id="req-payable-comments" rows="3" placeholder="NKB MANUFACTURING CORPORATION CHECK DETAILS..." class="w-full px-2.5 sm:px-3 py-2 border border-slate-300 rounded-md sm:rounded-lg bg-white text-xs sm:text-sm font-mono text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">${cp?.comments || ''}</textarea>
                             </div>
 
                             <div>
-                                <label class="block text-slate-700 mb-1">Files (Attachment / Voucher / Invoice)</label>
-                                <div class="border-2 border-dashed border-slate-200 hover:border-slate-300 rounded-xl p-3 bg-slate-50 transition relative text-center">
-                                    <input type="file" id="req-payable-file" accept="image/*,.pdf" onchange="handlePayableAttachmentSelect(this)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
-                                    <div id="req-payable-droptext" class="space-y-0.5 pointer-events-none">
-                                        <span class="text-xl">📁</span>
-                                        <div class="text-xs text-slate-600 font-bold">Choose File or drag & drop</div>
-                                        <div class="text-[10px] text-slate-400">PNG, JPG, WEBP, or PDF up to 12MB</div>
+                                <label class="block text-[11px] sm:text-xs font-semibold text-slate-600 mb-1">Files</label>
+                                <div class="border border-slate-300 rounded-md sm:rounded-lg p-2 bg-white flex items-center justify-between text-xs sm:text-sm relative overflow-hidden">
+                                    <div class="flex items-center gap-2 min-w-0 flex-1">
+                                        <label for="req-payable-file" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded text-xs font-semibold text-slate-700 cursor-pointer whitespace-nowrap transition">
+                                            Choose File
+                                        </label>
+                                        <input type="file" id="req-payable-file" accept="image/*,.pdf" onchange="handlePayableAttachmentSelect(this)" class="sr-only">
+                                        <span id="req-payable-droptext" class="text-xs text-slate-400 truncate">
+                                            ${cp?.attachment_url ? 'Attached Document' : 'No file chosen'}
+                                        </span>
                                     </div>
-                                    <div id="req-payable-preview-container" class="${cp?.attachment_url ? '' : 'hidden'} flex items-center justify-between gap-3 p-2 bg-white rounded-lg border border-slate-200 text-left">
-                                        <div class="flex items-center gap-2 min-w-0">
-                                            <span class="text-lg">📄</span>
-                                            <div class="min-w-0">
-                                                <div id="req-payable-preview-name" class="text-xs font-bold text-slate-800 truncate">${cp?.attachment_url ? 'Attached Document' : 'document'}</div>
-                                                <div class="text-[10px] text-emerald-600 font-bold">Ready to submit</div>
-                                            </div>
-                                        </div>
-                                        <button type="button" onclick="clearPayableAttachment()" class="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded text-[10px] font-bold border border-rose-200 cursor-pointer">Remove</button>
+                                    <div id="req-payable-preview-container" class="${cp?.attachment_url ? '' : 'hidden'} flex items-center gap-2 pl-2">
+                                        <span id="req-payable-preview-name" class="text-xs font-medium text-slate-600 truncate max-w-[120px] sm:max-w-[180px]">
+                                            ${cp?.attachment_url ? 'Attached Document' : ''}
+                                        </span>
+                                        <button type="button" onclick="clearPayableAttachment()" class="text-xs text-red-600 hover:text-red-800 font-semibold cursor-pointer">Remove</button>
                                     </div>
+                                    <img id="req-payable-preview-img" class="hidden" alt="preview">
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Right Side: Clean Summary Card (4 cols) (NO VAT) -->
-                        <div class="lg:col-span-4 self-start bg-slate-50 rounded-xl border border-slate-200 p-4 space-y-3">
-                            <div class="flex justify-between items-center text-xs">
-                                <span class="text-slate-600 font-semibold">Subtotal:</span>
-                                <span id="req-payable-summary-subtotal" class="font-mono font-bold text-slate-900 text-sm">₱0.00</span>
+                        <!-- Right Side: Clean Summary Card (5 cols on md, 4 cols on lg) (NO VAT) -->
+                        <div class="md:col-span-5 lg:col-span-4 bg-white rounded-md sm:rounded-lg border border-slate-300 p-3.5 sm:p-4 space-y-2.5 shadow-xs flex flex-col justify-center">
+                            <div class="flex justify-between items-center text-xs sm:text-sm">
+                                <span class="text-slate-600 font-medium">Subtotal:</span>
+                                <span id="req-payable-summary-subtotal" class="font-mono font-bold text-slate-900">₱0.00</span>
                             </div>
-                            <div class="border-t border-slate-200 pt-3 flex justify-between items-center text-xs">
-                                <span class="text-slate-800 font-extrabold text-sm">Total:</span>
-                                <span id="req-payable-summary-total" class="font-mono font-black text-slate-900 text-base">₱0.00</span>
+                            <div class="border-t border-slate-200 pt-2.5 flex justify-between items-center text-xs sm:text-sm">
+                                <span class="text-slate-700 font-bold">Total:</span>
+                                <span id="req-payable-summary-total" class="font-mono font-bold text-slate-900">₱0.00</span>
                             </div>
-                            <div class="border-t border-slate-200 pt-2 flex justify-between items-center text-xs text-indigo-700 font-bold">
-                                <span>Amount Due:</span>
-                                <span id="req-payable-summary-due" class="font-mono font-black text-indigo-700 text-base">₱0.00</span>
+                            <div class="border-t border-slate-200 pt-2 flex justify-between items-center text-xs sm:text-sm">
+                                <span class="text-slate-800 font-extrabold">Amount Due:</span>
+                                <span id="req-payable-summary-due" class="font-mono font-black text-slate-900 text-sm sm:text-base">₱0.00</span>
                             </div>
                         </div>
                     </div>
 
                     <!-- Bottom Action Buttons matching reference image -->
-                    <div class="flex items-center gap-2 pt-3 border-t border-slate-100">
-                        <button type="submit" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow transition cursor-pointer">Save</button>
-                        <button type="button" onclick="closeModal()" class="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold shadow transition cursor-pointer">Cancel</button>
-                        <button type="button" onclick="closeModal()" class="px-5 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg font-bold shadow transition cursor-pointer">Back</button>
+                    <div class="flex flex-wrap items-center gap-2 sm:gap-2.5 pt-3 border-t border-slate-200">
+                        <button type="submit" class="h-9 sm:h-10 px-5 sm:px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-md sm:rounded-lg text-xs sm:text-sm font-bold shadow-xs transition cursor-pointer">Save</button>
+                        <button type="button" onclick="closeModal()" class="h-9 sm:h-10 px-4 sm:px-5 bg-red-600 hover:bg-red-700 text-white rounded-md sm:rounded-lg text-xs sm:text-sm font-bold shadow-xs transition cursor-pointer">Cancel</button>
+                        <button type="button" onclick="closeModal()" class="h-9 sm:h-10 px-4 sm:px-5 bg-slate-600 hover:bg-slate-700 text-white rounded-md sm:rounded-lg text-xs sm:text-sm font-bold shadow-xs transition cursor-pointer">Back</button>
                     </div>
                 </form>
             </div>
