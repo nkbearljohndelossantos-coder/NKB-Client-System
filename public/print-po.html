@@ -719,7 +719,10 @@
 
         function formatNumber2(val) {
             const num = parseFloat(val);
-            if (isNaN(num)) return '0.00';
+            if (isNaN(num) || Math.abs(num) < 0.005) return '0.00';
+            if (num < 0) {
+                return '-' + Math.abs(num).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
             return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
 
@@ -855,9 +858,10 @@
             const paymentMade = parseCleanNumber(paymentMadeEl ? paymentMadeEl.textContent : 0);
 
             // Subtotal net after VAT & discount, then minus Payment Made
-            // When VAT and discount are 0, this is strictly (subtotal - payment made)
+            // If overpaid (payment made > net subtotal), Total Balance displays with a negative sign
             const netSubtotal = Math.max(0, runningSubtotal + vat - discount);
-            const totalBalance = Math.max(0, netSubtotal - paymentMade);
+            const diff = Math.round((netSubtotal - paymentMade) * 100) / 100;
+            const totalBalance = Math.abs(diff) < 0.005 ? 0 : diff;
 
             document.getElementById('disp-subtotal').textContent = formatNumber2(runningSubtotal);
             const balanceEl = document.getElementById('disp-total-balance') || document.getElementById('disp-total');
@@ -993,7 +997,8 @@
             const finalDiscount = po.discount_amount || 0;
             const finalPaymentMade = (po.payment_made !== undefined && po.payment_made !== null) ? po.payment_made : (po.paid_amount || 0);
             const finalNet = (po.grand_total !== undefined && po.grand_total !== null) ? po.grand_total : (finalSubtotal + finalVat - finalDiscount);
-            const finalTotalBalance = Math.max(0, finalNet - finalPaymentMade);
+            const finalDiff = Math.round((finalNet - finalPaymentMade) * 100) / 100;
+            const finalTotalBalance = Math.abs(finalDiff) < 0.005 ? 0 : finalDiff;
 
             document.getElementById('disp-subtotal').textContent = formatNumber2(finalSubtotal);
             document.getElementById('disp-vat').textContent = formatNumber2(finalVat);
