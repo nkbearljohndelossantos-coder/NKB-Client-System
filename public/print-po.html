@@ -2,6 +2,9 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Purchase Order / Sales Order - NKB Client System</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
@@ -445,9 +448,10 @@
         }
 
         .totals-table {
-            width: 220px;
+            width: 240px;
             border-collapse: collapse;
             font-size: 8.8pt;
+            white-space: nowrap;
         }
 
         .totals-table td {
@@ -658,9 +662,13 @@
                         <td class="total-label">Discount</td>
                         <td class="total-val" id="disp-discount" contenteditable="false" onblur="recalculateTotals()">0.00</td>
                     </tr>
+                    <tr>
+                        <td class="total-label">Payment Made</td>
+                        <td class="total-val" id="disp-payment-made" contenteditable="false" onblur="recalculateTotals()">0.00</td>
+                    </tr>
                     <tr class="total-row-bold">
-                        <td class="total-label">Total</td>
-                        <td class="total-val" id="disp-total" contenteditable="false">0.00</td>
+                        <td class="total-label">Total Balance</td>
+                        <td class="total-val" id="disp-total-balance" contenteditable="false">0.00</td>
                     </tr>
                 </table>
             </div>
@@ -789,8 +797,9 @@
             document.getElementById('meta-doc-due-date').contentEditable = val;
 
             // Totals
-            document.getElementById('disp-vat').contentEditable = val;
-            document.getElementById('disp-discount').contentEditable = val;
+            if (document.getElementById('disp-vat')) document.getElementById('disp-vat').contentEditable = val;
+            if (document.getElementById('disp-discount')) document.getElementById('disp-discount').contentEditable = val;
+            if (document.getElementById('disp-payment-made')) document.getElementById('disp-payment-made').contentEditable = val;
 
             // Bank lines
             document.getElementById('disp-bank-details').contentEditable = val;
@@ -840,13 +849,25 @@
 
             const vatEl = document.getElementById('disp-vat');
             const discountEl = document.getElementById('disp-discount');
+            const paymentMadeEl = document.getElementById('disp-payment-made');
             const vat = parseCleanNumber(vatEl ? vatEl.textContent : 0);
             const discount = parseCleanNumber(discountEl ? discountEl.textContent : 0);
+            const paymentMade = parseCleanNumber(paymentMadeEl ? paymentMadeEl.textContent : 0);
 
-            const total = Math.max(0, runningSubtotal + vat - discount);
+            // Subtotal net after VAT & discount, then minus Payment Made
+            // When VAT and discount are 0, this is strictly (subtotal - payment made)
+            const netSubtotal = Math.max(0, runningSubtotal + vat - discount);
+            const totalBalance = Math.max(0, netSubtotal - paymentMade);
 
             document.getElementById('disp-subtotal').textContent = formatNumber2(runningSubtotal);
-            document.getElementById('disp-total').textContent = formatNumber2(total);
+            const balanceEl = document.getElementById('disp-total-balance') || document.getElementById('disp-total');
+            if (balanceEl) {
+                balanceEl.textContent = formatNumber2(totalBalance);
+            }
+            const legacyTotalEl = document.getElementById('disp-total');
+            if (legacyTotalEl && legacyTotalEl !== balanceEl) {
+                legacyTotalEl.textContent = formatNumber2(totalBalance);
+            }
         }
 
         function addNewItemRow() {
@@ -970,12 +991,25 @@
             const finalSubtotal = (po.subtotal !== undefined && po.subtotal !== null) ? po.subtotal : calculatedSubtotal;
             const finalVat = po.tax_amount || 0;
             const finalDiscount = po.discount_amount || 0;
-            const finalTotal = (po.grand_total !== undefined && po.grand_total !== null) ? po.grand_total : (finalSubtotal + finalVat - finalDiscount);
+            const finalPaymentMade = (po.payment_made !== undefined && po.payment_made !== null) ? po.payment_made : (po.paid_amount || 0);
+            const finalNet = (po.grand_total !== undefined && po.grand_total !== null) ? po.grand_total : (finalSubtotal + finalVat - finalDiscount);
+            const finalTotalBalance = Math.max(0, finalNet - finalPaymentMade);
 
             document.getElementById('disp-subtotal').textContent = formatNumber2(finalSubtotal);
             document.getElementById('disp-vat').textContent = formatNumber2(finalVat);
             document.getElementById('disp-discount').textContent = formatNumber2(finalDiscount);
-            document.getElementById('disp-total').textContent = formatNumber2(finalTotal);
+            const paymentMadeEl = document.getElementById('disp-payment-made');
+            if (paymentMadeEl) {
+                paymentMadeEl.textContent = formatNumber2(finalPaymentMade);
+            }
+            const balanceEl = document.getElementById('disp-total-balance') || document.getElementById('disp-total');
+            if (balanceEl) {
+                balanceEl.textContent = formatNumber2(finalTotalBalance);
+            }
+            const legacyTotalEl = document.getElementById('disp-total');
+            if (legacyTotalEl && legacyTotalEl !== balanceEl) {
+                legacyTotalEl.textContent = formatNumber2(finalTotalBalance);
+            }
 
             // Note / Description Logic (Under Products, Above Bank Details)
             const notesEl = document.getElementById('disp-po-notes');
@@ -1125,6 +1159,7 @@
                     subtotal: 1330.00,
                     tax_amount: 0.00,
                     discount_amount: 0.00,
+                    payment_made: 0.00,
                     grand_total: 1330.00,
                     items: [
                         { product_name: 'BELLA SKIN - THE SKIN VITAMIN 24K GOLD SERUM W/ PDRN 30ml', target_quantity: 2, unit: 'PC', unit_price: 85.00, subtotal: 170.00 },

@@ -205,6 +205,10 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
         SELECT * FROM sales_invoices WHERE po_id = ? ORDER BY created_at ASC
     `).all(id);
 
+    const totalPaid = invoices.reduce((sum, inv) => sum + (parseFloat(inv.paid_amount) || 0), 0);
+    po.payment_made = totalPaid;
+    po.paid_amount = totalPaid;
+
     const canSeePrices = canViewOrderPrices(req.user.role);
     if (!canSeePrices) {
         po.subtotal = null;

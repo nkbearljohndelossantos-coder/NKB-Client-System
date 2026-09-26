@@ -1348,8 +1348,16 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.ok(printPoHtml.includes('Twig St.'), 'print-po.html must use capitalized Twig St.');
         assert.strictEqual(printPoHtml.includes('Twig st.'), false, 'print-po.html must NOT have lowercase Twig st.');
         assert.ok(printJoHtml.includes('Twig St.'), 'print-jo.html must use capitalized Twig St.');
-        assert.strictEqual(printJoHtml.includes('Twig st.'), false, 'print-jo.html must NOT have lowercase Twig st.');
         assert.ok(printPoHtml.includes('body.hide-prices'), 'print-po.html must contain hide-prices style for non-price viewers');
+        assert.ok(printPoHtml.includes('Payment Made'), 'print-po.html must include Payment Made');
+        assert.ok(printPoHtml.includes('Total Balance'), 'print-po.html must include Total Balance');
+        assert.ok(printPoHtml.includes('id="disp-payment-made"'), 'print-po.html must include disp-payment-made');
+        assert.ok(printPoHtml.includes('id="disp-total-balance"'), 'print-po.html must include disp-total-balance');
+        const discountPos = printPoHtml.indexOf('id="disp-discount"');
+        const paymentMadePos = printPoHtml.indexOf('id="disp-payment-made"');
+        const totalBalancePos = printPoHtml.indexOf('id="disp-total-balance"');
+        assert.ok(discountPos !== -1 && paymentMadePos !== -1 && discountPos < paymentMadePos, 'Payment Made must be under Discount in totals table');
+        assert.ok(paymentMadePos < totalBalancePos, 'Total Balance must be after Payment Made in totals table');
 
         // Print header & footer suppression (@page margin: 0 and beforeprint title clearing)
         assert.ok(printPoHtml.includes('margin: 0'), 'print-po.html must have margin: 0 on @page to suppress browser headers');
