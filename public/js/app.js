@@ -15,6 +15,9 @@ const NKB = {
                 if (res.success) {
                     this.user = res.user;
                     this.updateHeaderProfile();
+                    if (this.sleepTimer && typeof this.sleepTimer.init === 'function') {
+                        this.sleepTimer.init();
+                    }
                 } else {
                     this.logout();
                 }
@@ -346,6 +349,612 @@ const NKB = {
         localStorage.removeItem('nkb_token');
         localStorage.removeItem('nkb_user');
         window.location.href = '/index.html';
+    },
+
+    // =========================================================
+    // AFK SLEEP TIMER & SECURITY PIN SCREEN LOCK ENGINE
+    // =========================================================
+    sleepTimer: {
+        isLocked: false,
+        lastActivityTime: Date.now(),
+        autoLockMinutes: 5,
+        hasPin: false,
+        timerInterval: null,
+        enteredPin: '',
+        isPasswordMode: false,
+        isSubmitting: false,
+        failedAttempts: 0,
+        _listenersAttached: false,
+        _lockKeyListenerAttached: false,
+
+        init: function() {
+            if (!NKB.user || !NKB.token) return;
+
+            this.autoLockMinutes = NKB.user.autoLockMinutes !== undefined && NKB.user.autoLockMinutes !== null ? Number(NKB.user.autoLockMinutes) : 5;
+            this.hasPin = !!NKB.user.hasPin;
+            this.lastActivityTime = Date.now();
+            this.isLocked = false;
+
+            this.injectStyles();
+            this.attachActivityListeners();
+            this.startIdleChecker();
+            this.injectHeaderControls();
+        },
+
+        injectStyles: function() {
+            if (document.getElementById('nkb-sleep-timer-style')) return;
+            const style = document.createElement('style');
+            style.id = 'nkb-sleep-timer-style';
+            style.textContent = `
+                @keyframes nkbShake {
+                    0%, 100% { transform: translateX(0); }
+                    20%, 60% { transform: translateX(-8px); }
+                    40%, 80% { transform: translateX(8px); }
+                }
+                .nkb-animate-shake {
+                    animation: nkbShake 0.4s ease-in-out;
+                }
+                .nkb-pin-key {
+                    transition: all 0.1s ease;
+                }
+                .nkb-pin-key:active {
+                    transform: scale(0.92);
+                    background-color: #312e81 !important;
+                }
+            `;
+            document.head.appendChild(style);
+        },
+
+        attachActivityListeners: function() {
+            if (this._listenersAttached) return;
+            this._listenersAttached = true;
+
+            const handleActivity = () => {
+                if (!this.isLocked) {
+                    this.lastActivityTime = Date.now();
+                }
+            };
+
+            let throttleTimer = null;
+            const throttledHandler = () => {
+                if (!throttleTimer) {
+                    handleActivity();
+                    throttleTimer = setTimeout(() => { throttleTimer = null; }, 1000);
+                }
+            };
+
+            ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'].forEach(evt => {
+                window.addEventListener(evt, throttledHandler, { passive: true });
+            });
+
+            // Global shortcut: Alt+L or Ctrl+Alt+L to lock immediately
+            window.addEventListener('keydown', (e) => {
+                if ((e.altKey && (e.key === 'l' || e.key === 'L')) || (e.ctrlKey && e.altKey && (e.key === 'l' || e.key === 'L'))) {
+                    e.preventDefault();
+                    if (!this.isLocked && NKB.user) {
+                        this.lock('manual');
+                    }
+                }
+            });
+        },
+
+        startIdleChecker: function() {
+            if (this.timerInterval) clearInterval(this.timerInterval);
+            this.timerInterval = setInterval(() => {
+                if (!NKB.user || !NKB.token || this.isLocked) return;
+                if (this.autoLockMinutes <= 0) return; // Disabled
+
+                const idleSeconds = (Date.now() - this.lastActivityTime) / 1000;
+                const thresholdSeconds = this.autoLockMinutes * 60;
+
+                if (idleSeconds >= thresholdSeconds) {
+                    this.lock('afk');
+                }
+            }, 3000);
+        },
+
+        injectHeaderControls: function() {
+            // Find user name container in navigation
+            const navUserContainer = document.querySelector('#nav-user-name')?.closest('.flex');
+            if (navUserContainer && !document.getElementById('btn-header-lock-screen')) {
+                const parent = navUserContainer.parentElement;
+                if (parent) {
+                    const lockBtn = document.createElement('button');
+                    lockBtn.id = 'btn-header-lock-screen';
+                    lockBtn.type = 'button';
+                    lockBtn.onclick = () => this.lock('manual');
+                    lockBtn.className = 'px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer shadow-2xs';
+                    lockBtn.title = 'Lock Screen (Alt+L)';
+                    lockBtn.innerHTML = `<span>🔒</span><span class="hidden sm:inline">Lock</span>`;
+
+                    const settingsBtn = document.createElement('button');
+                    settingsBtn.id = 'btn-header-pin-settings';
+                    settingsBtn.type = 'button';
+                    settingsBtn.onclick = () => this.openSettingsModal();
+                    settingsBtn.className = 'p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 rounded-lg text-xs font-semibold transition flex items-center justify-center cursor-pointer shadow-2xs';
+                    settingsBtn.title = 'Sleep Timer & Security PIN Settings';
+                    settingsBtn.innerHTML = `<span>⚙️</span>`;
+
+                    parent.insertBefore(settingsBtn, navUserContainer);
+                    parent.insertBefore(lockBtn, navUserContainer);
+                }
+            }
+
+            // Also check Client view buttons
+            const clientAuthActions = document.getElementById('auth-header-actions');
+            if (clientAuthActions && !document.getElementById('btn-client-lock-screen')) {
+                const lockBtn = document.createElement('button');
+                lockBtn.id = 'btn-client-lock-screen';
+                lockBtn.type = 'button';
+                lockBtn.onclick = () => this.lock('manual');
+                lockBtn.className = 'inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 border border-slate-700 transition cursor-pointer';
+                lockBtn.title = 'Lock Screen (Alt+L)';
+                lockBtn.innerHTML = `<span>🔒</span><span class="hidden sm:inline">Lock</span>`;
+
+                clientAuthActions.insertBefore(lockBtn, clientAuthActions.firstChild);
+            }
+        },
+
+        lock: function(reason = 'manual') {
+            if (this.isLocked) return;
+            this.isLocked = true;
+            this.enteredPin = '';
+            this.isPasswordMode = false;
+            this.failedAttempts = 0;
+
+            let existing = document.getElementById('nkb-sleep-lockscreen-root');
+            if (!existing) {
+                existing = document.createElement('div');
+                existing.id = 'nkb-sleep-lockscreen-root';
+                document.body.appendChild(existing);
+            }
+
+            this.renderLockScreen(reason);
+        },
+
+        renderLockScreen: function(reason = 'manual') {
+            const root = document.getElementById('nkb-sleep-lockscreen-root');
+            if (!root) return;
+
+            const u = NKB.user || { name: 'User', role: 'STAFF', email: '' };
+            const isAfk = reason === 'afk';
+            const userInitial = (u.name || 'U').charAt(0).toUpperCase();
+
+            root.innerHTML = `
+                <div class="fixed inset-0 z-[999999] bg-slate-950/95 backdrop-blur-2xl flex items-center justify-center p-3 sm:p-4 text-slate-100 select-none overflow-y-auto">
+                    <div class="max-w-sm sm:max-w-md w-full bg-slate-900/90 border border-slate-800 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-5 text-center my-auto">
+                        
+                        <!-- LOCK STATUS BADGE & HEADER -->
+                        <div class="flex flex-col items-center space-y-2">
+                            <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500 via-rose-500 to-indigo-600 flex items-center justify-center text-2xl shadow-lg shadow-amber-500/20 animate-pulse">
+                                🔒
+                            </div>
+                            <h2 class="text-lg sm:text-xl font-black tracking-tight text-white mt-1">SESSION LOCKED</h2>
+                            <p class="text-xs text-slate-400 font-medium">
+                                ${isAfk ? 'Away from keyboard (AFK) idle timeout.' : 'Workstation locked by operator.'}
+                            </p>
+                        </div>
+
+                        <!-- USER PROFILE CARD -->
+                        <div class="p-3 bg-slate-800/80 border border-slate-700/80 rounded-2xl flex items-center gap-3 text-left">
+                            <div class="w-10 h-10 rounded-xl bg-indigo-600 text-white font-black flex items-center justify-center text-base flex-shrink-0">
+                                ${userInitial}
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <div class="text-xs font-bold text-white truncate">${u.name}</div>
+                                <div class="text-[10px] text-slate-400 truncate">${u.email || ''}</div>
+                            </div>
+                            <span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase tracking-wide flex-shrink-0">
+                                ${(u.role || 'STAFF').replace(/_/g, ' ')}
+                            </span>
+                        </div>
+
+                        <!-- PIN OR PASSWORD CONTAINER -->
+                        <div id="lockscreen-input-container" class="space-y-4">
+                            <!-- Populated dynamically -->
+                        </div>
+
+                        <!-- ERROR MESSAGE -->
+                        <div id="lockscreen-error-msg" class="hidden text-xs font-bold text-rose-400 p-2 bg-rose-950/40 border border-rose-800/50 rounded-xl"></div>
+
+                        <!-- FOOTER OPTIONS -->
+                        <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
+                            <button type="button" onclick="NKB.sleepTimer.togglePasswordMode()" class="hover:text-indigo-400 font-bold transition">
+                                <span id="btn-toggle-auth-text">${this.isPasswordMode ? '← Use Security PIN' : '🔑 Unlock with Password'}</span>
+                            </button>
+                            <button type="button" onclick="NKB.logout()" class="hover:text-rose-400 font-bold transition flex items-center gap-1">
+                                <span>Logout</span>
+                                <span>→</span>
+                            </button>
+                        </div>
+
+                    </div>
+                </div>
+            `;
+
+            this.updateInputDisplay();
+            this.attachLockKeyListeners();
+        },
+
+        updateInputDisplay: function() {
+            const container = document.getElementById('lockscreen-input-container');
+            const toggleText = document.getElementById('btn-toggle-auth-text');
+            if (!container) return;
+
+            if (this.isPasswordMode) {
+                if (toggleText) toggleText.textContent = '← Use Security PIN';
+                container.innerHTML = `
+                    <form onsubmit="NKB.sleepTimer.submitPassword(event)" class="space-y-3">
+                        <div class="text-xs text-slate-400">Enter your account password to resume:</div>
+                        <input type="password" id="lock-password-input" autofocus required placeholder="Account Password" class="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <button type="submit" id="btn-submit-lock-pwd" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 shadow-md shadow-indigo-600/30">
+                            <span>Unlock Session</span>
+                        </button>
+                    </form>
+                `;
+                setTimeout(() => document.getElementById('lock-password-input')?.focus(), 100);
+                return;
+            }
+
+            if (toggleText) toggleText.textContent = '🔑 Unlock with Password';
+
+            const pinLen = this.enteredPin.length;
+
+            container.innerHTML = `
+                <div class="space-y-4">
+                    ${!this.hasPin ? `
+                        <div class="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-300 font-medium">
+                            💡 Setup your 4-digit PIN now. It will be saved for future sleep locks.
+                        </div>
+                    ` : `
+                        <div class="text-xs text-slate-400 font-medium">Enter your 4-to-6 digit Security PIN:</div>
+                    `}
+
+                    <!-- PIN DOTS INDICATOR -->
+                    <div id="pin-dots-container" class="flex justify-center items-center gap-3 my-3 p-2 rounded-xl transition-all">
+                        <div class="w-4 h-4 rounded-full border-2 ${pinLen >= 1 ? 'bg-indigo-500 border-indigo-400 scale-110 shadow-sm shadow-indigo-500' : 'bg-slate-800 border-slate-700'} transition-all duration-150"></div>
+                        <div class="w-4 h-4 rounded-full border-2 ${pinLen >= 2 ? 'bg-indigo-500 border-indigo-400 scale-110 shadow-sm shadow-indigo-500' : 'bg-slate-800 border-slate-700'} transition-all duration-150"></div>
+                        <div class="w-4 h-4 rounded-full border-2 ${pinLen >= 3 ? 'bg-indigo-500 border-indigo-400 scale-110 shadow-sm shadow-indigo-500' : 'bg-slate-800 border-slate-700'} transition-all duration-150"></div>
+                        <div class="w-4 h-4 rounded-full border-2 ${pinLen >= 4 ? 'bg-indigo-500 border-indigo-400 scale-110 shadow-sm shadow-indigo-500' : 'bg-slate-800 border-slate-700'} transition-all duration-150"></div>
+                        ${pinLen >= 5 ? `
+                            <div class="w-4 h-4 rounded-full border-2 bg-indigo-500 border-indigo-400 scale-110 shadow-sm shadow-indigo-500 transition-all duration-150"></div>
+                        ` : ''}
+                        ${pinLen >= 6 ? `
+                            <div class="w-4 h-4 rounded-full border-2 bg-indigo-500 border-indigo-400 scale-110 shadow-sm shadow-indigo-500 transition-all duration-150"></div>
+                        ` : ''}
+                    </div>
+
+                    <!-- ON-SCREEN NUMERIC KEYPAD -->
+                    <div class="grid grid-cols-3 gap-2.5 max-w-[260px] mx-auto">
+                        <button type="button" onclick="NKB.sleepTimer.appendPinDigit('1')" class="nkb-pin-key h-12 bg-slate-800 hover:bg-slate-700 rounded-2xl text-lg font-bold text-white shadow-sm flex items-center justify-center cursor-pointer">1</button>
+                        <button type="button" onclick="NKB.sleepTimer.appendPinDigit('2')" class="nkb-pin-key h-12 bg-slate-800 hover:bg-slate-700 rounded-2xl text-lg font-bold text-white shadow-sm flex items-center justify-center cursor-pointer">2</button>
+                        <button type="button" onclick="NKB.sleepTimer.appendPinDigit('3')" class="nkb-pin-key h-12 bg-slate-800 hover:bg-slate-700 rounded-2xl text-lg font-bold text-white shadow-sm flex items-center justify-center cursor-pointer">3</button>
+                        <button type="button" onclick="NKB.sleepTimer.appendPinDigit('4')" class="nkb-pin-key h-12 bg-slate-800 hover:bg-slate-700 rounded-2xl text-lg font-bold text-white shadow-sm flex items-center justify-center cursor-pointer">4</button>
+                        <button type="button" onclick="NKB.sleepTimer.appendPinDigit('5')" class="nkb-pin-key h-12 bg-slate-800 hover:bg-slate-700 rounded-2xl text-lg font-bold text-white shadow-sm flex items-center justify-center cursor-pointer">5</button>
+                        <button type="button" onclick="NKB.sleepTimer.appendPinDigit('6')" class="nkb-pin-key h-12 bg-slate-800 hover:bg-slate-700 rounded-2xl text-lg font-bold text-white shadow-sm flex items-center justify-center cursor-pointer">6</button>
+                        <button type="button" onclick="NKB.sleepTimer.appendPinDigit('7')" class="nkb-pin-key h-12 bg-slate-800 hover:bg-slate-700 rounded-2xl text-lg font-bold text-white shadow-sm flex items-center justify-center cursor-pointer">7</button>
+                        <button type="button" onclick="NKB.sleepTimer.appendPinDigit('8')" class="nkb-pin-key h-12 bg-slate-800 hover:bg-slate-700 rounded-2xl text-lg font-bold text-white shadow-sm flex items-center justify-center cursor-pointer">8</button>
+                        <button type="button" onclick="NKB.sleepTimer.appendPinDigit('9')" class="nkb-pin-key h-12 bg-slate-800 hover:bg-slate-700 rounded-2xl text-lg font-bold text-white shadow-sm flex items-center justify-center cursor-pointer">9</button>
+                        <button type="button" onclick="NKB.sleepTimer.clearPin()" class="nkb-pin-key h-12 bg-slate-800/60 hover:bg-slate-700 text-slate-400 hover:text-white rounded-2xl text-xs font-bold shadow-sm flex items-center justify-center cursor-pointer" title="Clear">✕</button>
+                        <button type="button" onclick="NKB.sleepTimer.appendPinDigit('0')" class="nkb-pin-key h-12 bg-slate-800 hover:bg-slate-700 rounded-2xl text-lg font-bold text-white shadow-sm flex items-center justify-center cursor-pointer">0</button>
+                        <button type="button" onclick="NKB.sleepTimer.deletePinDigit()" class="nkb-pin-key h-12 bg-slate-800/60 hover:bg-slate-700 text-slate-400 hover:text-white rounded-2xl text-base font-bold shadow-sm flex items-center justify-center cursor-pointer" title="Backspace">⌫</button>
+                    </div>
+
+                    ${pinLen >= 4 ? `
+                        <button type="button" onclick="NKB.sleepTimer.submitPin()" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 shadow-md shadow-indigo-600/30">
+                            <span>Unlock Now →</span>
+                        </button>
+                    ` : ''}
+                </div>
+            `;
+        },
+
+        appendPinDigit: function(digit) {
+            if (this.isSubmitting || this.isPasswordMode) return;
+            if (this.enteredPin.length >= 8) return;
+
+            this.enteredPin += String(digit);
+            this.updateInputDisplay();
+
+            // Clear any error notice
+            const err = document.getElementById('lockscreen-error-msg');
+            if (err) err.classList.add('hidden');
+
+            // Auto-submit on 4th digit
+            if (this.enteredPin.length === 4) {
+                setTimeout(() => {
+                    if (this.isLocked && !this.isSubmitting && this.enteredPin.length >= 4) {
+                        this.submitPin();
+                    }
+                }, 180);
+            }
+        },
+
+        deletePinDigit: function() {
+            if (this.isSubmitting || this.isPasswordMode) return;
+            this.enteredPin = this.enteredPin.slice(0, -1);
+            this.updateInputDisplay();
+        },
+
+        clearPin: function() {
+            if (this.isSubmitting || this.isPasswordMode) return;
+            this.enteredPin = '';
+            this.updateInputDisplay();
+        },
+
+        attachLockKeyListeners: function() {
+            if (this._lockKeyListenerAttached) return;
+            this._lockKeyListenerAttached = true;
+
+            window.addEventListener('keydown', (e) => {
+                if (!this.isLocked || this.isPasswordMode) return;
+
+                if (/^[0-9]$/.test(e.key)) {
+                    e.preventDefault();
+                    this.appendPinDigit(e.key);
+                } else if (e.key === 'Backspace') {
+                    e.preventDefault();
+                    this.deletePinDigit();
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    this.clearPin();
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (this.enteredPin.length >= 4) {
+                        this.submitPin();
+                    }
+                }
+            });
+        },
+
+        togglePasswordMode: function() {
+            this.isPasswordMode = !this.isPasswordMode;
+            this.enteredPin = '';
+            const err = document.getElementById('lockscreen-error-msg');
+            if (err) err.classList.add('hidden');
+            this.updateInputDisplay();
+        },
+
+        submitPin: async function() {
+            if (this.isSubmitting || !this.enteredPin) return;
+            this.isSubmitting = true;
+
+            const dots = document.getElementById('pin-dots-container');
+            if (dots) dots.classList.add('opacity-50');
+
+            try {
+                const res = await NKB.api('/api/auth/verify-pin', {
+                    method: 'POST',
+                    body: JSON.stringify({ pin: this.enteredPin })
+                });
+
+                if (res.success) {
+                    this.unlockSuccess(res.message);
+                } else {
+                    this.unlockFailure(res.error || 'Incorrect Security PIN.');
+                }
+            } catch (err) {
+                this.unlockFailure('Error verifying PIN. Please try again.');
+            } finally {
+                this.isSubmitting = false;
+                if (dots) dots.classList.remove('opacity-50');
+            }
+        },
+
+        submitPassword: async function(e) {
+            if (e) e.preventDefault();
+            const pwdInput = document.getElementById('lock-password-input');
+            const pwd = pwdInput ? pwdInput.value : '';
+            if (!pwd) return;
+
+            const btn = document.getElementById('btn-submit-lock-pwd');
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Verifying...';
+            }
+
+            try {
+                const res = await NKB.api('/api/auth/verify-pin', {
+                    method: 'POST',
+                    body: JSON.stringify({ password: pwd })
+                });
+
+                if (res.success) {
+                    this.unlockSuccess(res.message);
+                } else {
+                    this.unlockFailure(res.error || 'Incorrect account password.');
+                }
+            } catch (err) {
+                this.unlockFailure('Error verifying password.');
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = 'Unlock Session';
+                }
+            }
+        },
+
+        unlockSuccess: function(msg) {
+            this.isLocked = false;
+            this.enteredPin = '';
+            this.hasPin = true;
+            this.lastActivityTime = Date.now();
+
+            const root = document.getElementById('nkb-sleep-lockscreen-root');
+            if (root) {
+                root.innerHTML = '';
+            }
+
+            NKB.showToast(msg || 'Screen unlocked successfully!', 'success');
+        },
+
+        unlockFailure: function(errMsg) {
+            this.failedAttempts++;
+            this.enteredPin = '';
+            this.updateInputDisplay();
+
+            const dots = document.getElementById('pin-dots-container');
+            if (dots) {
+                dots.classList.add('nkb-animate-shake');
+                setTimeout(() => dots.classList.remove('nkb-animate-shake'), 450);
+            }
+
+            const err = document.getElementById('lockscreen-error-msg');
+            if (err) {
+                err.textContent = errMsg || 'Incorrect Security PIN.';
+                err.classList.remove('hidden');
+            }
+        },
+
+        // ---------------------------------------------------------
+        // SETTINGS MODAL: CONFIGURE SLEEP TIMER & SECURITY PIN
+        // ---------------------------------------------------------
+        openSettingsModal: function() {
+            const root = document.getElementById('modals-root') || document.getElementById('client-modals-root') || document.body;
+            let container = document.getElementById('nkb-sleep-settings-modal');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'nkb-sleep-settings-modal';
+                root.appendChild(container);
+            }
+
+            const currentMins = this.autoLockMinutes;
+
+            container.innerHTML = `
+                <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50 overflow-y-auto">
+                    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 my-auto text-slate-800">
+                        <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                            <div class="flex items-center gap-2.5">
+                                <span class="text-xl">🔒</span>
+                                <div>
+                                    <h3 class="text-base font-black text-slate-900">Sleep Timer & PIN Security</h3>
+                                    <p class="text-xs text-slate-500 font-medium">Automatic workstation lock and PIN settings</p>
+                                </div>
+                            </div>
+                            <button type="button" onclick="document.getElementById('nkb-sleep-settings-modal').remove()" class="text-slate-400 hover:text-slate-600 font-bold text-2xl leading-none">&times;</button>
+                        </div>
+
+                        <form onsubmit="NKB.sleepTimer.saveSettings(event)" class="space-y-4 text-xs font-semibold">
+                            <!-- TIMER DURATION SELECTOR -->
+                            <div>
+                                <label class="block text-slate-700 font-bold mb-1">Inactivity Sleep Timer (AFK Lock)</label>
+                                <select id="set-autolock-minutes" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-slate-50 font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500">
+                                    <option value="1" ${currentMins === 1 ? 'selected' : ''}>⏱️ 1 Minute (High Security)</option>
+                                    <option value="3" ${currentMins === 3 ? 'selected' : ''}>⏱️ 3 Minutes</option>
+                                    <option value="5" ${currentMins === 5 ? 'selected' : ''}>⏱️ 5 Minutes (Recommended)</option>
+                                    <option value="10" ${currentMins === 10 ? 'selected' : ''}>⏱️ 10 Minutes</option>
+                                    <option value="15" ${currentMins === 15 ? 'selected' : ''}>⏱️ 15 Minutes</option>
+                                    <option value="30" ${currentMins === 30 ? 'selected' : ''}>⏱️ 30 Minutes</option>
+                                    <option value="0" ${currentMins === 0 ? 'selected' : ''}>🚫 Disabled / Never</option>
+                                </select>
+                                <p class="text-[10px] text-slate-400 font-normal mt-1">When idle with no mouse or keyboard activity, the screen automatically locks.</p>
+                            </div>
+
+                            <!-- PIN SETTINGS -->
+                            <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                                <div class="flex items-center justify-between">
+                                    <span class="font-bold text-slate-800">Security PIN</span>
+                                    <span class="px-2 py-0.5 rounded-full text-[9px] font-bold ${this.hasPin ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
+                                        ${this.hasPin ? '✓ PIN Active' : 'Not Configured'}
+                                    </span>
+                                </div>
+
+                                <div>
+                                    <label class="block text-slate-600 mb-1">New PIN (4 to 6 Digits)</label>
+                                    <input type="password" id="set-pin-value" maxlength="8" inputmode="numeric" placeholder="e.g. 1234" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white font-mono font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500">
+                                </div>
+
+                                <div>
+                                    <label class="block text-slate-600 mb-1">Confirm New PIN</label>
+                                    <input type="password" id="set-pin-confirm" maxlength="8" inputmode="numeric" placeholder="Re-enter PIN" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white font-mono font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500">
+                                </div>
+
+                                ${this.hasPin ? `
+                                    <div>
+                                        <label class="block text-slate-600 mb-1">Current Account Password (for verification)</label>
+                                        <input type="password" id="set-pin-current-pwd" placeholder="Account Password" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white font-normal text-slate-800 focus:ring-2 focus:ring-indigo-500">
+                                    </div>
+                                ` : ''}
+                            </div>
+
+                            <div class="flex justify-between items-center pt-2 border-t border-slate-100">
+                                <button type="button" onclick="NKB.sleepTimer.lock('manual')" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition flex items-center gap-1">
+                                    <span>🔒 Test Lock</span>
+                                </button>
+
+                                <div class="flex gap-2">
+                                    <button type="button" onclick="document.getElementById('nkb-sleep-settings-modal').remove()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition">
+                                        Cancel
+                                    </button>
+                                    <button type="submit" id="btn-save-pin-settings" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold transition shadow-sm">
+                                        Save Settings
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            `;
+        },
+
+        saveSettings: async function(e) {
+            e.preventDefault();
+            const auto_lock_minutes = parseInt(document.getElementById('set-autolock-minutes').value, 10);
+            const pin = document.getElementById('set-pin-value')?.value.trim();
+            const confirm = document.getElementById('set-pin-confirm')?.value.trim();
+            const current_password = document.getElementById('set-pin-current-pwd')?.value || '';
+
+            if (pin || confirm) {
+                if (pin !== confirm) {
+                    NKB.showToast('PINs do not match. Please re-enter.', 'error');
+                    return;
+                }
+                if (!/^\d{4,8}$/.test(pin)) {
+                    NKB.showToast('PIN must be 4 to 8 numeric digits.', 'error');
+                    return;
+                }
+            }
+
+            const btn = document.getElementById('btn-save-pin-settings');
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Saving...';
+            }
+
+            try {
+                const payload = { auto_lock_minutes };
+                if (pin) payload.pin = pin;
+                if (current_password) payload.current_password = current_password;
+
+                const res = await NKB.api('/api/auth/set-pin', {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                });
+
+                if (!res.success) {
+                    NKB.showToast(res.error || 'Failed to update settings.', 'error');
+                    return;
+                }
+
+                this.autoLockMinutes = res.autoLockMinutes;
+                this.hasPin = res.hasPin;
+                if (NKB.user) {
+                    NKB.user.autoLockMinutes = res.autoLockMinutes;
+                    NKB.user.hasPin = res.hasPin;
+                }
+
+                NKB.showToast('✅ Sleep Timer & PIN settings updated successfully!', 'success');
+                document.getElementById('nkb-sleep-settings-modal')?.remove();
+            } catch (err) {
+                console.error('Error saving settings:', err);
+                NKB.showToast('Error saving settings.', 'error');
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = 'Save Settings';
+                }
+            }
+        }
     }
 };
 

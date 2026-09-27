@@ -590,6 +590,17 @@ function runMigrations(dbInstance, isMysql) {
             } catch (_) {}
         }
 
+        // Schema Upgrades: Users Table for AFK Sleep Timer & PIN Screen Lock
+        const userCols = [
+            { name: 'security_pin', type: textType },
+            { name: 'auto_lock_minutes', type: `${intType} DEFAULT 5` }
+        ];
+        for (const col of userCols) {
+            try {
+                dbInstance.exec(`ALTER TABLE users ADD COLUMN ${col.name} ${col.type};`);
+            } catch (_) {}
+        }
+
         // Create product_formulations, formulation_ingredients, and order_material_conversions tables
         try {
             if (isMysql) {

@@ -80,6 +80,7 @@ router.post('/login', (req, res) => {
 
         let user = db.prepare(`
             SELECT u.id, u.name, u.email, u.password_hash, u.role, u.client_id, u.is_active,
+                   u.security_pin, u.auto_lock_minutes,
                    c.company_name, c.default_billing_policy, c.default_tolerance_percent
             FROM users u
             LEFT JOIN clients c ON u.client_id = c.id
@@ -97,6 +98,7 @@ router.post('/login', (req, res) => {
 
                 user = db.prepare(`
                     SELECT u.id, u.name, u.email, u.password_hash, u.role, u.client_id, u.is_active,
+                           u.security_pin, u.auto_lock_minutes,
                            c.company_name, c.default_billing_policy, c.default_tolerance_percent
                     FROM users u
                     LEFT JOIN clients c ON u.client_id = c.id
@@ -240,7 +242,9 @@ router.post('/login', (req, res) => {
                 clientId: user.client_id,
                 companyName: user.company_name,
                 defaultBillingPolicy: user.default_billing_policy,
-                defaultTolerancePercent: user.default_tolerance_percent
+                defaultTolerancePercent: user.default_tolerance_percent,
+                hasPin: !!user.security_pin,
+                autoLockMinutes: user.auto_lock_minutes !== null && user.auto_lock_minutes !== undefined ? Number(user.auto_lock_minutes) : 5
             }
         });
     } catch (err) {
@@ -276,13 +280,148 @@ router.get('/me', authenticateToken, (req, res) => {
         clientId: req.user.client_id,
         companyName: req.user.company_name,
         defaultBillingPolicy: req.user.default_billing_policy,
-        defaultTolerancePercent: req.user.default_tolerance_percent
+        defaultTolerancePercent: req.user.default_tolerance_percent,
+        hasPin: !!req.user.security_pin,
+        autoLockMinutes: req.user.auto_lock_minutes !== null && req.user.auto_lock_minutes !== undefined ? Number(req.user.auto_lock_minutes) : 5
     };
     return res.json({
         success: true,
         user: userData,
         data: userData
     });
+});
+
+/**
+ * POST /api/auth/set-pin
+ * Set or update security PIN and auto-lock sleep timer
+ */
+router.post('/set-pin', authenticateToken, (req, res) => {
+    try {
+        const { pin, auto_lock_minutes, current_password } = req.body;
+
+        if (!pin && auto_lock_minutes === undefined) {
+            return res.status(400).json({
+                success: false,
+                error: 'Please provide a PIN or auto-lock duration.'
+            });
+        }
+
+        const user = db.prepare('SELECT id, password_hash, security_pin FROM users WHERE id = ?').get(req.user.id);
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'User not found.' });
+        }
+
+        // If current_password is provided, verify it
+        if (current_password && !passwordsMatch(current_password, user.password_hash)) {
+            return res.status(400).json({ success: false, error: 'Incorrect account password.' });
+        }
+
+        let pinHash = user.security_pin;
+        if (pin !== undefined) {
+            const cleanPin = String(pin).trim();
+            if (cleanPin.length > 0) {
+                if (!/^\d{4,8}$/.test(cleanPin)) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Security PIN must be between 4 and 8 numeric digits.'
+                    });
+                }
+                pinHash = bcrypt.hashSync(cleanPin, 10);
+            } else {
+                pinHash = null; // Clear PIN
+            }
+        }
+
+        let lockMins = user.auto_lock_minutes !== null && user.auto_lock_minutes !== undefined ? user.auto_lock_minutes : 5;
+        if (auto_lock_minutes !== undefined) {
+            const parsed = parseInt(auto_lock_minutes, 10);
+            lockMins = isNaN(parsed) ? 5 : Math.max(0, parsed);
+        }
+
+        db.prepare(`
+            UPDATE users
+            SET security_pin = ?,
+                auto_lock_minutes = ?,
+                updated_at = datetime('now', 'localtime')
+            WHERE id = ?
+        `).run(pinHash, lockMins, req.user.id);
+
+        try {
+            logAudit({
+                userId: req.user.id,
+                userName: req.user.name,
+                userRole: req.user.role,
+                action: 'UPDATE_SECURITY_PIN',
+                entityType: 'USER',
+                entityId: req.user.id,
+                details: { autoLockMinutes: lockMins, hasPin: !!pinHash }
+            });
+        } catch (_) {}
+
+        return res.json({
+            success: true,
+            message: 'Security PIN and Sleep Timer updated successfully.',
+            hasPin: !!pinHash,
+            autoLockMinutes: lockMins
+        });
+    } catch (err) {
+        console.error('Error setting PIN:', err);
+        return res.status(500).json({ success: false, error: err.message || 'Failed to update security PIN.' });
+    }
+});
+
+/**
+ * POST /api/auth/verify-pin
+ * Validate PIN or password for AFK Sleep Timer Screen Unlock
+ */
+router.post('/verify-pin', authenticateToken, (req, res) => {
+    try {
+        const { pin, password } = req.body;
+
+        if (!pin && !password) {
+            return res.status(400).json({
+                success: false,
+                error: 'Please enter your PIN or account password.'
+            });
+        }
+
+        const user = db.prepare('SELECT id, password_hash, security_pin, name FROM users WHERE id = ?').get(req.user.id);
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'User not found.' });
+        }
+
+        // If user submitted password (fallback)
+        if (password) {
+            if (passwordsMatch(password, user.password_hash)) {
+                return res.json({ success: true, message: 'Unlocked with password successfully.' });
+            }
+            return res.status(401).json({ success: false, error: 'Incorrect account password.' });
+        }
+
+        // If user submitted PIN
+        const cleanPin = String(pin).trim();
+
+        // If user has not set a PIN yet, allow them to set it directly on first lock
+        if (!user.security_pin) {
+            if (/^\d{4,8}$/.test(cleanPin)) {
+                const pinHash = bcrypt.hashSync(cleanPin, 10);
+                db.prepare("UPDATE users SET security_pin = ?, updated_at = datetime('now', 'localtime') WHERE id = ?").run(pinHash, req.user.id);
+                return res.json({ success: true, message: 'Security PIN created and screen unlocked!', isFirstPin: true });
+            }
+            return res.status(400).json({ success: false, error: 'Please enter a valid 4-to-8 digit numeric PIN.' });
+        }
+
+        // Verify stored bcrypt PIN hash (or legacy plain pin fallback if any)
+        const isMatch = passwordsMatch(cleanPin, user.security_pin) || String(user.security_pin) === cleanPin;
+        if (isMatch) {
+            return res.json({ success: true, message: 'Screen unlocked successfully.' });
+        }
+
+        return res.status(401).json({ success: false, error: 'Incorrect Security PIN.' });
+    } catch (err) {
+        console.error('Error verifying PIN:', err);
+        return res.status(500).json({ success: false, error: 'Failed to verify PIN.' });
+    }
 });
 
 /**

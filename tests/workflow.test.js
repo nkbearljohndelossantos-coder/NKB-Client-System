@@ -2787,6 +2787,79 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.strictEqual(otherClientAlertRes.status, 403);
     });
 
+    test('37. AFK Sleep Timer & Workstation PIN Security Verification', async () => {
+        // 1. Initial auth state check - check hasPin and default autoLockMinutes
+        const meRes1 = await request(app)
+            .get('/api/auth/me')
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(meRes1.status, 200);
+        assert.strictEqual(typeof meRes1.body.data.hasPin, 'boolean');
+        assert.ok(typeof meRes1.body.data.autoLockMinutes === 'number' || meRes1.body.data.autoLockMinutes === null);
+
+        // 2. Reject invalid PIN configurations (letters, too short, too long)
+        const badPin1 = await request(app)
+            .post('/api/auth/set-pin')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({ pin: 'abc' });
+        assert.strictEqual(badPin1.status, 400);
+
+        const badPin2 = await request(app)
+            .post('/api/auth/set-pin')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({ pin: '12' });
+        assert.strictEqual(badPin2.status, 400);
+
+        // 3. Set valid 4-digit PIN and customized auto_lock_minutes
+        const setPinRes = await request(app)
+            .post('/api/auth/set-pin')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({ pin: '2026', auto_lock_minutes: 10 });
+        assert.strictEqual(setPinRes.status, 200);
+        assert.strictEqual(setPinRes.body.success, true);
+        assert.strictEqual(setPinRes.body.autoLockMinutes, 10);
+        assert.strictEqual(setPinRes.body.hasPin, true);
+
+        // 4. Verify auth profile reflects hasPin=true and updated minutes
+        const meRes2 = await request(app)
+            .get('/api/auth/me')
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(meRes2.status, 200);
+        assert.strictEqual(meRes2.body.data.hasPin, true);
+        assert.strictEqual(meRes2.body.data.autoLockMinutes, 10);
+
+        // 5. Test PIN verification endpoint: wrong PIN rejected
+        const verifyWrong = await request(app)
+            .post('/api/auth/verify-pin')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({ pin: '9999' });
+        assert.strictEqual(verifyWrong.status, 401);
+        assert.strictEqual(verifyWrong.body.success, false);
+
+        // 6. Test PIN verification endpoint: correct PIN succeeds
+        const verifyCorrect = await request(app)
+            .post('/api/auth/verify-pin')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({ pin: '2026' });
+        assert.strictEqual(verifyCorrect.status, 200);
+        assert.strictEqual(verifyCorrect.body.success, true);
+
+        // 7. Test Password fallback verification: incorrect password fails
+        const verifyWrongPwd = await request(app)
+            .post('/api/auth/verify-pin')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({ password: 'WrongPassword999!' });
+        assert.strictEqual(verifyWrongPwd.status, 401);
+        assert.strictEqual(verifyWrongPwd.body.success, false);
+
+        // 8. Test Password fallback verification: correct password unlocks session
+        const verifyCorrectPwd = await request(app)
+            .post('/api/auth/verify-pin')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({ password: 'Admin123!' });
+        assert.strictEqual(verifyCorrectPwd.status, 200);
+        assert.strictEqual(verifyCorrectPwd.body.success, true);
+    });
+
     after(() => {
         // Automatically delete all test decoys and temporary test database
         try {

@@ -22,6 +22,8 @@ CREATE TABLE IF NOT EXISTS users (
     phone TEXT,
     is_active INTEGER NOT NULL DEFAULT 1,
     last_active_at TEXT,
+    security_pin TEXT,
+    auto_lock_minutes INTEGER DEFAULT 5,
     created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL
