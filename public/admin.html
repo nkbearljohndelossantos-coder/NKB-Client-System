@@ -431,7 +431,7 @@
                                 <span>📖</span><span>How Orders Work</span>
                             </button>
                         </div>
-                        <p class="text-sm text-slate-500">Client orders with agreed manufacturing tolerance and billing policy.</p>
+                        <p class="text-sm text-slate-500">Client orders with approved formulation, pricing, and manufacturing status.</p>
                     </div>
                     <button onclick="openCreatePOModal()" title="Create Purchase Order (Ctrl+O)" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/30 transition flex items-center gap-2">
                         <span>➕ Create Purchase Order</span>
@@ -470,12 +470,9 @@
                         <table class="w-full text-left text-xs">
                             <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider sticky top-0 z-10 shadow-sm">
                                 <tr>
-                                    <th class="py-3 px-4">PO Number</th>
-                                    <th class="py-3 px-4">Date</th>
+                                    <th class="py-3 px-4">PO Number & Date</th>
                                     <th class="py-3 px-4">Client</th>
                                     <th class="py-3 px-4">Ordered Products Breakdown</th>
-                                    <th class="py-3 px-4">Tolerance</th>
-                                    <th class="py-3 px-4">Billing Policy</th>
                                     <th class="py-3 px-4">Target Qty</th>
                                     <th class="py-3 px-4">Total Amount</th>
                                     <th class="py-3 px-4">Status</th>
@@ -483,7 +480,7 @@
                                 </tr>
                             </thead>
                             <tbody id="table-orders-body" class="divide-y divide-slate-100 font-medium">
-                                <tr><td colspan="10" class="py-6 text-center text-slate-400">Loading purchase orders...</td></tr>
+                                <tr><td colspan="7" class="py-6 text-center text-slate-400">Loading purchase orders...</td></tr>
                             </tbody>
                         </table>
                     </div>

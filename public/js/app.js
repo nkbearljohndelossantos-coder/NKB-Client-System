@@ -401,7 +401,6 @@ async function openViewPOModal(poId) {
                 <td class="py-3 px-3 text-center"><span class="badge bg-slate-100 text-slate-700 font-mono text-[10px]">${item.formula_code || 'FORM-2026-V1'}</span></td>
                 <td class="py-3 px-3 text-center text-slate-600">${item.shelf_life_months || 24} mos</td>
                 <td class="py-3 px-3 text-center font-black text-slate-950 font-mono">${NKB.formatNumber(item.target_quantity)} ${item.unit || 'pcs'}</td>
-                <td class="py-3 px-3 text-center text-slate-500 font-mono text-[11px]">${NKB.formatNumber(item.min_allowed_quantity)} – ${NKB.formatNumber(item.max_allowed_quantity)}</td>
                 ${canViewPrices ? `
                     <td class="py-3 px-3 text-right font-bold text-indigo-900 font-mono">₱${Number(item.unit_price || 0).toFixed(2)}</td>
                     <td class="py-3 px-3 text-right font-extrabold text-slate-900 font-mono">${NKB.formatCurrency(item.subtotal)}</td>
@@ -460,8 +459,8 @@ async function openViewPOModal(poId) {
                     ` : ''}
                 </div>
 
-                <!-- 4 Specifications Badges -->
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+                <!-- Specifications Badges -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
                     <div class="p-2.5 bg-slate-50 rounded-xl border border-slate-200/70 space-y-0.5">
                         <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Formulation Code</span>
                         <div class="font-mono font-black text-slate-800 flex items-center gap-1.5">
@@ -478,12 +477,6 @@ async function openViewPOModal(poId) {
                         <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Target Quantity</span>
                         <div class="font-mono font-black text-slate-900 flex items-center gap-1.5">
                             <span>📦</span><span>${NKB.formatNumber(item.target_quantity)} ${item.unit || 'pcs'}</span>
-                        </div>
-                    </div>
-                    <div class="p-2.5 bg-indigo-50/60 rounded-xl border border-indigo-100 space-y-0.5">
-                        <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-500 block">Tolerance Bounds (±${po.tolerance_percent}%)</span>
-                        <div class="font-mono font-extrabold text-indigo-950 text-[11px]">
-                            ${NKB.formatNumber(item.min_allowed_quantity)} – ${NKB.formatNumber(item.max_allowed_quantity)} pcs
                         </div>
                     </div>
                 </div>
@@ -593,12 +586,8 @@ async function openViewPOModal(poId) {
                         </div>
                         <div class="space-y-1">
                             <span class="text-[10px] uppercase font-bold text-slate-400">Contract & Payment Terms</span>
-                            <div>Tolerance Limit: <strong class="text-indigo-700 font-bold">±${po.tolerance_percent}%</strong></div>
                             <div>Term of Payment: <strong class="text-slate-800">${po.form_of_payment || po.terms || 'COD'}</strong></div>
-                            <div>Billing Policy: <span class="badge ${po.billing_policy === 'ACTUAL_DELIVERY' ? 'bg-indigo-50 text-indigo-700' : 'bg-purple-50 text-purple-700'}">${po.billing_policy}</span></div>
-                            <div class="text-[10px] text-slate-500 mt-1 leading-normal">
-                                ${po.billing_policy === 'ACTUAL_DELIVERY' ? 'Over/under runs within tolerance are billed based on actual accepted units.' : 'Fixed PO quantity is billed; overruns reserved as buffer stock.'}
-                            </div>
+                            ${po.target_bank_name ? `<div>Target Bank: <strong class="text-slate-800">${po.target_bank_name}</strong></div>` : ''}
                         </div>
                     </div>
 
@@ -630,7 +619,6 @@ async function openViewPOModal(poId) {
                         <div class="border border-slate-200 rounded-2xl overflow-hidden shadow-sm mt-4">
                             <div class="px-4 py-2.5 bg-slate-50 border-b border-slate-200 font-bold text-slate-700 text-xs uppercase tracking-wider flex items-center justify-between">
                                 <span>📋 Consolidated Line Item Overview</span>
-                                <span class="text-[11px] font-mono text-slate-500 font-normal">±${po.tolerance_percent}% Manufacturing Tolerance</span>
                             </div>
                             <div class="max-h-72 overflow-y-auto overflow-x-auto">
                                 <table class="w-full text-left">
@@ -641,7 +629,6 @@ async function openViewPOModal(poId) {
                                             <th class="py-2.5 px-3 text-center">Formula Code</th>
                                             <th class="py-2.5 px-3 text-center">Shelf Life</th>
                                             <th class="py-2.5 px-3 text-center">Target Qty</th>
-                                            <th class="py-2.5 px-3 text-center">Tolerance Range</th>
                                             ${canViewPrices ? `
                                                 <th class="py-2.5 px-3 text-right">Fixed Price</th>
                                                 <th class="py-2.5 px-3 text-right">Line Total</th>
@@ -1027,31 +1014,17 @@ async function openEditPOModal(poId) {
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div>
-                            <label class="block text-slate-600 mb-1">Agreed Tolerance</label>
-                            <div class="px-3 py-2 border rounded-xl bg-slate-100 text-slate-800 font-bold">
-                                ±${po.tolerance_percent}%
-                            </div>
-                        </div>
-                        <div>
-                            <label class="block text-slate-600 mb-1">Billing Policy</label>
-                            <select id="edit-po-billing-policy" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold">
-                                <option value="ACTUAL_DELIVERY" ${po.billing_policy === 'ACTUAL_DELIVERY' ? 'selected' : ''}>Option A: Bill Actual Delivered</option>
-                                <option value="FIXED_PO_BUFFER" ${po.billing_policy === 'FIXED_PO_BUFFER' ? 'selected' : ''}>Option B: Fixed PO + Buffer Stock</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-slate-600 mb-1 font-bold">Term of Payment *</label>
-                            <select id="edit-po-form-of-payment" onchange="toggleCustomPOTerm('edit')" class="w-full px-3 py-2 border rounded-xl bg-white font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500">
-                                <option value="COD" ${selectedTerm === 'COD' ? 'selected' : ''}>COD (Cash on Delivery)</option>
-                                <option value="7d" ${selectedTerm === '7d' ? 'selected' : ''}>7d (7 Days)</option>
-                                <option value="15d" ${selectedTerm === '15d' ? 'selected' : ''}>15d (15 Days)</option>
-                                <option value="30d" ${selectedTerm === '30d' ? 'selected' : ''}>30d (30 Days)</option>
-                                <option value="CUSTOM" ${isCustom ? 'selected' : ''}>Custom Term...</option>
-                            </select>
-                            <input type="text" id="edit-po-form-of-payment-custom" value="${isCustom ? rawTerm.replace(/"/g, '&quot;') : ''}" placeholder="e.g. 50% DP, 50% upon delivery..." class="${isCustom ? '' : 'hidden'} mt-1.5 w-full px-3 py-1.5 border rounded-lg bg-white text-xs font-medium text-slate-900">
-                        </div>
+                    <input type="hidden" id="edit-po-billing-policy" value="${po.billing_policy || 'ACTUAL_DELIVERY'}">
+                    <div>
+                        <label class="block text-slate-600 mb-1 font-bold">Term of Payment *</label>
+                        <select id="edit-po-form-of-payment" onchange="toggleCustomPOTerm('edit')" class="w-full px-3 py-2 border rounded-xl bg-white font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500">
+                            <option value="COD" ${selectedTerm === 'COD' ? 'selected' : ''}>COD (Cash on Delivery)</option>
+                            <option value="7d" ${selectedTerm === '7d' ? 'selected' : ''}>7d (7 Days)</option>
+                            <option value="15d" ${selectedTerm === '15d' ? 'selected' : ''}>15d (15 Days)</option>
+                            <option value="30d" ${selectedTerm === '30d' ? 'selected' : ''}>30d (30 Days)</option>
+                            <option value="CUSTOM" ${isCustom ? 'selected' : ''}>Custom Term...</option>
+                        </select>
+                        <input type="text" id="edit-po-form-of-payment-custom" value="${isCustom ? rawTerm.replace(/"/g, '&quot;') : ''}" placeholder="e.g. 50% DP, 50% upon delivery..." class="${isCustom ? '' : 'hidden'} mt-1.5 w-full px-3 py-1.5 border rounded-lg bg-white text-xs font-medium text-slate-900">
                     </div>
 
                     <!-- Multi-Brand Search with Suggestions (Edit Mode) -->

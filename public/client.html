@@ -262,17 +262,14 @@
                         <table class="w-full text-left text-xs">
                             <thead class="bg-slate-50 border-y border-slate-200 text-slate-600 font-bold uppercase tracking-wider">
                                 <tr>
-                                    <th class="py-3 px-4">PO Number</th>
-                                    <th class="py-3 px-4">Date</th>
-                                    <th class="py-3 px-4">Tolerance</th>
-                                    <th class="py-3 px-4">Billing Policy</th>
+                                    <th class="py-3 px-4">PO Number & Date</th>
                                     <th class="py-3 px-4">Total Amount</th>
                                     <th class="py-3 px-4">Status</th>
                                     <th class="py-3 px-4 text-right">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="client-table-recent-pos" class="divide-y divide-slate-100 font-medium">
-                                <tr><td colspan="7" class="py-6 text-center text-slate-400">Loading orders...</td></tr>
+                                <tr><td colspan="4" class="py-6 text-center text-slate-400">Loading orders...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -354,30 +351,9 @@
                                 </table>
                             </div>
 
-                            <!-- Billing Policy Selector -->
-                            <div class="pt-1">
-                                <label class="block text-slate-700 text-xs font-bold mb-2">3. Over-run Billing Policy</label>
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <label class="p-3.5 border-2 border-indigo-600 bg-indigo-50/50 rounded-xl cursor-pointer flex flex-col justify-between space-y-1.5">
-                                        <div class="flex items-center justify-between">
-                                            <span class="font-extrabold text-indigo-950 text-xs">Option A: Bill Actual</span>
-                                            <input type="radio" name="client_billing_policy" value="ACTUAL_DELIVERY" checked class="text-indigo-600">
-                                        </div>
-                                        <p class="text-[10px] text-slate-600 font-normal">
-                                            Over-run is delivered and billed directly on invoice.
-                                        </p>
-                                    </label>
-
-                                    <label class="p-3.5 border-2 border-slate-200 hover:border-slate-300 rounded-xl cursor-pointer flex flex-col justify-between space-y-1.5">
-                                        <div class="flex items-center justify-between">
-                                            <span class="font-extrabold text-slate-900 text-xs">Option B: Fixed + Buffer</span>
-                                            <input type="radio" name="client_billing_policy" value="FIXED_PO_BUFFER" class="text-indigo-600">
-                                        </div>
-                                        <p class="text-[10px] text-slate-600 font-normal">
-                                            Invoice fixed at PO target. Extra output stored as factory buffer.
-                                        </p>
-                                    </label>
-                                </div>
+                            <!-- Billing Policy Selector (Hidden in interface, defaults to ACTUAL_DELIVERY) -->
+                            <div class="hidden">
+                                <input type="radio" name="client_billing_policy" value="ACTUAL_DELIVERY" checked>
                             </div>
 
                             <div>
@@ -428,19 +404,16 @@
                         <table class="w-full text-left text-xs">
                             <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider sticky top-0 z-10 shadow-sm">
                                 <tr>
-                                    <th class="py-3 px-4">PO Number</th>
-                                    <th class="py-3 px-4">Date</th>
+                                    <th class="py-3 px-4">PO Number & Date</th>
                                     <th class="py-3 px-4">Ordered Products Breakdown</th>
                                     <th class="py-3 px-4">Target Qty</th>
-                                    <th class="py-3 px-4">Tolerance</th>
-                                    <th class="py-3 px-4">Policy</th>
                                     <th class="py-3 px-4">PO Value</th>
                                     <th class="py-3 px-4">Status</th>
                                     <th class="py-3 px-4 text-right">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="client-table-all-orders" class="divide-y divide-slate-100 font-medium">
-                                <tr><td colspan="9" class="py-6 text-center text-slate-400">Loading purchase orders...</td></tr>
+                                <tr><td colspan="6" class="py-6 text-center text-slate-400">Loading purchase orders...</td></tr>
                             </tbody>
                         </table>
                     </div>

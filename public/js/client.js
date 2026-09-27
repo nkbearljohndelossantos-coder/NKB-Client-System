@@ -157,14 +157,14 @@ async function loadClientDashboard() {
     if (ordersRes.success && ordersRes.data && ordersRes.data.length > 0) {
         tbody.innerHTML = ordersRes.data.slice(0, 5).map(po => `
             <tr class="hover:bg-slate-50 transition">
-                <td class="py-3 px-4 font-bold text-indigo-600 cursor-pointer hover:underline" onclick="openViewPOModal('${po.id}')" title="Click to view full PO details">${po.po_number}</td>
-                <td class="py-3 px-4 text-slate-600">
-                    <div class="font-medium text-slate-800">${NKB.formatDate(po.po_date)}</div>
+                <td class="py-3 px-4 whitespace-nowrap">
+                    <div class="text-[11px] text-slate-500 font-medium leading-none mb-1">${NKB.formatDate(po.po_date)}</div>
+                    <button type="button" onclick="openViewPOModal('${po.id}')" class="font-mono font-bold text-indigo-600 hover:text-indigo-800 hover:underline text-left block text-sm" title="Click to view full PO details">
+                        ${po.po_number}
+                    </button>
                 </td>
-                <td class="py-3 px-4"><span class="badge bg-slate-100 text-slate-700">±${po.tolerance_percent}%</span></td>
-                <td class="py-3 px-4"><span class="badge ${po.billing_policy === 'ACTUAL_DELIVERY' ? 'bg-indigo-50 text-indigo-700' : 'bg-purple-50 text-purple-700'}">${po.billing_policy}</span></td>
-                <td class="py-3 px-4 font-extrabold text-slate-900">${NKB.formatCurrency(po.grand_total)}</td>
-                <td class="py-3 px-4">${NKB.renderStatusBadge(po.status)}</td>
+                <td class="py-3 px-4 font-extrabold text-slate-900 whitespace-nowrap">${NKB.formatCurrency(po.grand_total)}</td>
+                <td class="py-3 px-4 whitespace-nowrap">${NKB.renderStatusBadge(po.status)}</td>
                 <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
                     <button onclick="openViewPOModal('${po.id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="View Full Order Info">
                         <span>👁️ View</span>
@@ -181,7 +181,7 @@ async function loadClientDashboard() {
             </tr>
         `).join('');
     } else {
-        tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-slate-400">No purchase orders placed yet.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="4" class="py-6 text-center text-slate-400">No purchase orders placed yet.</td></tr>`;
     }
 }
 
@@ -742,9 +742,18 @@ async function loadClientOrders() {
 
             return `
             <tr class="hover:bg-slate-50 transition">
-                <td class="py-3 px-4 font-bold text-indigo-600 cursor-pointer hover:underline whitespace-nowrap" onclick="openViewPOModal('${po.id}')" title="Click to view full PO details">${po.po_number}</td>
-                <td class="py-3 px-4 text-slate-600 whitespace-nowrap">
-                    <div class="font-medium text-slate-800">${NKB.formatDate(po.po_date)}</div>
+                <td class="py-3 px-4 whitespace-nowrap">
+                    <div class="text-[11px] text-slate-500 font-medium leading-none mb-1">${NKB.formatDate(po.po_date)}</div>
+                    <button type="button" onclick="openViewPOModal('${po.id}')" class="font-mono font-bold text-indigo-600 hover:text-indigo-800 hover:underline text-left block text-sm" title="Click to view full PO details">
+                        ${po.po_number}
+                    </button>
+                    ${po.form_of_payment ? `
+                        <div class="mt-1">
+                            <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 inline-flex items-center gap-1" title="Term of Payment: ${po.form_of_payment}">
+                                💳 ${po.form_of_payment}
+                            </span>
+                        </div>
+                    ` : ''}
                 </td>
                 <td class="py-3 px-4">
                     <div class="space-y-1 w-60">
@@ -752,8 +761,6 @@ async function loadClientOrders() {
                     </div>
                 </td>
                 <td class="py-3 px-4 font-bold text-slate-800 whitespace-nowrap font-mono">${NKB.formatNumber(po.total_target_quantity)} pcs</td>
-                <td class="py-3 px-4 whitespace-nowrap"><span class="badge bg-slate-100 text-slate-700">±${po.tolerance_percent}%</span></td>
-                <td class="py-3 px-4 whitespace-nowrap"><span class="badge ${po.billing_policy === 'ACTUAL_DELIVERY' ? 'bg-indigo-50 text-indigo-700' : 'bg-purple-50 text-purple-700'}">${po.billing_policy}</span></td>
                 <td class="py-3 px-4 font-extrabold text-slate-900 whitespace-nowrap font-mono">${NKB.formatCurrency(po.grand_total)}</td>
                 <td class="py-3 px-4 whitespace-nowrap">${NKB.renderStatusBadge(po.status)}</td>
                 <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
@@ -773,7 +780,7 @@ async function loadClientOrders() {
             `;
         }).join('');
     } else {
-        tbody.innerHTML = `<tr><td colspan="9" class="py-6 text-center text-slate-400">No orders found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="py-6 text-center text-slate-400">No orders found.</td></tr>`;
     }
 }
 

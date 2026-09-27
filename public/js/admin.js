@@ -730,25 +730,23 @@ async function loadOrders() {
 
             return `
             <tr class="hover:bg-slate-50 transition ${isVoided ? 'opacity-60 bg-rose-50/20' : ''}">
-                <td class="py-3 px-4 font-bold text-indigo-600 cursor-pointer hover:underline whitespace-nowrap" onclick="openViewPOModal('${po.id}')" title="Click to view full PO details">
-                    ${po.po_number}
-                </td>
-                <td class="py-3 px-4 text-slate-600 whitespace-nowrap">
-                    <div class="font-medium text-slate-800">${NKB.formatDate(po.po_date)}</div>
+                <td class="py-3 px-4 whitespace-nowrap">
+                    <div class="text-[11px] text-slate-500 font-medium leading-none mb-1">${NKB.formatDate(po.po_date)}</div>
+                    <button type="button" onclick="openViewPOModal('${po.id}')" class="font-mono font-bold text-indigo-600 hover:text-indigo-800 hover:underline text-left block text-sm" title="Click to view full PO details">
+                        ${po.po_number}
+                    </button>
+                    ${po.form_of_payment ? `
+                        <div class="mt-1">
+                            <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 inline-flex items-center gap-1" title="Term of Payment: ${po.form_of_payment}">
+                                💳 ${po.form_of_payment}
+                            </span>
+                        </div>
+                    ` : ''}
                 </td>
                 <td class="py-3 px-4 font-bold text-slate-800">${(po.is_vyuceutical_ops === 1 || (po.company_name && po.company_name.toLowerCase().includes('vyuceutical'))) ? `<span class="text-purple-900 font-extrabold">Vyuceutical OPC - ${po.contact_person || po.company_name}</span>` : po.company_name}</td>
                 <td class="py-3 px-4">
                     <div class="space-y-1 w-64 max-h-28 overflow-y-auto pr-1">
                         ${itemsList}
-                    </div>
-                </td>
-                <td class="py-3 px-4 whitespace-nowrap"><span class="badge bg-slate-100 text-slate-700">±${po.tolerance_percent}%</span></td>
-                <td class="py-3 px-4 whitespace-nowrap">
-                    <div><span class="badge ${po.billing_policy === 'ACTUAL_DELIVERY' ? 'bg-indigo-50 text-indigo-700' : 'bg-purple-50 text-purple-700'}">${po.billing_policy}</span></div>
-                    <div class="mt-1">
-                        <span class="px-2 py-0.5 rounded text-[10px] font-black bg-blue-50 text-blue-800 border border-blue-200 inline-flex items-center gap-1" title="Term of Payment: ${po.form_of_payment || 'COD'}">
-                            💳 ${po.form_of_payment || 'COD'}
-                        </span>
                     </div>
                 </td>
                 <td class="py-3 px-4 font-black text-slate-950 whitespace-nowrap font-mono">${NKB.formatNumber(po.total_target_quantity)} pcs</td>
@@ -892,7 +890,7 @@ async function loadOrders() {
             `;
         }).join('');
     } else {
-        tbody.innerHTML = `<tr><td colspan="10" class="py-6 text-center text-slate-400">No purchase orders found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-slate-400">No purchase orders found.</td></tr>`;
     }
 }
 
@@ -5484,7 +5482,7 @@ async function openCreatePOModal() {
                     </button>
                 </div>
                 <form id="form-create-po" onsubmit="submitCreatePO(event)" class="space-y-4 text-xs font-semibold flex-1 overflow-y-auto pr-1">
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                             <label class="block text-slate-600 mb-1">Select Client *</label>
                             <select id="po-client-id" onchange="onAdminPOClientChanged()" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-slate-900">
@@ -5493,13 +5491,6 @@ async function openCreatePOModal() {
                                     const label = isVyu ? `Vyuceutical OPC - ${c.contact_person || c.company_name}` : c.company_name;
                                     return `<option value="${c.id}">${label}</option>`;
                                 }).join('')}
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-slate-600 mb-1">Billing Policy</label>
-                            <select id="po-billing-policy" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold">
-                                <option value="ACTUAL_DELIVERY">Option A: Bill Actual Delivered</option>
-                                <option value="FIXED_PO_BUFFER">Option B: Fixed PO + Buffer Stock</option>
                             </select>
                         </div>
                         <div>
@@ -5513,6 +5504,8 @@ async function openCreatePOModal() {
                             </select>
                             <input type="text" id="create-po-form-of-payment-custom" placeholder="e.g. 50% DP, 50% upon delivery..." class="hidden mt-1.5 w-full px-3 py-1.5 border rounded-lg bg-white text-xs font-medium text-slate-900">
                         </div>
+                        <!-- Hidden Billing Policy (defaults to ACTUAL_DELIVERY) -->
+                        <input type="hidden" id="po-billing-policy" value="ACTUAL_DELIVERY">
                     </div>
 
                     <!-- Multi-Brand Search with Suggestions -->
