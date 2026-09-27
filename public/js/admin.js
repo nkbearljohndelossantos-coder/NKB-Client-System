@@ -728,11 +728,19 @@ async function loadOrders() {
             const allDispatched = totalItemsCount > 0 && po.items && po.items.every(it => it.dr_number);
             const isVoided = po.status === 'VOIDED';
 
+            const statusBorderColor = isVoided ? 'border-l-rose-500' :
+                po.status === 'COMPLETED' ? 'border-l-emerald-600' :
+                po.status === 'APPROVED' ? 'border-l-indigo-600' :
+                po.status === 'IN_PRODUCTION' ? 'border-l-blue-600' :
+                po.status === 'PARTIALLY_DELIVERED' ? 'border-l-purple-600' :
+                (po.status === 'PENDING_APPROVAL' || po.status === 'DRAFT') ? 'border-l-amber-500' :
+                'border-l-slate-400';
+
             return `
-            <tr class="hover:bg-slate-50 transition ${isVoided ? 'opacity-60 bg-rose-50/20' : ''}">
-                <td class="py-3 px-4 whitespace-nowrap">
-                    <div class="text-[11px] text-slate-500 font-medium leading-none mb-1">${NKB.formatDate(po.po_date)}</div>
-                    <button type="button" onclick="openViewPOModal('${po.id}')" class="font-mono font-bold text-indigo-600 hover:text-indigo-800 hover:underline text-left block text-sm" title="Click to view full PO details">
+            <tr class="bg-white hover:bg-slate-50/90 transition shadow-xs rounded-2xl group ${isVoided ? 'opacity-60 bg-rose-50/20' : ''}">
+                <td class="py-3.5 px-4 whitespace-nowrap rounded-l-2xl border-y border-l border-slate-200/90 border-l-4 ${statusBorderColor}">
+                    <div class="text-[11px] text-slate-500 font-semibold leading-none mb-1">${NKB.formatDate(po.po_date)}</div>
+                    <button type="button" onclick="openViewPOModal('${po.id}')" class="font-mono font-black text-indigo-600 hover:text-indigo-800 hover:underline text-left block text-sm tracking-tight" title="Click to view full PO details">
                         ${po.po_number}
                     </button>
                     ${po.form_of_payment ? `
@@ -743,15 +751,15 @@ async function loadOrders() {
                         </div>
                     ` : ''}
                 </td>
-                <td class="py-3 px-4 font-bold text-slate-800">${(po.is_vyuceutical_ops === 1 || (po.company_name && po.company_name.toLowerCase().includes('vyuceutical'))) ? `<span class="text-purple-900 font-extrabold">Vyuceutical OPC - ${po.contact_person || po.company_name}</span>` : po.company_name}</td>
-                <td class="py-3 px-4">
+                <td class="py-3.5 px-4 font-bold text-slate-800 border-y border-slate-200/90">${(po.is_vyuceutical_ops === 1 || (po.company_name && po.company_name.toLowerCase().includes('vyuceutical'))) ? `<span class="text-purple-900 font-extrabold">Vyuceutical OPC - ${po.contact_person || po.company_name}</span>` : po.company_name}</td>
+                <td class="py-3.5 px-4 border-y border-slate-200/90">
                     <div class="space-y-1 w-64 max-h-28 overflow-y-auto pr-1">
                         ${itemsList}
                     </div>
                 </td>
-                <td class="py-3 px-4 font-black text-slate-950 whitespace-nowrap font-mono">${NKB.formatNumber(po.total_target_quantity)} pcs</td>
-                <td class="py-3 px-4 font-extrabold text-slate-900 whitespace-nowrap font-mono">${canViewPrices && po.grand_total !== null && po.grand_total !== undefined ? NKB.formatCurrency(po.grand_total) : '—'}</td>
-                <td class="py-3 px-4 whitespace-nowrap">
+                <td class="py-3.5 px-4 font-black text-slate-950 whitespace-nowrap font-mono border-y border-slate-200/90">${NKB.formatNumber(po.total_target_quantity)} pcs</td>
+                <td class="py-3.5 px-4 font-extrabold text-slate-900 whitespace-nowrap font-mono border-y border-slate-200/90">${canViewPrices && po.grand_total !== null && po.grand_total !== undefined ? NKB.formatCurrency(po.grand_total) : '—'}</td>
+                <td class="py-3.5 px-4 whitespace-nowrap border-y border-slate-200/90">
                     <div>${NKB.renderStatusBadge(po.status)}</div>
                     ${po.accounting_confirmed === 1 ? `
                         <div class="mt-1">
@@ -786,7 +794,7 @@ async function loadOrders() {
                         </div>
                     `}
                 </td>
-                <td class="py-3 px-4 text-right whitespace-nowrap">
+                <td class="py-3.5 px-4 text-right whitespace-nowrap rounded-r-2xl border-y border-r border-slate-200/90">
                     <div class="inline-flex items-center gap-1.5 justify-end">
                         ${(isExecAdmin && po.status === 'PENDING_APPROVAL') ? `
                             <button onclick="approvePO('${po.id}', '${po.po_number}')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer" title="Approve Purchase Order">
@@ -890,7 +898,7 @@ async function loadOrders() {
             `;
         }).join('');
     } else {
-        tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-slate-400">No purchase orders found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="py-8 text-center text-slate-400 bg-white rounded-2xl border border-slate-200 shadow-xs">No purchase orders found.</td></tr>`;
     }
 }
 

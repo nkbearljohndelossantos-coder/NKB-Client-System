@@ -258,18 +258,18 @@
                         <h3 class="font-bold text-slate-900">Recent Purchase Orders</h3>
                         <button onclick="switchClientTab('my-orders')" class="text-xs text-indigo-600 font-bold hover:underline">View All →</button>
                     </div>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left text-xs">
-                            <thead class="bg-slate-50 border-y border-slate-200 text-slate-600 font-bold uppercase tracking-wider">
+                    <div class="overflow-x-auto p-2 bg-slate-100/70 border border-slate-200 rounded-2xl shadow-sm">
+                        <table class="w-full text-left text-xs border-separate border-spacing-y-2.5">
+                            <thead class="bg-slate-200/90 text-slate-700 font-bold uppercase tracking-wider">
                                 <tr>
-                                    <th class="py-3 px-4">PO Number & Date</th>
-                                    <th class="py-3 px-4">Total Amount</th>
-                                    <th class="py-3 px-4">Status</th>
-                                    <th class="py-3 px-4 text-right">Actions</th>
+                                    <th class="py-2.5 px-4 bg-slate-200/90 rounded-l-xl">PO Number & Date</th>
+                                    <th class="py-2.5 px-4 bg-slate-200/90">Total Amount</th>
+                                    <th class="py-2.5 px-4 bg-slate-200/90">Status</th>
+                                    <th class="py-2.5 px-4 text-right bg-slate-200/90 rounded-r-xl">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody id="client-table-recent-pos" class="divide-y divide-slate-100 font-medium">
-                                <tr><td colspan="4" class="py-6 text-center text-slate-400">Loading orders...</td></tr>
+                            <tbody id="client-table-recent-pos" class="font-medium">
+                                <tr><td colspan="4" class="py-6 text-center text-slate-400 bg-white rounded-2xl border border-slate-200 shadow-xs">Loading orders...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -400,20 +400,20 @@
                 </div>
 
                 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-                    <div class="overflow-x-auto max-h-[75vh] overflow-y-auto border border-slate-200 rounded-xl shadow-sm">
-                        <table class="w-full text-left text-xs">
-                            <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider sticky top-0 z-10 shadow-sm">
+                    <div class="overflow-x-auto max-h-[75vh] overflow-y-auto p-2.5 bg-slate-100/70 border border-slate-200 rounded-2xl shadow-sm">
+                        <table class="w-full text-left text-xs border-separate border-spacing-y-3">
+                            <thead class="bg-slate-200/90 text-slate-700 font-bold uppercase tracking-wider sticky top-0 z-10 shadow-xs backdrop-blur-xs">
                                 <tr>
-                                    <th class="py-3 px-4">PO Number & Date</th>
-                                    <th class="py-3 px-4">Ordered Products Breakdown</th>
-                                    <th class="py-3 px-4">Target Qty</th>
-                                    <th class="py-3 px-4">PO Value</th>
-                                    <th class="py-3 px-4">Status</th>
-                                    <th class="py-3 px-4 text-right">Actions</th>
+                                    <th class="py-2.5 px-4 bg-slate-200/90 rounded-l-xl">PO Number & Date</th>
+                                    <th class="py-2.5 px-4 bg-slate-200/90">Ordered Products Breakdown</th>
+                                    <th class="py-2.5 px-4 bg-slate-200/90">Target Qty</th>
+                                    <th class="py-2.5 px-4 bg-slate-200/90">PO Value</th>
+                                    <th class="py-2.5 px-4 bg-slate-200/90">Status</th>
+                                    <th class="py-2.5 px-4 text-right bg-slate-200/90 rounded-r-xl">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody id="client-table-all-orders" class="divide-y divide-slate-100 font-medium">
-                                <tr><td colspan="6" class="py-6 text-center text-slate-400">Loading purchase orders...</td></tr>
+                            <tbody id="client-table-all-orders" class="font-medium">
+                                <tr><td colspan="6" class="py-8 text-center text-slate-400 bg-white rounded-2xl border border-slate-200 shadow-xs">Loading purchase orders...</td></tr>
                             </tbody>
                         </table>
                     </div>

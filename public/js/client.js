@@ -155,17 +155,34 @@ async function loadClientDashboard() {
     // Recent POs
     const tbody = document.getElementById('client-table-recent-pos');
     if (ordersRes.success && ordersRes.data && ordersRes.data.length > 0) {
-        tbody.innerHTML = ordersRes.data.slice(0, 5).map(po => `
-            <tr class="hover:bg-slate-50 transition">
-                <td class="py-3 px-4 whitespace-nowrap">
-                    <div class="text-[11px] text-slate-500 font-medium leading-none mb-1">${NKB.formatDate(po.po_date)}</div>
-                    <button type="button" onclick="openViewPOModal('${po.id}')" class="font-mono font-bold text-indigo-600 hover:text-indigo-800 hover:underline text-left block text-sm" title="Click to view full PO details">
+        tbody.innerHTML = ordersRes.data.slice(0, 5).map(po => {
+            const isVoided = po.status === 'VOIDED';
+            const statusBorderColor = isVoided ? 'border-l-rose-500' :
+                po.status === 'COMPLETED' ? 'border-l-emerald-600' :
+                po.status === 'APPROVED' ? 'border-l-indigo-600' :
+                po.status === 'IN_PRODUCTION' ? 'border-l-blue-600' :
+                po.status === 'PARTIALLY_DELIVERED' ? 'border-l-purple-600' :
+                (po.status === 'PENDING_APPROVAL' || po.status === 'DRAFT') ? 'border-l-amber-500' :
+                'border-l-slate-400';
+
+            return `
+            <tr class="bg-white hover:bg-slate-50/90 transition shadow-xs rounded-2xl group ${isVoided ? 'opacity-60 bg-rose-50/20' : ''}">
+                <td class="py-3.5 px-4 whitespace-nowrap rounded-l-2xl border-y border-l border-slate-200/90 border-l-4 ${statusBorderColor}">
+                    <div class="text-[11px] text-slate-500 font-semibold leading-none mb-1">${NKB.formatDate(po.po_date)}</div>
+                    <button type="button" onclick="openViewPOModal('${po.id}')" class="font-mono font-black text-indigo-600 hover:text-indigo-800 hover:underline text-left block text-sm tracking-tight" title="Click to view full PO details">
                         ${po.po_number}
                     </button>
+                    ${po.form_of_payment ? `
+                        <div class="mt-1">
+                            <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 inline-flex items-center gap-1" title="Term of Payment: ${po.form_of_payment}">
+                                💳 ${po.form_of_payment}
+                            </span>
+                        </div>
+                    ` : ''}
                 </td>
-                <td class="py-3 px-4 font-extrabold text-slate-900 whitespace-nowrap">${NKB.formatCurrency(po.grand_total)}</td>
-                <td class="py-3 px-4 whitespace-nowrap">${NKB.renderStatusBadge(po.status)}</td>
-                <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                <td class="py-3.5 px-4 font-extrabold text-slate-900 whitespace-nowrap font-mono border-y border-slate-200/90">${NKB.formatCurrency(po.grand_total)}</td>
+                <td class="py-3.5 px-4 whitespace-nowrap border-y border-slate-200/90">${NKB.renderStatusBadge(po.status)}</td>
+                <td class="py-3.5 px-4 text-right space-x-1.5 whitespace-nowrap rounded-r-2xl border-y border-r border-slate-200/90">
                     <button onclick="openViewPOModal('${po.id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="View Full Order Info">
                         <span>👁️ View</span>
                     </button>
@@ -179,9 +196,10 @@ async function loadClientDashboard() {
                     ` : ''}
                 </td>
             </tr>
-        `).join('');
+            `;
+        }).join('');
     } else {
-        tbody.innerHTML = `<tr><td colspan="4" class="py-6 text-center text-slate-400">No purchase orders placed yet.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="4" class="py-6 text-center text-slate-400 bg-white rounded-2xl border border-slate-200 shadow-xs">No purchase orders placed yet.</td></tr>`;
     }
 }
 
@@ -740,11 +758,20 @@ async function loadClientOrders() {
                 `).join('')
                 : '<span class="text-slate-400 italic text-[11px]">No items</span>';
 
+            const isVoided = po.status === 'VOIDED';
+            const statusBorderColor = isVoided ? 'border-l-rose-500' :
+                po.status === 'COMPLETED' ? 'border-l-emerald-600' :
+                po.status === 'APPROVED' ? 'border-l-indigo-600' :
+                po.status === 'IN_PRODUCTION' ? 'border-l-blue-600' :
+                po.status === 'PARTIALLY_DELIVERED' ? 'border-l-purple-600' :
+                (po.status === 'PENDING_APPROVAL' || po.status === 'DRAFT') ? 'border-l-amber-500' :
+                'border-l-slate-400';
+
             return `
-            <tr class="hover:bg-slate-50 transition">
-                <td class="py-3 px-4 whitespace-nowrap">
-                    <div class="text-[11px] text-slate-500 font-medium leading-none mb-1">${NKB.formatDate(po.po_date)}</div>
-                    <button type="button" onclick="openViewPOModal('${po.id}')" class="font-mono font-bold text-indigo-600 hover:text-indigo-800 hover:underline text-left block text-sm" title="Click to view full PO details">
+            <tr class="bg-white hover:bg-slate-50/90 transition shadow-xs rounded-2xl group ${isVoided ? 'opacity-60 bg-rose-50/20' : ''}">
+                <td class="py-3.5 px-4 whitespace-nowrap rounded-l-2xl border-y border-l border-slate-200/90 border-l-4 ${statusBorderColor}">
+                    <div class="text-[11px] text-slate-500 font-semibold leading-none mb-1">${NKB.formatDate(po.po_date)}</div>
+                    <button type="button" onclick="openViewPOModal('${po.id}')" class="font-mono font-black text-indigo-600 hover:text-indigo-800 hover:underline text-left block text-sm tracking-tight" title="Click to view full PO details">
                         ${po.po_number}
                     </button>
                     ${po.form_of_payment ? `
@@ -755,15 +782,15 @@ async function loadClientOrders() {
                         </div>
                     ` : ''}
                 </td>
-                <td class="py-3 px-4">
+                <td class="py-3.5 px-4 border-y border-slate-200/90">
                     <div class="space-y-1 w-60">
                         ${itemsList}
                     </div>
                 </td>
-                <td class="py-3 px-4 font-bold text-slate-800 whitespace-nowrap font-mono">${NKB.formatNumber(po.total_target_quantity)} pcs</td>
-                <td class="py-3 px-4 font-extrabold text-slate-900 whitespace-nowrap font-mono">${NKB.formatCurrency(po.grand_total)}</td>
-                <td class="py-3 px-4 whitespace-nowrap">${NKB.renderStatusBadge(po.status)}</td>
-                <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                <td class="py-3.5 px-4 font-bold text-slate-800 whitespace-nowrap font-mono border-y border-slate-200/90">${NKB.formatNumber(po.total_target_quantity)} pcs</td>
+                <td class="py-3.5 px-4 font-extrabold text-slate-900 whitespace-nowrap font-mono border-y border-slate-200/90">${NKB.formatCurrency(po.grand_total)}</td>
+                <td class="py-3.5 px-4 whitespace-nowrap border-y border-slate-200/90">${NKB.renderStatusBadge(po.status)}</td>
+                <td class="py-3.5 px-4 text-right space-x-1.5 whitespace-nowrap rounded-r-2xl border-y border-r border-slate-200/90">
                     <button onclick="openViewPOModal('${po.id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="View Full Order Info">
                         <span>👁️ View</span>
                     </button>
@@ -780,7 +807,7 @@ async function loadClientOrders() {
             `;
         }).join('');
     } else {
-        tbody.innerHTML = `<tr><td colspan="6" class="py-6 text-center text-slate-400">No orders found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-slate-400 bg-white rounded-2xl border border-slate-200 shadow-xs">No orders found.</td></tr>`;
     }
 }
 
