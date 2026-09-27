@@ -73,7 +73,7 @@ router.get('/:productId', authenticateToken, requireRoles('SUPER_ADMIN', 'ADMIN'
  * POST /api/formulations
  * Create or update product formulation and its ingredients
  */
-router.post('/', authenticateToken, requireRoles('SUPER_ADMIN', 'ADMIN', 'IT_ADMIN', 'CEO'), (req, res) => {
+router.post('/', authenticateToken, requireRoles('SUPER_ADMIN', 'ADMIN', 'IT_ADMIN', 'CEO', 'PRODUCTION'), (req, res) => {
     try {
         const updated = saveFormulation(db, req.body, req.user.id);
         logAudit({

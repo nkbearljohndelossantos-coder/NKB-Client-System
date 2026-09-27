@@ -4573,6 +4573,9 @@ function renderProductsTable(products) {
             <td class="py-3 px-4"><span class="badge ${p.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}">${p.is_active ? 'ACTIVE' : 'INACTIVE'}</span></td>
             <td class="py-3 px-4 text-right whitespace-nowrap">
                 <div class="flex items-center justify-end gap-1.5">
+                    <button onclick="openProductFormulationModal('${p.id}')" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 active:scale-95 text-amber-800 border border-amber-200 rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-2xs" title="Equivalent Chemical Formulation & Manual Counter-Check">
+                        <span>🧪 Formulation</span>
+                    </button>
                     <button onclick="openEditProductModal('${p.id}')" class="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition" title="Edit Product">
                         <span>✏️</span>
                     </button>
@@ -5370,9 +5373,14 @@ async function openEditProductModal(productId) {
                             <input type="text" id="edit-prod-unit" value="${prod.unit || 'pcs'}" class="w-full px-3 py-2 border rounded-xl bg-slate-50">
                         </div>
                     </div>
-                    <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl">Cancel</button>
-                        <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold">Update Product</button>
+                    <div class="flex justify-between items-center pt-2 border-t border-slate-100">
+                        <button type="button" onclick="openProductFormulationModal('${prod.id}')" class="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-2xs" title="Equivalent Chemical Formulation & Counter-Check">
+                            <span>🧪 Formulation & BOM</span>
+                        </button>
+                        <div class="flex gap-2">
+                            <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl">Cancel</button>
+                            <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold">Update Product</button>
+                        </div>
                     </div>
                 </form>
             </div>
@@ -9779,7 +9787,105 @@ function filterFormulationsTable() {
     renderFormulationsTable(filtered);
 }
 
-async function openViewFormulationModal(productId) {
+// =============================================================
+// COSMETIC PRODUCT FORMULATION & MANUAL COUNTER-CHECK SYSTEM
+// =============================================================
+
+let currentActiveFormulation = null;
+let currentFormulationTab = 'countercheck'; // 'countercheck' | 'edit'
+let currentCounterCheckQty = 1000;
+let currentCounterCheckUnit = 'pcs';
+let counterCheckCheckedMap = {}; // ingredient key -> true/false
+
+const STANDARD_RECIPE_PRESETS = {
+    SUNSCREEN: {
+        code: 'FORM-SGC-V1',
+        name: 'Broad Spectrum SPF 50+ Gel-Cream Formulation',
+        baseDose: 50,
+        unit: 'g',
+        instructions: 'Mix Phase A at 75°C. Disperse Phase B at 75°C. Emulsify Phase B into Phase A. Cool down to 45°C before adding Phase C actives and Phase D aroma/preservatives.',
+        ingredients: [
+            { material_code: 'RM-WTR-01', material_name: 'Deionized Water (Aqua)', phase: 'Phase A - Water Base', percentage: 65.5, qty: 32.75, unit: 'g', unit_cost: 0.02, notes: 'Purified USP Grade' },
+            { material_code: 'RM-GLY-01', material_name: 'Vegetable Glycerin 99.5%', phase: 'Phase A - Water Base', percentage: 5.0, qty: 2.50, unit: 'g', unit_cost: 0.18, notes: 'Humectant' },
+            { material_code: 'RM-CAR-01', material_name: 'Carbomer 940 Polymer', phase: 'Phase A - Water Base', percentage: 0.5, qty: 0.25, unit: 'g', unit_cost: 1.40, notes: 'Thickening Agent' },
+            { material_code: 'RM-OMC-01', material_name: 'Octyl Methoxycinnamate (OMC)', phase: 'Phase B - UV Filters', percentage: 7.5, qty: 3.75, unit: 'g', unit_cost: 2.20, notes: 'UVB Organic Absorber' },
+            { material_code: 'RM-AVO-01', material_name: 'Avobenzone (Butyl Methoxydibenzoylmethane)', phase: 'Phase B - UV Filters', percentage: 3.0, qty: 1.50, unit: 'g', unit_cost: 2.80, notes: 'UVA Organic Absorber' },
+            { material_code: 'RM-TIO-01', material_name: 'Micronized Titanium Dioxide', phase: 'Phase B - UV Filters', percentage: 2.0, qty: 1.00, unit: 'g', unit_cost: 1.50, notes: 'Physical Mineral Filter' },
+            { material_code: 'RM-CTA-01', material_name: 'Cetearyl Alcohol 30/70', phase: 'Phase B - UV Filters', percentage: 3.5, qty: 1.75, unit: 'g', unit_cost: 0.45, notes: 'Emulsifying Co-wax' },
+            { material_code: 'RM-NIA-01', material_name: 'Niacinamide USP (Vitamin B3)', phase: 'Phase C - Actives', percentage: 5.0, qty: 2.50, unit: 'g', unit_cost: 1.80, notes: 'Brightening & Barrier Repair' },
+            { material_code: 'RM-CEN-01', material_name: 'Centella Asiatica (Cica) Leaf Extract', phase: 'Phase C - Actives', percentage: 3.0, qty: 1.50, unit: 'g', unit_cost: 3.50, notes: 'Soothing Botanical' },
+            { material_code: 'RM-HYA-01', material_name: 'Sodium Hyaluronate (Hyaluronic Acid)', phase: 'Phase C - Actives', percentage: 1.0, qty: 0.50, unit: 'g', unit_cost: 12.00, notes: 'Multi-depth Hydration' },
+            { material_code: 'RM-TEA-01', material_name: 'Triethanolamine 99% (TEA)', phase: 'Phase D - Finishing', percentage: 2.0, qty: 1.00, unit: 'g', unit_cost: 0.35, notes: 'pH Neutralizer' },
+            { material_code: 'RM-PHX-01', material_name: 'Phenoxyethanol & Ethylhexylglycerin', phase: 'Phase D - Finishing', percentage: 1.0, qty: 0.50, unit: 'g', unit_cost: 0.95, notes: 'Broad-Spectrum Preservative' },
+            { material_code: 'RM-FRG-01', material_name: 'Fresh Dewdrop Fragrance Oil (Hypoallergenic)', phase: 'Phase D - Finishing', percentage: 1.0, qty: 0.50, unit: 'g', unit_cost: 2.50, notes: 'Cosmetic Grade Scent' }
+        ]
+    },
+    SOAP: {
+        code: 'FORM-BLS-V1',
+        name: 'Triple Whitening Bleaching Cold-Process Soap Formula',
+        baseDose: 135,
+        unit: 'g',
+        instructions: 'Saponify oils in Phase A with lye solution at 40°C. Blend to light trace. Incorporate Phase B whitening powders and Phase C essential oils.',
+        ingredients: [
+            { material_code: 'RM-CNO-01', material_name: 'Refined Coconut Oil (Cocos Nucifera)', phase: 'Phase A - Saponified Base', percentage: 48.0, qty: 64.80, unit: 'g', unit_cost: 0.15, notes: 'Cleansing Lather Base' },
+            { material_code: 'RM-PKO-01', material_name: 'Palm Kernel Oil', phase: 'Phase A - Saponified Base', percentage: 20.0, qty: 27.00, unit: 'g', unit_cost: 0.14, notes: 'Hardness & Conditioning' },
+            { material_code: 'RM-WTR-01', material_name: 'Deionized Water (Aqua)', phase: 'Phase A - Saponified Base', percentage: 16.0, qty: 21.60, unit: 'g', unit_cost: 0.02, notes: 'Lye Solvent' },
+            { material_code: 'RM-NAOH-01', material_name: 'Sodium Hydroxide Flakes 99% (Lye)', phase: 'Phase A - Saponified Base', percentage: 8.0, qty: 10.80, unit: 'g', unit_cost: 0.12, notes: 'Saponification Agent' },
+            { material_code: 'RM-KJC-01', material_name: 'Kojic Acid Dipalmitate Pure', phase: 'Phase B - Whitening Actives', percentage: 2.5, qty: 3.375, unit: 'g', unit_cost: 4.20, notes: 'Tyrosinase Inhibitor' },
+            { material_code: 'RM-GLU-01', material_name: 'Reduced L-Glutathione Powder 98%', phase: 'Phase B - Whitening Actives', percentage: 1.5, qty: 2.025, unit: 'g', unit_cost: 8.50, notes: 'Master Antioxidant' },
+            { material_code: 'RM-PAP-01', material_name: 'Papain Enzyme Extract (Carica Papaya)', phase: 'Phase B - Whitening Actives', percentage: 1.5, qty: 2.025, unit: 'g', unit_cost: 3.80, notes: 'Enzymatic Exfoliant' },
+            { material_code: 'RM-BHT-01', material_name: 'Butylated Hydroxytoluene (BHT)', phase: 'Phase C - Aroma & Stabilization', percentage: 0.5, qty: 0.675, unit: 'g', unit_cost: 0.60, notes: 'Antioxidant Stabilizer' },
+            { material_code: 'RM-FRG-02', material_name: 'Sweet Citrus Blossom Fragrance Oil', phase: 'Phase C - Aroma & Stabilization', percentage: 2.0, qty: 2.70, unit: 'g', unit_cost: 2.20, notes: 'Aromatic Fragrance' }
+        ]
+    },
+    LOTION: {
+        code: 'FORM-KLC-V2',
+        name: 'Intensive Kojic Body Lotion Formulation',
+        baseDose: 250,
+        unit: 'g',
+        instructions: 'Heat water phase A to 80°C. Melt oil phase B to 80°C. Homogenize for 10 minutes. Cool to 40°C before adding Phase C actives.',
+        ingredients: [
+            { material_code: 'RM-WTR-01', material_name: 'Deionized Water (Aqua)', phase: 'Phase A - Water Phase', percentage: 70.0, qty: 175.0, unit: 'g', unit_cost: 0.02, notes: 'Base Vehicle' },
+            { material_code: 'RM-GLY-01', material_name: 'Vegetable Glycerin 99.5%', phase: 'Phase A - Water Base', percentage: 4.0, qty: 10.0, unit: 'g', unit_cost: 0.18, notes: 'Hydrating Humectant' },
+            { material_code: 'RM-EDTA-01', material_name: 'Disodium EDTA', phase: 'Phase A - Water Phase', percentage: 0.2, qty: 0.5, unit: 'g', unit_cost: 0.85, notes: 'Chelating Agent' },
+            { material_code: 'RM-CTA-01', material_name: 'Cetyl Alcohol NF', phase: 'Phase B - Oil Phase', percentage: 4.0, qty: 10.0, unit: 'g', unit_cost: 0.45, notes: 'Emollient & Viscosity Builder' },
+            { material_code: 'RM-STA-01', material_name: 'Triple Pressed Stearic Acid', phase: 'Phase B - Oil Phase', percentage: 3.0, qty: 7.5, unit: 'g', unit_cost: 0.35, notes: 'Thickener & Emulsifier' },
+            { material_code: 'RM-MNO-01', material_name: 'White Mineral Oil USP', phase: 'Phase B - Oil Phase', percentage: 6.0, qty: 15.0, unit: 'g', unit_cost: 0.28, notes: 'Occlusive Moisturizer' },
+            { material_code: 'RM-DMT-01', material_name: 'Dimethicone 350 cSt', phase: 'Phase B - Oil Phase', percentage: 2.0, qty: 5.0, unit: 'g', unit_cost: 0.75, notes: 'Slip & Velvet Feel' },
+            { material_code: 'RM-KJC-01', material_name: 'Kojic Acid Dipalmitate', phase: 'Phase C - Actives', percentage: 2.5, qty: 6.25, unit: 'g', unit_cost: 4.20, notes: 'Skin Brightener' },
+            { material_code: 'RM-ARB-01', material_name: 'Alpha Arbutin Powder', phase: 'Phase C - Actives', percentage: 1.5, qty: 3.75, unit: 'g', unit_cost: 6.50, notes: 'Dark Spot Correction' },
+            { material_code: 'RM-ASC-01', material_name: 'Sodium Ascorbyl Phosphate (Vitamin C)', phase: 'Phase C - Actives', percentage: 2.0, qty: 5.0, unit: 'g', unit_cost: 3.20, notes: 'Stable Vitamin C Active' },
+            { material_code: 'RM-PHX-01', material_name: 'Phenoxyethanol & Ethylhexylglycerin', phase: 'Phase D - Preservation', percentage: 1.8, qty: 4.5, unit: 'g', unit_cost: 0.95, notes: 'Microbial Preservative' },
+            { material_code: 'RM-FRG-03', material_name: 'Silk Blossom Premium Perfume Essence', phase: 'Phase D - Preservation', percentage: 3.0, qty: 7.5, unit: 'g', unit_cost: 2.80, notes: 'Body Fragrance' }
+        ]
+    },
+    SERUM: {
+        code: 'FORM-NCS-V3',
+        name: 'Pore Refining 10% Niacinamide Facial Serum',
+        baseDose: 30,
+        unit: 'g',
+        instructions: 'Hydrate hyaluronic acid in Phase A water. Dissolve Niacinamide and Zinc PCA until crystal clear. Preserve with Phase C.',
+        ingredients: [
+            { material_code: 'RM-WTR-01', material_name: 'Deionized Water (Aqua)', phase: 'Phase A - Hydration Base', percentage: 76.5, qty: 22.95, unit: 'g', unit_cost: 0.02, notes: 'Ultra-Pure Deionized' },
+            { material_code: 'RM-GLY-01', material_name: 'Vegetable Glycerin 99.5%', phase: 'Phase A - Hydration Base', percentage: 5.0, qty: 1.50, unit: 'g', unit_cost: 0.18, notes: 'Hydrating Humectant' },
+            { material_code: 'RM-HYA-01', material_name: 'Sodium Hyaluronate High MW', phase: 'Phase A - Hydration Base', percentage: 0.5, qty: 0.15, unit: 'g', unit_cost: 12.00, notes: 'Viscosity & Film Former' },
+            { material_code: 'RM-NIA-01', material_name: 'Niacinamide Pure Powder (Vitamin B3)', phase: 'Phase B - Sebum Regulating Actives', percentage: 10.0, qty: 3.00, unit: 'g', unit_cost: 1.80, notes: 'Sebum & Pore Minimizer' },
+            { material_code: 'RM-ZNC-01', material_name: 'Zinc PCA Pure Powder', phase: 'Phase B - Sebum Regulating Actives', percentage: 1.0, qty: 0.30, unit: 'g', unit_cost: 5.50, notes: 'Anti-Acne Astringent' },
+            { material_code: 'RM-CEN-01', material_name: 'Centella Asiatica Extract', phase: 'Phase B - Sebum Regulating Actives', percentage: 5.0, qty: 1.50, unit: 'g', unit_cost: 3.50, notes: 'Calming Botanical' },
+            { material_code: 'RM-ALN-01', material_name: 'Allantoin USP', phase: 'Phase B - Sebum Regulating Actives', percentage: 0.5, qty: 0.15, unit: 'g', unit_cost: 1.20, notes: 'Anti-Irritant' },
+            { material_code: 'RM-PHX-01', material_name: 'Phenoxyethanol Optiphen Plus', phase: 'Phase C - Preservation', percentage: 1.5, qty: 0.45, unit: 'g', unit_cost: 0.95, notes: 'Broad-Spectrum Preservative' }
+        ]
+    }
+};
+
+function formatMassCalc(grams) {
+    if (grams >= 1000) {
+        return (grams / 1000).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + ' kg';
+    }
+    return Number(grams).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' g';
+}
+
+async function openProductFormulationModal(productId, initialTab = 'countercheck') {
     const root = document.getElementById('modals-root');
     if (!root) return;
 
@@ -9788,7 +9894,7 @@ async function openViewFormulationModal(productId) {
             <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 my-auto">
                 <div class="flex items-center gap-3 text-slate-700 font-bold text-sm">
                     <span class="animate-spin text-xl">🧪</span>
-                    <span>Retrieving Confidential Formulation & BOM...</span>
+                    <span>Retrieving Product Formulation & BOM...</span>
                 </div>
             </div>
         </div>
@@ -9802,126 +9908,766 @@ async function openViewFormulationModal(productId) {
             return;
         }
 
-        const data = res.data;
-        const formulation = data.formulation || data;
-        const ingredients = data.ingredients || formulation.ingredients || [];
-        const prodName = data.product_name || formulation.product_name || (data.product && data.product.name) || formulation.name;
-        const prodSku = data.product_sku || formulation.product_sku || (data.product && data.product.sku) || formulation.formula_code || 'N/A';
+        currentActiveFormulation = res.data.formulation || res.data;
+        if (!currentActiveFormulation.ingredients) {
+            currentActiveFormulation.ingredients = res.data.ingredients || [];
+        }
+        currentFormulationTab = initialTab;
+        counterCheckCheckedMap = {};
 
-        const phases = {};
-        ingredients.forEach(ing => {
-            const p = ing.phase || 'Phase A';
-            if (!phases[p]) phases[p] = [];
-            phases[p].push(ing);
-        });
-
-        root.innerHTML = `
-            <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50 overflow-y-auto">
-                <div class="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl space-y-5 my-auto max-h-[92vh] flex flex-col">
-                    <div class="flex justify-between items-start border-b border-slate-100 pb-3 flex-shrink-0">
-                        <div class="flex items-center gap-3">
-                            <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white flex items-center justify-center text-xl shadow-md shadow-indigo-500/20">
-                                🧪
-                            </div>
-                            <div>
-                                <div class="flex items-center gap-2">
-                                    <h3 class="text-base font-black text-slate-900">${formulation.name}</h3>
-                                    <span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300 uppercase tracking-wide">
-                                        🔒 CONFIDENTIAL BOM
-                                    </span>
-                                </div>
-                                <p class="text-xs text-slate-500 font-medium mt-0.5">Formula Code: <strong class="font-mono text-indigo-700">${formulation.formula_code}</strong> • Standard Batch Dose: <strong class="font-mono text-slate-800">${formulation.base_dose_qty} ${formulation.base_unit}</strong></p>
-                            </div>
-                        </div>
-                        <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-2xl leading-none">&times;</button>
-                    </div>
-
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-shrink-0">
-                        <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                            <span class="text-[10px] text-slate-400 uppercase font-bold block">Target Product</span>
-                            <div class="font-black text-slate-900 text-xs mt-0.5">${prodName}</div>
-                            <div class="text-[10px] font-mono text-indigo-700 font-bold mt-0.5">SKU: ${prodSku}</div>
-                        </div>
-                        <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                            <span class="text-[10px] text-slate-400 uppercase font-bold block">Chemical Stability & Yield</span>
-                            <div class="font-bold text-emerald-700 text-xs mt-0.5">Cleanroom Grade Tested</div>
-                            <div class="text-[10px] text-slate-500 mt-0.5">${ingredients.length} Active Ingredients</div>
-                        </div>
-                        <div class="p-3 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl border border-emerald-200">
-                            <span class="text-[10px] text-emerald-800 uppercase font-bold block">Live Inventory Synced</span>
-                            <div class="font-mono font-bold text-emerald-900 text-[11px] mt-0.5 truncate">Key: nkb_inv_live_6ae...</div>
-                            <div class="text-[10px] text-emerald-700 font-medium">Automatic BOM translation active</div>
-                        </div>
-                    </div>
-
-                    <div class="overflow-y-auto flex-1 space-y-4 border border-slate-200 rounded-2xl p-4 bg-slate-50/50">
-                        ${Object.keys(phases).map(phaseName => {
-                            const phaseItems = phases[phaseName];
-                            const phasePct = phaseItems.reduce((acc, it) => acc + Number(it.percentage || 0), 0);
-                            return `
-                                <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                                    <div class="bg-slate-100 px-4 py-2 flex justify-between items-center border-b border-slate-200">
-                                        <span class="font-black text-slate-800 text-xs">${phaseName}</span>
-                                        <span class="text-[11px] font-mono font-bold text-indigo-700">Subtotal: ${phasePct.toFixed(2)}%</span>
-                                    </div>
-                                    <table class="w-full text-left text-xs">
-                                        <thead class="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider text-[10px] border-b border-slate-100">
-                                            <tr>
-                                                <th class="py-2 px-3">Material Code</th>
-                                                <th class="py-2 px-3">Material Name / INCI</th>
-                                                <th class="py-2 px-3 text-center">% w/w</th>
-                                                <th class="py-2 px-3 text-right">Dose / Unit</th>
-                                                <th class="py-2 px-3 text-right">Est. Unit Cost</th>
-                                                <th class="py-2 px-3">Application Notes</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody class="divide-y divide-slate-100 font-medium">
-                                            ${phaseItems.map(item => `
-                                                <tr class="hover:bg-slate-50">
-                                                    <td class="py-2 px-3 font-mono font-bold text-slate-800 text-[11px] whitespace-nowrap">${item.material_code}</td>
-                                                    <td class="py-2 px-3 font-bold text-slate-900">${item.material_name}</td>
-                                                    <td class="py-2 px-3 text-center font-mono font-bold text-indigo-700">${Number(item.percentage).toFixed(2)}%</td>
-                                                    <td class="py-2 px-3 text-right font-mono font-black text-slate-900">${Number(item.quantity_per_unit).toFixed(4)} ${item.unit}</td>
-                                                    <td class="py-2 px-3 text-right font-mono text-emerald-700 font-bold">₱${(Number(item.unit_cost) || 0).toFixed(2)}</td>
-                                                    <td class="py-2 px-3 text-slate-500 text-[11px]">${item.notes || '—'}</td>
-                                                </tr>
-                                            `).join('')}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            `;
-                        }).join('')}
-
-                        ${formulation.instructions ? `
-                            <div class="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs space-y-1">
-                                <span class="font-bold text-amber-900 block uppercase text-[10px] tracking-wider">🔬 Compounding & Mixing Instructions:</span>
-                                <p class="text-slate-800 leading-relaxed">${formulation.instructions}</p>
-                            </div>
-                        ` : ''}
-                    </div>
-
-                    <div class="flex justify-between items-center pt-2 border-t border-slate-100 flex-shrink-0">
-                        <div class="text-[10px] text-slate-400 font-medium">
-                            NKB Chemical & Formulation Secret • Unauthorized copying is strictly prohibited.
-                        </div>
-                        <button type="button" onclick="closeModal()" class="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs transition">
-                            Close
-                        </button>
-                    </div>
-                </div>
-            </div>
-        `;
+        renderFullFormulationModal();
     } catch (err) {
-        console.error('Error viewing formulation modal:', err);
+        console.error('Error opening formulation modal:', err);
         NKB.showToast('Error opening formulation details.', 'error');
         closeModal();
     }
 }
 
+function renderFullFormulationModal() {
+    const root = document.getElementById('modals-root');
+    if (!root || !currentActiveFormulation) return;
+
+    const f = currentActiveFormulation;
+    const prodName = f.product_name || f.name || 'Cosmetic Product';
+    const prodSku = f.product_sku || (f.product && f.product.sku) || 'SKU-N/A';
+    const formulaCode = f.formula_code || 'FORM-CUSTOM';
+    const baseDose = Number(f.base_dose_qty) || 50;
+    const baseUnit = f.base_unit || 'g';
+
+    root.innerHTML = `
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto">
+            <div class="bg-white rounded-2xl max-w-5xl w-full p-4 sm:p-6 shadow-2xl space-y-4 my-auto max-h-[94vh] flex flex-col">
+                <!-- TOP HEADER -->
+                <div class="flex justify-between items-start border-b border-slate-100 pb-3 flex-shrink-0">
+                    <div class="flex items-center gap-3">
+                        <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-500 via-indigo-600 to-purple-600 text-white flex items-center justify-center text-xl shadow-md shadow-indigo-500/20 flex-shrink-0">
+                            🧪
+                        </div>
+                        <div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <h3 class="text-base font-black text-slate-900">${prodName}</h3>
+                                <span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300 uppercase tracking-wide">
+                                    🔒 CONFIDENTIAL BOM
+                                </span>
+                                <span class="px-2 py-0.5 rounded-full text-[9px] font-mono font-black bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                    ${formulaCode}
+                                </span>
+                            </div>
+                            <p class="text-xs text-slate-500 font-medium mt-0.5">
+                                SKU: <strong class="font-mono text-slate-700">${prodSku}</strong> • Standard Dose: <strong class="font-mono text-indigo-700">${baseDose} ${baseUnit}</strong> per unit
+                            </p>
+                        </div>
+                    </div>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-2xl leading-none">&times;</button>
+                </div>
+
+                <!-- TAB SWITCHER HEADER -->
+                <div class="flex items-center justify-between border-b border-slate-200 pb-2 flex-shrink-0">
+                    <div class="flex items-center gap-2">
+                        <button id="tab-btn-countercheck" onclick="switchFormulationModalTab('countercheck')" class="px-3.5 py-1.5 rounded-xl font-bold text-xs transition flex items-center gap-1.5 ${currentFormulationTab === 'countercheck' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">
+                            <span>🧮 Manual Counter-Check Calculator</span>
+                        </button>
+                        <button id="tab-btn-edit" onclick="switchFormulationModalTab('edit')" class="px-3.5 py-1.5 rounded-xl font-bold text-xs transition flex items-center gap-1.5 ${currentFormulationTab === 'edit' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">
+                            <span>📝 Edit Formulation & Recipe BOM</span>
+                        </button>
+                    </div>
+
+                    <div class="hidden sm:flex items-center gap-2 text-xs">
+                        <button onclick="printFormulationCounterCheck('${f.product_id}')" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold transition flex items-center gap-1 shadow-sm">
+                            <span>🖨️ Print Cleanroom Sheet</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- TAB 1: MANUAL COUNTER-CHECK CALCULATOR -->
+                <div id="section-form-countercheck" class="${currentFormulationTab === 'countercheck' ? 'flex' : 'hidden'} flex-col flex-1 overflow-hidden space-y-3">
+                    
+                    <!-- BATCH SELECTOR & PRESETS BAR -->
+                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2 flex-shrink-0">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div class="flex items-center gap-2">
+                                <label class="text-xs font-bold text-slate-700 whitespace-nowrap">Target Batch Quantity:</label>
+                                <input type="number" id="fc-batch-qty" min="1" step="1" value="${currentCounterCheckQty}" oninput="updateCounterCheckMath()" class="w-28 px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-mono font-black text-indigo-900 focus:ring-2 focus:ring-indigo-500">
+                                <select id="fc-batch-unit" onchange="updateCounterCheckMath()" class="px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800">
+                                    <option value="pcs" ${currentCounterCheckUnit === 'pcs' ? 'selected' : ''}>pcs (units)</option>
+                                    <option value="kg" ${currentCounterCheckUnit === 'kg' ? 'selected' : ''}>kg (bulk mass)</option>
+                                </select>
+                            </div>
+
+                            <!-- QUICK PRESET PILLS -->
+                            <div class="flex flex-wrap items-center gap-1.5 text-[11px]">
+                                <span class="text-slate-400 font-bold uppercase text-[9.5px]">Presets:</span>
+                                <button type="button" onclick="setCounterCheckPreset(250, 'pcs')" class="px-2 py-0.5 bg-white hover:bg-indigo-50 text-slate-700 border border-slate-200 rounded-md font-bold transition">250 pcs</button>
+                                <button type="button" onclick="setCounterCheckPreset(500, 'pcs')" class="px-2 py-0.5 bg-white hover:bg-indigo-50 text-slate-700 border border-slate-200 rounded-md font-bold transition">500 pcs</button>
+                                <button type="button" onclick="setCounterCheckPreset(1000, 'pcs')" class="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-300 rounded-md font-bold transition">1,000 pcs</button>
+                                <button type="button" onclick="setCounterCheckPreset(2500, 'pcs')" class="px-2 py-0.5 bg-white hover:bg-indigo-50 text-slate-700 border border-slate-200 rounded-md font-bold transition">2,500 pcs</button>
+                                <button type="button" onclick="setCounterCheckPreset(5000, 'pcs')" class="px-2 py-0.5 bg-white hover:bg-indigo-50 text-slate-700 border border-slate-200 rounded-md font-bold transition">5,000 pcs</button>
+                                <button type="button" onclick="setCounterCheckPreset(50, 'kg')" class="px-2 py-0.5 bg-white hover:bg-amber-50 text-amber-800 border border-amber-200 rounded-md font-bold transition">50 kg</button>
+                                <button type="button" onclick="setCounterCheckPreset(100, 'kg')" class="px-2 py-0.5 bg-white hover:bg-amber-50 text-amber-800 border border-amber-200 rounded-md font-bold transition">100 kg</button>
+                            </div>
+                        </div>
+
+                        <!-- KPI SUMMARY CARDS -->
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t border-slate-200">
+                            <div class="p-2 bg-white rounded-lg border border-slate-200">
+                                <span class="text-[10px] text-slate-400 uppercase font-bold block">Finished Output</span>
+                                <div id="kpi-fc-output" class="font-black text-slate-900 text-xs mt-0.5 font-mono">1,000 pcs</div>
+                            </div>
+                            <div class="p-2 bg-white rounded-lg border border-slate-200">
+                                <span class="text-[10px] text-slate-400 uppercase font-bold block">Compounding Mass</span>
+                                <div id="kpi-fc-mass" class="font-black text-indigo-700 text-xs mt-0.5 font-mono">50.00 kg</div>
+                            </div>
+                            <div class="p-2 bg-white rounded-lg border border-slate-200">
+                                <span class="text-[10px] text-slate-400 uppercase font-bold block">Manual Check Progress</span>
+                                <div id="kpi-fc-progress" class="font-black text-emerald-700 text-xs mt-0.5">0 / 0 Verified</div>
+                            </div>
+                            <div class="p-2 bg-white rounded-lg border border-slate-200">
+                                <span class="text-[10px] text-slate-400 uppercase font-bold block">Est. Raw Material Cost</span>
+                                <div id="kpi-fc-cost" class="font-black text-slate-900 text-xs mt-0.5 font-mono">₱0.00</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- INGREDIENTS COUNTER-CHECK TABLE -->
+                    <div class="flex-1 overflow-y-auto border border-slate-200 rounded-xl p-3 bg-slate-50/50 space-y-3" id="container-countercheck-table">
+                        <!-- Populated by updateCounterCheckMath() -->
+                    </div>
+
+                    <!-- INSTRUCTIONS & BOTTOM CONTROLS -->
+                    ${f.instructions ? `
+                        <div class="p-2.5 bg-amber-50/80 border border-amber-200 rounded-xl text-xs space-y-1 flex-shrink-0">
+                            <span class="font-bold text-amber-900 block uppercase text-[10px] tracking-wider">🔬 Compounding & Mixing Instructions:</span>
+                            <p class="text-slate-800 text-[11px] leading-relaxed">${f.instructions}</p>
+                        </div>
+                    ` : ''}
+
+                    <div class="flex justify-between items-center pt-2 border-t border-slate-100 flex-shrink-0">
+                        <div class="text-[10px] text-slate-400 font-medium">
+                            💡 Tip: Tick the checkbox next to each raw material as you physically counter-check weights and lot numbers.
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button type="button" onclick="printFormulationCounterCheck('${f.product_id}')" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-xs transition flex items-center gap-1.5 shadow-sm">
+                                <span>🖨️ Print Sheet</span>
+                            </button>
+                            <button type="button" onclick="switchFormulationModalTab('edit')" class="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl text-xs transition flex items-center gap-1">
+                                <span>✏️ Edit Recipe</span>
+                            </button>
+                            <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs transition">
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: EDIT FORMULATION & RECIPE BOM -->
+                <div id="section-form-edit" class="${currentFormulationTab === 'edit' ? 'flex' : 'hidden'} flex-col flex-1 overflow-hidden space-y-3">
+                    
+                    <!-- EDIT PARAMETERS BAR -->
+                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-3 flex-shrink-0">
+                        <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-700 mb-1">Formula Code *</label>
+                                <input type="text" id="fe-formula-code" value="${formulaCode}" required class="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold text-indigo-700">
+                            </div>
+                            <div class="sm:col-span-2">
+                                <label class="block text-[11px] font-bold text-slate-700 mb-1">Formulation Name *</label>
+                                <input type="text" id="fe-formula-name" value="${f.name || ''}" required class="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900">
+                            </div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-700 mb-1">Base Dose</label>
+                                    <input type="number" id="fe-base-dose" step="0.01" min="0.01" value="${baseDose}" oninput="recalcEditIngredientsFromDose()" class="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-700 mb-1">Unit</label>
+                                    <select id="fe-base-unit" class="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900">
+                                        <option value="g" ${baseUnit === 'g' ? 'selected' : ''}>g</option>
+                                        <option value="ml" ${baseUnit === 'ml' ? 'selected' : ''}>ml</option>
+                                        <option value="kg" ${baseUnit === 'kg' ? 'selected' : ''}>kg</option>
+                                        <option value="pcs" ${baseUnit === 'pcs' ? 'selected' : ''}>pcs</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TEMPLATE PRESETS -->
+                        <div class="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-200 text-xs">
+                            <div class="flex flex-wrap items-center gap-1.5">
+                                <span class="text-[10px] text-slate-500 font-bold uppercase">Load Standard Template:</span>
+                                <button type="button" onclick="loadStandardFormulationTemplate('SUNSCREEN')" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-md font-bold text-[11px] transition">☀️ Sunscreen</button>
+                                <button type="button" onclick="loadStandardFormulationTemplate('SOAP')" class="px-2.5 py-1 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 rounded-md font-bold text-[11px] transition">🧼 Soap</button>
+                                <button type="button" onclick="loadStandardFormulationTemplate('LOTION')" class="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-md font-bold text-[11px] transition">🧴 Lotion</button>
+                                <button type="button" onclick="loadStandardFormulationTemplate('SERUM')" class="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 rounded-md font-bold text-[11px] transition">💧 Serum</button>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <label class="inline-flex items-center gap-1 text-[11px] text-slate-600 font-semibold cursor-pointer">
+                                    <input type="checkbox" id="fe-is-confidential" checked class="rounded text-indigo-600">
+                                    <span>🔒 Strict Staff Only</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- INGREDIENTS EDITING GRID -->
+                    <div class="flex-1 overflow-y-auto border border-slate-200 rounded-xl p-2 bg-slate-50/50">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-100 text-slate-600 font-bold uppercase tracking-wider text-[10px] sticky top-0 z-10 border-b border-slate-200">
+                                <tr>
+                                    <th class="py-2 px-2" style="width: 140px;">Phase</th>
+                                    <th class="py-2 px-2" style="width: 100px;">Mat. Code</th>
+                                    <th class="py-2 px-2">Material Name / INCI</th>
+                                    <th class="py-2 px-2 text-center" style="width: 75px;">% w/w</th>
+                                    <th class="py-2 px-2 text-right" style="width: 85px;">Dose / Unit</th>
+                                    <th class="py-2 px-2" style="width: 55px;">Unit</th>
+                                    <th class="py-2 px-2 text-right" style="width: 80px;">Cost (₱)</th>
+                                    <th class="py-2 px-2">Notes</th>
+                                    <th class="py-2 px-1 text-center" style="width: 35px;"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="fe-ingredients-tbody" class="divide-y divide-slate-200 font-medium">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- BALANCE FOOTER & ADD BUTTON -->
+                    <div class="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-slate-100 rounded-xl flex-shrink-0 text-xs">
+                        <button type="button" onclick="addFormulationIngredientRow()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold transition flex items-center gap-1 shadow-sm">
+                            <span>➕ Add Ingredient</span>
+                        </button>
+
+                        <div class="flex items-center gap-3">
+                            <div id="fe-balance-badge" class="px-3 py-1 rounded-full font-mono font-bold text-xs bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                Total: 100.00% w/w
+                            </div>
+                            <div class="text-[11px] text-slate-600 font-bold">
+                                Est. Unit Cost: <span id="fe-total-unit-cost" class="font-mono text-emerald-700">₱0.00</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- INSTRUCTIONS EDIT -->
+                    <div class="flex-shrink-0">
+                        <label class="block text-[11px] font-bold text-slate-700 mb-1">Compounding & Homogenization Instructions:</label>
+                        <textarea id="fe-instructions" rows="2" placeholder="e.g. Heat Phase A to 75°C. Disperse Phase B. Emulsify under vacuum..." class="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 leading-relaxed font-normal">${f.instructions || ''}</textarea>
+                    </div>
+
+                    <div class="flex justify-between items-center pt-2 border-t border-slate-100 flex-shrink-0">
+                        <div class="text-[10px] text-slate-400 font-medium">
+                            Changes will immediately update the Cleanroom Counter-Checking calculator and BOM.
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button type="button" onclick="switchFormulationModalTab('countercheck')" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition">
+                                Back to Counter-Check
+                            </button>
+                            <button type="button" onclick="saveProductFormulation('${f.product_id}')" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs transition flex items-center gap-1.5 shadow-md shadow-emerald-600/20">
+                                <span>💾 Save Formulation</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    `;
+
+    // Initialize the active view
+    updateCounterCheckMath();
+    populateEditIngredientsTable();
+}
+
+function switchFormulationModalTab(tab) {
+    currentFormulationTab = tab;
+    const secCc = document.getElementById('section-form-countercheck');
+    const secEdit = document.getElementById('section-form-edit');
+    const btnCc = document.getElementById('tab-btn-countercheck');
+    const btnEdit = document.getElementById('tab-btn-edit');
+
+    if (!secCc || !secEdit) return;
+
+    if (tab === 'countercheck') {
+        secCc.classList.remove('hidden');
+        secCc.classList.add('flex');
+        secEdit.classList.add('hidden');
+        secEdit.classList.remove('flex');
+        btnCc.className = "px-3.5 py-1.5 rounded-xl font-bold text-xs transition flex items-center gap-1.5 bg-indigo-600 text-white shadow-sm";
+        btnEdit.className = "px-3.5 py-1.5 rounded-xl font-bold text-xs transition flex items-center gap-1.5 bg-slate-100 text-slate-600 hover:bg-slate-200";
+        updateCounterCheckMath();
+    } else {
+        secEdit.classList.remove('hidden');
+        secEdit.classList.add('flex');
+        secCc.classList.add('hidden');
+        secCc.classList.remove('flex');
+        btnEdit.className = "px-3.5 py-1.5 rounded-xl font-bold text-xs transition flex items-center gap-1.5 bg-indigo-600 text-white shadow-sm";
+        btnCc.className = "px-3.5 py-1.5 rounded-xl font-bold text-xs transition flex items-center gap-1.5 bg-slate-100 text-slate-600 hover:bg-slate-200";
+        populateEditIngredientsTable();
+    }
+}
+
+function setCounterCheckPreset(qty, unit) {
+    currentCounterCheckQty = qty;
+    currentCounterCheckUnit = unit;
+    const inputQty = document.getElementById('fc-batch-qty');
+    const inputUnit = document.getElementById('fc-batch-unit');
+    if (inputQty) inputQty.value = qty;
+    if (inputUnit) inputUnit.value = unit;
+    updateCounterCheckMath();
+}
+
+function toggleCounterCheckItem(key) {
+    counterCheckCheckedMap[key] = !counterCheckCheckedMap[key];
+    updateCounterCheckMath();
+}
+
+function updateCounterCheckMath() {
+    if (!currentActiveFormulation) return;
+    const f = currentActiveFormulation;
+    const ingredients = f.ingredients || [];
+    const baseDose = Number(f.base_dose_qty) || 50;
+    const baseUnit = f.base_unit || 'g';
+
+    const inputQty = parseFloat(document.getElementById('fc-batch-qty')?.value);
+    currentCounterCheckQty = (!isNaN(inputQty) && inputQty > 0) ? inputQty : 1000;
+    currentCounterCheckUnit = document.getElementById('fc-batch-unit')?.value || 'pcs';
+
+    // Calculate total batch mass in grams and finished pcs
+    let totalPieces = 0;
+    let totalCompoundingMassGrams = 0;
+
+    if (currentCounterCheckUnit === 'pcs') {
+        totalPieces = currentCounterCheckQty;
+        totalCompoundingMassGrams = totalPieces * baseDose;
+    } else {
+        totalCompoundingMassGrams = currentCounterCheckQty * 1000;
+        totalPieces = baseDose > 0 ? (totalCompoundingMassGrams / baseDose) : currentCounterCheckQty;
+    }
+
+    // Update KPI Bar
+    const kpiOutput = document.getElementById('kpi-fc-output');
+    const kpiMass = document.getElementById('kpi-fc-mass');
+    const kpiProgress = document.getElementById('kpi-fc-progress');
+    const kpiCost = document.getElementById('kpi-fc-cost');
+
+    if (kpiOutput) kpiOutput.textContent = `${Number(totalPieces).toLocaleString('en-US', { maximumFractionDigits: 0 })} pcs`;
+    if (kpiMass) kpiMass.textContent = `${(totalCompoundingMassGrams / 1000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg (${totalCompoundingMassGrams.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} g)`;
+
+    // Group ingredients by Phase
+    const phases = {};
+    ingredients.forEach((ing, idx) => {
+        const ph = ing.phase || 'Phase A - Base';
+        if (!phases[ph]) phases[ph] = [];
+        phases[ph].push({ ...ing, originalIndex: idx });
+    });
+
+    let totalVerified = 0;
+    let totalBatchEstCost = 0;
+
+    const container = document.getElementById('container-countercheck-table');
+    if (!container) return;
+
+    if (ingredients.length === 0) {
+        container.innerHTML = `
+            <div class="p-8 text-center text-slate-400 font-medium">
+                No ingredients defined in this recipe. Switch to "Edit Formulation" tab to add materials.
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = Object.keys(phases).map(phaseName => {
+        const phaseItems = phases[phaseName];
+        const phasePct = phaseItems.reduce((acc, it) => acc + (Number(it.percentage) || 0), 0);
+
+        return `
+            <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-2xs">
+                <div class="bg-slate-100/90 px-3.5 py-1.5 flex justify-between items-center border-b border-slate-200">
+                    <span class="font-black text-slate-800 text-xs flex items-center gap-1.5">
+                        <span>⚗️</span>
+                        <span>${phaseName}</span>
+                    </span>
+                    <span class="text-[11px] font-mono font-bold text-indigo-700">Subtotal: ${phasePct.toFixed(2)}% w/w</span>
+                </div>
+                <table class="w-full text-left text-xs">
+                    <thead class="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider text-[9.5px] border-b border-slate-100">
+                        <tr>
+                            <th class="py-1.5 px-3" style="width: 32px; text-align: center;">✓</th>
+                            <th class="py-1.5 px-3" style="width: 100px;">Material Code</th>
+                            <th class="py-1.5 px-3">Material Description / INCI</th>
+                            <th class="py-1.5 px-3 text-center" style="width: 70px;">% w/w</th>
+                            <th class="py-1.5 px-3 text-right" style="width: 80px;">Dose / Unit</th>
+                            <th class="py-1.5 px-3 text-right" style="width: 130px;">Required for Batch</th>
+                            <th class="py-1.5 px-3 text-right" style="width: 90px;">Est. Cost</th>
+                            <th class="py-1.5 px-3">Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 font-medium">
+                        ${phaseItems.map(item => {
+                            const pct = Number(item.percentage) || 0;
+                            const dose = Number(item.quantity_per_unit || item.qty) || ((baseDose * pct) / 100);
+                            const reqGrams = (totalCompoundingMassGrams * pct) / 100;
+                            const formattedReq = formatMassCalc(reqGrams);
+                            const unitCost = Number(item.unit_cost) || 0;
+                            const itemBatchCost = reqGrams * unitCost;
+                            totalBatchEstCost += itemBatchCost;
+
+                            const itemKey = item.material_code || `ing_${item.originalIndex}`;
+                            const isChecked = !!counterCheckCheckedMap[itemKey];
+                            if (isChecked) totalVerified++;
+
+                            return `
+                                <tr class="${isChecked ? 'bg-emerald-50/70' : 'hover:bg-slate-50'} transition">
+                                    <td class="py-2 px-3 text-center">
+                                        <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleCounterCheckItem('${itemKey}')" class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer">
+                                    </td>
+                                    <td class="py-2 px-3 font-mono font-bold text-slate-800 text-[11px] whitespace-nowrap">
+                                        ${item.material_code || '-'}
+                                    </td>
+                                    <td class="py-2 px-3 font-bold text-slate-900">
+                                        ${item.material_name || 'Raw Material'}
+                                    </td>
+                                    <td class="py-2 px-3 text-center font-mono font-bold text-indigo-700">
+                                        ${pct.toFixed(2)}%
+                                    </td>
+                                    <td class="py-2 px-3 text-right font-mono text-slate-700">
+                                        ${dose.toFixed(4)} ${item.unit || 'g'}
+                                    </td>
+                                    <td class="py-2 px-3 text-right font-mono font-black text-indigo-900 bg-indigo-50/40 text-[11.5px]">
+                                        ${formattedReq}
+                                    </td>
+                                    <td class="py-2 px-3 text-right font-mono text-emerald-700 font-bold">
+                                        ₱${itemBatchCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </td>
+                                    <td class="py-2 px-3 text-slate-500 text-[11px]">
+                                        ${isChecked ? '<span class="text-emerald-700 font-bold">✅ Verified Scale Check</span>' : (item.notes || '—')}
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }).join('');
+
+    if (kpiProgress) {
+        const pctVerified = ingredients.length > 0 ? Math.round((totalVerified / ingredients.length) * 100) : 0;
+        kpiProgress.textContent = `${totalVerified} / ${ingredients.length} Checked (${pctVerified}%)`;
+    }
+
+    if (kpiCost) {
+        const perUnitCost = totalPieces > 0 ? (totalBatchEstCost / totalPieces) : 0;
+        kpiCost.textContent = `₱${totalBatchEstCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (₱${perUnitCost.toFixed(2)}/u)`;
+    }
+}
+
+function printFormulationCounterCheck(productId) {
+    const qty = currentCounterCheckQty || 1000;
+    const unit = currentCounterCheckUnit || 'pcs';
+    window.open(`/print-formulation-countercheck.html?productId=${productId}&batchQty=${qty}&batchUnit=${unit}`, '_blank');
+}
+
+// -------------------------------------------------------------
+// RECIPE EDITOR TAB FUNCTIONS
+// -------------------------------------------------------------
+function populateEditIngredientsTable() {
+    if (!currentActiveFormulation) return;
+    const tbody = document.getElementById('fe-ingredients-tbody');
+    if (!tbody) return;
+
+    const ingredients = currentActiveFormulation.ingredients || [];
+    tbody.innerHTML = '';
+
+    if (ingredients.length === 0) {
+        addFormulationIngredientRow();
+    } else {
+        ingredients.forEach(ing => addFormulationIngredientRow(ing));
+    }
+    updateFormulationBalance();
+}
+
+let editRowCounter = 0;
+
+function addFormulationIngredientRow(data = null) {
+    const tbody = document.getElementById('fe-ingredients-tbody');
+    if (!tbody) return;
+
+    editRowCounter++;
+    const rowId = `fe-row-${editRowCounter}`;
+
+    const defaultPhase = data?.phase || 'Phase A - Water Base';
+    const code = data?.material_code || '';
+    const name = data?.material_name || '';
+    const pct = data?.percentage !== undefined ? Number(data.percentage) : 0;
+    const qty = data?.quantity_per_unit !== undefined ? Number(data.quantity_per_unit) : 0;
+    const unit = data?.unit || 'g';
+    const cost = data?.unit_cost !== undefined ? Number(data.unit_cost) : 0.50;
+    const notes = data?.notes || '';
+
+    const tr = document.createElement('tr');
+    tr.id = rowId;
+    tr.className = "hover:bg-slate-50 transition";
+    tr.innerHTML = `
+        <td class="py-1 px-2">
+            <input type="text" value="${defaultPhase}" class="ing-phase w-full px-2 py-1 text-xs border border-slate-300 rounded bg-white font-semibold text-slate-800" placeholder="Phase A">
+        </td>
+        <td class="py-1 px-2">
+            <input type="text" value="${code}" class="ing-code w-full px-2 py-1 text-xs border border-slate-300 rounded bg-white font-mono font-bold text-slate-800" placeholder="RM-CODE">
+        </td>
+        <td class="py-1 px-2">
+            <input type="text" value="${name}" class="ing-name w-full px-2 py-1 text-xs border border-slate-300 rounded bg-white font-bold text-slate-900" placeholder="Raw Material Name">
+        </td>
+        <td class="py-1 px-2">
+            <input type="number" step="0.01" min="0" max="100" value="${pct.toFixed(2)}" oninput="onEditIngredientPctChange('${rowId}')" class="ing-pct w-full px-1.5 py-1 text-xs text-center border border-slate-300 rounded bg-white font-mono font-bold text-indigo-700">
+        </td>
+        <td class="py-1 px-2">
+            <input type="number" step="0.0001" min="0" value="${qty.toFixed(4)}" oninput="onEditIngredientQtyChange('${rowId}')" class="ing-qty w-full px-1.5 py-1 text-xs text-right border border-slate-300 rounded bg-white font-mono font-black text-slate-800">
+        </td>
+        <td class="py-1 px-2">
+            <input type="text" value="${unit}" class="ing-unit w-full px-1 py-1 text-xs text-center border border-slate-300 rounded bg-white font-semibold">
+        </td>
+        <td class="py-1 px-2">
+            <input type="number" step="0.01" min="0" value="${cost.toFixed(2)}" oninput="updateFormulationBalance()" class="ing-cost w-full px-1.5 py-1 text-xs text-right border border-slate-300 rounded bg-white font-mono font-bold text-emerald-700">
+        </td>
+        <td class="py-1 px-2">
+            <input type="text" value="${notes}" class="ing-notes w-full px-2 py-1 text-xs border border-slate-300 rounded bg-white text-slate-600" placeholder="Notes...">
+        </td>
+        <td class="py-1 px-1 text-center">
+            <button type="button" onclick="removeFormulationIngredientRow('${rowId}')" class="p-1 hover:bg-rose-100 text-rose-600 rounded transition" title="Delete Row">
+                🗑️
+            </button>
+        </td>
+    `;
+
+    tbody.appendChild(tr);
+    updateFormulationBalance();
+}
+
+function removeFormulationIngredientRow(rowId) {
+    const row = document.getElementById(rowId);
+    if (row) {
+        row.remove();
+        updateFormulationBalance();
+    }
+}
+
+function onEditIngredientPctChange(rowId) {
+    const row = document.getElementById(rowId);
+    if (!row) return;
+
+    const baseDose = parseFloat(document.getElementById('fe-base-dose')?.value) || 50;
+    const pctInput = row.querySelector('.ing-pct');
+    const qtyInput = row.querySelector('.ing-qty');
+
+    const pct = parseFloat(pctInput.value) || 0;
+    const qty = (baseDose * pct) / 100;
+    if (qtyInput) qtyInput.value = qty.toFixed(4);
+
+    updateFormulationBalance();
+}
+
+function onEditIngredientQtyChange(rowId) {
+    const row = document.getElementById(rowId);
+    if (!row) return;
+
+    const baseDose = parseFloat(document.getElementById('fe-base-dose')?.value) || 50;
+    const pctInput = row.querySelector('.ing-pct');
+    const qtyInput = row.querySelector('.ing-qty');
+
+    const qty = parseFloat(qtyInput.value) || 0;
+    const pct = baseDose > 0 ? (qty / baseDose) * 100 : 0;
+    if (pctInput) pctInput.value = pct.toFixed(2);
+
+    updateFormulationBalance();
+}
+
+function recalcEditIngredientsFromDose() {
+    const baseDose = parseFloat(document.getElementById('fe-base-dose')?.value) || 50;
+    const rows = document.querySelectorAll('#fe-ingredients-tbody tr');
+
+    rows.forEach(row => {
+        const pctInput = row.querySelector('.ing-pct');
+        const qtyInput = row.querySelector('.ing-qty');
+        const pct = parseFloat(pctInput?.value) || 0;
+        const qty = (baseDose * pct) / 100;
+        if (qtyInput) qtyInput.value = qty.toFixed(4);
+    });
+
+    updateFormulationBalance();
+}
+
+function updateFormulationBalance() {
+    const rows = document.querySelectorAll('#fe-ingredients-tbody tr');
+    let sumPct = 0;
+    let sumUnitCost = 0;
+
+    rows.forEach(row => {
+        const pct = parseFloat(row.querySelector('.ing-pct')?.value) || 0;
+        const qty = parseFloat(row.querySelector('.ing-qty')?.value) || 0;
+        const cost = parseFloat(row.querySelector('.ing-cost')?.value) || 0;
+
+        sumPct += pct;
+        sumUnitCost += (qty * cost);
+    });
+
+    const badge = document.getElementById('fe-balance-badge');
+    const costDisplay = document.getElementById('fe-total-unit-cost');
+
+    if (badge) {
+        const isBalanced = Math.abs(sumPct - 100.0) < 0.05;
+        if (isBalanced) {
+            badge.className = "px-3 py-1 rounded-full font-mono font-bold text-xs bg-emerald-100 text-emerald-800 border border-emerald-300";
+            badge.textContent = `✅ Balanced: ${sumPct.toFixed(2)}% w/w`;
+        } else {
+            badge.className = "px-3 py-1 rounded-full font-mono font-bold text-xs bg-amber-100 text-amber-900 border border-amber-300";
+            badge.textContent = `⚠️ Total: ${sumPct.toFixed(2)}% w/w (Target: 100%)`;
+        }
+    }
+
+    if (costDisplay) {
+        costDisplay.textContent = `₱${sumUnitCost.toFixed(2)} / unit`;
+    }
+}
+
+function loadStandardFormulationTemplate(key) {
+    const template = STANDARD_RECIPE_PRESETS[key];
+    if (!template) return;
+
+    if (!confirm(`Load standard ${template.name} template? This will replace the ingredients below.`)) {
+        return;
+    }
+
+    document.getElementById('fe-formula-code').value = template.code;
+    document.getElementById('fe-formula-name').value = template.name;
+    document.getElementById('fe-base-dose').value = template.baseDose;
+    document.getElementById('fe-base-unit').value = template.unit;
+    document.getElementById('fe-instructions').value = template.instructions;
+
+    const tbody = document.getElementById('fe-ingredients-tbody');
+    tbody.innerHTML = '';
+
+    template.ingredients.forEach(ing => {
+        addFormulationIngredientRow({
+            phase: ing.phase,
+            material_code: ing.material_code,
+            material_name: ing.material_name,
+            percentage: ing.percentage,
+            quantity_per_unit: ing.qty,
+            unit: ing.unit,
+            unit_cost: ing.unit_cost,
+            notes: ing.notes
+        });
+    });
+
+    updateFormulationBalance();
+    NKB.showToast(`Loaded ${key} recipe template successfully.`, 'success');
+}
+
+async function saveProductFormulation(productId) {
+    if (!productId && currentActiveFormulation) {
+        productId = currentActiveFormulation.product_id;
+    }
+
+    const formulaCode = (document.getElementById('fe-formula-code')?.value || '').trim();
+    const name = (document.getElementById('fe-formula-name')?.value || '').trim();
+    const baseDoseQty = parseFloat(document.getElementById('fe-base-dose')?.value) || 50;
+    const baseUnit = document.getElementById('fe-base-unit')?.value || 'g';
+    const instructions = (document.getElementById('fe-instructions')?.value || '').trim();
+    const isConfidential = document.getElementById('fe-is-confidential')?.checked ? 1 : 0;
+
+    if (!name) {
+        NKB.showToast('Please enter a formulation name.', 'warning');
+        return;
+    }
+
+    // Collect ingredient rows
+    const rows = document.querySelectorAll('#fe-ingredients-tbody tr');
+    const ingredients = [];
+
+    rows.forEach((row, idx) => {
+        const phase = row.querySelector('.ing-phase')?.value.trim() || 'Phase A';
+        const material_code = row.querySelector('.ing-code')?.value.trim() || `RM-${idx + 1}`;
+        const material_name = row.querySelector('.ing-name')?.value.trim() || 'Raw Material';
+        const percentage = parseFloat(row.querySelector('.ing-pct')?.value) || 0;
+        const quantity_per_unit = parseFloat(row.querySelector('.ing-qty')?.value) || 0;
+        const unit = row.querySelector('.ing-unit')?.value.trim() || 'g';
+        const unit_cost = parseFloat(row.querySelector('.ing-cost')?.value) || 0;
+        const notes = row.querySelector('.ing-notes')?.value.trim() || '';
+
+        ingredients.push({
+            phase,
+            material_code,
+            material_name,
+            percentage,
+            quantity_per_unit,
+            unit,
+            unit_cost,
+            notes
+        });
+    });
+
+    if (ingredients.length === 0) {
+        NKB.showToast('Please add at least one ingredient to the formulation.', 'warning');
+        return;
+    }
+
+    try {
+        const payload = {
+            productId,
+            formulaCode,
+            name,
+            baseDoseQty,
+            baseUnit,
+            instructions,
+            isConfidential,
+            ingredients
+        };
+
+        const res = await NKB.api('/api/formulations', {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+
+        if (!res.success) {
+            NKB.showToast(res.error || 'Failed to save formulation.', 'error');
+            return;
+        }
+
+        NKB.showToast('✅ Formulation and BOM saved successfully!', 'success');
+        currentActiveFormulation = res.data;
+
+        // Refresh background formulations table if active
+        if (typeof loadFormulations === 'function') {
+            loadFormulations();
+        }
+
+        // Switch to Counter-Check tab with updated numbers
+        switchFormulationModalTab('countercheck');
+    } catch (err) {
+        console.error('Error saving formulation:', err);
+        NKB.showToast('Error saving formulation.', 'error');
+    }
+}
+
+// Window Exports
 window.loadFormulations = loadFormulations;
 window.renderFormulationsTable = renderFormulationsTable;
 window.filterFormulationsTable = filterFormulationsTable;
-window.openViewFormulationModal = openViewFormulationModal;
+window.openProductFormulationModal = openProductFormulationModal;
+window.openViewFormulationModal = openProductFormulationModal;
+window.switchFormulationModalTab = switchFormulationModalTab;
+window.setCounterCheckPreset = setCounterCheckPreset;
+window.toggleCounterCheckItem = toggleCounterCheckItem;
+window.updateCounterCheckMath = updateCounterCheckMath;
+window.printFormulationCounterCheck = printFormulationCounterCheck;
+window.populateEditIngredientsTable = populateEditIngredientsTable;
+window.addFormulationIngredientRow = addFormulationIngredientRow;
+window.removeFormulationIngredientRow = removeFormulationIngredientRow;
+window.onEditIngredientPctChange = onEditIngredientPctChange;
+window.onEditIngredientQtyChange = onEditIngredientQtyChange;
+window.recalcEditIngredientsFromDose = recalcEditIngredientsFromDose;
+window.updateFormulationBalance = updateFormulationBalance;
+window.loadStandardFormulationTemplate = loadStandardFormulationTemplate;
+window.saveProductFormulation = saveProductFormulation;
 
 // -------------------------------------------------------------
 // 16. DEVELOPER REST API & API KEYS MANAGER

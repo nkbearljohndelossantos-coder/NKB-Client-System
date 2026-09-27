@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Formulation Counter-Check Worksheet - NKB Manufacturing</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, Helvetica, "Segoe UI", sans-serif;
+            color: #0f172a;
+            background: #ffffff;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        @page {
+            size: A4 portrait;
+            margin: 0;
+        }
+
+        @media print {
+            @page {
+                size: A4 portrait;
+                margin: 0;
+            }
+
+            html, body {
+                width: 210mm !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: #ffffff !important;
+                font-size: 8.5pt !important;
+                color: #000000 !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            .no-print {
+                display: none !important;
+            }
+
+            .print-sheet {
+                width: 210mm !important;
+                max-width: 210mm !important;
+                min-height: 297mm !important;
+                margin: 0 auto !important;
+                padding: 8mm 12mm !important;
+                box-sizing: border-box !important;
+                border: none !important;
+                box-shadow: none !important;
+                background: transparent !important;
+            }
+
+            .avoid-break {
+                break-inside: avoid !important;
+                page-break-inside: avoid !important;
+            }
+        }
+
+        @media screen {
+            body {
+                background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+                padding: 16px 16px 60px 16px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 16px;
+                min-height: 100vh;
+            }
+
+            .no-print-toolbar {
+                width: 100%;
+                max-width: 860px;
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: space-between;
+                align-items: center;
+                gap: 10px;
+                background: #ffffff;
+                padding: 12px 18px;
+                border-radius: 12px;
+                box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0,0,0,0.05);
+                position: sticky;
+                top: 12px;
+                z-index: 100;
+            }
+
+            .toolbar-btn {
+                padding: 8px 16px;
+                border-radius: 8px;
+                font-size: 12px;
+                font-weight: 700;
+                cursor: pointer;
+                border: none;
+                transition: all 0.15s ease;
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                text-decoration: none;
+            }
+
+            .btn-primary {
+                background: #0f172a;
+                color: #ffffff;
+            }
+            .btn-primary:hover {
+                background: #1e293b;
+            }
+
+            .btn-secondary {
+                background: #f1f5f9;
+                color: #334155;
+                border: 1px solid #cbd5e1;
+            }
+            .btn-secondary:hover {
+                background: #e2e8f0;
+            }
+
+            .print-sheet {
+                width: 210mm;
+                min-height: 297mm;
+                background: #ffffff;
+                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.06);
+                border-radius: 4px;
+                padding: 10mm 12mm;
+                box-sizing: border-box;
+            }
+        }
+
+        .header-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 2px solid #0f172a;
+            padding-bottom: 8px;
+            margin-bottom: 10px;
+        }
+
+        .company-title {
+            font-size: 15pt;
+            font-weight: 900;
+            color: #0f172a;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .company-sub {
+            font-size: 8pt;
+            color: #475569;
+            margin-top: 2px;
+            line-height: 1.3;
+        }
+
+        .confidential-seal {
+            background: #fff1f2;
+            border: 1.5px solid #f43f5e;
+            color: #be123c;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 7.5pt;
+            font-weight: 900;
+            text-align: right;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .worksheet-banner {
+            background: #0f172a;
+            color: #ffffff;
+            padding: 6px 12px;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .worksheet-title {
+            font-size: 10.5pt;
+            font-weight: 900;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .worksheet-badge {
+            background: #fef3c7;
+            color: #78350f;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 7.5pt;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        .meta-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 8px 12px;
+            margin-bottom: 12px;
+            font-size: 8pt;
+        }
+
+        .meta-item strong {
+            display: block;
+            font-size: 7pt;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            margin-bottom: 1px;
+        }
+
+        .meta-item span {
+            font-size: 8.5pt;
+            font-weight: 800;
+            color: #0f172a;
+        }
+
+        .highlight-calc-box {
+            background: #eff6ff;
+            border: 1.5px solid #3b82f6;
+            border-radius: 8px;
+            padding: 8px 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .highlight-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .highlight-label {
+            font-size: 7pt;
+            color: #1e40af;
+            text-transform: uppercase;
+            font-weight: 800;
+        }
+
+        .highlight-val {
+            font-size: 11pt;
+            font-weight: 900;
+            color: #1e3a8a;
+            font-family: monospace;
+        }
+
+        .section-title {
+            font-size: 9pt;
+            font-weight: 900;
+            color: #0f172a;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            margin: 10px 0 5px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #cbd5e1;
+            padding-bottom: 3px;
+        }
+
+        .styled-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 8pt;
+            margin-bottom: 10px;
+        }
+
+        .styled-table th {
+            background: #f1f5f9;
+            color: #334155;
+            font-weight: 800;
+            text-align: left;
+            padding: 5px 6px;
+            border: 1px solid #cbd5e1;
+            text-transform: uppercase;
+            font-size: 7pt;
+            letter-spacing: 0.3px;
+        }
+
+        .styled-table td {
+            padding: 5px 6px;
+            border: 1px solid #e2e8f0;
+            vertical-align: middle;
+        }
+
+        .phase-header-row td {
+            background: #f8fafc;
+            font-weight: 900;
+            color: #1e293b;
+            font-size: 7.5pt;
+            border-top: 1.5px solid #94a3b8;
+            padding: 4px 6px;
+        }
+
+        .blank-check-box {
+            display: inline-block;
+            width: 13px;
+            height: 13px;
+            border: 1.5px solid #64748b;
+            border-radius: 3px;
+            vertical-align: middle;
+            margin-right: 4px;
+        }
+
+        .write-in-line {
+            display: inline-block;
+            width: 100%;
+            min-height: 16px;
+            border-bottom: 1px dashed #94a3b8;
+        }
+
+        .instructions-box {
+            background: #fffbeb;
+            border: 1px solid #fef3c7;
+            border-radius: 6px;
+            padding: 8px 12px;
+            margin-bottom: 12px;
+            font-size: 7.5pt;
+            color: #78350f;
+            line-height: 1.4;
+        }
+
+        .signoff-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 7.5pt;
+            margin-top: 10px;
+            margin-bottom: 6px;
+        }
+
+        .signoff-table th {
+            background: #0f172a;
+            color: #ffffff;
+            font-weight: 800;
+            text-align: center;
+            padding: 4px;
+            font-size: 7pt;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            border: 1px solid #0f172a;
+        }
+
+        .signoff-table td {
+            border: 1px solid #cbd5e1;
+            padding: 6px 8px;
+            height: 48px;
+            vertical-align: bottom;
+            text-align: center;
+        }
+
+        .signoff-line {
+            border-top: 1px solid #0f172a;
+            margin: 4px 10px 2px 10px;
+        }
+
+        .signoff-label {
+            font-size: 6.5pt;
+            color: #64748b;
+            text-transform: uppercase;
+        }
+
+        .footer-note {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 6.5pt;
+            color: #94a3b8;
+            margin-top: 6px;
+            border-top: 1px solid #f1f5f9;
+            padding-top: 4px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- SCREEN-ONLY FLOATING ACTION TOOLBAR -->
+    <div class="no-print-toolbar no-print">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 16px;">🧪</span>
+            <div>
+                <strong style="font-size: 13px; color: #0f172a;" id="toolbar-product-title">Compounding Counter-Check Sheet</strong>
+                <div style="font-size: 11px; color: #64748b;">NKB Cleanroom Dispensing & Verification</div>
+            </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: bold; color: #334155;">
+                <span>Target Batch:</span>
+                <input type="number" id="toolbar-batch-qty" min="1" step="1" value="1000" style="width: 75px; padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-weight: 800; font-family: monospace;">
+                <select id="toolbar-batch-unit" style="padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 11px; font-weight: bold;">
+                    <option value="pcs">pcs (units)</option>
+                    <option value="kg">kg (bulk)</option>
+                </select>
+                <button onclick="recalculateFromToolbar()" class="toolbar-btn btn-secondary" style="padding: 4px 10px;">Recalculate</button>
+            </div>
+            <button onclick="window.print()" class="toolbar-btn btn-primary">
+                <span>🖨️ Print Sheet</span>
+            </button>
+            <button onclick="window.close()" class="toolbar-btn btn-secondary">
+                <span>Close</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- PRINT SHEET CONTAINER -->
+    <div class="print-sheet">
+
+        <!-- HEADER -->
+        <div class="header-container">
+            <div>
+                <div class="company-title">NKB MANUFACTURING & TRADING</div>
+                <div class="company-sub">
+                    FDA Certified Cleanroom Compounding Facility & Laboratory<br>
+                    Quality Assurance • Standard Operating Procedure (SOP-CMP-04)
+                </div>
+            </div>
+            <div class="confidential-seal">
+                🔒 CONFIDENTIAL BOM<br>
+                AUTHORIZED STAFF ONLY
+            </div>
+        </div>
+
+        <!-- BANNER -->
+        <div class="worksheet-banner">
+            <span class="worksheet-title">FORMULATION COMPOUNDING & MANUAL COUNTER-CHECK LOG</span>
+            <span class="worksheet-badge" id="badge-doc-id">BATCH RUN WORKSHEET</span>
+        </div>
+
+        <!-- METADATA GRID -->
+        <div class="meta-grid">
+            <div class="meta-item">
+                <strong>Target Product</strong>
+                <span id="meta-product-name">Loading Product...</span>
+            </div>
+            <div class="meta-item">
+                <strong>Product SKU / Formula Code</strong>
+                <span id="meta-product-code">-</span>
+            </div>
+            <div class="meta-item">
+                <strong>Standard Single Dose</strong>
+                <span id="meta-base-dose">-</span>
+            </div>
+            <div class="meta-item">
+                <strong>Document Date & Time</strong>
+                <span id="meta-print-date">-</span>
+            </div>
+        </div>
+
+        <!-- HIGHLIGHT CALCULATION SUMMARY -->
+        <div class="highlight-calc-box">
+            <div class="highlight-item">
+                <span class="highlight-label">Target Batch Output</span>
+                <span class="highlight-val" id="calc-batch-qty">1,000 pcs</span>
+            </div>
+            <div class="highlight-item">
+                <span class="highlight-label">Total Compounding Mass</span>
+                <span class="highlight-val" id="calc-total-mass">50.00 kg (50,000 g)</span>
+            </div>
+            <div class="highlight-item">
+                <span class="highlight-label">Phase Count</span>
+                <span class="highlight-val" id="calc-phase-count">4 Phases</span>
+            </div>
+            <div class="highlight-item">
+                <span class="highlight-label">Raw Material Items</span>
+                <span class="highlight-val" id="calc-material-count">13 Items</span>
+            </div>
+        </div>
+
+        <!-- INGREDIENTS TABLE -->
+        <div class="section-title">
+            <span>Phased Raw Material Requirements & Dispensing Verification</span>
+            <span style="font-size: 7pt; color: #64748b; font-weight: normal;">All ingredients must be counter-checked on calibrated scales</span>
+        </div>
+
+        <table class="styled-table" id="table-ingredients">
+            <thead>
+                <tr>
+                    <th style="width: 25px; text-align: center;">#</th>
+                    <th style="width: 80px;">Material Code</th>
+                    <th>Chemical / Raw Material Name & INCI</th>
+                    <th style="width: 60px; text-align: center;">% w/w</th>
+                    <th style="width: 75px; text-align: right;">Unit Dose</th>
+                    <th style="width: 100px; text-align: right;">Required Batch Qty</th>
+                    <th style="width: 100px; text-align: center;">Actual Weighed Qty</th>
+                    <th style="width: 110px; text-align: center;">Lot / Drum #</th>
+                    <th style="width: 80px; text-align: center;">Verified (✓)</th>
+                </tr>
+            </thead>
+            <tbody id="table-ingredients-body">
+                <tr><td colspan="9" style="text-align: center; padding: 16px; color: #64748b;">Loading formulation recipe...</td></tr>
+            </tbody>
+            <tfoot>
+                <tr style="background: #f8fafc; font-weight: 800; border-top: 1.5px solid #0f172a;">
+                    <td colspan="3" style="text-align: right; text-transform: uppercase;">Theoretical Batch Mass:</td>
+                    <td id="tfoot-total-pct" style="text-align: center; font-family: monospace;">100.00%</td>
+                    <td id="tfoot-unit-dose" style="text-align: right; font-family: monospace;">-</td>
+                    <td id="tfoot-batch-qty" style="text-align: right; font-family: monospace; font-size: 9pt; color: #1e3a8a;">-</td>
+                    <td colspan="3" style="font-size: 7pt; color: #64748b; text-align: center;">Scale Tolerance: ±0.05% of net weight</td>
+                </tr>
+            </tfoot>
+        </table>
+
+        <!-- COMPOUNDING INSTRUCTIONS -->
+        <div class="avoid-break" id="container-instructions">
+            <div class="section-title">Compounding & Mixing Protocol (SOP Cleanroom Guide)</div>
+            <div class="instructions-box" id="instructions-text">
+                Follow standard cleanroom procedures: Heat water phase A to specified temperature. Disperse oil phase B. Emulsify slowly under homogenizer (3,000 RPM). Cool down below 45°C before incorporating heat-sensitive active ingredients and fragrance.
+            </div>
+        </div>
+
+        <!-- 4-BLOCK SIGN-OFF TABLE -->
+        <div class="avoid-break">
+            <div class="section-title">Cleanroom Counter-Check & Release Sign-Off</div>
+            <table class="signoff-table">
+                <thead>
+                    <tr>
+                        <th style="width: 25%;">1. Dispensed & Staged</th>
+                        <th style="width: 25%;">2. Weighed & Counter-Checked</th>
+                        <th style="width: 25%;">3. Compounded & Homogenized</th>
+                        <th style="width: 25%;">4. QC & Cleanroom Supervisor</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>
+                            <div class="signoff-line"></div>
+                            <div class="signoff-label">Warehouse Dispenser / Date</div>
+                        </td>
+                        <td>
+                            <div class="signoff-line"></div>
+                            <div class="signoff-label">Compounding Chemist / Date</div>
+                        </td>
+                        <td>
+                            <div class="signoff-line"></div>
+                            <div class="signoff-label">Production Officer / Date</div>
+                        </td>
+                        <td>
+                            <div class="signoff-line"></div>
+                            <div class="signoff-label">QC Inspector / Batch Release</div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- FOOTER -->
+        <div class="footer-note">
+            <span>NKB Manufacturing & Trading Corp. • Confidential Formulation Recipe System</span>
+            <span id="footer-gen-time">Generated: Asia/Manila (UTC+8)</span>
+            <span>Page 1 of 1</span>
+        </div>
+
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const productId = urlParams.get('productId') || urlParams.get('id');
+        let currentBatchQty = parseFloat(urlParams.get('batchQty') || urlParams.get('qty')) || 1000;
+        let currentBatchUnit = urlParams.get('batchUnit') || urlParams.get('unit') || 'pcs';
+        let loadedFormulation = null;
+
+        document.getElementById('toolbar-batch-qty').value = currentBatchQty;
+        document.getElementById('toolbar-batch-unit').value = currentBatchUnit;
+
+        function getManilaDateTimeStr() {
+            return new Intl.DateTimeFormat('en-US', {
+                timeZone: 'Asia/Manila',
+                year: 'numeric',
+                month: 'short',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true
+            }).format(new Date());
+        }
+
+        async function loadData() {
+            if (!productId) {
+                alert('No Product ID specified in URL.');
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/formulations/${productId}`, { credentials: 'include' });
+                const json = await res.json();
+                if (!json.success || !json.data) {
+                    alert('Error loading formulation: ' + (json.error || 'Not found'));
+                    return;
+                }
+                loadedFormulation = json.data;
+                renderWorksheet();
+            } catch (err) {
+                console.error('Failed to load formulation worksheet:', err);
+                alert('Connection error while fetching formulation.');
+            }
+        }
+
+        function recalculateFromToolbar() {
+            const qtyInput = parseFloat(document.getElementById('toolbar-batch-qty').value);
+            if (isNaN(qtyInput) || qtyInput <= 0) {
+                alert('Please enter a valid batch quantity.');
+                return;
+            }
+            currentBatchQty = qtyInput;
+            currentBatchUnit = document.getElementById('toolbar-batch-unit').value;
+            renderWorksheet();
+        }
+
+        function formatMassDisplay(grams) {
+            if (grams >= 1000) {
+                return (grams / 1000).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + ' kg';
+            }
+            return Number(grams).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' g';
+        }
+
+        function renderWorksheet() {
+            if (!loadedFormulation) return;
+            const f = loadedFormulation;
+            const ingredients = f.ingredients || [];
+            const prodName = f.product_name || f.name || 'Cosmetic Product';
+            const prodSku = f.product_sku || 'N/A';
+            const formulaCode = f.formula_code || 'FORM-CUSTOM';
+            const baseDose = Number(f.base_dose_qty) || 50;
+            const baseUnit = f.base_unit || 'g';
+
+            document.getElementById('toolbar-product-title').textContent = `${prodName} (Batch: ${currentBatchQty.toLocaleString()} ${currentBatchUnit})`;
+            document.getElementById('meta-product-name').textContent = prodName;
+            document.getElementById('meta-product-code').textContent = `${prodSku} • ${formulaCode}`;
+            document.getElementById('meta-base-dose').textContent = `${baseDose} ${baseUnit} / unit`;
+            document.getElementById('meta-print-date').textContent = getManilaDateTimeStr();
+            document.getElementById('footer-gen-time').textContent = `Generated: ${getManilaDateTimeStr()} (Asia/Manila)`;
+
+            // Calculate total batch mass
+            let totalCompoundingMassGrams = 0;
+            let totalPieces = 0;
+
+            if (currentBatchUnit === 'pcs') {
+                totalPieces = currentBatchQty;
+                totalCompoundingMassGrams = totalPieces * baseDose;
+            } else {
+                // 'kg'
+                totalCompoundingMassGrams = currentBatchQty * 1000;
+                totalPieces = baseDose > 0 ? (totalCompoundingMassGrams / baseDose) : currentBatchQty;
+            }
+
+            document.getElementById('calc-batch-qty').textContent = `${Number(totalPieces).toLocaleString('en-US', { maximumFractionDigits: 0 })} pcs`;
+            document.getElementById('calc-total-mass').textContent = `${(totalCompoundingMassGrams / 1000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg (${totalCompoundingMassGrams.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} g)`;
+
+            // Group by phase
+            const phases = {};
+            ingredients.forEach(ing => {
+                const ph = ing.phase || 'Phase A - Base';
+                if (!phases[ph]) phases[ph] = [];
+                phases[ph].push(ing);
+            });
+
+            document.getElementById('calc-phase-count').textContent = `${Object.keys(phases).length} Phase${Object.keys(phases).length > 1 ? 's' : ''}`;
+            document.getElementById('calc-material-count').textContent = `${ingredients.length} Material${ingredients.length > 1 ? 's' : ''}`;
+
+            // Render table
+            const tbody = document.getElementById('table-ingredients-body');
+            let rowsHtml = '';
+            let itemCounter = 1;
+            let sumPct = 0;
+
+            Object.keys(phases).forEach(phaseName => {
+                const phaseList = phases[phaseName];
+                const phaseSubPct = phaseList.reduce((acc, it) => acc + (Number(it.percentage) || 0), 0);
+
+                rowsHtml += `
+                    <tr class="phase-header-row">
+                        <td colspan="3" style="text-align: left; padding: 4px 6px;">⚗️ <strong>${phaseName}</strong></td>
+                        <td style="text-align: center; font-family: monospace;">Subtotal: ${phaseSubPct.toFixed(2)}%</td>
+                        <td colspan="5"></td>
+                    </tr>
+                `;
+
+                phaseList.forEach(ing => {
+                    const pct = Number(ing.percentage) || 0;
+                    sumPct += pct;
+                    const dose = Number(ing.quantity_per_unit || ing.qty) || ((baseDose * pct) / 100);
+                    const reqGrams = (totalCompoundingMassGrams * pct) / 100;
+                    const formattedReq = formatMassDisplay(reqGrams);
+
+                    rowsHtml += `
+                        <tr>
+                            <td style="text-align: center; color: #64748b; font-size: 7pt;">${itemCounter++}</td>
+                            <td style="font-family: monospace; font-weight: bold; color: #1e3a8a; font-size: 7.5pt;">${ing.material_code || '-'}</td>
+                            <td style="font-weight: 700; color: #0f172a;">
+                                ${ing.material_name || 'Raw Material'}
+                                ${ing.notes ? `<div style="font-size: 6.5pt; color: #64748b; font-weight: normal;">Notes: ${ing.notes}</div>` : ''}
+                            </td>
+                            <td style="text-align: center; font-family: monospace; font-weight: 700; color: #3b82f6;">${pct.toFixed(2)}%</td>
+                            <td style="text-align: right; font-family: monospace;">${dose.toFixed(4)} ${ing.unit || 'g'}</td>
+                            <td style="text-align: right; font-family: monospace; font-weight: 900; font-size: 8.5pt; color: #1e3a8a; background: #f0fdf4;">${formattedReq}</td>
+                            <td style="text-align: center;"><span class="write-in-line"></span></td>
+                            <td style="text-align: center;"><span class="write-in-line"></span></td>
+                            <td style="text-align: center;"><span class="blank-check-box"></span></td>
+                        </tr>
+                    `;
+                });
+            });
+
+            tbody.innerHTML = rowsHtml || `<tr><td colspan="9" style="text-align: center; padding: 12px; color: #94a3b8;">No ingredients defined in this formulation.</td></tr>`;
+
+            document.getElementById('tfoot-total-pct').textContent = `${sumPct.toFixed(2)}%`;
+            document.getElementById('tfoot-unit-dose').textContent = `${baseDose.toFixed(2)} ${baseUnit}`;
+            document.getElementById('tfoot-batch-qty').textContent = formatMassDisplay(totalCompoundingMassGrams);
+
+            // Instructions
+            if (f.instructions && f.instructions.trim()) {
+                document.getElementById('instructions-text').textContent = f.instructions;
+                document.getElementById('container-instructions').style.display = 'block';
+            } else {
+                document.getElementById('instructions-text').textContent = 'Follow standard cleanroom procedures for compounding, temperature maintenance, and quality inspection.';
+            }
+        }
+
+        window.onload = loadData;
+    </script>
+</body>
+</html>
