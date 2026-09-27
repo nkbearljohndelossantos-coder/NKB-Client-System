@@ -896,6 +896,60 @@ function runMigrations(dbInstance, isMysql) {
             console.warn('Support inquiries table init note:', inqErr.message);
         }
 
+        // Dispatch Notifications (WhatsApp / SMS milestones)
+        try {
+            if (isMysql) {
+                dbInstance.exec(`
+                    CREATE TABLE IF NOT EXISTS dispatch_notifications (
+                        id VARCHAR(36) PRIMARY KEY,
+                        dr_id VARCHAR(36) NOT NULL,
+                        po_id VARCHAR(36) NOT NULL,
+                        client_id VARCHAR(36) NOT NULL,
+                        channel VARCHAR(50) NOT NULL,
+                        recipient_phone VARCHAR(50) NULL,
+                        recipient_name VARCHAR(255) NULL,
+                        message TEXT NOT NULL,
+                        status VARCHAR(50) NOT NULL DEFAULT 'SENT',
+                        sent_by VARCHAR(36) NULL,
+                        sent_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        INDEX idx_dn_dr (dr_id),
+                        INDEX idx_dn_po (po_id),
+                        INDEX idx_dn_client (client_id),
+                        INDEX idx_dn_sent (sent_at)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+                `);
+            } else {
+                dbInstance.exec(`
+                    CREATE TABLE IF NOT EXISTS dispatch_notifications (
+                        id TEXT PRIMARY KEY,
+                        dr_id TEXT NOT NULL,
+                        po_id TEXT NOT NULL,
+                        client_id TEXT NOT NULL,
+                        channel TEXT NOT NULL,
+                        recipient_phone TEXT,
+                        recipient_name TEXT,
+                        message TEXT NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'SENT',
+                        sent_by TEXT,
+                        sent_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                        FOREIGN KEY (dr_id) REFERENCES delivery_receipts(id) ON DELETE CASCADE,
+                        FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_dn_dr ON dispatch_notifications(dr_id);
+                    CREATE INDEX IF NOT EXISTS idx_dn_po ON dispatch_notifications(po_id);
+                    CREATE INDEX IF NOT EXISTS idx_dn_client ON dispatch_notifications(client_id);
+                    CREATE INDEX IF NOT EXISTS idx_dn_sent ON dispatch_notifications(sent_at);
+                `);
+            }
+        } catch (dnErr) {
+            console.warn('dispatch_notifications table init note:', dnErr.message);
+        }
+
+        // Add self-healing columns to delivery_receipts
+        try { dbInstance.exec(`ALTER TABLE delivery_receipts ADD COLUMN whatsapp_notified_at ${textType};`); } catch (_) {}
+        try { dbInstance.exec(`ALTER TABLE delivery_receipts ADD COLUMN sms_notified_at ${textType};`); } catch (_) {}
+        try { dbInstance.exec(`ALTER TABLE delivery_receipts ADD COLUMN dispatch_message ${textType};`); } catch (_) {}
+
         // Seed IT Admin, Inventory & Purchasing users if not already present
         try {
             const itAdminEmail = 'itadmin@nkbmanufacturing.com';

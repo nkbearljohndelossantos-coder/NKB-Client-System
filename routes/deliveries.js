@@ -7,6 +7,14 @@ const { getNextDocumentNumber } = require('../services/documentNumberService');
 const { recordMovement } = require('../services/inventoryService');
 const { logAudit } = require('../services/auditService');
 const { getManilaDate } = require('../helpers/timezone');
+const {
+    sendAutomatedDispatchAlert,
+    getDispatchNotificationsForDR,
+    getWhatsAppUrl,
+    getSmsUrl,
+    generateDispatchAlertMessage,
+    cleanPhoneNumber
+} = require('../services/dispatchNotificationService');
 
 /**
  * GET /api/deliveries
@@ -273,8 +281,25 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'WAREHOUSE', 'PRODUCTI
 
     try {
         const result = createDrTx();
+
+        // Automated WhatsApp / SMS Dispatch Milestone Alert
+        let dispatchAlert = null;
+        try {
+            dispatchAlert = sendAutomatedDispatchAlert({
+                drId: result.drId,
+                trigger: 'AUTOMATED',
+                sentBy: req.user.id
+            });
+        } catch (notifErr) {
+            console.warn('Automated dispatch alert notice:', notifErr.message);
+        }
+
         const createdDR = db.prepare('SELECT * FROM delivery_receipts WHERE id = ?').get(result.drId);
-        return res.status(201).json({ success: true, data: createdDR });
+        return res.status(201).json({
+            success: true,
+            data: createdDR,
+            dispatchAlert
+        });
     } catch (err) {
         return res.status(400).json({ success: false, error: err.message });
     }
@@ -474,6 +499,122 @@ router.post('/:id/accept', authenticateToken, enforceClientIsolation, (req, res)
         });
     } catch (err) {
         return res.status(400).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * GET /api/deliveries/:id/dispatch-alert
+ * Retrieve pre-formatted WhatsApp / SMS dispatch notice and click-to-chat links
+ */
+router.get('/:id/dispatch-alert', authenticateToken, enforceClientIsolation, (req, res) => {
+    try {
+        const dr = db.prepare(`
+            SELECT dr.*, po.po_number, c.company_name, c.contact_person, c.phone as client_phone
+            FROM delivery_receipts dr
+            JOIN purchase_orders po ON dr.po_id = po.id
+            JOIN clients c ON dr.client_id = c.id
+            WHERE dr.id = ?
+        `).get(req.params.id);
+
+        if (!dr) {
+            return res.status(404).json({ success: false, error: 'Delivery Receipt not found.' });
+        }
+
+        if (req.user.role === 'CLIENT' && dr.client_id !== req.clientId) {
+            return res.status(403).json({ success: false, error: 'Access denied.' });
+        }
+
+        const items = db.prepare(`
+            SELECT di.*, COALESCE(poi.item_name, p.name) as product_name
+            FROM delivery_items di
+            JOIN products p ON di.product_id = p.id
+            LEFT JOIN purchase_order_items poi ON poi.po_id = ? AND poi.product_id = di.product_id
+            WHERE di.dr_id = ?
+        `).all(dr.po_id, dr.id);
+
+        const client = {
+            company_name: dr.company_name,
+            contact_person: dr.contact_person,
+            phone: dr.client_phone
+        };
+
+        const message = dr.dispatch_message || generateDispatchAlertMessage({
+            client,
+            po: { po_number: dr.po_number },
+            dr,
+            items
+        });
+
+        const cleanedPhone = cleanPhoneNumber(dr.client_phone);
+        const whatsappUrl = getWhatsAppUrl(cleanedPhone, message);
+        const smsUrl = getSmsUrl(cleanedPhone, message);
+        const history = getDispatchNotificationsForDR(dr.id);
+
+        return res.json({
+            success: true,
+            data: {
+                drId: dr.id,
+                drNumber: dr.dr_number,
+                poNumber: dr.po_number,
+                recipientName: dr.contact_person || dr.company_name,
+                recipientPhone: cleanedPhone || dr.client_phone || '',
+                message,
+                whatsappUrl,
+                smsUrl,
+                whatsappNotifiedAt: dr.whatsapp_notified_at,
+                smsNotifiedAt: dr.sms_notified_at,
+                history
+            }
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/deliveries/:id/send-dispatch-alert
+ * Manually trigger or re-send dispatch alert via WhatsApp / SMS
+ */
+router.post('/:id/send-dispatch-alert', authenticateToken, requireRoles('ADMIN', 'WAREHOUSE', 'PRODUCTION', 'LOGISTICS'), (req, res) => {
+    try {
+        const { channel = 'ALL' } = req.body;
+        const result = sendAutomatedDispatchAlert({
+            drId: req.params.id,
+            trigger: 'MANUAL',
+            sentBy: req.user.id,
+            channel
+        });
+
+        logAudit({
+            userId: req.user.id,
+            userName: req.user.name,
+            userRole: req.user.role,
+            action: 'SEND_DISPATCH_ALERT',
+            entityType: 'DELIVERY_RECEIPT',
+            entityId: result.drNumber,
+            details: { drId: req.params.id, recipientPhone: result.recipientPhone, channel }
+        });
+
+        return res.json({
+            success: true,
+            message: `Dispatch alert milestone recorded for ${result.recipientName}.`,
+            data: result
+        });
+    } catch (err) {
+        return res.status(400).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * GET /api/deliveries/:id/dispatch-notifications
+ * History of notifications sent for this DR
+ */
+router.get('/:id/dispatch-notifications', authenticateToken, (req, res) => {
+    try {
+        const history = getDispatchNotificationsForDR(req.params.id);
+        return res.json({ success: true, data: history });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
     }
 });
 

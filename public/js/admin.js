@@ -1695,6 +1695,11 @@ async function loadDeliveries() {
                             </button>
                         `}
 
+                        <!-- WhatsApp / SMS Dispatch Milestone Notice -->
+                        <button onclick="openDispatchAlertModal('${dr.id}')" class="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 rounded-xl text-xs font-bold transition inline-flex items-center gap-1 cursor-pointer shadow-xs" title="WhatsApp & SMS Dispatch Milestone">
+                            <span>📲</span><span class="hidden xl:inline">Alert</span>
+                        </button>
+
                         <!-- 3-Dot (•••) Dropdown Menu -->
                         <div class="relative inline-block text-left">
                             <button type="button" onclick="toggleTableActionMenu(event, 'dr-menu-${dr.id}')" class="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl border border-slate-200 transition focus:outline-none cursor-pointer" title="More Actions">
@@ -1703,6 +1708,9 @@ async function loadDeliveries() {
                             <div id="dr-menu-${dr.id}" class="table-action-menu hidden absolute right-0 mt-1 w-52 bg-white rounded-2xl shadow-2xl border border-slate-200 py-1.5 z-40 text-left animate-fade-in font-medium text-xs divide-y divide-slate-100">
                                 <div class="py-1">
                                     <div class="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">DR Actions</div>
+                                    <button onclick="openDispatchAlertModal('${dr.id}')" class="w-full flex items-center gap-2 px-3 py-1.5 text-emerald-700 hover:bg-emerald-50 transition text-left cursor-pointer font-bold">
+                                        <span>📲</span><span>WhatsApp / SMS Alert</span>
+                                    </button>
                                     <button onclick="openViewDRModal('${dr.id}')" class="w-full flex items-center gap-2 px-3 py-1.5 text-slate-700 hover:bg-slate-50 transition text-left cursor-pointer">
                                         <span>🔍</span><span>View DR Details</span>
                                     </button>
@@ -6841,6 +6849,13 @@ async function submitCreateDR(e, poNumber, batchId) {
         NKB.showToast(`Delivery Receipt ${res.data.dr_number} created! Waiting for client digital acceptance.`, 'success');
         closeModal();
         switchTab('deliveries');
+        if (res.data?.id) {
+            setTimeout(() => {
+                if (typeof openDispatchAlertModal === 'function') {
+                    openDispatchAlertModal(res.data.id);
+                }
+            }, 300);
+        }
     } else {
         NKB.showToast(res.error || 'Failed to create DR.', 'error');
     }
@@ -7069,6 +7084,13 @@ async function submitCreateAllDR(e, poId, companyName) {
         if (typeof loadDeliveries === 'function') loadDeliveries();
         if (typeof switchTab === 'function') {
             switchTab('deliveries');
+        }
+        if (res.data?.id) {
+            setTimeout(() => {
+                if (typeof openDispatchAlertModal === 'function') {
+                    openDispatchAlertModal(res.data.id);
+                }
+            }, 300);
         }
     } else {
         if (btn) {
@@ -7363,6 +7385,9 @@ async function openViewDRModal(drId) {
                         <a href="/print-dr.html?id=${dr.id}" class="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1">
                             🖨️ Print DR
                         </a>
+                        <button type="button" onclick="openDispatchAlertModal('${dr.id}')" class="px-3.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer" title="WhatsApp & SMS Dispatch Milestone Alert">
+                            <span>📲</span><span>WhatsApp / SMS Alert</span>
+                        </button>
                         ${(dr.status === 'ACCEPTED' && canInvoice) ? `
                             <button onclick="closeModal(); openGenerateInvoiceModal('${dr.id}', '${dr.dr_number}', '${dr.company_name}', ${dr.total_accepted})" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm">
                                 ⚡ Generate Sales Invoice
@@ -7376,6 +7401,233 @@ async function openViewDRModal(drId) {
     `;
 }
 window.openViewDRModal = openViewDRModal;
+
+// 6g. WhatsApp & SMS Dispatch Milestone Notification Modal
+async function openDispatchAlertModal(drId) {
+    const root = document.getElementById('modals-root');
+    if (!root) return;
+
+    // Show loading skeleton
+    root.innerHTML = `
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
+            <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl text-center space-y-3">
+                <div class="text-3xl animate-bounce">📲</div>
+                <div class="text-sm font-bold text-slate-800">Generating WhatsApp & SMS Dispatch Alert...</div>
+                <div class="text-xs text-slate-500">Preparing tracking link and milestone message</div>
+            </div>
+        </div>
+    `;
+
+    const res = await NKB.api(`/api/deliveries/${drId}/dispatch-alert`);
+    if (!res.success || !res.data) {
+        NKB.showToast(res.error || 'Failed to load dispatch milestone alert.', 'error');
+        closeModal();
+        return;
+    }
+
+    const data = res.data;
+    const history = data.history || [];
+
+    const safeEscape = (str) => {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    };
+
+    root.innerHTML = `
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-3 sm:p-4 z-50 animate-fade-in">
+            <div class="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-4 max-h-[92vh] flex flex-col animate-scaleIn">
+                <!-- Header -->
+                <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-xl text-emerald-600 flex-shrink-0">
+                            📲
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h3 class="text-base font-black text-slate-900">WhatsApp & SMS Dispatch Milestone</h3>
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">Live DR Notice</span>
+                            </div>
+                            <p class="text-xs text-slate-500">${data.drNumber} • PO: ${data.poNumber} • ${data.recipientName}</p>
+                        </div>
+                    </div>
+                    <button type="button" onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-xl p-1 cursor-pointer">&times;</button>
+                </div>
+
+                <div class="overflow-y-auto flex-1 space-y-4 pr-1 text-xs">
+                    <!-- Client & Recipient Information -->
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
+                        <div>
+                            <span class="text-[10px] text-slate-400 uppercase font-bold block">Client Contact</span>
+                            <span class="font-extrabold text-slate-900 text-xs">${data.recipientName || 'Client Recipient'}</span>
+                        </div>
+                        <div>
+                            <span class="text-[10px] text-slate-400 uppercase font-bold block">Mobile Phone (PH)</span>
+                            <span class="font-mono font-bold text-indigo-700 text-xs">${data.recipientPhone ? '+' + data.recipientPhone : 'No mobile registered'}</span>
+                        </div>
+                        <div>
+                            <span class="text-[10px] text-slate-400 uppercase font-bold block">Milestone Status</span>
+                            ${data.whatsappNotifiedAt ? `
+                                <span class="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700">
+                                    <span>✅</span><span>Milestone Dispatched</span>
+                                </span>
+                            ` : `
+                                <span class="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700">
+                                    <span>⏳</span><span>Ready to Dispatch</span>
+                                </span>
+                            `}
+                        </div>
+                    </div>
+
+                    <!-- Message Preview in Chat Bubble -->
+                    <div class="space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <label class="font-bold text-slate-800 flex items-center gap-1.5">
+                                <span>💬</span><span>Pre-Formatted Milestone Message Preview</span>
+                            </label>
+                            <button type="button" onclick="copyDispatchMessage()" class="text-[11px] text-indigo-600 font-bold hover:underline flex items-center gap-1 cursor-pointer">
+                                <span>📋</span><span>Copy Text</span>
+                            </button>
+                        </div>
+                        <div class="p-4 bg-emerald-950 text-emerald-100 rounded-2xl border border-emerald-800 font-mono text-[11px] whitespace-pre-wrap select-all leading-relaxed shadow-inner max-h-56 overflow-y-auto" id="dispatch-message-text">${safeEscape(data.message)}</div>
+                    </div>
+
+                    <!-- Instant Click-to-Send Actions -->
+                    <div class="space-y-2">
+                        <label class="font-bold text-slate-800 flex items-center gap-1.5">
+                            <span>🚀</span><span>Instant Dispatch Channels</span>
+                        </label>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                            <!-- WhatsApp -->
+                            <button type="button" onclick="sendViaWhatsApp('${drId}', '${encodeURIComponent(data.whatsappUrl)}')" class="p-3 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white rounded-2xl font-bold shadow-md shadow-emerald-600/30 transition flex flex-col items-center justify-center gap-1 text-center cursor-pointer group">
+                                <div class="flex items-center gap-1.5 text-sm">
+                                    <span>🟢</span><span>Send WhatsApp</span>
+                                </div>
+                                <span class="text-[10px] text-emerald-100 font-normal">Opens chat with pre-filled text</span>
+                            </button>
+
+                            <!-- SMS -->
+                            <button type="button" onclick="sendViaSMS('${drId}', '${encodeURIComponent(data.smsUrl)}')" class="p-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-2xl font-bold shadow-md shadow-indigo-600/30 transition flex flex-col items-center justify-center gap-1 text-center cursor-pointer group">
+                                <div class="flex items-center gap-1.5 text-sm">
+                                    <span>📱</span><span>Send Native SMS</span>
+                                </div>
+                                <span class="text-[10px] text-indigo-100 font-normal">Launches default SMS messenger</span>
+                            </button>
+
+                            <!-- Log Only / Resend Record -->
+                            <button type="button" onclick="recordDispatchMilestone('${drId}')" class="p-3 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-2xl font-bold transition flex flex-col items-center justify-center gap-1 text-center cursor-pointer">
+                                <div class="flex items-center gap-1.5 text-sm">
+                                    <span>🔔</span><span>Log Milestone</span>
+                                </div>
+                                <span class="text-[10px] text-slate-500 font-normal">Record milestone in audit trail</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Dispatch Notification Audit History -->
+                    <div class="space-y-1.5 pt-1">
+                        <label class="font-bold text-slate-800 flex items-center justify-between">
+                            <span>📜 Dispatch Milestone History</span>
+                            <span class="text-[11px] text-slate-500 font-normal">${history.length} log(s)</span>
+                        </label>
+                        ${history.length > 0 ? `
+                            <div class="border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+                                <table class="w-full text-left text-xs">
+                                    <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
+                                        <tr>
+                                            <th class="py-2 px-3">Date & Time</th>
+                                            <th class="py-2 px-3">Channel</th>
+                                            <th class="py-2 px-3">Recipient Phone</th>
+                                            <th class="py-2 px-3">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        ${history.map(h => `
+                                            <tr class="hover:bg-slate-50">
+                                                <td class="py-2 px-3 text-slate-600 whitespace-nowrap">${NKB.formatDate(h.sent_at)}</td>
+                                                <td class="py-2 px-3 font-bold text-slate-800">
+                                                    <span class="px-1.5 py-0.5 rounded text-[10px] ${h.channel === 'WHATSAPP' ? 'bg-emerald-100 text-emerald-800' : (h.channel === 'SMS' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800')}">${h.channel}</span>
+                                                </td>
+                                                <td class="py-2 px-3 font-mono text-slate-700">${h.recipient_phone || '—'}</td>
+                                                <td class="py-2 px-3 text-emerald-700 font-bold">${h.status === 'SENT' ? '✅ Sent' : h.status}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ` : `
+                            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 text-center text-slate-400 text-xs italic">
+                                No dispatch milestones logged yet. Click WhatsApp or SMS above to notify the client!
+                            </div>
+                        `}
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div class="flex items-center justify-between pt-3 border-t border-slate-100">
+                    <span class="text-[11px] text-slate-500">Auto-formatted with Philippine mobile format (+639...)</span>
+                    <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition cursor-pointer">Close</button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+window.openDispatchAlertModal = openDispatchAlertModal;
+
+function copyDispatchMessage() {
+    const el = document.getElementById('dispatch-message-text');
+    if (el) {
+        navigator.clipboard.writeText(el.innerText || el.textContent);
+        NKB.showToast('📋 Dispatch notice copied to clipboard!', 'success');
+    }
+}
+window.copyDispatchMessage = copyDispatchMessage;
+
+async function sendViaWhatsApp(drId, encodedUrl) {
+    const url = decodeURIComponent(encodedUrl);
+    window.open(url, '_blank');
+    try {
+        await NKB.api(`/api/deliveries/${drId}/send-dispatch-alert`, {
+            method: 'POST',
+            body: JSON.stringify({ channel: 'WHATSAPP' })
+        });
+        NKB.showToast('🟢 WhatsApp milestone opened & recorded in audit log!', 'success');
+        openDispatchAlertModal(drId);
+    } catch (_) {}
+}
+window.sendViaWhatsApp = sendViaWhatsApp;
+
+async function sendViaSMS(drId, encodedUrl) {
+    const url = decodeURIComponent(encodedUrl);
+    window.location.href = url;
+    try {
+        await NKB.api(`/api/deliveries/${drId}/send-dispatch-alert`, {
+            method: 'POST',
+            body: JSON.stringify({ channel: 'SMS' })
+        });
+        NKB.showToast('📱 SMS client opened & milestone recorded in audit log!', 'success');
+        openDispatchAlertModal(drId);
+    } catch (_) {}
+}
+window.sendViaSMS = sendViaSMS;
+
+async function recordDispatchMilestone(drId) {
+    const res = await NKB.api(`/api/deliveries/${drId}/send-dispatch-alert`, {
+        method: 'POST',
+        body: JSON.stringify({ channel: 'ALL' })
+    });
+    if (res.success) {
+        NKB.showToast('🔔 Dispatch milestone recorded in audit trail!', 'success');
+        openDispatchAlertModal(drId);
+    } else {
+        NKB.showToast(res.error || 'Failed to record dispatch milestone.', 'error');
+    }
+}
+window.recordDispatchMilestone = recordDispatchMilestone;
 
 // 6f. Record Client Product Receiving Modal (Assigned to Accounting & Admin)
 async function openClientReceivingModal(drId) {

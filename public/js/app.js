@@ -2196,6 +2196,343 @@ function executeCommandItem(idx) {
 }
 window.executeCommandItem = executeCommandItem;
 
+// =============================================================
+// INTERACTIVE 7-STAGE ORDER PROCESS GUIDE (DUAL MODE: STORY / SOP)
+// =============================================================
 
+const ORDER_PROCESS_STEPS = [
+    {
+        step: 1,
+        shortTitle: '1. PO Order',
+        title: 'Step 1: Placing the Purchase Order',
+        storyBadge: 'The Birthday Wish & Recipe List 🎂',
+        sopBadge: 'Contract PO & Tolerances 📑',
+        icon: '📝',
+        story: {
+            headline: 'Imagine baking 1,000 sweet strawberry cupcakes for a giant party!',
+            body: `You write down a magical wish list on paper and bring it to our master bakery: <em>"Dear Baker, please bake 1,000 sweet strawberry cupcakes with pink frosting for my friends!"</em> In our cosmetics factory, this wish list is called a <strong>Purchase Order (PO)</strong>. You choose which lotion, soap, or serum you want, how many bottles you need, and what scent or bottle style you love.`,
+            analogyTakeaway: '👶 <strong>Kid Rule:</strong> Nothing gets baked until you write down your wish list!'
+        },
+        sop: {
+            headline: 'Client PO submission with SKU pricing, tolerances, and overrun policy.',
+            body: `The client submits a Purchase Order specifying SKUs, target volumes, contract unit costs, and manufacturing tolerances (default: <strong>±10%</strong>). The client selects their overrun billing policy: <strong>Option A (Bill Actual Deliveries)</strong> where overruns are invoiced directly, or <strong>Option B (Fixed PO + Buffer)</strong> where extra units are stored in the factory buffer warehouse for future drawdowns.`,
+            sopTakeaway: '👔 <strong>SOP Rule:</strong> Status set to <code>PENDING_APPROVAL</code>. System reserves SKU pricing and prepares BOM.'
+        }
+    },
+    {
+        step: 2,
+        shortTitle: '2. Accounting',
+        title: 'Step 2: Accounting Confirmation & Validation',
+        storyBadge: "The Cashier's Green Stamp 💰",
+        sopBadge: 'Finance Review & Credit Validation 🏦',
+        icon: '💵',
+        story: {
+            headline: 'The head chef checks your piggy bank tokens!',
+            body: `Before opening the big sugar bags, the bakery cashier checks if you have your tokens or pocket money ready. When mommy gives a thumbs up, the cashier stamps <strong>"APPROVED!"</strong> in shiny green ink. Now the whole bakery knows it is a real order, and the kitchen lights turn on!`,
+            analogyTakeaway: '👶 <strong>Kid Rule:</strong> Green stamp means the bakery is officially unlocked and ready to cook!'
+        },
+        sop: {
+            headline: 'Finance team verifies credit terms, down payments, or PDC checks.',
+            body: `The Accounting Department reviews the pending PO, checks client payment terms (Down payment, PDC, or Net 30 credit limit), and clicks <strong>Confirm Order</strong>. This locks the contract pricing, updates the PO status to <code>APPROVED</code>, and automatically triggers the formulation conversion and material sufficiency checks.`,
+            sopTakeaway: '👔 <strong>SOP Rule:</strong> PO status transitions to <code>APPROVED</code>, notifying Warehouse and Production.'
+        }
+    },
+    {
+        step: 3,
+        shortTitle: '3. Formulation',
+        title: 'Step 3: Formulation Conversion & Inventory Check',
+        storyBadge: 'Flour, Sugar & Pink Sprinkles 📦',
+        sopBadge: 'BOM Explosion & Material Requisition 🧪',
+        icon: '📦',
+        story: {
+            headline: 'Helpers rush into the giant pantry room!',
+            body: `The helpers open the pantry doors! Do we have enough flour, cocoa butter, vanilla extract, and rainbow sprinkles? If a jar is running low, our shopping team hops on their bicycles immediately to buy fresh supplies from our trusted ingredient farmers!`,
+            analogyTakeaway: '👶 <strong>Kid Rule:</strong> We make sure every sprinkle and bottle cap is waiting on the table before mixing!'
+        },
+        sop: {
+            headline: 'Bill of Materials (BOM) explosion against live warehouse stocks.',
+            body: `The system explodes the PO into raw chemicals (active ingredients, emulsifiers, fragrances) and packaging components (bottles, pumps, custom labels). If live warehouse stock is insufficient, the system alerts Purchasing and generates a <strong>Supply Requisition</strong> to replenish materials before batch scheduling.`,
+            sopTakeaway: '👔 <strong>SOP Rule:</strong> Automated material sufficiency check ensures zero floor delays during compounding.'
+        }
+    },
+    {
+        step: 4,
+        shortTitle: '4. Production',
+        title: 'Step 4: Compounding & Packaging (Job Orders)',
+        storyBadge: 'Mixing in Big Shiny Kettles 🥣',
+        sopBadge: 'Job Orders & Batch Compounding 🏭',
+        icon: '🥣',
+        story: {
+            headline: 'Time to bake! Big mixers spinning and ovens glowing!',
+            body: `The master bakers wear white aprons and hairnets. They pour pure oils and gentle creams into giant stainless steel bowls that stir round and round! Every batch gets its own secret badge number, like <code>BATCH-2026-001</code>, so we know exactly who stirred it and when it was filled into bottles!`,
+            analogyTakeaway: '👶 <strong>Kid Rule:</strong> Clean hands, shiny kettles, and lots of stirring make the best lotion!'
+        },
+        sop: {
+            headline: 'Production floor execution via Job Orders (JO) and Batch Runs.',
+            body: `Production Supervisors issue Job Orders (JO) linked to the PO. Workers follow validated master formulation records in cleanroom suites. Compounding kettles blend bulk cosmetic product, followed by automated filling lines, induction sealing, batch date-coding, and cartoning into shipping boxes.`,
+            sopTakeaway: '👔 <strong>SOP Rule:</strong> PO status updates to <code>IN_PRODUCTION</code> with live tracking in client portal.'
+        }
+    },
+    {
+        step: 5,
+        shortTitle: '5. QC Audit',
+        title: 'Step 5: Quality Control & Yield Sign-off',
+        storyBadge: 'The Magnifying Glass Inspector 🔍',
+        sopBadge: 'QA/QC Chemical & Yield Tolerance Audit 🔬',
+        icon: '🔍',
+        story: {
+            headline: 'Inspector Owl puts on funny safety glasses!',
+            body: `Before anyone is allowed to touch a single bottle, our super-careful Inspector Owl examines them with a magnifying glass! She sniffs the strawberry aroma, checks if the lotion feels silky-soft, and tests the caps to make sure not a single drop leaks out! Only perfect bottles get the golden star!`,
+            analogyTakeaway: '👶 <strong>Kid Rule:</strong> Only yummy, silky, safe bottles get approved for the journey!'
+        },
+        sop: {
+            headline: 'Strict laboratory QA/QC testing and yield variance verification.',
+            body: `Quality Assurance conducts organoleptic, physical, and microbiological clearance (pH, viscosity, specific gravity, seal vacuum testing). QC records the <strong>Actual Yield</strong> (e.g., 1,050 pcs on a 1,000 target). The system verifies that yield falls within agreed tolerance (±10%). If approved, the batch is released as <code>APPROVED_FOR_DISPATCH</code>.`,
+            sopTakeaway: '👔 <strong>SOP Rule:</strong> Batches exceeding tolerance trigger an over-tolerance management exception review.'
+        }
+    },
+    {
+        step: 6,
+        shortTitle: '6. Dispatch',
+        title: 'Step 6: Delivery Receipt (DR) & WhatsApp Milestone',
+        storyBadge: 'Vroom Vroom! Delivery Truck on the Road 🚚',
+        sopBadge: 'DR Generation & Real-Time WhatsApp Milestone 📲',
+        icon: '🚚',
+        story: {
+            headline: 'Honk honk! Delivery van rolling down your street!',
+            body: `We wrap your boxes in neat bubble wrap and stack them safely inside the delivery van. Our friendly driver waves and heads out: <em>"Delivery on the way!"</em> BEEP! Your phone buzzes with a WhatsApp notification: <em>"Kuya Eddie is driving van NBC-2026 straight to your doorstep right now!"</em>`,
+            analogyTakeaway: '👶 <strong>Kid Rule:</strong> Your phone rings right as the van pulls up so you are ready to receive!'
+        },
+        sop: {
+            headline: 'Warehouse issues Delivery Receipt (DR) with instant WhatsApp / SMS dispatch notice.',
+            body: `Warehouse prepares the Delivery Receipt (DR) assigning driver name and vehicle plate number. The system instantly generates automated WhatsApp and SMS dispatch milestones with direct links to the digital receiving portal. PO transitions to <code>PARTIALLY_DELIVERED</code> or <code>DELIVERING</code>.`,
+            sopTakeaway: '👔 <strong>SOP Rule:</strong> Pre-formatted WhatsApp link (<code>639...</code>) and SMS link dispatch milestone notifications to client.'
+        }
+    },
+    {
+        step: 7,
+        shortTitle: '7. Acceptance & Billing',
+        title: 'Step 7: Client Receiving, Digital Acceptance & Sales Invoicing',
+        storyBadge: 'Unpacking Boxes & Happy High-Fives 🧾',
+        sopBadge: 'Digital DR Sign-off & Automated Sales Invoice 💳',
+        icon: '🧾',
+        story: {
+            headline: 'Boxes opened, bottles counted, and high-fives all around!',
+            body: `The truck pulls in! You open the boxes and count: <em>"1,000 bottles arrived safe and sound!"</em> You sign your name with a smiley face on the tablet screen. If the chef baked 50 extra bottles, you keep the bonus bottles or store them in our safe locker for your next party. Then the cashier gives you your gold star receipt!`,
+            analogyTakeaway: '👶 <strong>Kid Rule:</strong> You only pay for what safely arrived in your hands!'
+        },
+        sop: {
+            headline: 'Client digital signature sign-off, billing computation, and invoice issuance.',
+            body: `The client or warehouse receiving officer verifies item counts, logs any rejected units, and captures digital signature. System immutably signs the DR, calculates billable quantities based on the selected policy (Option A bills actual accepted quantity; Option B bills fixed PO target and allocates overrun to Client Buffer Stock), and generates the official Sales Invoice.`,
+            sopTakeaway: '👔 <strong>SOP Rule:</strong> DR status set to <code>ACCEPTED</code> -> <code>INVOICED</code>. Buffer stock is updated in real time.'
+        }
+    }
+];
 
+let orderGuideCurrentStep = 1;
+let orderGuideMode = localStorage.getItem('nkb_guide_mode') || 'story'; // 'story' or 'sop'
 
+function openOrderProcessGuideModal(initialStep = 1) {
+    orderGuideCurrentStep = Math.max(1, Math.min(7, parseInt(initialStep, 10) || 1));
+    renderOrderProcessGuideModal();
+
+    // Attach keyboard listener for arrow navigation
+    document.removeEventListener('keydown', handleOrderGuideKeyDown);
+    document.addEventListener('keydown', handleOrderGuideKeyDown);
+}
+window.openOrderProcessGuideModal = openOrderProcessGuideModal;
+
+function closeOrderProcessGuideModal() {
+    const modal = document.getElementById('modal-order-process-guide');
+    if (modal) modal.remove();
+    document.removeEventListener('keydown', handleOrderGuideKeyDown);
+}
+window.closeOrderProcessGuideModal = closeOrderProcessGuideModal;
+
+function handleOrderGuideKeyDown(e) {
+    const modal = document.getElementById('modal-order-process-guide');
+    if (!modal) return;
+    if (e.key === 'Escape') {
+        closeOrderProcessGuideModal();
+    } else if (e.key === 'ArrowRight' || e.key === 'Right') {
+        if (orderGuideCurrentStep < 7) {
+            setOrderGuideStep(orderGuideCurrentStep + 1);
+        }
+    } else if (e.key === 'ArrowLeft' || e.key === 'Left') {
+        if (orderGuideCurrentStep > 1) {
+            setOrderGuideStep(orderGuideCurrentStep - 1);
+        }
+    }
+}
+
+function setOrderGuideStep(step) {
+    orderGuideCurrentStep = Math.max(1, Math.min(7, step));
+    renderOrderProcessGuideModal();
+}
+window.setOrderGuideStep = setOrderGuideStep;
+
+function setOrderGuideMode(mode) {
+    orderGuideMode = (mode === 'sop') ? 'sop' : 'story';
+    localStorage.setItem('nkb_guide_mode', orderGuideMode);
+    renderOrderProcessGuideModal();
+}
+window.setOrderGuideMode = setOrderGuideMode;
+
+function renderOrderProcessGuideModal() {
+    let modal = document.getElementById('modal-order-process-guide');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'modal-order-process-guide';
+        modal.className = 'fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-sm animate-fade-in';
+        document.body.appendChild(modal);
+    }
+
+    const currentItem = ORDER_PROCESS_STEPS.find(s => s.step === orderGuideCurrentStep) || ORDER_PROCESS_STEPS[0];
+    const isStory = orderGuideMode === 'story';
+    const isFirst = orderGuideCurrentStep === 1;
+    const isLast = orderGuideCurrentStep === ORDER_PROCESS_STEPS.length;
+
+    // Check if user is on admin or client page to offer contextual shortcut
+    const isAdmin = !!document.getElementById('sidebar-menu') || !!document.getElementById('view-orders');
+    const isClient = !!document.getElementById('client-sidebar') || typeof switchClientTab === 'function';
+
+    let actionBtnHtml = '';
+    if (orderGuideCurrentStep === 1) {
+        if (isAdmin) {
+            actionBtnHtml = `<button type="button" onclick="closeOrderProcessGuideModal(); if(typeof openCreatePOModal==='function') openCreatePOModal();" class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"><span>➕</span><span>Create Purchase Order (Admin)</span></button>`;
+        } else if (isClient) {
+            actionBtnHtml = `<button type="button" onclick="closeOrderProcessGuideModal(); if(typeof switchClientTab==='function') switchClientTab('place-order');" class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"><span>➕</span><span>Go to Place Order</span></button>`;
+        }
+    } else if (orderGuideCurrentStep === 6) {
+        if (isAdmin) {
+            actionBtnHtml = `<button type="button" onclick="closeOrderProcessGuideModal(); if(typeof switchTab==='function') switchTab('deliveries');" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"><span>🚚</span><span>View Deliveries Table</span></button>`;
+        } else if (isClient) {
+            actionBtnHtml = `<button type="button" onclick="closeOrderProcessGuideModal(); if(typeof switchClientTab==='function') switchClientTab('dr-acceptance');" class="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"><span>📦</span><span>View Pending DRs</span></button>`;
+        }
+    }
+
+    modal.innerHTML = `
+        <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-3xl overflow-hidden flex flex-col max-h-[92vh] animate-scaleIn">
+            <!-- Modal Header -->
+            <div class="p-4 sm:p-5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-indigo-900/50">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl bg-indigo-600/30 border border-indigo-400/30 flex items-center justify-center text-xl flex-shrink-0 shadow-inner">
+                        📖
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-base sm:text-lg font-black text-white">How Manufacturing Orders Work</h3>
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-400/30">7-Step SOP</span>
+                        </div>
+                        <p class="text-xs text-indigo-200/80">From PO Creation to Formulation, QC Clearance, DR Dispatch & Invoice</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2 self-end sm:self-center">
+                    <!-- Dual Mode Toggle Switch -->
+                    <div class="bg-slate-800/90 p-1 rounded-2xl border border-slate-700/80 flex items-center shadow-inner">
+                        <button type="button" onclick="setOrderGuideMode('story')" class="px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${isStory ? 'bg-amber-500 text-slate-950 shadow-sm' : 'text-slate-300 hover:text-white'}">
+                            <span>👶</span><span class="hidden sm:inline">Story Mode</span>
+                        </button>
+                        <button type="button" onclick="setOrderGuideMode('sop')" class="px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${!isStory ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-300 hover:text-white'}">
+                            <span>👔</span><span class="hidden sm:inline">Enterprise SOP</span>
+                        </button>
+                    </div>
+                    <button type="button" onclick="closeOrderProcessGuideModal()" class="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-white/10 transition cursor-pointer" aria-label="Close Modal">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step Pills Bar -->
+            <div class="bg-slate-50 border-b border-slate-200 px-4 py-2.5 overflow-x-auto scrollbar-none">
+                <div class="flex items-center gap-2 min-w-max justify-start sm:justify-center">
+                    ${ORDER_PROCESS_STEPS.map(s => {
+                        const isActive = s.step === orderGuideCurrentStep;
+                        const isDone = s.step < orderGuideCurrentStep;
+                        let pillClass = 'bg-white text-slate-600 border-slate-200 hover:border-slate-300';
+                        if (isActive) {
+                            pillClass = isStory 
+                                ? 'bg-amber-500 text-slate-950 font-black border-amber-500 shadow-md ring-2 ring-amber-200' 
+                                : 'bg-indigo-600 text-white font-black border-indigo-600 shadow-md ring-2 ring-indigo-200';
+                        } else if (isDone) {
+                            pillClass = 'bg-emerald-50 text-emerald-700 font-bold border-emerald-200 hover:bg-emerald-100';
+                        }
+                        return `
+                            <button type="button" onclick="setOrderGuideStep(${s.step})" class="px-3 py-1.5 rounded-xl border text-xs flex items-center gap-1.5 transition cursor-pointer ${pillClass}">
+                                <span class="text-sm">${isDone ? '✅' : s.icon}</span>
+                                <span>${s.shortTitle}</span>
+                            </button>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+
+            <!-- Step Body Content -->
+            <div class="p-6 overflow-y-auto flex-1 space-y-4">
+                <div class="flex items-start justify-between gap-4 flex-wrap">
+                    <div class="flex items-center gap-2">
+                        <span class="px-2.5 py-1 rounded-lg text-xs font-black uppercase tracking-wider ${isStory ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-indigo-100 text-indigo-900 border border-indigo-300'}">
+                            ${isStory ? currentItem.storyBadge : currentItem.sopBadge}
+                        </span>
+                        <span class="text-xs text-slate-400 font-mono font-bold">Stage ${currentItem.step} of 7</span>
+                    </div>
+
+                    ${actionBtnHtml}
+                </div>
+
+                <div class="flex items-start gap-4">
+                    <div class="w-14 h-14 rounded-2xl ${isStory ? 'bg-amber-50 border-amber-200 text-amber-600' : 'bg-indigo-50 border-indigo-200 text-indigo-600'} border flex items-center justify-center text-3xl flex-shrink-0 shadow-sm">
+                        ${currentItem.icon}
+                    </div>
+                    <div class="space-y-1">
+                        <h4 class="text-lg sm:text-xl font-black text-slate-900 leading-snug">${currentItem.title}</h4>
+                        <p class="text-xs sm:text-sm font-semibold ${isStory ? 'text-amber-800' : 'text-indigo-700'}">
+                            ${isStory ? currentItem.story.headline : currentItem.sop.headline}
+                        </p>
+                    </div>
+                </div>
+
+                <div class="p-4 rounded-2xl ${isStory ? 'bg-amber-50/50 border border-amber-200/70 text-slate-700' : 'bg-slate-50 border border-slate-200 text-slate-700'} text-xs sm:text-sm leading-relaxed space-y-2">
+                    <p>${isStory ? currentItem.story.body : currentItem.sop.body}</p>
+                </div>
+
+                <!-- Callout Takeaway -->
+                <div class="p-4 rounded-2xl ${isStory ? 'bg-gradient-to-r from-amber-100 to-amber-50 border border-amber-300 text-amber-950' : 'bg-gradient-to-r from-indigo-950 to-slate-900 border border-indigo-800 text-white'} shadow-sm">
+                    <div class="flex items-start gap-3">
+                        <span class="text-xl flex-shrink-0">${isStory ? '💡' : '⚡'}</span>
+                        <div class="text-xs sm:text-sm leading-relaxed">
+                            ${isStory ? currentItem.story.analogyTakeaway : currentItem.sop.sopTakeaway}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer Controls -->
+            <div class="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3">
+                <button type="button" onclick="setOrderGuideStep(${orderGuideCurrentStep - 1})" ${isFirst ? 'disabled' : ''} class="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${isFirst ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900 shadow-xs cursor-pointer'}">
+                    <span>← Previous</span>
+                </button>
+
+                <div class="flex items-center gap-1">
+                    ${ORDER_PROCESS_STEPS.map(s => `
+                        <div class="w-2.5 h-2.5 rounded-full transition-all ${s.step === orderGuideCurrentStep ? (isStory ? 'bg-amber-500 w-6' : 'bg-indigo-600 w-6') : (s.step < orderGuideCurrentStep ? 'bg-emerald-400' : 'bg-slate-300')}"></div>
+                    `).join('')}
+                </div>
+
+                <div class="flex items-center gap-2">
+                    ${isLast ? `
+                        <button type="button" onclick="closeOrderProcessGuideModal()" class="px-5 py-2 ${isStory ? 'bg-amber-500 hover:bg-amber-400 text-slate-950' : 'bg-indigo-600 hover:bg-indigo-500 text-white'} rounded-xl text-xs font-black transition shadow-md flex items-center gap-1.5 cursor-pointer">
+                            <span>✨ Got It! Got It!</span>
+                        </button>
+                    ` : `
+                        <button type="button" onclick="setOrderGuideStep(${orderGuideCurrentStep + 1})" class="px-5 py-2 ${isStory ? 'bg-amber-500 hover:bg-amber-400 text-slate-950' : 'bg-indigo-600 hover:bg-indigo-500 text-white'} rounded-xl text-xs font-black transition shadow-md flex items-center gap-1.5 cursor-pointer">
+                            <span>Next Step →</span>
+                        </button>
+                    `}
+                </div>
+            </div>
+        </div>
+    `;
+}
+window.renderOrderProcessGuideModal = renderOrderProcessGuideModal;

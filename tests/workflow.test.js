@@ -2678,6 +2678,115 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         db.prepare('DELETE FROM cheque_payables WHERE id = ?').run(payableId);
     });
 
+    test('36. Automated WhatsApp / SMS Milestone Notice on DR Dispatch & Click-to-Chat Scheme', async () => {
+        // 1. Create a PO
+        const poRes = await request(app)
+            .post('/api/orders')
+            .set('Authorization', `Bearer ${clientToken}`)
+            .send({
+                client_id: demoClient.id,
+                tolerance_percent: 10.0,
+                billing_policy: 'ACTUAL_DELIVERY',
+                items: [{ product_id: lotionProduct.id, target_quantity: 500, unit_price: 120.0 }]
+            });
+        assert.strictEqual(poRes.status, 201);
+        const po = poRes.body.data;
+
+        // 2. Approve PO
+        await request(app).post(`/api/orders/${po.id}/approve`).set('Authorization', `Bearer ${adminToken}`);
+
+        // 3. Create Job Order and Batch
+        const joRes = await request(app)
+            .post('/api/job-orders')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({ po_id: po.id, product_id: lotionProduct.id, target_quantity: 500 });
+        assert.strictEqual(joRes.status, 201);
+        const jo = joRes.body.data;
+
+        const batchRes = await request(app)
+            .post('/api/production/batches')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({ jo_id: jo.id, target_quantity: 500 });
+        assert.strictEqual(batchRes.status, 201);
+        const batch = batchRes.body.data;
+
+        // 4. Record Yield
+        const yieldRes = await request(app)
+            .post(`/api/production/batches/${batch.id}/yield`)
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({ actual_yield: 500, qc_notes: 'All 500 units passed QC release testing' });
+        assert.strictEqual(yieldRes.status, 200);
+
+        // 5. Create Delivery Receipt (DR) -> Automated dispatch alert triggered!
+        const drRes = await request(app)
+            .post('/api/deliveries')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                po_id: po.id,
+                driver_name: 'Kuya Eddie Ramos',
+                vehicle_plate: 'NBC-2026',
+                notes: 'Handle with extra care - fragranced lotion bottles',
+                items: [{ product_id: lotionProduct.id, batch_id: batch.id, delivered_quantity: 500, unit_price: 120.0 }]
+            });
+        assert.strictEqual(drRes.status, 201);
+        assert.strictEqual(drRes.body.success, true);
+        const dr = drRes.body.data;
+        assert.ok(dr.id);
+
+        // Verify dispatchAlert returned in creation response
+        const dispatchAlert = drRes.body.dispatchAlert;
+        assert.ok(dispatchAlert);
+        assert.strictEqual(dispatchAlert.recipientPhone, '639171234567');
+        assert.ok(dispatchAlert.whatsappUrl.includes('https://api.whatsapp.com/send?phone=639171234567'));
+        assert.ok(dispatchAlert.smsUrl.includes('sms:639171234567'));
+        assert.ok(dispatchAlert.message.includes('NKB MANUFACTURING'));
+        assert.ok(dispatchAlert.message.includes(dr.dr_number));
+        assert.ok(dispatchAlert.message.includes('Kuya Eddie Ramos'));
+        assert.ok(dispatchAlert.message.includes('NBC-2026'));
+
+        // 6. Test GET /api/deliveries/:id/dispatch-alert
+        const alertRes = await request(app)
+            .get(`/api/deliveries/${dr.id}/dispatch-alert`)
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(alertRes.status, 200);
+        assert.strictEqual(alertRes.body.success, true);
+        const alertData = alertRes.body.data;
+        assert.strictEqual(alertData.drId, dr.id);
+        assert.strictEqual(alertData.drNumber, dr.dr_number);
+        assert.strictEqual(alertData.poNumber, po.po_number);
+        assert.strictEqual(alertData.recipientPhone, '639171234567');
+        assert.ok(alertData.whatsappUrl.startsWith('https://api.whatsapp.com/send?phone=639171234567'));
+        assert.ok(alertData.smsUrl.startsWith('sms:639171234567'));
+        assert.ok(Array.isArray(alertData.history));
+        assert.ok(alertData.history.length >= 1);
+        assert.strictEqual(alertData.history[0].channel, 'ALL');
+
+        // 7. Test POST /api/deliveries/:id/send-dispatch-alert (Manual Resend / Trigger)
+        const sendRes = await request(app)
+            .post(`/api/deliveries/${dr.id}/send-dispatch-alert`)
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({ channel: 'WHATSAPP' });
+        assert.strictEqual(sendRes.status, 200);
+        assert.strictEqual(sendRes.body.success, true);
+        assert.strictEqual(sendRes.body.data.drId, dr.id);
+        assert.strictEqual(sendRes.body.data.channel, 'WHATSAPP');
+
+        // 8. Test GET /api/deliveries/:id/dispatch-notifications (History)
+        const notifRes = await request(app)
+            .get(`/api/deliveries/${dr.id}/dispatch-notifications`)
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(notifRes.status, 200);
+        assert.strictEqual(notifRes.body.success, true);
+        assert.ok(Array.isArray(notifRes.body.data));
+        assert.strictEqual(notifRes.body.data.length, 2); // Initial automated + 1 manual resend
+
+        // 9. Client isolation on dispatch alert
+        const otherClientAlertRes = await request(app)
+            .get(`/api/deliveries/${dr.id}/dispatch-alert`)
+            .set('Authorization', `Bearer ${otherClientToken}`);
+        assert.strictEqual(otherClientAlertRes.status, 403);
+    });
+
     after(() => {
         // Automatically delete all test decoys and temporary test database
         try {
