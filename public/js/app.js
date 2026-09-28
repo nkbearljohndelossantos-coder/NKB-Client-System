@@ -521,8 +521,8 @@ const NKB = {
             const userInitial = (u.name || 'U').charAt(0).toUpperCase();
 
             root.innerHTML = `
-                <div class="fixed inset-0 z-[999999] bg-slate-950/95 backdrop-blur-2xl flex items-center justify-center p-3 sm:p-4 text-slate-100 select-none overflow-y-auto">
-                    <div class="max-w-sm sm:max-w-md w-full bg-slate-900/90 border border-slate-800 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-5 text-center my-auto">
+                <div class="nkb-lockscreen-overlay fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-4 text-slate-100 select-none overflow-y-auto" style="position: fixed !important; inset: 0 !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; height: 100dvh !important; z-index: 999999 !important; background-color: rgba(2, 6, 23, 0.98) !important; backdrop-filter: blur(24px) !important; -webkit-backdrop-filter: blur(24px) !important;">
+                    <div class="nkb-lockscreen-card max-w-sm sm:max-w-md w-full rounded-3xl p-5 sm:p-7 space-y-5 text-center my-auto" style="background-color: #0f172a !important; border: 2px solid #334155 !important; border-radius: 1.5rem !important; box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(255, 255, 255, 0.08) !important; color: #f8fafc !important;">
                         
                         <!-- LOCK STATUS BADGE & HEADER -->
                         <div class="flex flex-col items-center space-y-2">
@@ -536,7 +536,7 @@ const NKB = {
                         </div>
 
                         <!-- USER PROFILE CARD -->
-                        <div class="p-3 bg-slate-800/80 border border-slate-700/80 rounded-2xl flex items-center gap-3 text-left">
+                        <div class="nkb-lockscreen-user-pill p-3 rounded-2xl flex items-center gap-3 text-left" style="background-color: #1e293b !important; border: 1px solid #334155 !important;">
                             <div class="w-10 h-10 rounded-xl bg-indigo-600 text-white font-black flex items-center justify-center text-base flex-shrink-0">
                                 ${userInitial}
                             </div>
@@ -544,7 +544,7 @@ const NKB = {
                                 <div class="text-xs font-bold text-white truncate">${u.name}</div>
                                 <div class="text-[10px] text-slate-400 truncate">${u.email || ''}</div>
                             </div>
-                            <span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase tracking-wide flex-shrink-0">
+                            <span class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wide flex-shrink-0" style="background-color: rgba(99, 102, 241, 0.2) !important; color: #a5b4fc !important; border: 1px solid rgba(99, 102, 241, 0.4) !important;">
                                 ${(u.role || 'STAFF').replace(/_/g, ' ')}
                             </span>
                         </div>
@@ -555,10 +555,10 @@ const NKB = {
                         </div>
 
                         <!-- ERROR MESSAGE -->
-                        <div id="lockscreen-error-msg" class="hidden text-xs font-bold text-rose-400 p-2 bg-rose-950/40 border border-rose-800/50 rounded-xl"></div>
+                        <div id="lockscreen-error-msg" class="hidden text-xs font-bold p-2.5 rounded-xl text-center" style="background-color: rgba(76, 5, 25, 0.85) !important; border: 1px solid rgba(225, 29, 72, 0.6) !important; color: #fda4af !important;"></div>
 
                         <!-- FOOTER OPTIONS -->
-                        <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
+                        <div class="pt-3 border-t flex items-center justify-between text-xs text-slate-400" style="border-top: 1px solid #1e293b !important;">
                             <button type="button" onclick="NKB.sleepTimer.togglePasswordMode()" class="hover:text-indigo-400 font-bold transition">
                                 <span id="btn-toggle-auth-text">${this.isPasswordMode ? '← Use Security PIN' : '🔑 Unlock with Password'}</span>
                             </button>
@@ -586,8 +586,8 @@ const NKB = {
                 container.innerHTML = `
                     <form onsubmit="NKB.sleepTimer.submitPassword(event)" class="space-y-3">
                         <div class="text-xs text-slate-400">Enter your account password to resume:</div>
-                        <input type="password" id="lock-password-input" autofocus required placeholder="Account Password" class="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-                        <button type="submit" id="btn-submit-lock-pwd" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 shadow-md shadow-indigo-600/30">
+                        <input type="password" id="lock-password-input" autofocus required placeholder="Account Password" class="w-full px-4 py-2.5 rounded-xl text-white text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none" style="background-color: #1e293b !important; color: #ffffff !important; border: 1.5px solid #334155 !important;">
+                        <button type="submit" id="btn-submit-lock-pwd" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 shadow-md shadow-indigo-600/30 cursor-pointer">
                             <span>Unlock Session</span>
                         </button>
                     </form>
@@ -603,7 +603,7 @@ const NKB = {
             container.innerHTML = `
                 <div class="space-y-4">
                     ${!this.hasPin ? `
-                        <div class="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-300 font-medium">
+                        <div class="p-2.5 rounded-xl text-xs font-medium" style="background-color: rgba(245, 158, 11, 0.15) !important; border: 1px solid rgba(245, 158, 11, 0.35) !important; color: #fcd34d !important;">
                             💡 Setup your 4-digit PIN now. It will be saved for future sleep locks.
                         </div>
                     ` : `
@@ -612,36 +612,36 @@ const NKB = {
 
                     <!-- PIN DOTS INDICATOR -->
                     <div id="pin-dots-container" class="flex justify-center items-center gap-3 my-3 p-2 rounded-xl transition-all">
-                        <div class="w-4 h-4 rounded-full border-2 ${pinLen >= 1 ? 'bg-indigo-500 border-indigo-400 scale-110 shadow-sm shadow-indigo-500' : 'bg-slate-800 border-slate-700'} transition-all duration-150"></div>
-                        <div class="w-4 h-4 rounded-full border-2 ${pinLen >= 2 ? 'bg-indigo-500 border-indigo-400 scale-110 shadow-sm shadow-indigo-500' : 'bg-slate-800 border-slate-700'} transition-all duration-150"></div>
-                        <div class="w-4 h-4 rounded-full border-2 ${pinLen >= 3 ? 'bg-indigo-500 border-indigo-400 scale-110 shadow-sm shadow-indigo-500' : 'bg-slate-800 border-slate-700'} transition-all duration-150"></div>
-                        <div class="w-4 h-4 rounded-full border-2 ${pinLen >= 4 ? 'bg-indigo-500 border-indigo-400 scale-110 shadow-sm shadow-indigo-500' : 'bg-slate-800 border-slate-700'} transition-all duration-150"></div>
+                        <div class="w-4 h-4 rounded-full border-2 ${pinLen >= 1 ? 'scale-110 shadow-sm' : ''} transition-all duration-150" style="${pinLen >= 1 ? 'background-color: #6366f1 !important; border-color: #818cf8 !important; box-shadow: 0 0 10px rgba(99, 102, 241, 0.5) !important;' : 'background-color: #1e293b !important; border-color: #334155 !important;'}"></div>
+                        <div class="w-4 h-4 rounded-full border-2 ${pinLen >= 2 ? 'scale-110 shadow-sm' : ''} transition-all duration-150" style="${pinLen >= 2 ? 'background-color: #6366f1 !important; border-color: #818cf8 !important; box-shadow: 0 0 10px rgba(99, 102, 241, 0.5) !important;' : 'background-color: #1e293b !important; border-color: #334155 !important;'}"></div>
+                        <div class="w-4 h-4 rounded-full border-2 ${pinLen >= 3 ? 'scale-110 shadow-sm' : ''} transition-all duration-150" style="${pinLen >= 3 ? 'background-color: #6366f1 !important; border-color: #818cf8 !important; box-shadow: 0 0 10px rgba(99, 102, 241, 0.5) !important;' : 'background-color: #1e293b !important; border-color: #334155 !important;'}"></div>
+                        <div class="w-4 h-4 rounded-full border-2 ${pinLen >= 4 ? 'scale-110 shadow-sm' : ''} transition-all duration-150" style="${pinLen >= 4 ? 'background-color: #6366f1 !important; border-color: #818cf8 !important; box-shadow: 0 0 10px rgba(99, 102, 241, 0.5) !important;' : 'background-color: #1e293b !important; border-color: #334155 !important;'}"></div>
                         ${pinLen >= 5 ? `
-                            <div class="w-4 h-4 rounded-full border-2 bg-indigo-500 border-indigo-400 scale-110 shadow-sm shadow-indigo-500 transition-all duration-150"></div>
+                            <div class="w-4 h-4 rounded-full border-2 scale-110 shadow-sm transition-all duration-150" style="background-color: #6366f1 !important; border-color: #818cf8 !important; box-shadow: 0 0 10px rgba(99, 102, 241, 0.5) !important;"></div>
                         ` : ''}
                         ${pinLen >= 6 ? `
-                            <div class="w-4 h-4 rounded-full border-2 bg-indigo-500 border-indigo-400 scale-110 shadow-sm shadow-indigo-500 transition-all duration-150"></div>
+                            <div class="w-4 h-4 rounded-full border-2 scale-110 shadow-sm transition-all duration-150" style="background-color: #6366f1 !important; border-color: #818cf8 !important; box-shadow: 0 0 10px rgba(99, 102, 241, 0.5) !important;"></div>
                         ` : ''}
                     </div>
 
                     <!-- ON-SCREEN NUMERIC KEYPAD -->
                     <div class="grid grid-cols-3 gap-2.5 max-w-[260px] mx-auto">
-                        <button type="button" onclick="NKB.sleepTimer.appendPinDigit('1')" class="nkb-pin-key h-12 bg-slate-800 hover:bg-slate-700 rounded-2xl text-lg font-bold text-white shadow-sm flex items-center justify-center cursor-pointer">1</button>
-                        <button type="button" onclick="NKB.sleepTimer.appendPinDigit('2')" class="nkb-pin-key h-12 bg-slate-800 hover:bg-slate-700 rounded-2xl text-lg font-bold text-white shadow-sm flex items-center justify-center cursor-pointer">2</button>
-                        <button type="button" onclick="NKB.sleepTimer.appendPinDigit('3')" class="nkb-pin-key h-12 bg-slate-800 hover:bg-slate-700 rounded-2xl text-lg font-bold text-white shadow-sm flex items-center justify-center cursor-pointer">3</button>
-                        <button type="button" onclick="NKB.sleepTimer.appendPinDigit('4')" class="nkb-pin-key h-12 bg-slate-800 hover:bg-slate-700 rounded-2xl text-lg font-bold text-white shadow-sm flex items-center justify-center cursor-pointer">4</button>
-                        <button type="button" onclick="NKB.sleepTimer.appendPinDigit('5')" class="nkb-pin-key h-12 bg-slate-800 hover:bg-slate-700 rounded-2xl text-lg font-bold text-white shadow-sm flex items-center justify-center cursor-pointer">5</button>
-                        <button type="button" onclick="NKB.sleepTimer.appendPinDigit('6')" class="nkb-pin-key h-12 bg-slate-800 hover:bg-slate-700 rounded-2xl text-lg font-bold text-white shadow-sm flex items-center justify-center cursor-pointer">6</button>
-                        <button type="button" onclick="NKB.sleepTimer.appendPinDigit('7')" class="nkb-pin-key h-12 bg-slate-800 hover:bg-slate-700 rounded-2xl text-lg font-bold text-white shadow-sm flex items-center justify-center cursor-pointer">7</button>
-                        <button type="button" onclick="NKB.sleepTimer.appendPinDigit('8')" class="nkb-pin-key h-12 bg-slate-800 hover:bg-slate-700 rounded-2xl text-lg font-bold text-white shadow-sm flex items-center justify-center cursor-pointer">8</button>
-                        <button type="button" onclick="NKB.sleepTimer.appendPinDigit('9')" class="nkb-pin-key h-12 bg-slate-800 hover:bg-slate-700 rounded-2xl text-lg font-bold text-white shadow-sm flex items-center justify-center cursor-pointer">9</button>
-                        <button type="button" onclick="NKB.sleepTimer.clearPin()" class="nkb-pin-key h-12 bg-slate-800/60 hover:bg-slate-700 text-slate-400 hover:text-white rounded-2xl text-xs font-bold shadow-sm flex items-center justify-center cursor-pointer" title="Clear">✕</button>
-                        <button type="button" onclick="NKB.sleepTimer.appendPinDigit('0')" class="nkb-pin-key h-12 bg-slate-800 hover:bg-slate-700 rounded-2xl text-lg font-bold text-white shadow-sm flex items-center justify-center cursor-pointer">0</button>
-                        <button type="button" onclick="NKB.sleepTimer.deletePinDigit()" class="nkb-pin-key h-12 bg-slate-800/60 hover:bg-slate-700 text-slate-400 hover:text-white rounded-2xl text-base font-bold shadow-sm flex items-center justify-center cursor-pointer" title="Backspace">⌫</button>
+                        <button type="button" onclick="NKB.sleepTimer.appendPinDigit('1')" class="nkb-pin-key">1</button>
+                        <button type="button" onclick="NKB.sleepTimer.appendPinDigit('2')" class="nkb-pin-key">2</button>
+                        <button type="button" onclick="NKB.sleepTimer.appendPinDigit('3')" class="nkb-pin-key">3</button>
+                        <button type="button" onclick="NKB.sleepTimer.appendPinDigit('4')" class="nkb-pin-key">4</button>
+                        <button type="button" onclick="NKB.sleepTimer.appendPinDigit('5')" class="nkb-pin-key">5</button>
+                        <button type="button" onclick="NKB.sleepTimer.appendPinDigit('6')" class="nkb-pin-key">6</button>
+                        <button type="button" onclick="NKB.sleepTimer.appendPinDigit('7')" class="nkb-pin-key">7</button>
+                        <button type="button" onclick="NKB.sleepTimer.appendPinDigit('8')" class="nkb-pin-key">8</button>
+                        <button type="button" onclick="NKB.sleepTimer.appendPinDigit('9')" class="nkb-pin-key">9</button>
+                        <button type="button" onclick="NKB.sleepTimer.clearPin()" class="nkb-pin-key nkb-pin-key-action" title="Clear">✕</button>
+                        <button type="button" onclick="NKB.sleepTimer.appendPinDigit('0')" class="nkb-pin-key">0</button>
+                        <button type="button" onclick="NKB.sleepTimer.deletePinDigit()" class="nkb-pin-key nkb-pin-key-action" title="Backspace">⌫</button>
                     </div>
 
                     ${pinLen >= 4 ? `
-                        <button type="button" onclick="NKB.sleepTimer.submitPin()" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 shadow-md shadow-indigo-600/30">
+                        <button type="button" onclick="NKB.sleepTimer.submitPin()" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 shadow-md shadow-indigo-600/30 cursor-pointer">
                             <span>Unlock Now →</span>
                         </button>
                     ` : ''}
