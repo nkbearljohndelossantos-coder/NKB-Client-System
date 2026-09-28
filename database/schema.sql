@@ -542,6 +542,10 @@ CREATE TABLE IF NOT EXISTS product_formulations (
     product_id TEXT NOT NULL,
     formula_code TEXT NOT NULL,
     name TEXT NOT NULL,
+    compounding_code TEXT,
+    active_version TEXT DEFAULT 'V1.0',
+    version_status TEXT DEFAULT 'APPROVED',
+    fms_formula_id INTEGER,
     base_dose_qty REAL NOT NULL DEFAULT 1.0,
     base_unit TEXT NOT NULL DEFAULT 'pcs',
     instructions TEXT,
@@ -553,6 +557,7 @@ CREATE TABLE IF NOT EXISTS product_formulations (
 
 CREATE INDEX IF NOT EXISTS idx_pf_product ON product_formulations(product_id);
 CREATE INDEX IF NOT EXISTS idx_pf_formula_code ON product_formulations(formula_code);
+CREATE INDEX IF NOT EXISTS idx_pf_compounding_code ON product_formulations(compounding_code);
 
 -- Formulation Ingredients (Bill of Materials Items)
 CREATE TABLE IF NOT EXISTS formulation_ingredients (
@@ -565,6 +570,7 @@ CREATE TABLE IF NOT EXISTS formulation_ingredients (
     quantity_per_unit REAL NOT NULL DEFAULT 0.0,
     unit TEXT NOT NULL DEFAULT 'g',
     unit_cost REAL NOT NULL DEFAULT 0.0,
+    supplier TEXT,
     notes TEXT,
     sort_order INTEGER DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),

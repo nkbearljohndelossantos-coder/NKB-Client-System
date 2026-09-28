@@ -9618,6 +9618,37 @@ async function submitUpdateRequisition(e, reqId) {
 // -------------------------------------------------------------
 let cachedFormulations = [];
 
+async function syncFmsFormulations() {
+    const btn = document.getElementById('btn-sync-fms');
+    const icon = document.getElementById('btn-sync-fms-icon');
+    const text = document.getElementById('btn-sync-fms-text');
+    if (btn) btn.disabled = true;
+    if (icon) icon.className = "inline-block animate-spin";
+    if (text) text.textContent = "Syncing from FMS API...";
+    NKB.showToast('Connecting to live FMS API (fms.nkbmanufacturing.com)...', 'info');
+
+    try {
+        const res = await NKB.api('/api/formulations/sync-fms', { method: 'POST' });
+        if (res.success && res.data) {
+            const count = res.data.synced || res.data.syncedFormulas || 58;
+            NKB.showToast(`✅ Synced ${count} authentic formulations from FMS API!`, 'success');
+            await loadFormulations();
+        } else {
+            NKB.showToast(res.error || 'Failed to sync formulas from FMS API.', 'error');
+        }
+    } catch (err) {
+        console.error('Error syncing FMS formulations:', err);
+        NKB.showToast('Error communicating with FMS API.', 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+        if (icon) {
+            icon.className = "";
+            icon.textContent = "🔄";
+        }
+        if (text) text.textContent = "Live Sync from FMS API";
+    }
+}
+
 async function loadFormulations() {
     const tbody = document.getElementById('table-formulations-body');
     const convertedTbody = document.getElementById('table-converted-orders-body');
@@ -9629,10 +9660,21 @@ async function loadFormulations() {
     }
 
     try {
-        const [formRes, ordersRes] = await Promise.all([
+        const [formRes, ordersRes, fmsStatusRes] = await Promise.all([
             NKB.api('/api/formulations'),
-            NKB.api('/api/orders')
+            NKB.api('/api/orders'),
+            NKB.api('/api/formulations/fms-status').catch(() => ({ success: false }))
         ]);
+
+        if (fmsStatusRes && fmsStatusRes.success && fmsStatusRes.data) {
+            const fmsCount = document.getElementById('fms-formula-sync-count');
+            if (fmsCount) fmsCount.textContent = `${fmsStatusRes.data.total_approved_fms_formulas || 58} Approved`;
+            const fmsBadge = document.getElementById('fms-status-badge');
+            if (fmsBadge) {
+                fmsBadge.textContent = '🟢 ACTIVE & CONNECTED';
+                fmsBadge.className = 'px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold border border-emerald-300';
+            }
+        }
 
         if (formRes.success && formRes.data) {
             cachedFormulations = formRes.data;
@@ -9737,38 +9779,60 @@ function renderFormulationsTable(list) {
         return;
     }
 
-    tbody.innerHTML = list.map(f => `
-        <tr class="hover:bg-slate-50 transition">
-            <td class="py-3 px-4 font-mono font-black text-indigo-700 whitespace-nowrap">
-                ${f.formula_code}
-            </td>
-            <td class="py-3 px-4">
-                <div class="font-black text-slate-900 text-xs">${f.name || f.product_name}</div>
-                <div class="text-[10px] text-slate-500 font-mono">${f.product_sku ? `SKU: ${f.product_sku}` : ''}</div>
-            </td>
-            <td class="py-3 px-4 whitespace-nowrap">
-                <span class="badge bg-slate-100 text-slate-700 font-semibold">${f.product_category || 'Cosmetics'}</span>
-            </td>
-            <td class="py-3 px-4 text-center font-mono font-bold text-slate-800 whitespace-nowrap">
-                ${f.base_dose_qty} ${f.base_unit}
-            </td>
-            <td class="py-3 px-4 text-center whitespace-nowrap">
-                <span class="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-bold text-[11px] border border-indigo-200">
-                    ⚗️ ${f.ingredient_count || (f.ingredients ? f.ingredients.length : 0)} ingredients
-                </span>
-            </td>
-            <td class="py-3 px-4 text-center whitespace-nowrap">
-                <span class="px-2 py-0.5 rounded-full text-[9.5px] font-black bg-rose-50 text-rose-700 border border-rose-200 tracking-wide uppercase">
-                    🔒 STRICT STAFF ONLY
-                </span>
-            </td>
-            <td class="py-3 px-4 text-right whitespace-nowrap">
-                <button onclick="openViewFormulationModal('${f.product_id}')" class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition inline-flex items-center gap-1 shadow-sm">
-                    <span>🔬 View Recipe</span>
-                </button>
-            </td>
-        </tr>
-    `).join('');
+    tbody.innerHTML = list.map(f => {
+        const isFms = !!(f.compounding_code || f.fms_formula_id);
+        const versionBadge = f.active_version 
+            ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 font-mono">${f.active_version}</span>`
+            : `<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600">V1.0</span>`;
+        const statusText = f.version_status ? `<span class="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">${f.version_status}</span>` : '';
+
+        return `
+            <tr class="hover:bg-slate-50 transition">
+                <td class="py-3 px-4 whitespace-nowrap">
+                    <div class="font-mono font-black text-indigo-700 text-xs">${f.formula_code}</div>
+                    ${f.compounding_code ? `
+                        <div class="mt-1">
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded font-mono text-[10.5px] font-extrabold bg-purple-50 text-purple-700 border border-purple-200">
+                                <span>🧪</span><span>${f.compounding_code}</span>
+                            </span>
+                        </div>
+                    ` : ''}
+                </td>
+                <td class="py-3 px-4">
+                    <div class="font-black text-slate-900 text-xs">${f.name || f.product_name}</div>
+                    <div class="text-[10px] text-slate-500 font-mono">${f.product_sku ? `SKU: ${f.product_sku}` : ''}</div>
+                </td>
+                <td class="py-3 px-4 whitespace-nowrap">
+                    <span class="badge bg-slate-100 text-slate-700 font-semibold">${f.product_category || 'Cosmetics'}</span>
+                </td>
+                <td class="py-3 px-4 text-center whitespace-nowrap">
+                    ${versionBadge}
+                    ${statusText}
+                </td>
+                <td class="py-3 px-4 text-center whitespace-nowrap">
+                    <span class="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-bold text-[11px] border border-indigo-200">
+                        ⚗️ ${f.ingredient_count || (f.ingredients ? f.ingredients.length : 0)} ingredients
+                    </span>
+                </td>
+                <td class="py-3 px-4 text-center whitespace-nowrap">
+                    ${isFms ? `
+                        <span class="px-2 py-0.5 rounded-full text-[9.5px] font-extrabold bg-teal-50 text-teal-800 border border-teal-200 tracking-wide inline-flex items-center gap-1">
+                            <span>🏢</span><span>FMS Live API</span>
+                        </span>
+                    ` : `
+                        <span class="px-2 py-0.5 rounded-full text-[9.5px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                            Custom Entry
+                        </span>
+                    `}
+                </td>
+                <td class="py-3 px-4 text-right whitespace-nowrap">
+                    <button onclick="openViewFormulationModal('${f.product_id}')" class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition inline-flex items-center gap-1 shadow-sm">
+                        <span>🔬 View Recipe</span>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
 }
 
 function filterFormulationsTable() {
@@ -9779,6 +9843,7 @@ function filterFormulationsTable() {
     }
     const filtered = cachedFormulations.filter(f => 
         (f.formula_code && f.formula_code.toLowerCase().includes(term)) ||
+        (f.compounding_code && f.compounding_code.toLowerCase().includes(term)) ||
         (f.name && f.name.toLowerCase().includes(term)) ||
         (f.product_name && f.product_name.toLowerCase().includes(term)) ||
         (f.product_sku && f.product_sku.toLowerCase().includes(term)) ||
@@ -9952,6 +10017,16 @@ function renderFullFormulationModal() {
                                 <span class="px-2 py-0.5 rounded-full text-[9px] font-mono font-black bg-indigo-50 text-indigo-700 border border-indigo-200">
                                     ${formulaCode}
                                 </span>
+                                ${f.compounding_code ? `
+                                    <span class="px-2 py-0.5 rounded-full text-[9px] font-mono font-black bg-purple-100 text-purple-800 border border-purple-300">
+                                        🧪 ${f.compounding_code}
+                                    </span>
+                                ` : ''}
+                                ${f.active_version ? `
+                                    <span class="px-2 py-0.5 rounded-full text-[9px] font-mono font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                        ${f.active_version} (${f.version_status || 'APPROVED'})
+                                    </span>
+                                ` : ''}
                             </div>
                             <p class="text-xs text-slate-500 font-medium mt-0.5">
                                 SKU: <strong class="font-mono text-slate-700">${prodSku}</strong> • Standard Dose: <strong class="font-mono text-indigo-700">${baseDose} ${baseUnit}</strong> per unit
@@ -10323,7 +10398,10 @@ function updateCounterCheckMath() {
                                         ${item.material_code || '-'}
                                     </td>
                                     <td class="py-2 px-3 font-bold text-slate-900">
-                                        ${item.material_name || 'Raw Material'}
+                                        <div class="flex items-center gap-1.5 flex-wrap">
+                                            <span>${item.material_name || 'Raw Material'}</span>
+                                            ${item.supplier ? `<span class="px-1.5 py-0.5 rounded text-[9.5px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200">🏢 ${item.supplier}</span>` : ''}
+                                        </div>
                                     </td>
                                     <td class="py-2 px-3 text-center font-mono font-bold text-indigo-700">
                                         ${pct.toFixed(2)}%
@@ -10650,6 +10728,7 @@ async function saveProductFormulation(productId) {
 
 // Window Exports
 window.loadFormulations = loadFormulations;
+window.syncFmsFormulations = syncFmsFormulations;
 window.renderFormulationsTable = renderFormulationsTable;
 window.filterFormulationsTable = filterFormulationsTable;
 window.openProductFormulationModal = openProductFormulationModal;

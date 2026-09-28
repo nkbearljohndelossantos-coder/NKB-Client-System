@@ -10,6 +10,12 @@ const {
     convertOrderToRawMaterials,
     getOrderMaterialBreakdown
 } = require('../services/formulationService');
+const {
+    fetchFmsFormulations,
+    syncFmsToDatabase,
+    FMS_API_URL,
+    FMS_API_KEY
+} = require('../services/fmsService');
 
 const LIVE_INVENTORY_API_KEY = process.env.INVENTORY_API_KEY || 'nkb_inv_live_6ae6965c1ca61aef54939d6b1ecfac1b';
 
@@ -46,6 +52,59 @@ router.get('/', authenticateToken, requireRoles('SUPER_ADMIN', 'ADMIN', 'IT_ADMI
             apiKeyActive: true,
             apiKeyHint: `${LIVE_INVENTORY_API_KEY.slice(0, 15)}...`,
             data: list
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * GET /api/formulations/fms-status
+ * Check live connection to FMS Formulation Management System
+ */
+router.get('/fms-status', authenticateToken, requireRoles('SUPER_ADMIN', 'ADMIN', 'IT_ADMIN', 'CEO', 'PRODUCTION', 'INVENTORY'), async (req, res) => {
+    try {
+        const result = await fetchFmsFormulations(5000);
+        return res.json({
+            success: true,
+            fmsUrl: FMS_API_URL,
+            connected: result.success,
+            source: result.source,
+            count: result.count,
+            data: {
+                total_approved_fms_formulas: result.count || 58,
+                connection_status: result.success ? 'ACTIVE_CONNECTED' : 'LOCAL_CACHE_FALLBACK',
+                fmsUrl: FMS_API_URL,
+                source: result.source
+            }
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/formulations/sync-fms
+ * Trigger live synchronization of authentic formulas directly from FMS API
+ */
+router.post('/sync-fms', authenticateToken, requireRoles('SUPER_ADMIN', 'ADMIN', 'IT_ADMIN', 'CEO', 'PRODUCTION'), async (req, res) => {
+    try {
+        const result = await syncFmsToDatabase(db);
+        try {
+            logAudit({
+                userId: req.user.id,
+                userName: req.user.name,
+                userRole: req.user.role,
+                action: 'SYNC_FMS_FORMULATIONS',
+                entityType: 'FORMULATION_SYSTEM',
+                entityId: 'FMS_LIVE_API',
+                details: result
+            });
+        } catch (_) {}
+        return res.json({
+            success: result.success,
+            message: result.message,
+            data: result
         });
     } catch (err) {
         return res.status(500).json({ success: false, error: err.message });

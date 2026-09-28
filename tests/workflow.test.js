@@ -1698,6 +1698,12 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
 
         // 1. Create a Purchase Order with 2 products (Sunscreen and Lotion)
         const sunscreenProduct = db.prepare("SELECT * FROM products WHERE sku = 'SKC-2026001' OR name LIKE '%Sunscreen%' LIMIT 1").get() || lotionProduct;
+        const existingAssign = db.prepare('SELECT id FROM client_product_prices WHERE client_id = ? AND product_id = ?').get(demoClient.id, sunscreenProduct.id);
+        if (!existingAssign) {
+            db.prepare('INSERT INTO client_product_prices (id, client_id, product_id, custom_name, custom_price, custom_sku, custom_formula_code, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, 1)')
+                .run(require('uuid').v4(), demoClient.id, sunscreenProduct.id, sunscreenProduct.name, 150.0, sunscreenProduct.sku, sunscreenProduct.formula_code || 'FORM-SGC-V1');
+        }
+
         const poRes = await request(app)
             .post('/api/orders')
             .set('Authorization', `Bearer ${clientToken}`)
@@ -2858,6 +2864,56 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
             .send({ password: 'Admin123!' });
         assert.strictEqual(verifyCorrectPwd.status, 200);
         assert.strictEqual(verifyCorrectPwd.body.success, true);
+    });
+
+    test('38. Formulation Management System (FMS API) Live Integration, Compounding Codes, Versioning & Verified Suppliers Test', async () => {
+        // 1. Role-check: Client is forbidden from syncing or viewing FMS status
+        const clientSync = await request(app)
+            .post('/api/formulations/sync-fms')
+            .set('Authorization', `Bearer ${clientToken}`);
+        assert.strictEqual(clientSync.status, 403, 'Client must be forbidden from syncing FMS formulations');
+
+        const clientStatus = await request(app)
+            .get('/api/formulations/fms-status')
+            .set('Authorization', `Bearer ${clientToken}`);
+        assert.strictEqual(clientStatus.status, 403, 'Client must be forbidden from checking FMS status');
+
+        // 2. Admin checks FMS Status endpoint
+        const fmsStatusRes = await request(app)
+            .get('/api/formulations/fms-status')
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(fmsStatusRes.status, 200);
+        assert.strictEqual(fmsStatusRes.body.success, true);
+        assert.ok(fmsStatusRes.body.data.total_approved_fms_formulas >= 50, 'FMS must report authentic approved formulas');
+        assert.strictEqual(fmsStatusRes.body.data.connection_status, 'ACTIVE_CONNECTED');
+
+        // 3. Admin triggers sync from FMS API
+        const fmsSyncRes = await request(app)
+            .post('/api/formulations/sync-fms')
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(fmsSyncRes.status, 200);
+        assert.strictEqual(fmsSyncRes.body.success, true);
+        assert.ok(fmsSyncRes.body.data.syncedFormulas >= 50, 'Must synchronize at least 50 authentic approved formulas');
+
+        // 4. Verify authentic compounding codes and versions in DB
+        const fmsRows = db.prepare(`
+            SELECT pf.*, fi.supplier, fi.material_name 
+            FROM product_formulations pf
+            JOIN formulation_ingredients fi ON fi.formulation_id = pf.id
+            WHERE pf.compounding_code IS NOT NULL
+        `).all();
+        assert.ok(fmsRows.length > 0, 'Database must contain authentic compounding codes');
+
+        // Verify specific authentic FMS Compounding Code exists (e.g., CP-0308 or CP-0581)
+        const cp0308 = db.prepare("SELECT * FROM product_formulations WHERE compounding_code = 'CP-0308'").get();
+        assert.ok(cp0308, 'Compounding Code CP-0308 (SKEENCARE OXYGENATED SUNBLOCK CREAM) must exist');
+        assert.strictEqual(cp0308.version_status, 'APPROVED');
+
+        // Verify verified supplier exists in formulation_ingredients
+        const suppliers = db.prepare("SELECT DISTINCT supplier FROM formulation_ingredients WHERE supplier IS NOT NULL").all().map(s => s.supplier);
+        assert.ok(suppliers.length > 0, 'Must have authentic chemical suppliers');
+        const hasVerifiedSupplier = suppliers.some(s => ['CHEMICO', 'QUAD', 'HACHIMORI', 'LOGERCE', 'TRANSWORLD', 'REDOLENCE', 'MAYNILAD', 'CHEMREZ', 'LOYAL FAMILY'].includes(s));
+        assert.ok(hasVerifiedSupplier, 'Must contain authentic chemical supplier');
     });
 
     after(() => {

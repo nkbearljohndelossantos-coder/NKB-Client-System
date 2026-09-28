@@ -205,63 +205,13 @@ function seedDefaultFormulations(db) {
             db.prepare(`UPDATE formulation_ingredients SET unit_cost = 0.50 WHERE unit_cost IS NULL OR unit_cost = 0`).run();
         } catch (_) {}
 
-        const products = db.prepare(`
-            SELECT p.id, p.name, p.category, p.sku, p.formula_code,
-                   pf.id as formulation_id
-            FROM products p
-            LEFT JOIN product_formulations pf ON pf.product_id = p.id
-            WHERE pf.id IS NULL
-        `).all();
-
-        if (!products || products.length === 0) return;
-
-        const insertFormulation = db.prepare(`
-            INSERT INTO product_formulations 
-            (id, product_id, formula_code, name, base_dose_qty, base_unit, instructions, is_confidential, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 1, datetime('now', 'localtime'), datetime('now', 'localtime'))
-        `);
-
-        const insertIngredient = db.prepare(`
-            INSERT INTO formulation_ingredients 
-            (id, formulation_id, material_code, material_name, phase, percentage, quantity_per_unit, unit, unit_cost, notes, sort_order, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
-        `);
-
-        for (const prod of products) {
-            const template = matchTemplateForProduct(prod.name, prod.category);
-            const formId = uuidv4();
-            const formulaCode = prod.formula_code || template.code;
-            const formulaName = `${prod.name} - Proprietary Formulation (${formulaCode})`;
-
-            insertFormulation.run(
-                formId,
-                prod.id,
-                formulaCode,
-                formulaName,
-                template.baseDose,
-                template.unit,
-                template.instructions
-            );
-
-            template.ingredients.forEach((ing, idx) => {
-                const cost = ing.unit_cost !== undefined ? ing.unit_cost : (DEFAULT_MATERIAL_COSTS[ing.material_code] || 0.50);
-                insertIngredient.run(
-                    uuidv4(),
-                    formId,
-                    ing.material_code,
-                    ing.material_name,
-                    ing.phase,
-                    ing.percentage,
-                    ing.qty,
-                    ing.unit,
-                    cost,
-                    ing.notes,
-                    idx + 1
-                );
-            });
+        const hasFms = db.prepare("SELECT COUNT(*) as c FROM product_formulations WHERE compounding_code IS NOT NULL").get();
+        if (!hasFms || hasFms.c === 0) {
+            const { syncFmsCacheToDatabase } = require('./fmsService');
+            syncFmsCacheToDatabase(db);
         }
     } catch (err) {
-        console.warn('Seed default formulations note:', err.message);
+        console.warn('Seed formulations note:', err.message);
     }
 }
 
@@ -280,18 +230,18 @@ function getFormulations(db, options = {}) {
                COUNT(fi.id) as ingredient_count,
                COALESCE(SUM(fi.quantity_per_unit), 0) as total_formulation_mass
         FROM product_formulations pf
-        JOIN products p ON p.id = pf.product_id
+        LEFT JOIN products p ON p.id = pf.product_id
         LEFT JOIN formulation_ingredients fi ON fi.formulation_id = pf.id
     `;
     const params = [];
 
     if (options.search) {
-        query += ` WHERE (p.name LIKE ? OR pf.formula_code LIKE ? OR pf.name LIKE ? OR p.sku LIKE ?)`;
+        query += ` WHERE (p.name LIKE ? OR pf.formula_code LIKE ? OR pf.compounding_code LIKE ? OR pf.name LIKE ? OR p.sku LIKE ?)`;
         const term = `%${options.search}%`;
-        params.push(term, term, term, term);
+        params.push(term, term, term, term, term);
     }
 
-    query += ` GROUP BY pf.id ORDER BY p.name ASC`;
+    query += ` GROUP BY pf.id ORDER BY pf.compounding_code DESC, p.name ASC, pf.name ASC`;
 
     return db.prepare(query).all(...params);
 }
@@ -310,26 +260,93 @@ function getFormulationByProductId(db, productId) {
                p.default_price,
                p.description as product_description
         FROM product_formulations pf
-        JOIN products p ON p.id = pf.product_id
-        WHERE pf.product_id = ?
-    `).get(productId);
+        LEFT JOIN products p ON p.id = pf.product_id
+        WHERE pf.product_id = ? OR pf.formula_code = ? OR pf.id = ?
+    `).get(productId, productId, productId);
 
     if (!formulation) {
-        // Fallback: If product exists without formulation, create it now!
         const prod = db.prepare('SELECT * FROM products WHERE id = ?').get(productId);
         if (prod) {
-            seedDefaultFormulations(db);
-            formulation = db.prepare(`
-                SELECT pf.*,
-                       p.name as product_name,
-                       p.sku as product_sku,
-                       p.category as product_category,
-                       p.default_price,
-                       p.description as product_description
-                FROM product_formulations pf
-                JOIN products p ON p.id = pf.product_id
-                WHERE pf.product_id = ?
-            `).get(productId);
+            let match = null;
+            if (prod.formula_code) {
+                match = db.prepare('SELECT * FROM product_formulations WHERE formula_code = ?').get(prod.formula_code);
+            }
+            if (!match) {
+                const norm = (prod.name + ' ' + (prod.category || '')).toUpperCase();
+                if (norm.includes('SUN') || norm.includes('SPF') || norm.includes('UV')) {
+                    match = db.prepare("SELECT * FROM product_formulations WHERE compounding_code = 'CP-0308' OR name LIKE '%SUNBLOCK%' OR name LIKE '%SUNSCREEN%' LIMIT 1").get();
+                } else if (norm.includes('LOTION') || norm.includes('MILK')) {
+                    match = db.prepare("SELECT * FROM product_formulations WHERE name LIKE '%LOTION%' LIMIT 1").get();
+                } else if (norm.includes('SOAP') || norm.includes('BAR') || norm.includes('BLEACH')) {
+                    match = db.prepare("SELECT * FROM product_formulations WHERE name LIKE '%SOAP%' LIMIT 1").get();
+                } else if (norm.includes('SERUM') || norm.includes('PORE') || norm.includes('AMPOULE')) {
+                    match = db.prepare("SELECT * FROM product_formulations WHERE name LIKE '%SERUM%' LIMIT 1").get();
+                } else if (norm.includes('TONER')) {
+                    match = db.prepare("SELECT * FROM product_formulations WHERE name LIKE '%TONER%' LIMIT 1").get();
+                } else {
+                    match = db.prepare("SELECT * FROM product_formulations WHERE compounding_code IS NOT NULL LIMIT 1").get();
+                }
+            }
+
+            if (match) {
+                const newFormId = uuidv4();
+                db.prepare(`
+                    INSERT INTO product_formulations (
+                        id, product_id, formula_code, name, compounding_code,
+                        active_version, version_status, fms_formula_id,
+                        base_dose_qty, base_unit, instructions, is_confidential,
+                        created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now', 'localtime'), datetime('now', 'localtime'))
+                `).run(
+                    newFormId,
+                    prod.id,
+                    match.formula_code,
+                    prod.name + ' Official Formulation',
+                    match.compounding_code,
+                    match.active_version || 'V1.0',
+                    match.version_status || 'APPROVED',
+                    match.fms_formula_id,
+                    match.base_dose_qty || 100,
+                    match.base_unit || 'g',
+                    match.instructions || ''
+                );
+
+                const matchIngs = db.prepare('SELECT * FROM formulation_ingredients WHERE formulation_id = ?').all(match.id);
+                const insertIng = db.prepare(`
+                    INSERT INTO formulation_ingredients (
+                        id, formulation_id, material_code, material_name, phase,
+                        percentage, quantity_per_unit, unit, unit_cost, supplier, notes, sort_order, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
+                `);
+                matchIngs.forEach((mi, idx) => {
+                    insertIng.run(
+                        uuidv4(),
+                        newFormId,
+                        mi.material_code,
+                        mi.material_name,
+                        mi.phase,
+                        mi.percentage,
+                        mi.quantity_per_unit,
+                        mi.unit,
+                        mi.unit_cost,
+                        mi.supplier,
+                        mi.notes,
+                        idx + 1
+                    );
+                });
+
+                formulation = db.prepare(`
+                    SELECT pf.*,
+                           p.name as product_name,
+                           p.sku as product_sku,
+                           p.category as product_category,
+                           p.default_price,
+                           p.description as product_description
+                    FROM product_formulations pf
+                    LEFT JOIN products p ON p.id = pf.product_id
+                    WHERE pf.id = ?
+                `).get(newFormId);
+            }
         }
     }
 
@@ -360,7 +377,7 @@ function getFormulationByProductId(db, productId) {
  * Create or update product formulation and its ingredients
  */
 function saveFormulation(db, data, userId = null) {
-    const { productId, formulaCode, name, baseDoseQty, baseUnit, instructions, isConfidential, ingredients } = data;
+    const { productId, formulaCode, name, compoundingCode, activeVersion, versionStatus, baseDoseQty, baseUnit, instructions, isConfidential, ingredients } = data;
 
     if (!productId) throw new Error('Product ID is required.');
     if (!name || !name.trim()) throw new Error('Formulation name is required.');
@@ -373,6 +390,9 @@ function saveFormulation(db, data, userId = null) {
             UPDATE product_formulations
             SET formula_code = ?,
                 name = ?,
+                compounding_code = ?,
+                active_version = ?,
+                version_status = ?,
                 base_dose_qty = ?,
                 base_unit = ?,
                 instructions = ?,
@@ -382,6 +402,9 @@ function saveFormulation(db, data, userId = null) {
         `).run(
             formulaCode || 'FORM-CUSTOM',
             name.trim(),
+            compoundingCode || null,
+            activeVersion || 'V1.0',
+            versionStatus || 'APPROVED',
             Number(baseDoseQty) || 1.0,
             baseUnit || 'pcs',
             instructions || '',
@@ -391,13 +414,16 @@ function saveFormulation(db, data, userId = null) {
     } else {
         db.prepare(`
             INSERT INTO product_formulations
-            (id, product_id, formula_code, name, base_dose_qty, base_unit, instructions, is_confidential, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
+            (id, product_id, formula_code, name, compounding_code, active_version, version_status, base_dose_qty, base_unit, instructions, is_confidential, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
         `).run(
             formId,
             productId,
             formulaCode || 'FORM-CUSTOM',
             name.trim(),
+            compoundingCode || null,
+            activeVersion || 'V1.0',
+            versionStatus || 'APPROVED',
             Number(baseDoseQty) || 1.0,
             baseUnit || 'pcs',
             instructions || '',
@@ -415,8 +441,8 @@ function saveFormulation(db, data, userId = null) {
         db.prepare('DELETE FROM formulation_ingredients WHERE formulation_id = ?').run(formId);
         const insertIng = db.prepare(`
             INSERT INTO formulation_ingredients
-            (id, formulation_id, material_code, material_name, phase, percentage, quantity_per_unit, unit, unit_cost, notes, sort_order, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
+            (id, formulation_id, material_code, material_name, phase, percentage, quantity_per_unit, unit, unit_cost, supplier, notes, sort_order, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
         `);
 
         ingredients.forEach((ing, idx) => {
@@ -434,7 +460,8 @@ function saveFormulation(db, data, userId = null) {
                 Number(ing.quantity_per_unit || ing.qty) || 0.0,
                 ing.unit || 'g',
                 cost,
-                ing.notes || '',
+                ing.supplier || null,
+                ing.notes || (ing.supplier ? `Supplier: ${ing.supplier}` : ''),
                 idx + 1
             );
         });
@@ -542,14 +569,14 @@ function convertOrderToRawMaterials(db, poId, userId = null) {
         WHERE id = ?
     `).run(poId);
 
-    return getOrderMaterialBreakdown(db, poId);
+    return getOrderMaterialBreakdown(db, poId, false);
 }
 
 /**
  * Retrieve raw material breakdown for an order:
  * Grouped per ordered product + Consolidated pull sheet across all products
  */
-function getOrderMaterialBreakdown(db, poId) {
+function getOrderMaterialBreakdown(db, poId, autoConvert = true) {
     const po = db.prepare(`
         SELECT po.*,
                c.company_name as client_name,
@@ -582,7 +609,7 @@ function getOrderMaterialBreakdown(db, poId) {
     `).all(poId);
 
     // If order was accounting confirmed but not yet converted, trigger conversion now
-    if (rawList.length === 0 && (po.accounting_confirmed === 1 || po.status === 'APPROVED' || po.status === 'IN_PRODUCTION' || po.status === 'COMPLETED')) {
+    if (autoConvert && rawList.length === 0 && (po.accounting_confirmed === 1 || po.status === 'APPROVED' || po.status === 'IN_PRODUCTION' || po.status === 'COMPLETED')) {
         return convertOrderToRawMaterials(db, poId);
     }
 

@@ -439,10 +439,14 @@
         </div>
 
         <!-- METADATA GRID -->
-        <div class="meta-grid">
+        <div class="meta-grid" style="grid-template-columns: repeat(5, 1fr);">
             <div class="meta-item">
                 <strong>Target Product</strong>
                 <span id="meta-product-name">Loading Product...</span>
+            </div>
+            <div class="meta-item">
+                <strong>Compounding Code / Version</strong>
+                <span id="meta-compounding-code">-</span>
             </div>
             <div class="meta-item">
                 <strong>Product SKU / Formula Code</strong>
@@ -637,6 +641,7 @@
 
             document.getElementById('toolbar-product-title').textContent = `${prodName} (Batch: ${currentBatchQty.toLocaleString()} ${currentBatchUnit})`;
             document.getElementById('meta-product-name').textContent = prodName;
+            document.getElementById('meta-compounding-code').textContent = `${f.compounding_code || 'CP-APPROVED'} • ${f.active_version || 'V1.0'} (${f.version_status || 'APPROVED'})`;
             document.getElementById('meta-product-code').textContent = `${prodSku} • ${formulaCode}`;
             document.getElementById('meta-base-dose').textContent = `${baseDose} ${baseUnit} / unit`;
             document.getElementById('meta-print-date').textContent = getManilaDateTimeStr();
@@ -700,6 +705,7 @@
                             <td style="font-family: monospace; font-weight: bold; color: #1e3a8a; font-size: 7.5pt;">${ing.material_code || '-'}</td>
                             <td style="font-weight: 700; color: #0f172a;">
                                 ${ing.material_name || 'Raw Material'}
+                                ${ing.supplier ? `<span style="display: inline-block; background: #e0e7ff; color: #3730a3; padding: 1px 5px; border-radius: 3px; font-size: 6.5pt; font-weight: 800; margin-left: 4px;">🏢 ${ing.supplier}</span>` : ''}
                                 ${ing.notes ? `<div style="font-size: 6.5pt; color: #64748b; font-weight: normal;">Notes: ${ing.notes}</div>` : ''}
                             </td>
                             <td style="text-align: center; font-family: monospace; font-weight: 700; color: #3b82f6;">${pct.toFixed(2)}%</td>

@@ -734,9 +734,24 @@ function runMigrations(dbInstance, isMysql) {
                 } catch (_) {}
 
                 try {
+                    const pfCols = dbInstance.prepare("PRAGMA table_info(product_formulations)").all().map(c => c.name);
+                    if (pfCols.length > 0) {
+                        if (!pfCols.includes('compounding_code')) dbInstance.exec("ALTER TABLE product_formulations ADD COLUMN compounding_code TEXT;");
+                        if (!pfCols.includes('active_version')) dbInstance.exec("ALTER TABLE product_formulations ADD COLUMN active_version TEXT DEFAULT 'V1.0';");
+                        if (!pfCols.includes('version_status')) dbInstance.exec("ALTER TABLE product_formulations ADD COLUMN version_status TEXT DEFAULT 'APPROVED';");
+                        if (!pfCols.includes('fms_formula_id')) dbInstance.exec("ALTER TABLE product_formulations ADD COLUMN fms_formula_id INTEGER;");
+                    }
+                } catch (_) {}
+
+                try {
                     const fiCols = dbInstance.prepare("PRAGMA table_info(formulation_ingredients)").all().map(c => c.name);
-                    if (fiCols.length > 0 && !fiCols.includes('unit_cost')) {
-                        dbInstance.exec("ALTER TABLE formulation_ingredients ADD COLUMN unit_cost REAL DEFAULT 0.0;");
+                    if (fiCols.length > 0) {
+                        if (!fiCols.includes('unit_cost')) {
+                            dbInstance.exec("ALTER TABLE formulation_ingredients ADD COLUMN unit_cost REAL DEFAULT 0.0;");
+                        }
+                        if (!fiCols.includes('supplier')) {
+                            dbInstance.exec("ALTER TABLE formulation_ingredients ADD COLUMN supplier TEXT;");
+                        }
                     }
                 } catch (_) {}
 
@@ -753,7 +768,12 @@ function runMigrations(dbInstance, isMysql) {
                 } catch (_) {}
             } else {
                 try { dbInstance.exec("ALTER TABLE users ADD COLUMN last_active_at VARCHAR(255) NULL;"); } catch (_) {}
+                try { dbInstance.exec("ALTER TABLE product_formulations ADD COLUMN compounding_code VARCHAR(100) NULL;"); } catch (_) {}
+                try { dbInstance.exec("ALTER TABLE product_formulations ADD COLUMN active_version VARCHAR(50) DEFAULT 'V1.0';"); } catch (_) {}
+                try { dbInstance.exec("ALTER TABLE product_formulations ADD COLUMN version_status VARCHAR(50) DEFAULT 'APPROVED';"); } catch (_) {}
+                try { dbInstance.exec("ALTER TABLE product_formulations ADD COLUMN fms_formula_id INT NULL;"); } catch (_) {}
                 try { dbInstance.exec("ALTER TABLE formulation_ingredients ADD COLUMN unit_cost DECIMAL(12,4) DEFAULT 0.0000;"); } catch (_) {}
+                try { dbInstance.exec("ALTER TABLE formulation_ingredients ADD COLUMN supplier VARCHAR(100) NULL;"); } catch (_) {}
                 try { dbInstance.exec("ALTER TABLE order_material_conversions ADD COLUMN unit_cost DECIMAL(12,4) DEFAULT 0.0000;"); } catch (_) {}
                 try { dbInstance.exec("ALTER TABLE order_material_conversions ADD COLUMN total_cost DECIMAL(14,4) DEFAULT 0.0000;"); } catch (_) {}
             }
