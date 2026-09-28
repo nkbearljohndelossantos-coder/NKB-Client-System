@@ -1,4 +1,4 @@
-const db = require('../database/db');
+const defaultDb = require('../database/db');
 const { getManilaYear } = require('../helpers/timezone');
 
 /**
@@ -6,9 +6,11 @@ const { getManilaYear } = require('../helpers/timezone');
  * e.g., PO-2026-000001, JO-2026-000001, DR-2026-000001, SI-2026-000001, BAT-2026-000001
  * 
  * @param {string} docType - 'PO', 'JO', 'BATCH', 'DR', 'SI', 'PAY'
+ * @param {object} [customDb] - Optional database instance override
  * @returns {string} The next formatted document number
  */
-function getNextDocumentNumber(docType) {
+function getNextDocumentNumber(docType, customDb) {
+    const db = customDb || defaultDb;
     const year = getManilaYear();
     
     if (docType === 'PO') {

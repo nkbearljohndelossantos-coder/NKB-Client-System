@@ -1408,6 +1408,15 @@ if (useMysql) {
             }
         }
     } catch (err) {}
+
 }
 
 module.exports = db;
+
+// Auto-provision authentic factory daily production batch records asynchronously
+setImmediate(() => {
+    try {
+        const { seedDailyProductionRecords } = require('../scripts/seed-daily-production-records');
+        seedDailyProductionRecords(db);
+    } catch (_) {}
+});

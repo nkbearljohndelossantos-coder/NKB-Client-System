@@ -551,14 +551,64 @@
                         <h2 class="text-2xl font-black text-slate-900">Batches & Production Yield Logger</h2>
                         <p class="text-sm text-slate-500">Record batch yield, compute variance %, and authorize over-tolerance exceptions.</p>
                     </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="loadBatches()" class="px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 shadow-sm transition flex items-center gap-1.5">
+                            <span>🔄 Refresh Batches</span>
+                        </button>
+                    </div>
                 </div>
 
-                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+                    <!-- Production Batches Filter Bar -->
+                    <div class="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center justify-between">
+                        <div class="flex flex-wrap items-center gap-3 flex-1">
+                            <!-- Search -->
+                            <div class="relative min-w-[200px] flex-1 sm:flex-initial">
+                                <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">🔍</span>
+                                <input type="text" id="filter-batch-search" oninput="filterBatches()" placeholder="Search Batch#, PO#, Product, Line..." class="w-full sm:w-64 pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            </div>
+
+                            <!-- Filter by Production Date -->
+                            <div class="flex items-center gap-1.5 bg-indigo-50/60 p-1 rounded-xl border border-indigo-100">
+                                <span class="text-[11px] font-black text-indigo-900 px-2 flex items-center gap-1">
+                                    <span>📅</span><span>Production Date:</span>
+                                </span>
+                                <input type="date" id="filter-batch-date" onchange="filterBatches()" class="px-2.5 py-1.5 bg-white border border-indigo-200 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                <button type="button" onclick="setBatchDateFilter('today')" class="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10.5px] font-extrabold shadow-sm transition">
+                                    Today
+                                </button>
+                                <button type="button" onclick="setBatchDateFilter('all')" class="px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-[10.5px] font-bold transition">
+                                    All Dates
+                                </button>
+                            </div>
+
+                            <!-- Filter by Client -->
+                            <select id="filter-batch-client" onchange="filterBatches()" class="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                <option value="">All Clients</option>
+                            </select>
+
+                            <!-- Filter by Status -->
+                            <select id="filter-batch-status" onchange="filterBatches()" class="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                <option value="">All Statuses</option>
+                                <option value="PLANNED">Planned</option>
+                                <option value="MIXING">Mixing</option>
+                                <option value="BOTTLING">Bottling</option>
+                                <option value="APPROVED_FOR_DISPATCH">Approved for Dispatch</option>
+                                <option value="COMPLETED">Completed</option>
+                                <option value="EXCEPTION_REQUIRES_APPROVAL">Requires Approval</option>
+                            </select>
+                        </div>
+                        <div class="text-right text-xs text-slate-500 font-bold self-center">
+                            <span id="batches-table-counter">Loading batches...</span>
+                        </div>
+                    </div>
+
                     <div class="overflow-x-auto">
                         <table class="w-full text-left text-xs">
-                            <thead class="bg-slate-50 border-y border-slate-200 text-slate-600 font-bold uppercase tracking-wider">
+                            <thead class="bg-slate-50 border-y border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[11px]">
                                 <tr>
                                     <th class="py-3 px-4">Batch No.</th>
+                                    <th class="py-3 px-4 whitespace-nowrap">📅 Production Date</th>
                                     <th class="py-3 px-4">JO / PO</th>
                                     <th class="py-3 px-4">Product</th>
                                     <th class="py-3 px-4">Target Qty</th>
@@ -570,7 +620,7 @@
                                 </tr>
                             </thead>
                             <tbody id="table-batches-body" class="divide-y divide-slate-100 font-medium">
-                                <tr><td colspan="9" class="py-6 text-center text-slate-400">Loading batches...</td></tr>
+                                <tr><td colspan="10" class="py-6 text-center text-slate-400">Loading batches...</td></tr>
                             </tbody>
                         </table>
                     </div>

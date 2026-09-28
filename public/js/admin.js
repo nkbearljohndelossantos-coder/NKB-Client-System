@@ -1573,14 +1573,124 @@ window.printJobOrdersForSelectedClient = printJobOrdersForSelectedClient;
 // -------------------------------------------------------------
 // 4. PRODUCTION BATCHES & YIELD LOGGER
 // -------------------------------------------------------------
-async function loadBatches() {
-    const res = await NKB.api('/api/production/batches');
-    const tbody = document.getElementById('table-batches-body');
+let cachedBatches = [];
 
-    if (res.success && res.data && res.data.length > 0) {
-        tbody.innerHTML = res.data.map(b => `
+async function loadBatches() {
+    const tbody = document.getElementById('table-batches-body');
+    if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="10" class="py-6 text-center text-slate-400">Loading production batches...</td></tr>';
+    }
+
+    const res = await NKB.api('/api/production/batches');
+
+    if (res.success && res.data) {
+        cachedBatches = res.data;
+        window.cachedBatches = cachedBatches;
+
+        // Populate client filter dropdown if empty
+        const clientSelect = document.getElementById('filter-batch-client');
+        if (clientSelect && clientSelect.options.length <= 1) {
+            const clientMap = new Map();
+            cachedBatches.forEach(b => {
+                if (b.client_id && b.company_name) {
+                    clientMap.set(b.client_id, b.company_name);
+                }
+            });
+            clientMap.forEach((name, id) => {
+                const opt = document.createElement('option');
+                opt.value = id;
+                opt.textContent = name;
+                clientSelect.appendChild(opt);
+            });
+        }
+
+        filterBatches();
+    } else {
+        if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="10" class="py-6 text-center text-rose-500 font-bold">${res.error || 'Failed to load batches.'}</td></tr>`;
+        }
+    }
+}
+
+function filterBatches() {
+    const tbody = document.getElementById('table-batches-body');
+    if (!tbody) return;
+
+    const searchTerm = (document.getElementById('filter-batch-search')?.value || '').toLowerCase().trim();
+    const dateFilter = document.getElementById('filter-batch-date')?.value || '';
+    const clientFilter = document.getElementById('filter-batch-client')?.value || '';
+    const statusFilter = document.getElementById('filter-batch-status')?.value || '';
+
+    let filtered = cachedBatches;
+
+    if (searchTerm) {
+        filtered = filtered.filter(b =>
+            (b.batch_number && b.batch_number.toLowerCase().includes(searchTerm)) ||
+            (b.po_number && b.po_number.toLowerCase().includes(searchTerm)) ||
+            (b.jo_number && b.jo_number.toLowerCase().includes(searchTerm)) ||
+            (b.product_name && b.product_name.toLowerCase().includes(searchTerm)) ||
+            (b.company_name && b.company_name.toLowerCase().includes(searchTerm)) ||
+            (b.compounding_operator && b.compounding_operator.toLowerCase().includes(searchTerm)) ||
+            (b.bottling_lead && b.bottling_lead.toLowerCase().includes(searchTerm)) ||
+            (b.qc_inspector && b.qc_inspector.toLowerCase().includes(searchTerm))
+        );
+    }
+
+    if (dateFilter) {
+        filtered = filtered.filter(b => {
+            if (!b.production_date) return false;
+            return b.production_date.startsWith(dateFilter);
+        });
+    }
+
+    if (clientFilter) {
+        filtered = filtered.filter(b => b.client_id === clientFilter);
+    }
+
+    if (statusFilter) {
+        filtered = filtered.filter(b => b.status === statusFilter);
+    }
+
+    const counter = document.getElementById('batches-table-counter');
+    if (counter) {
+        counter.textContent = `Showing ${filtered.length} of ${cachedBatches.length} batches`;
+    }
+
+    renderBatchesTable(filtered);
+}
+
+function setBatchDateFilter(mode) {
+    const dateInput = document.getElementById('filter-batch-date');
+    if (!dateInput) return;
+
+    if (mode === 'today') {
+        const today = new Date().toISOString().split('T')[0];
+        dateInput.value = today;
+    } else {
+        dateInput.value = '';
+    }
+    filterBatches();
+}
+
+function renderBatchesTable(batches) {
+    const tbody = document.getElementById('table-batches-body');
+    if (!tbody) return;
+
+    if (!batches || batches.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10" class="py-6 text-center text-slate-400">No production batches found matching the selected filter.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = batches.map(b => {
+        const formattedDate = b.production_date ? NKB.formatDate(b.production_date) : '—';
+        return `
             <tr class="hover:bg-slate-50 transition">
-                <td class="py-3 px-4 font-bold text-indigo-600">${b.batch_number}</td>
+                <td class="py-3 px-4 font-bold text-indigo-600 font-mono">${b.batch_number}</td>
+                <td class="py-3 px-4 whitespace-nowrap">
+                    <span class="px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-950 font-bold font-mono text-[11px]" title="Production Date">
+                        📅 ${b.production_date || formattedDate}
+                    </span>
+                </td>
                 <td class="py-3 px-4">
                     <button onclick="openViewPOModal('${b.po_id}')" class="font-bold text-indigo-600 hover:text-indigo-800 hover:underline" title="View Purchase Order Details">
                         ${b.po_number}
@@ -1603,6 +1713,10 @@ async function loadBatches() {
                 <td class="py-3 px-4 text-slate-500">${NKB.formatDate(b.expiry_date)}</td>
                 <td class="py-3 px-4">${NKB.renderStatusBadge(b.status)}</td>
                 <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                    <!-- 1-Click Batch Sales Order Print Shortcut -->
+                    <a href="/print-po.html?id=${b.po_id}&title=SALES%20ORDER&batch_id=${b.id}" target="_blank" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1 shadow-sm" title="Print Sales Order (1-Click Shortcut)">
+                        <span>🖨️ Sales Order</span>
+                    </a>
                     <button onclick="openViewPOModal('${b.po_id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-block" title="View Purchase Order Details">
                         👁️ View PO
                     </button>
@@ -1623,11 +1737,13 @@ async function loadBatches() {
                     ` : ''}
                 </td>
             </tr>
-        `).join('');
-    } else {
-        tbody.innerHTML = `<tr><td colspan="9" class="py-6 text-center text-slate-400">No production batches found.</td></tr>`;
-    }
+        `;
+    }).join('');
 }
+
+window.filterBatches = filterBatches;
+window.setBatchDateFilter = setBatchDateFilter;
+window.renderBatchesTable = renderBatchesTable;
 
 // -------------------------------------------------------------
 // 5. DELIVERIES / DR

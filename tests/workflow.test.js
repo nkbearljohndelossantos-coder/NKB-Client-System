@@ -2916,6 +2916,69 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.ok(hasVerifiedSupplier, 'Must contain authentic chemical supplier');
     });
 
+    test('39. Factory Daily Production Batches, Date Filtering & 1-Click Sales Order Shortcut Test', async () => {
+        // 0. Ensure daily production records are seeded in test db
+        const { seedDailyProductionRecords } = require('../scripts/seed-daily-production-records');
+        seedDailyProductionRecords(db);
+
+        // 1. Query batches filtered by Production Date (2026-09-26)
+        const dateRes = await request(app)
+            .get('/api/production/batches?productionDate=2026-09-26')
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(dateRes.status, 200);
+        assert.strictEqual(dateRes.body.success, true);
+        assert.ok(Array.isArray(dateRes.body.data));
+        assert.ok(dateRes.body.data.length >= 4, 'Must return multiple batches produced on 2026-09-26');
+        assert.ok(dateRes.body.data.every(b => b.production_date === '2026-09-26'), 'All returned batches must match production date 2026-09-26');
+
+        // 2. Verify authentic factory transaction records in DB
+        // SKEEN CARE Order (ref: 0004)
+        const skeencarePO = db.prepare("SELECT * FROM purchase_orders WHERE notes LIKE '%0004%'").get();
+        assert.ok(skeencarePO, 'SKEEN CARE PO (Ref 0004) must exist in transaction records');
+        assert.strictEqual(skeencarePO.status, 'COMPLETED', 'SKEEN CARE PO must be COMPLETED (Closed P.O.)');
+        assert.ok(skeencarePO.po_number.startsWith('PO-2026-'), 'Must use sequential system PO numbering');
+        assert.ok(skeencarePO.so_number.startsWith('SO-2026-'), 'Must use sequential system SO numbering');
+
+        // SKEEN CARE Batches: 600 (Sep 24), 840 (Sep 25), 1560 (Sep 26) = 3000 Total
+        const scBatches = db.prepare(`
+            SELECT pb.* FROM production_batches pb
+            JOIN job_orders jo ON pb.jo_id = jo.id
+            WHERE jo.po_id = ? ORDER BY pb.production_date ASC
+        `).all(skeencarePO.id);
+        assert.strictEqual(scBatches.length, 3, 'SKEEN CARE must have exactly 3 daily production batches');
+        const scTotalYield = scBatches.reduce((sum, b) => sum + b.actual_yield, 0);
+        assert.strictEqual(scTotalYield, 3000, 'SKEEN CARE total yield must equal exactly 3,000 KG');
+
+        // HER CHOICE Order 1 (ref: HCI_063_2026)
+        const hcPO1 = db.prepare("SELECT * FROM purchase_orders WHERE notes LIKE '%HCI_063_2026%'").get();
+        assert.ok(hcPO1, 'HER CHOICE PO (Ref HCI_063_2026) must exist in transaction records');
+        assert.strictEqual(hcPO1.status, 'IN_PRODUCTION');
+
+        // Verify Instant Whitening Lotion has 8 daily batches
+        const lotionBatches = db.prepare(`
+            SELECT pb.* FROM production_batches pb
+            JOIN job_orders jo ON pb.jo_id = jo.id
+            JOIN products p ON pb.product_id = p.id
+            WHERE jo.po_id = ? AND p.name LIKE '%WHITENING LOTION%'
+        `).all(hcPO1.id);
+        assert.strictEqual(lotionBatches.length, 8, 'Instant Whitening Lotion must have 8 daily batches');
+        const lotionYield = lotionBatches.reduce((sum, b) => sum + b.actual_yield, 0);
+        assert.strictEqual(lotionYield, 22747, 'Whitening Lotion cumulative yield must be 22,747 pcs');
+
+        // HER CHOICE Order 2 (ref: HCI_065_2026)
+        const hcPO2 = db.prepare("SELECT * FROM purchase_orders WHERE notes LIKE '%HCI_065_2026%'").get();
+        assert.ok(hcPO2, 'HER CHOICE PO (Ref HCI_065_2026) must exist in transaction records');
+
+        // 3. Verify HTML and JS templates contain the 1-click shortcut and date filter
+        const adminHtml = fs.readFileSync(path.join(__dirname, '../public/admin.html'), 'utf8');
+        assert.ok(adminHtml.includes('id="filter-batch-date"'), 'admin.html must contain filter-batch-date');
+        assert.ok(adminHtml.includes('setBatchDateFilter'), 'admin.html must contain setBatchDateFilter shortcut');
+
+        const adminJs = fs.readFileSync(path.join(__dirname, '../public/js/admin.js'), 'utf8');
+        assert.ok(adminJs.includes('title=SALES%20ORDER'), 'admin.js must include 1-click Sales Order shortcut URL');
+        assert.ok(adminJs.includes('filterBatches'), 'admin.js must implement filterBatches function');
+    });
+
     after(() => {
         // Automatically delete all test decoys and temporary test database
         try {

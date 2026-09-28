@@ -916,8 +916,13 @@
             }
 
             // Document Title
+            const urlParams = new URLSearchParams(window.location.search);
+            const paramTitle = urlParams.get('title') || urlParams.get('docTitle');
             const titleSelect = document.getElementById('doc-title-select');
-            let chosenTitle = titleSelect ? titleSelect.value : 'SALES ORDER';
+            if (paramTitle && titleSelect) {
+                titleSelect.value = paramTitle;
+            }
+            let chosenTitle = titleSelect ? titleSelect.value : (paramTitle || 'SALES ORDER');
             document.getElementById('hdr-doc-title').textContent = chosenTitle;
 
             // Customer Metadata
@@ -1188,7 +1193,20 @@
                 const res = await fetch(`/api/orders/${poId}`, { headers });
                 const json = await res.json();
                 if (json.success && json.data) {
-                    populateUI(json.data);
+                    const orderData = json.data;
+                    const batchId = urlParams.get('batch_id') || urlParams.get('batchId');
+                    if (batchId) {
+                        try {
+                            const bRes = await fetch(`/api/production/batches/${batchId}`, { headers });
+                            const bJson = await bRes.json();
+                            if (bJson.success && bJson.data) {
+                                const b = bJson.data;
+                                if (b.production_date) orderData.po_date = b.production_date;
+                                orderData.notes = `Batch: ${b.batch_number} (Production Date: ${b.production_date || 'N/A'}). ` + (orderData.notes || '');
+                            }
+                        } catch (_) {}
+                    }
+                    populateUI(orderData);
                 } else {
                     alert(json.error || 'Failed to load order details.');
                 }

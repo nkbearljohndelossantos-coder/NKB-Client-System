@@ -12,7 +12,7 @@ const { getManilaDate, getManilaDateTime } = require('../helpers/timezone');
  * GET /api/production/batches
  */
 router.get('/batches', authenticateToken, (req, res) => {
-    const { joId, status, search } = req.query;
+    const { joId, status, search, productionDate, date, clientId } = req.query;
 
     let query = `
         SELECT b.*, p.name as product_name, p.sku, p.unit,
@@ -30,11 +30,20 @@ router.get('/batches', authenticateToken, (req, res) => {
     if (req.user.role === 'CLIENT') {
         query += ' AND po.client_id = ?';
         params.push(req.user.client_id);
+    } else if (clientId) {
+        query += ' AND po.client_id = ?';
+        params.push(clientId);
     }
 
     if (joId) {
         query += ' AND b.jo_id = ?';
         params.push(joId);
+    }
+
+    const filterDate = productionDate || date;
+    if (filterDate) {
+        query += ' AND date(b.production_date) = date(?)';
+        params.push(filterDate);
     }
 
     if (status) {
@@ -43,12 +52,12 @@ router.get('/batches', authenticateToken, (req, res) => {
     }
 
     if (search) {
-        query += ' AND (b.batch_number LIKE ? OR p.name LIKE ? OR jo.jo_number LIKE ?)';
+        query += ' AND (b.batch_number LIKE ? OR p.name LIKE ? OR jo.jo_number LIKE ? OR po.po_number LIKE ? OR c.company_name LIKE ?)';
         const term = `%${search}%`;
-        params.push(term, term, term);
+        params.push(term, term, term, term, term);
     }
 
-    query += ' ORDER BY b.created_at DESC';
+    query += ' ORDER BY b.production_date DESC, b.created_at DESC';
     const batches = db.prepare(query).all(...params);
 
     return res.json({ success: true, data: batches });
