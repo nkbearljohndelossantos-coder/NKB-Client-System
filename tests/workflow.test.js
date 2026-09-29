@@ -1341,6 +1341,10 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         const printInvoiceHtml = fs.readFileSync(path.join(__dirname, '../public/print-invoice.html'), 'utf8');
 
         assert.ok(printPoHtml.includes('BDO UNIBANK, INC.<br>NKB MANUFACTURING CORPORATION<br>0080-5801-0547'), 'print-po.html must include NKB MANUFACTURING CORPORATION under BDO UNIBANK, INC.');
+        assert.ok(printPoHtml.includes('0000079720871'), 'print-po.html must include Security Bank account 0000079720871');
+        assert.ok(printPoHtml.includes('788-7-78803245-1'), 'print-po.html must include Metrobank account 788-7-78803245-1');
+        assert.ok(printPoHtml.includes('SECURITY BANK'), 'print-po.html must include SECURITY BANK');
+        assert.ok(printPoHtml.includes('METROBANK'), 'print-po.html must include METROBANK');
         assert.strictEqual(printPoHtml.includes('id="po-payment-section"'), false, 'print-po.html must NOT have #po-payment-section');
         assert.strictEqual(printPoHtml.includes('id="disp-po-payment"'), false, 'print-po.html must NOT have #disp-po-payment');
         assert.strictEqual(printPoHtml.includes('Form of Payment:'), false, 'print-po.html must NOT have "Form of Payment:" in receipt');

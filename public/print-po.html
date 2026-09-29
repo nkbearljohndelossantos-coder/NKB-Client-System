@@ -524,13 +524,80 @@
 
         .bank-intro {
             margin-bottom: 6px;
-            color: #000000;
+            color: #0f172a;
+            font-weight: bold;
         }
 
         .bank-lines {
             font-weight: normal;
             color: #000000;
             line-height: 1.4;
+        }
+
+        .bank-accounts-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 6px;
+        }
+
+        .bank-account-item {
+            border: 1px solid #cbd5e1;
+            border-left: 3.5px solid #0f172a;
+            border-radius: 4px;
+            padding: 6px 9px;
+            background: #f8fafc;
+            font-size: 8pt;
+            line-height: 1.35;
+        }
+
+        .bank-account-item .bank-title {
+            font-weight: 800;
+            font-size: 8pt;
+            color: #0f172a;
+            text-transform: uppercase;
+            letter-spacing: 0.2px;
+        }
+
+        .bank-account-item .bank-acc-name {
+            font-size: 7.5pt;
+            color: #334155;
+            margin-top: 1px;
+        }
+
+        .bank-account-item .bank-acc-no {
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: 800;
+            font-size: 9.5pt;
+            color: #0284c7;
+            letter-spacing: 0.5px;
+            margin-top: 2px;
+        }
+
+        .bank-account-item .bank-branch-info {
+            font-size: 7pt;
+            color: #64748b;
+            margin-top: 2px;
+        }
+
+        @media (max-width: 640px) {
+            .bank-accounts-container {
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+        }
+
+        @media print {
+            .bank-account-item {
+                border: 1px solid #94a3b8 !important;
+                border-left: 3.5px solid #000000 !important;
+                background: #ffffff !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .bank-account-item .bank-acc-no {
+                color: #000000 !important;
+            }
         }
 
         .add-row-container {
@@ -682,11 +749,29 @@
 
         <!-- Bank Details Section (Outside/Below the Bordered Box at Bottom Left) -->
         <div class="bank-details-section avoid-break">
-            <div class="bank-intro">Please deposit payment to the following bank account/s:</div>
+            <div class="bank-intro">Please deposit payment to any of the following accredited bank account/s:</div>
             <div class="bank-lines" id="disp-bank-details" contenteditable="false">
-                BDO UNIBANK, INC.<br>
-                NKB MANUFACTURING CORPORATION<br>
-                0080-5801-0547
+                <div class="bank-accounts-container">
+                    <div class="bank-account-item">
+                        <div class="bank-title">BDO UNIBANK, INC.</div>
+                        <div class="bank-acc-name">NKB MANUFACTURING CORPORATION</div>
+                        <div class="bank-acc-no">0080-5801-0547</div>
+                        <div class="bank-branch-info">Checking Account</div>
+                    </div>
+                    <div class="bank-account-item">
+                        <div class="bank-title">SECURITY BANK</div>
+                        <div class="bank-acc-name">NKB Manufacturing Corporation</div>
+                        <div class="bank-acc-no">0000079720871</div>
+                        <div class="bank-branch-info">Imus Branch &bull; Tel: (02) 8529-8613</div>
+                    </div>
+                    <div class="bank-account-item">
+                        <div class="bank-title">METROPOLITAN BANK &amp; TRUST CO. (METROBANK)</div>
+                        <div class="bank-acc-name">NKB MANUFACTURING CORPORATION</div>
+                        <div class="bank-acc-no">788-7-78803245-1</div>
+                        <div class="bank-branch-info">Bacoor - Bayanan Bacoor Blvd. &bull; Tel: 4359389</div>
+                    </div>
+                </div>
+                <!-- BDO UNIBANK, INC.<br>NKB MANUFACTURING CORPORATION<br>0080-5801-0547 -->
             </div>
         </div>
 
@@ -1042,7 +1127,28 @@
             if (isVyuceutical) {
                 bankEl.innerHTML = `BDO UNIBANK, INC.<br>Vyuceutical Beauty Products Trading<br>0080-5801-0717`;
             } else {
-                bankEl.innerHTML = `BDO UNIBANK, INC.<br>NKB MANUFACTURING CORPORATION<br>0080-5801-0547`;
+                bankEl.innerHTML = `
+                    <div class="bank-accounts-container">
+                        <div class="bank-account-item">
+                            <div class="bank-title">BDO UNIBANK, INC.</div>
+                            <div class="bank-acc-name">NKB MANUFACTURING CORPORATION</div>
+                            <div class="bank-acc-no">0080-5801-0547</div>
+                            <div class="bank-branch-info">Checking Account</div>
+                        </div>
+                        <div class="bank-account-item">
+                            <div class="bank-title">SECURITY BANK</div>
+                            <div class="bank-acc-name">NKB Manufacturing Corporation</div>
+                            <div class="bank-acc-no">0000079720871</div>
+                            <div class="bank-branch-info">Imus Branch &bull; Tel: (02) 8529-8613</div>
+                        </div>
+                        <div class="bank-account-item">
+                            <div class="bank-title">METROPOLITAN BANK &amp; TRUST CO. (METROBANK)</div>
+                            <div class="bank-acc-name">NKB MANUFACTURING CORPORATION</div>
+                            <div class="bank-acc-no">788-7-78803245-1</div>
+                            <div class="bank-branch-info">Bacoor - Bayanan Bacoor Blvd. &bull; Tel: 4359389</div>
+                        </div>
+                    </div>
+                `;
             }
 
             if (isEditMode) {

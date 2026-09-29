@@ -199,8 +199,8 @@ function runMigrations(dbInstance, isMysql) {
                 const initialBanks = [
                     { id: 'ba-bdo-01', bank_name: 'BDO Unibank', account_number: '1029-3847-4821', account_name: 'NKB Manufacturing & Trading Corp.', account_type: 'Checking (Disbursement)', balance: 1850000.00 },
                     { id: 'ba-bpi-02', bank_name: 'Bank of the Philippine Islands (BPI)', account_number: '0982-3712-9104', account_name: 'NKB Manufacturing Corp.', account_type: 'Checking (Collections)', balance: 1420000.00 },
-                    { id: 'ba-mb-03', bank_name: 'Metropolitan Bank & Trust Co. (Metrobank)', account_number: '4562-8901-3372', account_name: 'NKB Manufacturing Corp.', account_type: 'Checking', balance: 980000.00 },
-                    { id: 'ba-sec-04', bank_name: 'Security Bank', account_number: '3128-4902-1855', account_name: 'NKB Manufacturing & Trading Corp.', account_type: 'Checking', balance: 750000.00 },
+                    { id: 'ba-mb-03', bank_name: 'Metropolitan Bank & Trust Co. (Metrobank - Bacoor)', account_number: '788-7-78803245-1', account_name: 'NKB MANUFACTURING CORPORATION', account_type: 'Checking', balance: 980000.00 },
+                    { id: 'ba-sec-04', bank_name: 'Security Bank (Imus Branch)', account_number: '0000079720871', account_name: 'NKB Manufacturing Corporation', account_type: 'Checking', balance: 750000.00 },
                     { id: 'ba-ub-05', bank_name: 'UnionBank of the Philippines', account_number: '1094-8273-6290', account_name: 'NKB Manufacturing Corp.', account_type: 'Digital / Checking', balance: 520000.00 }
                 ];
                 const insertStmt = dbInstance.prepare(`
@@ -222,8 +222,15 @@ function runMigrations(dbInstance, isMysql) {
                 { id: 'ba-bdo-nkb-cpt', bank_name: 'BDO: NKB Cosmetic Products Trading - 0105-4800-3245', account_number: '0105-4800-3245', account_name: 'NKB Cosmetic Products Trading', account_type: 'Checking', balance: 700000.00 },
                 { id: 'ba-bdo-new-yra', bank_name: 'BDO: New Yra Enterprises - 0036-8801-3196', account_number: '0036-8801-3196', account_name: 'New Yra Enterprises', account_type: 'Checking', balance: 600000.00 },
                 { id: 'ba-bdo-vyu', bank_name: 'BDO: Vyuceutical - 0080-5801-0717', account_number: '0080-5801-0717', account_name: 'Vyuceutical OPC', account_type: 'Checking', balance: 550000.00 },
-                { id: 'ba-sec-nkb-mfg', bank_name: 'Security Bank: NKB Manufacturing Corporation', account_number: '3128-4902-1855', account_name: 'NKB Manufacturing Corporation', account_type: 'Checking', balance: 500000.00 }
+                { id: 'ba-sec-nkb-mfg', bank_name: 'Security Bank: NKB Manufacturing Corporation - 0000079720871', account_number: '0000079720871', account_name: 'NKB Manufacturing Corporation', account_type: 'Checking', balance: 500000.00 },
+                { id: 'ba-mb-nkb-mfg', bank_name: 'Metrobank: NKB Manufacturing Corporation - 788-7-78803245-1', account_number: '788-7-78803245-1', account_name: 'NKB MANUFACTURING CORPORATION', account_type: 'Checking', balance: 750000.00 }
             ];
+
+            // Update legacy placeholder account numbers if present
+            try {
+                dbInstance.prepare("UPDATE bank_accounts SET account_number = '0000079720871', bank_name = 'Security Bank: NKB Manufacturing Corporation - 0000079720871' WHERE account_number = '3128-4902-1855' OR id = 'ba-sec-nkb-mfg'").run();
+                dbInstance.prepare("UPDATE bank_accounts SET account_number = '788-7-78803245-1', bank_name = 'Metrobank: NKB Manufacturing Corporation - 788-7-78803245-1' WHERE account_number = '4562-8901-3372' OR id = 'ba-mb-03'").run();
+            } catch (_) {}
 
             const checkStmt = dbInstance.prepare("SELECT id FROM bank_accounts WHERE account_number = ? OR bank_name = ?");
             const insertStmt = dbInstance.prepare(`

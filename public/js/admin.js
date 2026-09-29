@@ -3162,7 +3162,8 @@ const DEFAULT_PAYABLE_BANKS_LIST = [
     { id: 'ba-bdo-nkb-cpt', name: 'BDO: NKB Cosmetic Products Trading - 0105-4800-3245', bank_name: 'BDO: NKB Cosmetic Products Trading - 0105-4800-3245', account_name: 'NKB Cosmetic Products Trading', account_number: '0105-4800-3245', balance: 700000 },
     { id: 'ba-bdo-new-yra', name: 'BDO: New Yra Enterprises - 0036-8801-3196', bank_name: 'BDO: New Yra Enterprises - 0036-8801-3196', account_name: 'New Yra Enterprises', account_number: '0036-8801-3196', balance: 600000 },
     { id: 'ba-bdo-vyu', name: 'BDO: Vyuceutical - 0080-5801-0717', bank_name: 'BDO: Vyuceutical - 0080-5801-0717', account_name: 'Vyuceutical OPC', account_number: '0080-5801-0717', balance: 550000 },
-    { id: 'ba-sec-nkb-mfg', name: 'Security Bank: NKB Manufacturing Corporation', bank_name: 'Security Bank: NKB Manufacturing Corporation', account_name: 'NKB Manufacturing Corporation', account_number: '3128-4902-1855', balance: 500000 }
+    { id: 'ba-sec-nkb-mfg', name: 'Security Bank: NKB Manufacturing Corporation - 0000079720871', bank_name: 'Security Bank: NKB Manufacturing Corporation - 0000079720871', account_name: 'NKB Manufacturing Corporation', account_number: '0000079720871', balance: 500000 },
+    { id: 'ba-mb-nkb-mfg', name: 'Metrobank: NKB Manufacturing Corporation - 788-7-78803245-1', bank_name: 'Metrobank: NKB Manufacturing Corporation - 788-7-78803245-1', account_name: 'NKB MANUFACTURING CORPORATION', account_number: '788-7-78803245-1', balance: 750000 }
 ];
 
 function checkPayableOverdraft(overrideAmount = null) {

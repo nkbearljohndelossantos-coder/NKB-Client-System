@@ -22,7 +22,8 @@ const DEFAULT_BANKS = [
     { id: 'ba-bdo-nkb-cpt', name: 'BDO: NKB Cosmetic Products Trading - 0105-4800-3245', bank_name: 'BDO', account_name: 'NKB Cosmetic Products Trading', account_number: '0105-4800-3245', company: 'NKB Cosmetic Products Trading' },
     { id: 'ba-bdo-new-yra', name: 'BDO: New Yra Enterprises - 0036-8801-3196', bank_name: 'BDO', account_name: 'New Yra Enterprises', account_number: '0036-8801-3196', company: 'New Yra Enterprises' },
     { id: 'ba-bdo-vyu', name: 'BDO: Vyuceutical - 0080-5801-0717', bank_name: 'BDO', account_name: 'Vyuceutical OPC', account_number: '0080-5801-0717', company: 'Vyuceutical OPC' },
-    { id: 'ba-sec-nkb-mfg', name: 'Security Bank: NKB Manufacturing Corporation', bank_name: 'Security Bank', account_name: 'NKB Manufacturing Corporation', account_number: '3128-4902-1855', company: 'NKB Manufacturing Corporation' }
+    { id: 'ba-sec-nkb-mfg', name: 'Security Bank: NKB Manufacturing Corporation - 0000079720871', bank_name: 'Security Bank', account_name: 'NKB Manufacturing Corporation', account_number: '0000079720871', company: 'NKB Manufacturing Corporation' },
+    { id: 'ba-mb-nkb-mfg', name: 'Metrobank: NKB Manufacturing Corporation - 788-7-78803245-1', bank_name: 'Metrobank', account_name: 'NKB MANUFACTURING CORPORATION', account_number: '788-7-78803245-1', company: 'NKB Manufacturing Corporation' }
 ];
 
 const DEFAULT_COMPANIES = [
