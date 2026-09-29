@@ -179,7 +179,13 @@ function syncFmsFormulasToDb(db, fmsFormulas, source = 'LIVE_API') {
             // 1. Direct formula_code match
             bestProduct = existingProducts.find(p => p.formula_code === f.formula_code);
 
-            // 2. Token / brand scoring match
+            // 2. Direct SKU match for FMS compounding code
+            const expectedSku = 'FMS-' + (f.compounding_code ? f.compounding_code.replace(/[^A-Z0-9]/gi, '') : f.formula_code.slice(-4));
+            if (!bestProduct) {
+                bestProduct = existingProducts.find(p => p.sku === expectedSku) || checkSkuStmt.get(expectedSku);
+            }
+
+            // 3. Token / brand scoring match
             if (!bestProduct) {
                 existingProducts.forEach(p => {
                     const normP = normalizeName(p.name);
@@ -197,13 +203,15 @@ function syncFmsFormulasToDb(db, fmsFormulas, source = 'LIVE_API') {
 
             let productId = bestProduct ? bestProduct.id : null;
 
-            // 3. If still unmatched, auto-provision master product in catalog
+            // 4. If still unmatched, auto-provision master product in catalog
             if (!bestProduct) {
                 productId = uuidv4();
                 const cleanName = f.formula_name.replace(/\s+\d+(\.\d+)?(\s*(G|KG|ML))?$/i, '').trim();
-                let skuCode = 'FMS-' + (f.compounding_code ? f.compounding_code.replace(/[^A-Z0-9]/gi, '') : f.formula_code.slice(-4));
-                if (checkSkuStmt.get(skuCode)) {
-                    skuCode = `${skuCode}-${f.formula_id || (i + 1)}`;
+                let skuCode = expectedSku;
+                let counter = 1;
+                while (checkSkuStmt.get(skuCode)) {
+                    skuCode = `${expectedSku}-${f.formula_id || counter}`;
+                    counter++;
                 }
                 insertProductStmt.run(
                     productId,
@@ -219,8 +227,11 @@ function syncFmsFormulasToDb(db, fmsFormulas, source = 'LIVE_API') {
                 updateProductCodeStmt.run(f.formula_code, productId);
             }
 
-            // Find existing formulation entry
-            let existingForm = db.prepare('SELECT id FROM product_formulations WHERE formula_code = ? OR product_id = ?').get(f.formula_code, productId);
+            // Find existing formulation entry by unique formula_code, or existing unlinked formulation for product
+            let existingForm = db.prepare('SELECT id FROM product_formulations WHERE formula_code = ?').get(f.formula_code);
+            if (!existingForm && productId) {
+                existingForm = db.prepare('SELECT id FROM product_formulations WHERE product_id = ? AND (formula_code IS NULL OR formula_code = ?)').get(productId, f.formula_code);
+            }
             const formId = existingForm ? existingForm.id : uuidv4();
 
             const batchSize = Number(f.batch_size) || 100;

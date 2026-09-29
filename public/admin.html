@@ -197,6 +197,13 @@
                             <span>Developer API</span>
                             <span class="ml-auto text-[8px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-extrabold border border-indigo-500/30">REST v1</span>
                         </button>
+                        <button onclick="switchTab('it-management')" id="tab-btn-it-management" class="sidebar-btn w-full flex items-center justify-between px-3 py-2 rounded-xl text-rose-300 hover:text-white hover:bg-slate-900 transition" title="IT Management & Master Records Editor">
+                            <div class="flex items-center gap-3">
+                                <svg class="w-4 h-4 flex-shrink-0 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                <span class="font-bold">IT Management</span>
+                            </div>
+                            <span class="text-[8px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-extrabold border border-rose-500/30">SUPER ADMIN</span>
+                        </button>
                     </div>
                 </div>
 
@@ -1583,11 +1590,194 @@
                 </div>
             </section>
 
+            <!-- TAB: IT MANAGEMENT & MASTER RECORDS EDITOR -->
+            <section id="view-it-management" class="space-y-6 hidden">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <div class="flex items-center gap-2.5">
+                            <h2 class="text-2xl font-black text-slate-900">IT Management & Master Records Console</h2>
+                            <span class="px-2 py-0.5 rounded bg-rose-100 text-rose-700 text-xs font-bold border border-rose-200">Super Admin / IT Override</span>
+                        </div>
+                        <p class="text-sm text-slate-500 mt-1">Universal administrative console to inspect, modify, and override all transactions, records, and system data.</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="loadITManagement()" class="px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 shadow-sm flex items-center gap-1.5 transition">
+                            <span>🔄 Refresh Data</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- QUICK ACTIONS GRID -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <!-- Quick Action 1: Reassign PO Client -->
+                    <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                        <div class="flex items-center gap-2 text-indigo-700 font-bold text-sm">
+                            <span>⚡ Quick PO / Order Client Reassignment</span>
+                        </div>
+                        <p class="text-xs text-slate-500">Instantly reassign any Purchase Order (e.g. PO-2026-000021) to a target client, with automatic cascading updates to linked Delivery Receipts, Invoices, and Payments.</p>
+                        
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-700 mb-1">Select Purchase Order</label>
+                                <select id="it-quick-po-select" class="w-full text-xs p-2 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500">
+                                    <option value="">Loading Orders...</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-700 mb-1">Target Client (e.g. GEMS)</label>
+                                <select id="it-quick-client-select" class="w-full text-xs p-2 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500">
+                                    <option value="">Loading Clients...</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between pt-1">
+                            <label class="flex items-center gap-2 text-xs text-slate-600 select-none cursor-pointer">
+                                <input type="checkbox" id="it-quick-po-cascade" checked class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                                <span>Cascade to linked DRs, Invoices & Payments</span>
+                            </label>
+                            <button onclick="executeQuickPOReassignment()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 transition flex items-center gap-1.5">
+                                <span>Reassign Client</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Quick Action 2: Override Record Status -->
+                    <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                        <div class="flex items-center gap-2 text-amber-700 font-bold text-sm">
+                            <span>⚡ Quick Status Override</span>
+                        </div>
+                        <p class="text-xs text-slate-500">Unblock or force-override the workflow status of any record (e.g. revive cancelled orders, clear stuck invoices, force approval) with audit logging.</p>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-700 mb-1">Entity / Table</label>
+                                <select id="it-quick-status-table" onchange="onITStatusTableChange()" class="w-full text-xs p-2 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white">
+                                    <option value="purchase_orders">Purchase Orders</option>
+                                    <option value="job_orders">Job Orders</option>
+                                    <option value="production_batches">Batches</option>
+                                    <option value="delivery_receipts">Delivery Receipts</option>
+                                    <option value="sales_invoices">Sales Invoices</option>
+                                    <option value="payments">Payments</option>
+                                    <option value="cheque_payables">Cheque Payables</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-700 mb-1">Target Document ID / No.</label>
+                                <input type="text" id="it-quick-status-id" placeholder="e.g. PO-2026-000021" class="w-full text-xs p-2 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-700 mb-1">New Status</label>
+                                <select id="it-quick-status-val" class="w-full text-xs p-2 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white">
+                                    <!-- Populated dynamically -->
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between pt-1">
+                            <input type="text" id="it-quick-status-reason" placeholder="Reason (e.g. Administrative correction)" class="w-2/3 text-xs p-2 border border-slate-300 rounded-xl bg-slate-50">
+                            <button onclick="executeQuickStatusOverride()" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-600/20 transition flex items-center gap-1.5">
+                                <span>Apply Override</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TABLE SELECTOR PILLS -->
+                <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                    <div class="text-xs font-bold uppercase tracking-wider text-slate-400">Select Database Entity / Records To Edit</div>
+                    <div class="flex flex-wrap gap-2" id="it-table-pills">
+                        <!-- Populated dynamically with TABLE_DEFINITIONS -->
+                    </div>
+                </div>
+
+                <!-- RECORDS DATA TABLE CARD -->
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                        <div class="flex items-center gap-3">
+                            <span class="text-xl" id="it-current-table-icon">📋</span>
+                            <div>
+                                <div class="font-bold text-sm text-slate-900" id="it-current-table-title">Purchase Orders & SOs</div>
+                                <div class="text-xs text-slate-500" id="it-current-table-desc">Click any record to edit its fields directly in the database.</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="relative">
+                                <input type="text" id="it-search-input" oninput="debounceITSearch()" placeholder="Search records, IDs, notes..." class="w-64 text-xs pl-8 pr-3 py-2 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500">
+                                <svg class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                            </div>
+                            <span id="it-records-counter" class="text-xs px-2.5 py-1 bg-slate-100 text-slate-700 font-bold rounded-lg border border-slate-200">0 records</span>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs" id="it-records-table">
+                            <thead class="bg-slate-50 border-y border-slate-200 text-slate-600 font-bold uppercase tracking-wider" id="it-records-thead">
+                                <!-- Dynamic headers -->
+                            </thead>
+                            <tbody id="it-records-tbody" class="divide-y divide-slate-100">
+                                <tr><td colspan="8" class="py-6 text-center text-slate-400">Loading records...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination Controls -->
+                    <div class="flex items-center justify-between pt-3 border-t border-slate-100 text-xs text-slate-500">
+                        <div id="it-pagination-info">Showing page 1 of 1</div>
+                        <div class="flex items-center gap-2">
+                            <button id="it-prev-page-btn" onclick="changeITPage(-1)" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg font-bold disabled:opacity-40">Previous</button>
+                            <button id="it-next-page-btn" onclick="changeITPage(1)" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg font-bold disabled:opacity-40">Next</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
         </main>
     </div>
 
     <!-- MODALS CONTAINER -->
-    <div id="modals-root"></div>
+    <div id="modals-root">
+        <!-- UNIVERSAL IT EDIT RECORD MODAL -->
+        <div id="modal-it-edit-record" class="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+            <div class="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-150">
+                <!-- Modal Header -->
+                <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+                    <div class="flex items-center gap-2.5">
+                        <span class="text-xl" id="it-modal-icon">✏️</span>
+                        <div>
+                            <h3 class="font-bold text-sm text-white" id="it-modal-title">Edit Database Record</h3>
+                            <div class="text-[10px] text-slate-400 font-mono" id="it-modal-subtitle">Table: purchase_orders | ID: ...</div>
+                        </div>
+                    </div>
+                    <button type="button" onclick="closeITEditModal()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+
+                <!-- Modal Form Body -->
+                <form id="form-it-edit-record" onsubmit="submitITRecordEdit(event)" class="flex-1 overflow-y-auto p-6 space-y-4">
+                    <div id="it-modal-fields-container" class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                        <!-- Dynamic fields populated by JavaScript -->
+                    </div>
+                    
+                    <div class="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-[11px] flex items-start gap-2">
+                        <span class="text-sm">⚠️</span>
+                        <span>Modifications made here write directly to the database. All edits are logged in the immutable Audit Trail with before/after state values.</span>
+                    </div>
+                </form>
+
+                <!-- Modal Footer -->
+                <div class="px-6 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+                    <button type="button" onclick="closeITEditModal()" class="px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 transition">
+                        Cancel
+                    </button>
+                    <button type="submit" form="form-it-edit-record" id="it-modal-save-btn" class="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-md shadow-rose-600/20 transition flex items-center gap-1.5">
+                        <span>💾 Save Record Changes</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="/js/xlsx.full.min.js"></script>
     <script src="/js/app.js?v=2.2.8"></script>

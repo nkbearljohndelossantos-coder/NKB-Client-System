@@ -2983,6 +2983,103 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.ok(adminJs.includes('filterBatches'), 'admin.js must implement filterBatches function');
     });
 
+    test('40. IT Management & Master Records Editor: PO Client Reassignment (PO-2026-000021 to GEMS), Universal Table Inspector & Data Override API', async () => {
+        // 1. Verify PO-2026-000021 exists and is assigned to GEMS Incorporated
+        const gemsClient = db.prepare("SELECT * FROM clients WHERE company_name LIKE '%GEMS%' LIMIT 1").get();
+        assert.ok(gemsClient, 'GEMS Incorporated client must exist in the database');
+        assert.strictEqual(gemsClient.id, '885fdb11-8fb8-4f37-8a45-94f9053caf6f');
+
+        const po21 = db.prepare("SELECT * FROM purchase_orders WHERE po_number = 'PO-2026-000021'").get();
+        assert.ok(po21, 'PO-2026-000021 must exist in the database');
+        assert.strictEqual(po21.client_id, gemsClient.id, 'PO-2026-000021 client_id must equal GEMS Incorporated id');
+
+        // 2. Test IT Management metadata endpoint (/api/it-management/tables)
+        const tablesRes = await request(app)
+            .get('/api/it-management/tables')
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(tablesRes.status, 200);
+        assert.strictEqual(tablesRes.body.success, true);
+        const tableKeys = tablesRes.body.data.map(t => t.tableName);
+        assert.ok(tableKeys.includes('purchase_orders'), 'IT Management must include purchase_orders');
+        assert.ok(tableKeys.includes('delivery_receipts'), 'IT Management must include delivery_receipts');
+        assert.ok(tableKeys.includes('clients'), 'IT Management must include clients');
+        assert.ok(tableKeys.includes('products'), 'IT Management must include products');
+
+        // 3. Test IT Management lookups endpoint (/api/it-management/lookups)
+        const lookupsRes = await request(app)
+            .get('/api/it-management/lookups')
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(lookupsRes.status, 200);
+        assert.strictEqual(lookupsRes.body.success, true);
+        assert.ok(lookupsRes.body.data.clients.length > 0);
+        assert.ok(lookupsRes.body.data.statuses.purchase_orders.includes('APPROVED'));
+
+        // 4. Test IT Management records listing with pagination
+        const recordsRes = await request(app)
+            .get('/api/it-management/records/purchase_orders?search=PO-2026-000021')
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(recordsRes.status, 200);
+        assert.strictEqual(recordsRes.body.success, true);
+        assert.ok(recordsRes.body.data.length >= 1);
+        const foundPo = recordsRes.body.data.find(p => p.po_number === 'PO-2026-000021');
+        assert.ok(foundPo, 'PO-2026-000021 must be found in IT Management records');
+        assert.strictEqual(foundPo.client_company_name, 'GEMS Incorporated');
+
+        // 5. Test Quick PO Client Reassignment endpoint
+        const reassignRes = await request(app)
+            .post('/api/it-management/quick-actions/reassign-po-client')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                poNumber: 'PO-2026-000021',
+                newClientId: gemsClient.id,
+                cascade: true
+            });
+        assert.strictEqual(reassignRes.status, 200);
+        assert.strictEqual(reassignRes.body.success, true);
+        assert.strictEqual(reassignRes.body.data.newClientId, gemsClient.id);
+
+        // 6. Test Universal Record Edit API (PUT /api/it-management/records/:table/:id)
+        const updateRes = await request(app)
+            .put(`/api/it-management/records/purchase_orders/${po21.id}`)
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                notes: 'PDRN approved formula: 060226-00-00 [Verified by IT Management]'
+            });
+        assert.strictEqual(updateRes.status, 200);
+        assert.strictEqual(updateRes.body.success, true);
+        assert.ok(updateRes.body.data.notes.includes('[Verified by IT Management]'));
+
+        // 7. Test Quick Status Override endpoint
+        const overrideRes = await request(app)
+            .post('/api/it-management/quick-actions/override-status')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                table: 'purchase_orders',
+                id: po21.id,
+                newStatus: 'APPROVED',
+                reason: 'Workflow state confirmation'
+            });
+        assert.strictEqual(overrideRes.status, 200);
+        assert.strictEqual(overrideRes.body.success, true);
+
+        // 8. Test RBAC protection: non-admins must be rejected with 403
+        const forbiddenRes = await request(app)
+            .get('/api/it-management/records/purchase_orders')
+            .set('Authorization', `Bearer ${clientToken}`);
+        assert.strictEqual(forbiddenRes.status, 403, 'Client role must be blocked from IT Management with 403');
+
+        // 9. Verify UI templates have IT Management tab and modal
+        const adminHtml = fs.readFileSync(path.join(__dirname, '../public/admin.html'), 'utf8');
+        assert.ok(adminHtml.includes('id="tab-btn-it-management"'), 'admin.html must contain tab-btn-it-management');
+        assert.ok(adminHtml.includes('id="view-it-management"'), 'admin.html must contain view-it-management');
+        assert.ok(adminHtml.includes('id="modal-it-edit-record"'), 'admin.html must contain modal-it-edit-record');
+
+        const adminJs = fs.readFileSync(path.join(__dirname, '../public/js/admin.js'), 'utf8');
+        assert.ok(adminJs.includes('loadITManagement'), 'admin.js must implement loadITManagement');
+        assert.ok(adminJs.includes('openITEditModal'), 'admin.js must implement openITEditModal');
+        assert.ok(adminJs.includes('executeQuickPOReassignment'), 'admin.js must implement executeQuickPOReassignment');
+    });
+
     after(() => {
         // Automatically delete all test decoys and temporary test database
         try {

@@ -1,11 +1,73 @@
 {
   "success": true,
-  "count": 58,
+  "count": 59,
   "batch_scaling": {
     "batch_size": 100,
     "uom": "kg"
   },
   "data": [
+    {
+      "formula_id": 78,
+      "formula_code": "FORM-2026-0088",
+      "formula_name": "BACCARAT",
+      "product_category": "Perfume Brand",
+      "active_version": "V1.0",
+      "version_status": "APPROVED",
+      "compounding_code": "CP-0894",
+      "batch_size": 100,
+      "batch_uom": "kg",
+      "total_raw_materials_count": 6,
+      "raw_materials_needed": [
+        {
+          "material_code": "RM-ETHYL-ALC-02",
+          "material_name": "ETHYL ALCOHOL - IND02",
+          "category": "Cosmetic",
+          "required_quantity": 69,
+          "uom": "kg",
+          "supplier": "LOYAL FAMILY"
+        },
+        {
+          "material_code": "RM-PEG40-01",
+          "material_name": "PEG40 - MEDMULS COH 40",
+          "category": "Cosmetic",
+          "required_quantity": 1,
+          "uom": "kg",
+          "supplier": "REDOLENCE"
+        },
+        {
+          "material_code": "PAR-BCT-0001",
+          "material_name": "BACCARAT (SCENT)",
+          "category": "Cosmetic",
+          "required_quantity": 13,
+          "uom": "kg",
+          "supplier": "REDOLENCE"
+        },
+        {
+          "material_code": "RM-PROCOL-HACHI",
+          "material_name": "PROPYLENE GLYCOL (HACHIMORI)",
+          "category": "Cosmetic",
+          "required_quantity": 3,
+          "uom": "kg",
+          "supplier": "HACHIMORI"
+        },
+        {
+          "material_code": "RM-FIXATIVE-01",
+          "material_name": "FIXATIVE (ASTERIA)",
+          "category": "Cosmetic",
+          "required_quantity": 2,
+          "uom": "kg",
+          "supplier": "ASTERIA"
+        },
+        {
+          "material_code": "MAT-WAT-01",
+          "material_name": "DE-IONIZED WATER",
+          "category": "Cosmetic",
+          "required_quantity": 12,
+          "uom": "kg",
+          "supplier": "MAYNILAD"
+        }
+      ]
+    },
     {
       "formula_id": 9,
       "formula_code": "FORM-2026-0019",

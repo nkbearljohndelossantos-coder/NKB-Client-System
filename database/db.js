@@ -1403,6 +1403,68 @@ if (useMysql) {
         console.error('Product auto-provision error:', err.message);
     }
 
+    // Auto-provision client: GEMS Incorporated
+    try {
+        const gemsId = '885fdb11-8fb8-4f37-8a45-94f9053caf6f';
+        const existingGems = db.prepare('SELECT id FROM clients WHERE id = ? OR company_name LIKE ?').get(gemsId, '%GEMS%');
+        if (!existingGems) {
+            db.prepare(`
+                INSERT INTO clients (id, company_name, contact_person, email, phone, address, tin, default_billing_policy, default_tolerance_percent, credit_limit, is_active, created_at, updated_at, is_vyuceutical_ops)
+                VALUES (?, 'GEMS Incorporated', 'Lorgie M. Villaricao', 'lorgie@gems.com', '0917-111-2233', 'Blk 1, Lot 20 & 21, Hilton St., Cefels Park III Subdivision, Brgy. 14', NULL, 'ACTUAL_DELIVERY', 10.0, 500000.0, 1, datetime('now', 'localtime'), datetime('now', 'localtime'), 0)
+            `).run(gemsId);
+            console.log('💎 Auto-provisioned client: GEMS Incorporated');
+        }
+    } catch (err) {
+        console.error('GEMS client auto-provision error:', err.message);
+    }
+
+    // Migration: Ensure PO-2026-000021 is assigned to client GEMS
+    try {
+        const gems = db.prepare("SELECT id FROM clients WHERE company_name LIKE '%GEMS%' LIMIT 1").get();
+        if (gems) {
+            const po21 = db.prepare("SELECT id, client_id FROM purchase_orders WHERE po_number = 'PO-2026-000021'").get();
+            if (po21 && po21.client_id !== gems.id) {
+                db.prepare("UPDATE purchase_orders SET client_id = ?, updated_at = datetime('now', 'localtime') WHERE id = ?").run(gems.id, po21.id);
+                db.prepare("UPDATE delivery_receipts SET client_id = ? WHERE po_id = ?").run(gems.id, po21.id);
+                db.prepare("UPDATE sales_invoices SET client_id = ? WHERE po_id = ?").run(gems.id, po21.id);
+                console.log(`✅ Reassigned PO-2026-000021 to client GEMS (${gems.id})`);
+            } else if (!po21) {
+                // Seed PO-2026-000021 with GEMS for local parity
+                const adminUser = db.prepare("SELECT id FROM users WHERE role IN ('SUPER_ADMIN', 'ADMIN') LIMIT 1").get();
+                const adminId = adminUser ? adminUser.id : 'a0000000-0000-0000-0000-000000000001';
+                const poId = 'b4c06a02-bb9c-4080-bba3-c11da3038c85';
+                db.prepare(`
+                    INSERT OR IGNORE INTO purchase_orders 
+                    (id, po_number, so_number, client_id, po_date, expected_delivery_date, tolerance_percent, billing_policy, status, notes, subtotal, tax_percent, tax_amount, grand_total, created_by, approved_by, approved_at, accounting_confirmed, accounting_confirmed_at, accounting_confirmed_by, form_of_payment, formulation_converted, formulation_converted_at, created_at, updated_at)
+                    VALUES (?, 'PO-2026-000021', 'SO-2026-000021', ?, '2026-09-28', NULL, 10.0, 'ACTUAL_DELIVERY', 'APPROVED', 'PDRN approved formula: 060226-00-00\n*Others- same formula as Bella Skin', 382960.0, 0.0, 0.0, 382960.0, ?, ?, datetime('now', 'localtime'), 1, datetime('now', 'localtime'), ?, 'COD', 1, datetime('now', 'localtime'), datetime('now', 'localtime'), datetime('now', 'localtime'))
+                `).run(poId, gems.id, adminId, adminId, adminId);
+                
+                const itemCheck = db.prepare("SELECT COUNT(*) as count FROM purchase_order_items WHERE po_id = ?").get(poId);
+                if (itemCheck && itemCheck.count === 0) {
+                    const sampleProducts = [
+                        { id: 'f72d4c6e-6825-4bb7-a52f-bfe82dfa4efd', sku: 'GEMS-001', name: 'ALOE NIACINAMIDE', qty: 1000, price: 76.25, sub: 76250 },
+                        { id: '2282d3d8-6ffa-4157-90b2-03e4c896ae36', sku: 'GEMS-002', name: 'PDRM + ROSE EXTRACT', qty: 1000, price: 101.85, sub: 101850 },
+                        { id: '6315665e-f7b9-4d49-92e2-95b82269ac05', sku: 'GEMS-003', name: 'TINTED SUNBLOCK', qty: 1000, price: 103.86, sub: 103860 },
+                        { id: '99cbfb00-6c9c-4096-8c17-e905067ba171', sku: 'GEMS-004', name: 'PEKAS CREAM', qty: 1000, price: 101.00, sub: 101000 }
+                    ];
+                    for (const p of sampleProducts) {
+                        db.prepare(`
+                            INSERT OR IGNORE INTO products (id, sku, name, category, default_price, is_active)
+                            VALUES (?, ?, ?, 'Skincare', ?, 1)
+                        `).run(p.id, p.sku, p.name, p.price);
+                        db.prepare(`
+                            INSERT INTO purchase_order_items (id, po_id, product_id, item_name, target_quantity, min_allowed_quantity, max_allowed_quantity, unit_price, subtotal)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        `).run(uuidv4(), poId, p.id, p.name, p.qty, Math.floor(p.qty * 0.9), Math.ceil(p.qty * 1.1), p.price, p.sub);
+                    }
+                }
+                console.log(`✅ Provisioned PO-2026-000021 with client GEMS (${gems.id}) for local parity`);
+            }
+        }
+    } catch (err) {
+        console.error('PO-2026-000021 GEMS migration error:', err.message);
+    }
+
     // Auto-initialize Document Sequences
     try {
         const year = new Date().getFullYear();

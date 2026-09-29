@@ -172,6 +172,7 @@ function mountApiRoutes() {
     app.use('/api/api-keys', require('./routes/apiKeys'));
     app.use('/api/cheque-payables', require('./routes/chequePayables'));
     app.use('/api/bank-accounts', require('./routes/bankAccounts'));
+    app.use('/api/it-management', require('./routes/itManagement'));
     app.use('/api/v1', require('./routes/v1/apiV1'));
 }
 

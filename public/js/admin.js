@@ -425,6 +425,7 @@ function switchTab(tabId) {
     else if (tabId === 'reports') loadReports();
     else if (tabId === 'audit') loadAuditLogs();
     else if (tabId === 'apikeys') loadApiKeys();
+    else if (tabId === 'it-management') loadITManagement();
 }
 
 // -------------------------------------------------------------
@@ -11351,5 +11352,771 @@ window.openAttachCheckModal = openAttachCheckModal;
 window.submitAttachCheck = submitAttachCheck;
 window.handlePaymentAttachmentSelect = handlePaymentAttachmentSelect;
 window.clearPaymentAttachment = clearPaymentAttachment;
+
+// =============================================================
+// IT MANAGEMENT & MASTER RECORDS EDITOR
+// =============================================================
+let itCurrentTable = 'purchase_orders';
+let itCurrentPage = 1;
+let itLookups = null;
+let itTablesMetadata = [];
+let itDebounceTimer = null;
+let itEditingTable = null;
+let itEditingId = null;
+
+async function loadITManagement(table = null, page = 1) {
+    if (table) itCurrentTable = table;
+    itCurrentPage = page;
+
+    // Load tables metadata if needed
+    if (!itTablesMetadata.length) {
+        try {
+            const res = await NKB.api('/api/it-management/tables');
+            if (res.success && res.data) itTablesMetadata = res.data;
+        } catch (e) {
+            console.error('Failed to load IT tables metadata:', e);
+        }
+    }
+
+    // Load lookups if needed
+    if (!itLookups) {
+        try {
+            const res = await NKB.api('/api/it-management/lookups');
+            if (res.success && res.data) {
+                itLookups = res.data;
+                populateITQuickActionSelects();
+            }
+        } catch (e) {
+            console.error('Failed to load IT lookups:', e);
+        }
+    }
+
+    renderITTablePills();
+    await fetchAndRenderITRecords();
+}
+
+function renderITTablePills() {
+    const pillsContainer = document.getElementById('it-table-pills');
+    if (!pillsContainer || !itTablesMetadata.length) return;
+
+    pillsContainer.innerHTML = itTablesMetadata.map(t => {
+        const isActive = t.tableName === itCurrentTable;
+        const activeCls = isActive
+            ? 'bg-rose-600 text-white font-bold shadow-md shadow-rose-600/30 border-rose-600'
+            : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200';
+        return `
+            <button type="button" onclick="selectITTable('${t.tableName}')" class="px-3 py-1.5 rounded-xl text-xs border transition flex items-center gap-1.5 ${activeCls}">
+                <span>${t.icon || '📄'}</span>
+                <span>${t.label}</span>
+            </button>
+        `;
+    }).join('');
+}
+
+function selectITTable(tableName) {
+    itCurrentTable = tableName;
+    itCurrentPage = 1;
+    const searchInput = document.getElementById('it-search-input');
+    if (searchInput) searchInput.value = '';
+    renderITTablePills();
+    fetchAndRenderITRecords();
+}
+
+function populateITQuickActionSelects() {
+    if (!itLookups) return;
+
+    // Quick PO select
+    const poSelect = document.getElementById('it-quick-po-select');
+    if (poSelect && itLookups.orders) {
+        poSelect.innerHTML = '<option value="">-- Choose a Purchase Order --</option>' +
+            itLookups.orders.map(o => {
+                const isSelected = o.po_number === 'PO-2026-000021' ? 'selected' : '';
+                return `<option value="${o.id}" ${isSelected}>${o.po_number} [${o.status}]</option>`;
+            }).join('');
+    }
+
+    // Quick Client select
+    const clientSelect = document.getElementById('it-quick-client-select');
+    if (clientSelect && itLookups.clients) {
+        clientSelect.innerHTML = '<option value="">-- Choose Target Client --</option>' +
+            itLookups.clients.map(c => {
+                const isGems = c.company_name.toLowerCase().includes('gems') ? 'selected' : '';
+                return `<option value="${c.id}" ${isGems}>${c.company_name} (${c.contact_person || 'No Contact'})</option>`;
+            }).join('');
+    }
+
+    onITStatusTableChange();
+}
+
+function onITStatusTableChange() {
+    const tableSelect = document.getElementById('it-quick-status-table');
+    const valSelect = document.getElementById('it-quick-status-val');
+    if (!tableSelect || !valSelect || !itLookups || !itLookups.statuses) return;
+
+    const tbl = tableSelect.value;
+    const statuses = itLookups.statuses[tbl] || [];
+    valSelect.innerHTML = statuses.map(s => `<option value="${s}">${s}</option>`).join('');
+}
+
+async function fetchAndRenderITRecords() {
+    const searchInput = document.getElementById('it-search-input');
+    const search = searchInput ? searchInput.value.trim() : '';
+
+    const tbody = document.getElementById('it-records-tbody');
+    if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="10" class="py-8 text-center text-slate-400">Loading records...</td></tr>';
+    }
+
+    try {
+        const queryParams = new URLSearchParams({
+            page: itCurrentPage,
+            limit: 50,
+            search
+        });
+
+        const res = await NKB.api(`/api/it-management/records/${itCurrentTable}?${queryParams.toString()}`);
+        if (!res.success) {
+            if (tbody) tbody.innerHTML = `<tr><td colspan="10" class="py-8 text-center text-rose-500 font-bold">${res.error || 'Failed to load records'}</td></tr>`;
+            return;
+        }
+
+        renderITRecordsUI(res);
+    } catch (err) {
+        console.error('Error fetching IT records:', err);
+        if (tbody) tbody.innerHTML = `<tr><td colspan="10" class="py-8 text-center text-rose-500 font-bold">Error loading records: ${err.message}</td></tr>`;
+    }
+}
+
+function renderITRecordsUI(res) {
+    const { table, data, pagination, definition } = res;
+
+    // Update Header Info
+    const iconEl = document.getElementById('it-current-table-icon');
+    const titleEl = document.getElementById('it-current-table-title');
+    const descEl = document.getElementById('it-current-table-desc');
+    const counterEl = document.getElementById('it-records-counter');
+
+    if (iconEl) iconEl.textContent = definition.icon || '📋';
+    if (titleEl) titleEl.textContent = definition.label;
+    if (descEl) descEl.textContent = `Managing ${pagination.total} total records in table '${table}'.`;
+    if (counterEl) counterEl.textContent = `${pagination.total} records`;
+
+    // Render Table Header
+    const thead = document.getElementById('it-records-thead');
+    if (thead) {
+        thead.innerHTML = getITTableHeaderHTML(table);
+    }
+
+    // Render Table Rows
+    const tbody = document.getElementById('it-records-tbody');
+    if (tbody) {
+        if (!data || data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="10" class="py-8 text-center text-slate-400">No records found matching criteria.</td></tr>';
+        } else {
+            tbody.innerHTML = data.map(row => getITTableRowHTML(table, row)).join('');
+        }
+    }
+
+    // Pagination
+    const pageInfo = document.getElementById('it-pagination-info');
+    const prevBtn = document.getElementById('it-prev-page-btn');
+    const nextBtn = document.getElementById('it-next-page-btn');
+
+    if (pageInfo) {
+        pageInfo.textContent = `Showing page ${pagination.page} of ${pagination.pages} (${pagination.total} records)`;
+    }
+    if (prevBtn) prevBtn.disabled = pagination.page <= 1;
+    if (nextBtn) nextBtn.disabled = pagination.page >= pagination.pages;
+}
+
+function getITTableHeaderHTML(table) {
+    const baseHeader = (cols) => `
+        <tr>
+            ${cols.map(c => `<th class="py-3 px-3">${c}</th>`).join('')}
+            <th class="py-3 px-3 text-right">Actions</th>
+        </tr>
+    `;
+
+    switch (table) {
+        case 'purchase_orders':
+            return baseHeader(['PO / SO No.', 'Client Company', 'Date', 'Status', 'Grand Total', 'Form of Payment', 'Notes']);
+        case 'purchase_order_items':
+            return baseHeader(['Item Name', 'PO Number', 'Product', 'Target Qty', 'Delivered Qty', 'Unit Price', 'Subtotal']);
+        case 'job_orders':
+            return baseHeader(['JO Number', 'PO Number', 'Product', 'Target Qty', 'Team', 'Status', 'Start Date']);
+        case 'production_batches':
+            return baseHeader(['Batch No.', 'JO / PO', 'Product', 'Formula', 'Prod Date', 'Yield / Target', 'Status', 'QC Notes']);
+        case 'delivery_receipts':
+            return baseHeader(['DR Number', 'Client Company', 'PO Number', 'Delivery Date', 'Driver & Plate', 'Status']);
+        case 'sales_invoices':
+            return baseHeader(['Invoice No.', 'Client Company', 'PO Number', 'DR Number', 'Total Amount', 'Due Date', 'Status']);
+        case 'payments':
+            return baseHeader(['Payment Ref', 'Invoice No.', 'Client Company', 'Amount', 'Method', 'Date', 'Status']);
+        case 'cheque_payables':
+            return baseHeader(['Voucher No.', 'Payee', 'Company', 'Amount', 'Bank', 'Cheque No.', 'Status']);
+        case 'clients':
+            return baseHeader(['Company Name', 'Contact Person', 'Email', 'Phone', 'Billing Policy', 'Credit Limit', 'Status']);
+        case 'products':
+            return baseHeader(['SKU', 'Product Name', 'Category', 'Unit', 'Price', 'Formula Code', 'Stock', 'Status']);
+        case 'raw_materials':
+            return baseHeader(['Code', 'Material Name', 'Category', 'Current Stock', 'Unit', 'Min Level', 'Cost']);
+        case 'users':
+            return baseHeader(['Name', 'Email', 'Role', 'Linked Client', 'Phone', 'Plain Pwd', 'Status']);
+        default:
+            return baseHeader(['ID', 'Details', 'Created At']);
+    }
+}
+
+function getITTableRowHTML(table, r) {
+    const statusBadge = (s) => {
+        if (!s) return '<span class="text-slate-400">-</span>';
+        let bg = 'bg-slate-100 text-slate-700 border-slate-200';
+        if (s.includes('APPROV') || s.includes('COMPLET') || s.includes('PAID') || s.includes('CLEARED') || s === 'ACTIVE') bg = 'bg-emerald-100 text-emerald-800 border-emerald-200 font-bold';
+        else if (s.includes('PRODUC') || s.includes('DISPATCH') || s.includes('PARTIAL')) bg = 'bg-indigo-100 text-indigo-800 border-indigo-200 font-bold';
+        else if (s.includes('PENDING') || s.includes('DRAFT')) bg = 'bg-amber-100 text-amber-800 border-amber-200 font-bold';
+        else if (s.includes('CANCEL') || s.includes('VOID') || s.includes('REJECT')) bg = 'bg-rose-100 text-rose-800 border-rose-200 font-bold';
+        return `<span class="px-2 py-0.5 rounded text-[10px] border ${bg}">${s}</span>`;
+    };
+
+    const actionButtons = `
+        <td class="py-2.5 px-3 text-right whitespace-nowrap">
+            <button type="button" onclick="openITEditModal('${table}', '${r.id}')" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-lg border border-indigo-200 transition text-[11px] shadow-sm">
+                ✏️ Edit
+            </button>
+            <button type="button" onclick="deleteITRecord('${table}', '${r.id}')" class="px-2 py-1 ml-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-lg border border-rose-200 transition text-[11px] shadow-sm" title="Delete Record">
+                🗑️
+            </button>
+        </td>
+    `;
+
+    switch (table) {
+        case 'purchase_orders':
+            return `
+                <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+                    <td class="py-2.5 px-3 font-mono font-bold text-indigo-700">${r.po_number}${r.so_number ? `<br><span class="text-[10px] text-slate-400">${r.so_number}</span>` : ''}</td>
+                    <td class="py-2.5 px-3 font-semibold text-slate-800">${r.client_company_name || r.client_id}</td>
+                    <td class="py-2.5 px-3 whitespace-nowrap text-slate-600">${r.po_date || '-'}</td>
+                    <td class="py-2.5 px-3 whitespace-nowrap">${statusBadge(r.status)}</td>
+                    <td class="py-2.5 px-3 font-mono font-bold text-slate-900">${NKB.formatCurrency(r.grand_total)}</td>
+                    <td class="py-2.5 px-3 text-slate-600">${r.form_of_payment || 'COD'}</td>
+                    <td class="py-2.5 px-3 text-slate-500 max-w-xs truncate" title="${r.notes || ''}">${r.notes || '-'}</td>
+                    ${actionButtons}
+                </tr>
+            `;
+        case 'purchase_order_items':
+            return `
+                <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+                    <td class="py-2.5 px-3 font-bold text-slate-800">${r.item_name || r.product_name || '-'}</td>
+                    <td class="py-2.5 px-3 font-mono text-indigo-600 font-bold">${r.po_number || r.po_id}</td>
+                    <td class="py-2.5 px-3 text-slate-600">${r.product_name || '-'}</td>
+                    <td class="py-2.5 px-3 font-mono font-bold text-slate-900">${NKB.formatNumber(r.target_quantity)}</td>
+                    <td class="py-2.5 px-3 font-mono text-slate-700">${NKB.formatNumber(r.delivered_quantity || 0)}</td>
+                    <td class="py-2.5 px-3 font-mono text-slate-900">${NKB.formatCurrency(r.unit_price)}</td>
+                    <td class="py-2.5 px-3 font-mono font-bold text-emerald-700">${NKB.formatCurrency(r.subtotal)}</td>
+                    ${actionButtons}
+                </tr>
+            `;
+        case 'job_orders':
+            return `
+                <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+                    <td class="py-2.5 px-3 font-mono font-bold text-indigo-700">${r.jo_number}</td>
+                    <td class="py-2.5 px-3 font-mono text-slate-600">${r.po_number || r.po_id}</td>
+                    <td class="py-2.5 px-3 text-slate-800">${r.product_name || r.product_id}</td>
+                    <td class="py-2.5 px-3 font-mono font-bold">${NKB.formatNumber(r.target_quantity)}</td>
+                    <td class="py-2.5 px-3 text-slate-600">${r.assigned_team || '-'}</td>
+                    <td class="py-2.5 px-3 whitespace-nowrap">${statusBadge(r.status)}</td>
+                    <td class="py-2.5 px-3 whitespace-nowrap text-slate-600">${r.scheduled_start_date || '-'}</td>
+                    ${actionButtons}
+                </tr>
+            `;
+        case 'production_batches':
+            return `
+                <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+                    <td class="py-2.5 px-3 font-mono font-bold text-indigo-700">${r.batch_number}</td>
+                    <td class="py-2.5 px-3 font-mono text-slate-600">${r.jo_number || r.jo_id}</td>
+                    <td class="py-2.5 px-3 text-slate-800 font-semibold">${r.product_name || r.product_id}</td>
+                    <td class="py-2.5 px-3 font-mono text-slate-500">${r.formula_code || '-'}</td>
+                    <td class="py-2.5 px-3 whitespace-nowrap text-slate-600">${r.production_date || '-'}</td>
+                    <td class="py-2.5 px-3 font-mono font-bold text-slate-900">${NKB.formatNumber(r.actual_yield || 0)} / ${NKB.formatNumber(r.target_quantity)}</td>
+                    <td class="py-2.5 px-3 whitespace-nowrap">${statusBadge(r.status)}</td>
+                    <td class="py-2.5 px-3 text-slate-500 max-w-xs truncate" title="${r.qc_notes || ''}">${r.qc_notes || '-'}</td>
+                    ${actionButtons}
+                </tr>
+            `;
+        case 'delivery_receipts':
+            return `
+                <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+                    <td class="py-2.5 px-3 font-mono font-bold text-indigo-700">${r.dr_number}</td>
+                    <td class="py-2.5 px-3 font-semibold text-slate-800">${r.client_company_name || r.client_id}</td>
+                    <td class="py-2.5 px-3 font-mono text-slate-600">${r.po_number || r.po_id}</td>
+                    <td class="py-2.5 px-3 whitespace-nowrap text-slate-600">${r.delivery_date || '-'}</td>
+                    <td class="py-2.5 px-3 text-slate-700">${r.driver_name || '-'} [${r.vehicle_plate || '-'}]</td>
+                    <td class="py-2.5 px-3 whitespace-nowrap">${statusBadge(r.status)}</td>
+                    ${actionButtons}
+                </tr>
+            `;
+        case 'sales_invoices':
+            return `
+                <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+                    <td class="py-2.5 px-3 font-mono font-bold text-indigo-700">${r.invoice_number}</td>
+                    <td class="py-2.5 px-3 font-semibold text-slate-800">${r.client_company_name || r.client_id}</td>
+                    <td class="py-2.5 px-3 font-mono text-slate-600">${r.po_number || r.po_id}</td>
+                    <td class="py-2.5 px-3 font-mono text-slate-600">${r.dr_number || r.dr_id || '-'}</td>
+                    <td class="py-2.5 px-3 font-mono font-bold text-slate-900">${NKB.formatCurrency(r.total_amount)}</td>
+                    <td class="py-2.5 px-3 whitespace-nowrap text-slate-600">${r.due_date || '-'}</td>
+                    <td class="py-2.5 px-3 whitespace-nowrap">${statusBadge(r.status)}</td>
+                    ${actionButtons}
+                </tr>
+            `;
+        case 'payments':
+            return `
+                <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+                    <td class="py-2.5 px-3 font-mono font-bold text-indigo-700">${r.payment_reference || r.id}</td>
+                    <td class="py-2.5 px-3 font-mono text-slate-600">${r.invoice_number || r.invoice_id}</td>
+                    <td class="py-2.5 px-3 font-semibold text-slate-800">${r.client_company_name || r.client_id}</td>
+                    <td class="py-2.5 px-3 font-mono font-bold text-emerald-700">${NKB.formatCurrency(r.amount)}</td>
+                    <td class="py-2.5 px-3 text-slate-700">${r.payment_method || '-'}</td>
+                    <td class="py-2.5 px-3 whitespace-nowrap text-slate-600">${r.payment_date || '-'}</td>
+                    <td class="py-2.5 px-3 whitespace-nowrap">${statusBadge(r.status)}</td>
+                    ${actionButtons}
+                </tr>
+            `;
+        case 'cheque_payables':
+            return `
+                <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+                    <td class="py-2.5 px-3 font-mono font-bold text-amber-700">${r.voucher_number || '-'}</td>
+                    <td class="py-2.5 px-3 font-semibold text-slate-800">${r.payee_name || '-'}</td>
+                    <td class="py-2.5 px-3 text-slate-600">${r.company || '-'}</td>
+                    <td class="py-2.5 px-3 font-mono font-bold text-slate-900">${NKB.formatCurrency(r.amount)}</td>
+                    <td class="py-2.5 px-3 text-slate-700">${r.bank_name || '-'}</td>
+                    <td class="py-2.5 px-3 font-mono text-slate-600">${r.cheque_number || '-'}</td>
+                    <td class="py-2.5 px-3 whitespace-nowrap">${statusBadge(r.status)}</td>
+                    ${actionButtons}
+                </tr>
+            `;
+        case 'clients':
+            return `
+                <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+                    <td class="py-2.5 px-3 font-bold text-slate-900">${r.company_name}</td>
+                    <td class="py-2.5 px-3 text-slate-700">${r.contact_person || '-'}</td>
+                    <td class="py-2.5 px-3 font-mono text-indigo-600">${r.email || '-'}</td>
+                    <td class="py-2.5 px-3 text-slate-600">${r.phone || '-'}</td>
+                    <td class="py-2.5 px-3 text-slate-600">${r.default_billing_policy || '-'}</td>
+                    <td class="py-2.5 px-3 font-mono font-bold text-slate-900">${NKB.formatCurrency(r.credit_limit)}</td>
+                    <td class="py-2.5 px-3 whitespace-nowrap">${statusBadge(r.is_active ? 'ACTIVE' : 'INACTIVE')}</td>
+                    ${actionButtons}
+                </tr>
+            `;
+        case 'products':
+            return `
+                <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+                    <td class="py-2.5 px-3 font-mono font-bold text-indigo-700">${r.sku}</td>
+                    <td class="py-2.5 px-3 font-bold text-slate-800">${r.name}</td>
+                    <td class="py-2.5 px-3 text-slate-600">${r.category || '-'}</td>
+                    <td class="py-2.5 px-3 text-slate-600">${r.unit || 'pcs'}</td>
+                    <td class="py-2.5 px-3 font-mono font-bold text-slate-900">${NKB.formatCurrency(r.default_price)}</td>
+                    <td class="py-2.5 px-3 font-mono text-slate-500">${r.formula_code || '-'}</td>
+                    <td class="py-2.5 px-3 font-mono text-slate-800">${NKB.formatNumber(r.current_stock || 0)}</td>
+                    <td class="py-2.5 px-3 whitespace-nowrap">${statusBadge(r.is_active ? 'ACTIVE' : 'INACTIVE')}</td>
+                    ${actionButtons}
+                </tr>
+            `;
+        case 'raw_materials':
+            return `
+                <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+                    <td class="py-2.5 px-3 font-mono font-bold text-emerald-700">${r.material_code || '-'}</td>
+                    <td class="py-2.5 px-3 font-bold text-slate-800">${r.material_name}</td>
+                    <td class="py-2.5 px-3 text-slate-600">${r.category || '-'}</td>
+                    <td class="py-2.5 px-3 font-mono font-bold text-slate-900">${NKB.formatNumber(r.current_stock || 0)}</td>
+                    <td class="py-2.5 px-3 text-slate-600">${r.unit || 'KG'}</td>
+                    <td class="py-2.5 px-3 font-mono text-slate-600">${NKB.formatNumber(r.minimum_stock_level || 0)}</td>
+                    <td class="py-2.5 px-3 font-mono font-bold text-slate-800">${NKB.formatCurrency(r.unit_cost || 0)}</td>
+                    ${actionButtons}
+                </tr>
+            `;
+        case 'users':
+            return `
+                <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+                    <td class="py-2.5 px-3 font-bold text-slate-900">${r.name}</td>
+                    <td class="py-2.5 px-3 font-mono text-indigo-600">${r.email}</td>
+                    <td class="py-2.5 px-3 font-bold text-rose-700">${r.role}</td>
+                    <td class="py-2.5 px-3 text-slate-600">${r.client_company_name || '-'}</td>
+                    <td class="py-2.5 px-3 text-slate-600">${r.phone || '-'}</td>
+                    <td class="py-2.5 px-3 font-mono text-slate-500">${r.plain_password || '********'}</td>
+                    <td class="py-2.5 px-3 whitespace-nowrap">${statusBadge(r.is_active ? 'ACTIVE' : 'INACTIVE')}</td>
+                    ${actionButtons}
+                </tr>
+            `;
+        default:
+            return `
+                <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+                    <td class="py-2.5 px-3 font-mono text-slate-600">${r.id}</td>
+                    <td class="py-2.5 px-3 text-slate-800">${JSON.stringify(r).slice(0, 80)}...</td>
+                    <td class="py-2.5 px-3 text-slate-500">${r.created_at || '-'}</td>
+                    ${actionButtons}
+                </tr>
+            `;
+    }
+}
+
+function debounceITSearch() {
+    clearTimeout(itDebounceTimer);
+    itDebounceTimer = setTimeout(() => {
+        itCurrentPage = 1;
+        fetchAndRenderITRecords();
+    }, 300);
+}
+
+function changeITPage(delta) {
+    itCurrentPage = Math.max(1, itCurrentPage + delta);
+    fetchAndRenderITRecords();
+}
+
+// Open Universal Edit Modal
+async function openITEditModal(table, id) {
+    itEditingTable = table;
+    itEditingId = id;
+
+    const modal = document.getElementById('modal-it-edit-record');
+    const container = document.getElementById('it-modal-fields-container');
+    const titleEl = document.getElementById('it-modal-title');
+    const subtitleEl = document.getElementById('it-modal-subtitle');
+    const iconEl = document.getElementById('it-modal-icon');
+
+    if (!modal || !container) return;
+
+    container.innerHTML = '<div class="col-span-2 py-8 text-center text-slate-400">Loading record details...</div>';
+    modal.classList.remove('hidden');
+
+    try {
+        const res = await NKB.api(`/api/it-management/records/${table}/${id}`);
+        if (!res.success || !res.data) {
+            alert('Failed to load record details: ' + (res.error || 'Not found'));
+            closeITEditModal();
+            return;
+        }
+
+        const record = res.data;
+        const def = res.definition;
+
+        if (titleEl) titleEl.textContent = `Edit ${def.label} Record`;
+        if (subtitleEl) subtitleEl.textContent = `Table: ${table} | ID: ${id}`;
+        if (iconEl) iconEl.textContent = def.icon || '✏️';
+
+        container.innerHTML = def.editableColumns.map(col => {
+            return generateITFieldInputHTML(col, record[col], table);
+        }).join('');
+
+    } catch (err) {
+        console.error('Error opening IT edit modal:', err);
+        alert('Error: ' + err.message);
+        closeITEditModal();
+    }
+}
+
+function generateITFieldInputHTML(col, val, table) {
+    const safeVal = (val === null || val === undefined) ? '' : val;
+    const label = col.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+    // 1. Client dropdown
+    if (col === 'client_id' && itLookups && itLookups.clients) {
+        return `
+            <div>
+                <label class="block text-[11px] font-bold text-slate-700 mb-1">${label}</label>
+                <select name="${col}" class="w-full text-xs p-2 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-rose-500 font-semibold text-slate-800">
+                    <option value="">-- No Client Linked --</option>
+                    ${itLookups.clients.map(c => `
+                        <option value="${c.id}" ${c.id === safeVal ? 'selected' : ''}>
+                            ${c.company_name} (${c.contact_person || 'No Contact'})
+                        </option>
+                    `).join('')}
+                </select>
+            </div>
+        `;
+    }
+
+    // 2. Product dropdown
+    if (col === 'product_id' && itLookups && itLookups.products) {
+        return `
+            <div>
+                <label class="block text-[11px] font-bold text-slate-700 mb-1">${label}</label>
+                <select name="${col}" class="w-full text-xs p-2 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-rose-500 font-semibold text-slate-800">
+                    <option value="">-- Select Product --</option>
+                    ${itLookups.products.map(p => `
+                        <option value="${p.id}" ${p.id === safeVal ? 'selected' : ''}>
+                            ${p.name} [${p.sku}]
+                        </option>
+                    `).join('')}
+                </select>
+            </div>
+        `;
+    }
+
+    // 3. Purchase Order dropdown
+    if (col === 'po_id' && itLookups && itLookups.orders) {
+        return `
+            <div>
+                <label class="block text-[11px] font-bold text-slate-700 mb-1">${label}</label>
+                <select name="${col}" class="w-full text-xs p-2 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-rose-500 font-mono text-slate-800">
+                    <option value="">-- Select Order --</option>
+                    ${itLookups.orders.map(o => `
+                        <option value="${o.id}" ${o.id === safeVal ? 'selected' : ''}>
+                            ${o.po_number} [${o.status}]
+                        </option>
+                    `).join('')}
+                </select>
+            </div>
+        `;
+    }
+
+    // 4. Status dropdown
+    if (col === 'status' && itLookups && itLookups.statuses && itLookups.statuses[table]) {
+        return `
+            <div>
+                <label class="block text-[11px] font-bold text-slate-700 mb-1">${label}</label>
+                <select name="${col}" class="w-full text-xs p-2 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-rose-500 font-bold text-indigo-700">
+                    ${itLookups.statuses[table].map(s => `
+                        <option value="${s}" ${s === safeVal ? 'selected' : ''}>${s}</option>
+                    `).join('')}
+                </select>
+            </div>
+        `;
+    }
+
+    // 5. User role dropdown
+    if (col === 'role' && itLookups && itLookups.statuses && itLookups.statuses.users) {
+        return `
+            <div>
+                <label class="block text-[11px] font-bold text-slate-700 mb-1">${label}</label>
+                <select name="${col}" class="w-full text-xs p-2 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-rose-500 font-bold text-rose-700">
+                    ${itLookups.statuses.users.map(r => `
+                        <option value="${r}" ${r === safeVal ? 'selected' : ''}>${r}</option>
+                    `).join('')}
+                </select>
+            </div>
+        `;
+    }
+
+    // 6. Boolean flags (1 / 0)
+    if (['accounting_confirmed', 'inventory_confirmed', 'formulation_converted', 'is_active', 'is_vyuceutical_ops'].includes(col)) {
+        return `
+            <div>
+                <label class="block text-[11px] font-bold text-slate-700 mb-1">${label}</label>
+                <select name="${col}" class="w-full text-xs p-2 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-rose-500">
+                    <option value="1" ${safeVal == 1 ? 'selected' : ''}>Yes (Active / Confirmed)</option>
+                    <option value="0" ${safeVal == 0 ? 'selected' : ''}>No (Inactive / Unconfirmed)</option>
+                </select>
+            </div>
+        `;
+    }
+
+    // 7. Date inputs
+    if (col.includes('date')) {
+        return `
+            <div>
+                <label class="block text-[11px] font-bold text-slate-700 mb-1">${label}</label>
+                <input type="date" name="${col}" value="${safeVal}" class="w-full text-xs p-2 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-rose-500">
+            </div>
+        `;
+    }
+
+    // 8. Textareas (Notes, description, address, qc_notes)
+    if (['notes', 'description', 'qc_notes', 'address'].includes(col)) {
+        return `
+            <div class="col-span-1 sm:col-span-2">
+                <label class="block text-[11px] font-bold text-slate-700 mb-1">${label}</label>
+                <textarea name="${col}" rows="3" class="w-full text-xs p-2 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-rose-500 font-sans">${safeVal}</textarea>
+            </div>
+        `;
+    }
+
+    // 9. Numeric inputs
+    if (['subtotal', 'grand_total', 'total_amount', 'amount', 'tax_amount', 'unit_price', 'default_price', 'credit_limit', 'target_quantity', 'actual_yield', 'variance_quantity', 'delivered_quantity', 'accepted_quantity', 'rejected_quantity', 'tolerance_percent', 'tax_percent', 'variance_percent', 'current_stock', 'minimum_stock_level', 'unit_cost', 'auto_lock_minutes'].includes(col)) {
+        return `
+            <div>
+                <label class="block text-[11px] font-bold text-slate-700 mb-1">${label}</label>
+                <input type="number" step="any" name="${col}" value="${safeVal}" class="w-full text-xs p-2 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-rose-500 font-mono">
+            </div>
+        `;
+    }
+
+    // Default: text input
+    return `
+        <div>
+            <label class="block text-[11px] font-bold text-slate-700 mb-1">${label}</label>
+            <input type="text" name="${col}" value="${safeVal}" class="w-full text-xs p-2 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-rose-500">
+        </div>
+    `;
+}
+
+function closeITEditModal() {
+    const modal = document.getElementById('modal-it-edit-record');
+    if (modal) modal.classList.add('hidden');
+    itEditingTable = null;
+    itEditingId = null;
+}
+
+async function submitITRecordEdit(event) {
+    if (event) event.preventDefault();
+    if (!itEditingTable || !itEditingId) return;
+
+    const form = document.getElementById('form-it-edit-record');
+    if (!form) return;
+
+    const formData = new FormData(form);
+    const payload = {};
+    for (const [key, value] of formData.entries()) {
+        payload[key] = value.trim();
+    }
+
+    const saveBtn = document.getElementById('it-modal-save-btn');
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<span>⏳ Saving Changes...</span>';
+    }
+
+    try {
+        const res = await NKB.api(`/api/it-management/records/${itEditingTable}/${itEditingId}`, {
+            method: 'PUT',
+            body: payload
+        });
+
+        if (!res.success) {
+            alert('Failed to save record changes: ' + (res.error || 'Server error'));
+            return;
+        }
+
+        NKB.toast('✅ Record updated successfully in database!');
+        closeITEditModal();
+        await fetchAndRenderITRecords();
+    } catch (err) {
+        console.error('Error saving IT record:', err);
+        alert('Error: ' + err.message);
+    } finally {
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<span>💾 Save Record Changes</span>';
+        }
+    }
+}
+
+async function executeQuickPOReassignment() {
+    const poSelect = document.getElementById('it-quick-po-select');
+    const clientSelect = document.getElementById('it-quick-client-select');
+    const cascadeCheckbox = document.getElementById('it-quick-po-cascade');
+
+    const poId = poSelect ? poSelect.value : null;
+    const newClientId = clientSelect ? clientSelect.value : null;
+    const cascade = cascadeCheckbox ? cascadeCheckbox.checked : true;
+
+    if (!poId) {
+        alert('Please select a Purchase Order to reassign.');
+        return;
+    }
+    if (!newClientId) {
+        alert('Please select a target client.');
+        return;
+    }
+
+    if (!confirm('Are you sure you want to reassign this Purchase Order and its related transactions to the selected client?')) {
+        return;
+    }
+
+    try {
+        const res = await NKB.api('/api/it-management/quick-actions/reassign-po-client', {
+            method: 'POST',
+            body: { poId, newClientId, cascade }
+        });
+
+        if (!res.success) {
+            alert('Failed to reassign client: ' + (res.error || 'Unknown error'));
+            return;
+        }
+
+        NKB.toast(`✅ ${res.message || 'Purchase Order client reassigned successfully!'}`);
+        await loadITManagement('purchase_orders');
+    } catch (err) {
+        console.error('Error reassigning PO client:', err);
+        alert('Error: ' + err.message);
+    }
+}
+
+async function executeQuickStatusOverride() {
+    const tableSelect = document.getElementById('it-quick-status-table');
+    const idInput = document.getElementById('it-quick-status-id');
+    const valSelect = document.getElementById('it-quick-status-val');
+    const reasonInput = document.getElementById('it-quick-status-reason');
+
+    const table = tableSelect ? tableSelect.value : null;
+    const docId = idInput ? idInput.value.trim() : null;
+    const newStatus = valSelect ? valSelect.value : null;
+    const reason = reasonInput ? reasonInput.value.trim() : null;
+
+    if (!table || !docId || !newStatus) {
+        alert('Please provide table, document ID / number, and new status.');
+        return;
+    }
+
+    if (!confirm(`Are you sure you want to override status of ${docId} to ${newStatus}?`)) {
+        return;
+    }
+
+    try {
+        const res = await NKB.api('/api/it-management/quick-actions/override-status', {
+            method: 'POST',
+            body: { table, id: docId, newStatus, reason }
+        });
+
+        if (!res.success) {
+            alert('Status override failed: ' + (res.error || 'Server error'));
+            return;
+        }
+
+        NKB.toast(`⚡ Status updated to ${newStatus}!`);
+        if (idInput) idInput.value = '';
+        if (reasonInput) reasonInput.value = '';
+        await fetchAndRenderITRecords();
+    } catch (err) {
+        console.error('Error overriding status:', err);
+        alert('Error: ' + err.message);
+    }
+}
+
+async function deleteITRecord(table, id) {
+    if (!confirm(`Are you sure you want to permanently delete record ${id} from table '${table}'? This action cannot be undone.`)) {
+        return;
+    }
+
+    try {
+        const res = await NKB.api(`/api/it-management/records/${table}/${id}`, {
+            method: 'DELETE'
+        });
+
+        if (!res.success) {
+            alert('Failed to delete record: ' + (res.error || 'Foreign key conflict or server error'));
+            return;
+        }
+
+        NKB.toast('🗑️ Record deleted successfully.');
+        await fetchAndRenderITRecords();
+    } catch (err) {
+        console.error('Error deleting IT record:', err);
+        alert('Error: ' + err.message);
+    }
+}
+
+// Global exports for inline HTML event handlers
+window.loadITManagement = loadITManagement;
+window.selectITTable = selectITTable;
+window.debounceITSearch = debounceITSearch;
+window.changeITPage = changeITPage;
+window.openITEditModal = openITEditModal;
+window.closeITEditModal = closeITEditModal;
+window.submitITRecordEdit = submitITRecordEdit;
+window.executeQuickPOReassignment = executeQuickPOReassignment;
+window.executeQuickStatusOverride = executeQuickStatusOverride;
+window.onITStatusTableChange = onITStatusTableChange;
+window.deleteITRecord = deleteITRecord;
+
 
 
