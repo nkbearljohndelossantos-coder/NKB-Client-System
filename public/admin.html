@@ -1864,11 +1864,11 @@
                     </div>
                 </div>
 
-                <!-- Exclusive Inventory Officer Keyboard Shortcut Bar -->
-                <div id="rm-inventory-shortcuts-bar" class="hidden rounded-2xl p-4 shadow-md border border-slate-800" style="background: linear-gradient(135deg, #0f172a 0%, #134e4a 50%, #0f172a 100%); color: #ffffff;">
+                <!-- Exclusive Inventory Officer Keyboard Shortcut Bar (Pinned / Sticky on Scroll) -->
+                <div id="rm-inventory-shortcuts-bar" class="hidden rounded-2xl p-4 shadow-lg border border-slate-800" style="position: sticky; top: 8px; z-index: 30; background: linear-gradient(135deg, #0f172a 0%, #134e4a 50%, #0f172a 100%); color: #ffffff; box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.35);">
                     <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
                         <div class="flex items-center gap-3 flex-wrap">
-                            <span class="px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider" style="background-color: rgba(20, 184, 166, 0.22); border: 1px solid rgba(45, 212, 191, 0.5); color: #5eead4;">⚡ Inventory Exclusive Shortcuts</span>
+                            <span class="px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider" style="background-color: rgba(20, 184, 166, 0.22); border: 1px solid rgba(45, 212, 191, 0.5); color: #5eead4;">📌 Pinned · Inventory Exclusive Shortcuts</span>
                             <div class="text-xs" style="color: #e2e8f0;">
                                 Selected Material: <span id="rm-selected-material-label" class="font-black" style="color: #fde047;">Use ↑ / ↓ arrows or click a row</span>
                             </div>
@@ -1965,6 +1965,10 @@
                                 <span class="rounded-full inline-block" style="width: 10px; height: 10px; background-color: #e11d48;"></span>
                                 <span>Red</span>
                             </button>
+                            <span id="rm-active-supplier-chip" class="hidden items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold cursor-pointer transition" style="background-color: #e0f2fe; color: #0369a1; border: 1px solid #7dd3fc;" onclick="filterRawMaterialsBySupplier('')" title="Click to clear supplier filter">
+                                <span id="rm-active-supplier-chip-text">🏭 Supplier</span>
+                                <span class="font-black">✕</span>
+                            </span>
                         </div>
 
                         <div class="flex flex-wrap items-center gap-2">
@@ -1980,6 +1984,10 @@
                                     <option value="STOCK_HIGH">📈 Highest Stock First</option>
                                 </select>
                             </div>
+
+                            <select id="rm-filter-supplier" onchange="filterRawMaterialsBySupplier(this.value)" class="text-xs px-3 py-2 border border-slate-300 rounded-xl bg-slate-50 font-semibold text-slate-700">
+                                <option value="">All Suppliers</option>
+                            </select>
 
                             <select id="rm-filter-category" onchange="loadRawMaterials()" class="text-xs px-3 py-2 border border-slate-300 rounded-xl bg-slate-50 font-semibold text-slate-700">
                                 <option value="">All Categories</option>
@@ -2003,7 +2011,7 @@
                                     <th class="py-3 px-2 text-center w-10" title="Color-Coded Stock Level">Color</th>
                                     <th class="py-3 px-3">Material Code</th>
                                     <th class="py-3 px-3">Material Name, Tag & Category</th>
-                                    <th class="py-3 px-3">Supplier & Lot #</th>
+                                    <th class="py-3 px-3">Supplier (Click to Filter) & Lot #</th>
                                     <th class="py-3 px-3">Warehouse Location</th>
                                     <th class="py-3 px-3 text-right">Current Stock</th>
                                     <th class="py-3 px-3 text-right">Min. Level</th>
@@ -2066,8 +2074,8 @@
     </div>
 
     <script src="/js/xlsx.full.min.js"></script>
-    <script src="/js/app.js?v=2.3.1"></script>
-    <script src="/js/admin.js?v=2.3.1"></script>
-    <script src="/js/agent-widgets.js?v=2.3.1"></script>
+    <script src="/js/app.js?v=2.3.2"></script>
+    <script src="/js/admin.js?v=2.3.2"></script>
+    <script src="/js/agent-widgets.js?v=2.3.2"></script>
 </body>
 </html>

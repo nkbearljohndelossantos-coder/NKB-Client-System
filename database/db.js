@@ -1194,6 +1194,7 @@ function runMigrations(dbInstance, isMysql) {
             }
 
             try { dbInstance.exec(`ALTER TABLE raw_materials_inventory ADD COLUMN is_fast_moving ${intType} DEFAULT 0;`); } catch (_) {}
+            try { dbInstance.exec(`ALTER TABLE raw_materials_inventory ADD COLUMN issuance_count ${intType} DEFAULT 0;`); } catch (_) {}
 
             // Seed initial warehouse raw materials if table is empty
             const rmCount = dbInstance.prepare('SELECT COUNT(*) as count FROM raw_materials_inventory').get()?.count || 0;

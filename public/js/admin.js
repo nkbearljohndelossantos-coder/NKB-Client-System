@@ -12748,6 +12748,7 @@ window.clearSOReminder = clearSOReminder;
 // =============================================================
 let cachedRawMaterials = [];
 let currentRawMaterialStatusFilter = '';
+let currentRawMaterialSupplierFilter = '';
 let selectedRawMaterialId = null;
 let selectedRawMaterialIndex = 0;
 
@@ -12778,19 +12779,38 @@ function updateSelectedRawMaterialBanner() {
     label.textContent = `[${rm.material_code}] ${rm.material_name} — ${NKB.formatNumber(rm.current_stock)} ${rm.unit}${fastTag}`;
 }
 
+function filterRawMaterialsBySupplier(supplierName) {
+    currentRawMaterialSupplierFilter = supplierName ? String(supplierName).trim() : '';
+    const supSelect = document.getElementById('rm-filter-supplier');
+    if (supSelect) {
+        if (currentRawMaterialSupplierFilter && !Array.from(supSelect.options).some(o => o.value === currentRawMaterialSupplierFilter)) {
+            const opt = document.createElement('option');
+            opt.value = currentRawMaterialSupplierFilter;
+            opt.textContent = currentRawMaterialSupplierFilter;
+            supSelect.appendChild(opt);
+        }
+        supSelect.value = currentRawMaterialSupplierFilter;
+    }
+    loadRawMaterials();
+}
+
 async function loadRawMaterials() {
     try {
         updateInventoryShortcutsBarVisibility();
 
         const catSelect = document.getElementById('rm-filter-category');
+        const supSelect = document.getElementById('rm-filter-supplier');
         const sortSelect = document.getElementById('rm-sort-select');
         const searchInput = document.getElementById('rm-search-input');
         const category = catSelect ? catSelect.value : '';
+        const supplier = supSelect ? supSelect.value : currentRawMaterialSupplierFilter;
+        currentRawMaterialSupplierFilter = supplier || '';
         const sort = sortSelect ? sortSelect.value : 'PRIORITIZED';
         const search = searchInput ? searchInput.value.trim() : '';
 
         const params = new URLSearchParams();
         if (category) params.set('category', category);
+        if (currentRawMaterialSupplierFilter) params.set('supplier', currentRawMaterialSupplierFilter);
         if (currentRawMaterialStatusFilter) params.set('status', currentRawMaterialStatusFilter);
         if (sort) params.set('sort', sort);
         if (search) params.set('search', search);
@@ -12800,6 +12820,24 @@ async function loadRawMaterials() {
 
         cachedRawMaterials = res.data || [];
         const s = res.summary || {};
+
+        if (supSelect && Array.isArray(s.suppliers)) {
+            const prevVal = currentRawMaterialSupplierFilter;
+            supSelect.innerHTML = `<option value="">All Suppliers</option>` +
+                s.suppliers.map(sup => `<option value="${sup.replace(/"/g, '&quot;')}" ${sup === prevVal ? 'selected' : ''}>${sup}</option>`).join('');
+            supSelect.value = prevVal;
+        }
+
+        const supChip = document.getElementById('rm-active-supplier-chip');
+        const supLabel = document.getElementById('rm-active-supplier-label');
+        if (supChip) {
+            if (currentRawMaterialSupplierFilter) {
+                supChip.classList.remove('hidden');
+                if (supLabel) supLabel.textContent = currentRawMaterialSupplierFilter;
+            } else {
+                supChip.classList.add('hidden');
+            }
+        }
 
         if (cachedRawMaterials.length > 0) {
             const existingIdx = selectedRawMaterialId
@@ -12865,6 +12903,21 @@ function selectRawMaterialRow(index, scrollIntoView = false) {
     updateSelectedRawMaterialBanner();
 }
 
+function getRawMaterialFefoInfo(expiryDateStr) {
+    if (!expiryDateStr) return null;
+    const exp = new Date(expiryDateStr);
+    if (isNaN(exp.getTime())) return null;
+    const now = new Date();
+    const diffDays = Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays < 0) {
+        return { isExpiring: true, isExpired: true, daysLeft: diffDays, label: `⚠️ EXPIRED LOT (${Math.abs(diffDays)}d ago)` };
+    }
+    if (diffDays <= 60) {
+        return { isExpiring: true, isExpired: false, daysLeft: diffDays, label: `⏳ FEFO: Expiring in ${diffDays}d` };
+    }
+    return null;
+}
+
 function renderRawMaterialsTable() {
     const tbody = document.getElementById('table-raw-materials-body');
     if (!tbody) return;
@@ -12874,25 +12927,29 @@ function renderRawMaterialsTable() {
         return;
     }
 
-    // Color-coded indicator only (no text status label)
-    const getRowColorClasses = (st) => {
+    // Color-coded indicator only (no text status label), with optional FEFO purple ring when expiring within 60 days
+    const getRowColorClasses = (st, fefoInfo) => {
+        const fefoRing = fefoInfo
+            ? ', 0 0 0 6px #9333ea'
+            : '';
+        const fefoTitleSuffix = fefoInfo ? ` · ${fefoInfo.label}` : '';
         if (st === 'OUT_OF_STOCK') {
             return {
                 rowStyle: 'border-left: 4px solid #e11d48; background-color: rgba(255, 228, 230, 0.45);',
-                dot: '<span class="rounded-full inline-block" style="width: 14px; height: 14px; background-color: #e11d48; box-shadow: 0 0 0 4px #ffe4e6;" title="Red Zone (Depleted)"></span>',
+                dot: `<span class="rounded-full inline-block" style="width: 14px; height: 14px; background-color: #e11d48; box-shadow: 0 0 0 3px #ffe4e6${fefoRing};" title="Red Zone (Depleted)${fefoTitleSuffix}"></span>`,
                 stockText: 'text-rose-600'
             };
         }
         if (st === 'LOW_STOCK') {
             return {
                 rowStyle: 'border-left: 4px solid #f59e0b; background-color: rgba(254, 243, 199, 0.45);',
-                dot: '<span class="rounded-full inline-block" style="width: 14px; height: 14px; background-color: #f59e0b; box-shadow: 0 0 0 4px #fef3c7;" title="Amber Zone (Below Minimum)"></span>',
+                dot: `<span class="rounded-full inline-block" style="width: 14px; height: 14px; background-color: #f59e0b; box-shadow: 0 0 0 3px #fef3c7${fefoRing};" title="Amber Zone (Below Minimum)${fefoTitleSuffix}"></span>`,
                 stockText: 'text-amber-600'
             };
         }
         return {
             rowStyle: 'border-left: 4px solid #10b981; background-color: rgba(209, 250, 229, 0.22);',
-            dot: '<span class="rounded-full inline-block" style="width: 14px; height: 14px; background-color: #10b981; box-shadow: 0 0 0 4px #d1fae5;" title="Green Zone (Sufficient)"></span>',
+            dot: `<span class="rounded-full inline-block" style="width: 14px; height: 14px; background-color: #10b981; box-shadow: 0 0 0 3px #d1fae5${fefoRing};" title="Green Zone (Sufficient)${fefoTitleSuffix}"></span>`,
             stockText: 'text-emerald-700'
         };
     };
@@ -12900,9 +12957,15 @@ function renderRawMaterialsTable() {
     const isInvOfficer = isInventoryOfficerAccount();
 
     tbody.innerHTML = cachedRawMaterials.map((rm, idx) => {
-        const colorCfg = getRowColorClasses(rm.status);
+        const fefoInfo = getRawMaterialFefoInfo(rm.expiry_date);
+        const colorCfg = getRowColorClasses(rm.status, fefoInfo);
         const isSelected = idx === selectedRawMaterialIndex;
         const isFastMoving = Number(rm.is_fast_moving) === 1;
+        const issuanceCount = Number(rm.issuance_count || 0);
+        const suggestFastMoving = !isFastMoving && issuanceCount >= 3;
+        const supplierName = rm.supplier || 'Standard Supplier';
+        const escapedSupplier = supplierName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        const isSupplierActive = currentRawMaterialSupplierFilter && currentRawMaterialSupplierFilter === supplierName;
         const selectedStyle = isSelected
             ? 'outline: 2px solid #0d9488; outline-offset: -2px; background-color: rgba(204, 251, 241, 0.65);'
             : '';
@@ -12921,12 +12984,21 @@ function renderRawMaterialsTable() {
                 <div class="flex items-center gap-1.5 flex-wrap">
                     <span class="font-bold text-slate-900">${rm.material_name}</span>
                     ${isFastMoving ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black" style="background-color: #ffedd5; color: #9a3412; border: 1px solid #fdba74;">🔥 FAST MOVING</span>' : ''}
+                    ${suggestFastMoving ? `<button type="button" onclick="event.stopPropagation(); toggleRawMaterialFastMoving('${rm.id}')" class="px-2 py-0.5 rounded-full text-[10px] font-bold cursor-pointer" style="background-color: #f0fdf4; color: #166534; border: 1px dashed #4ade80;" title="Issued ${issuanceCount} times — Click to tag as Fast Moving">📈 Suggested Fast Moving (${issuanceCount}x)</button>` : ''}
                 </div>
                 <div class="text-[10px] text-slate-500 mt-0.5">${rm.category || 'Raw Material'}</div>
             </td>
             <td class="py-3 px-3">
-                <div class="font-semibold text-slate-700">${rm.supplier || 'Standard Supplier'}</div>
-                <div class="text-[10px] text-slate-400 font-mono">Lot: ${rm.batch_lot_number || 'N/A'} ${rm.expiry_date ? `· Exp: ${rm.expiry_date}` : ''}</div>
+                <button type="button" onclick="event.stopPropagation(); filterRawMaterialsBySupplier('${escapedSupplier}')"
+                    class="font-semibold text-left transition cursor-pointer inline-flex items-center gap-1 rounded px-1.5 py-0.5 -ml-1.5"
+                    style="${isSupplierActive ? 'background-color: #ccfbf1; color: #115e59; border: 1px solid #5eead4;' : 'color: #0f766e; text-decoration: underline; text-decoration-style: dotted;'}"
+                    title="Click to filter all raw materials from ${supplierName}">
+                    <span>🏭 ${supplierName}</span>
+                </button>
+                <div class="text-[10px] text-slate-400 font-mono flex items-center gap-1.5 flex-wrap mt-0.5">
+                    <span>Lot: ${rm.batch_lot_number || 'N/A'} ${rm.expiry_date ? `· Exp: ${rm.expiry_date}` : ''}</span>
+                    ${fefoInfo ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-black" style="${fefoInfo.isExpired ? 'background-color: #ffe4e6; color: #9f1239; border: 1px solid #fda4af;' : 'background-color: #f3e8ff; color: #6b21a8; border: 1px solid #d8b4fe;'}">${fefoInfo.label}</span>` : ''}
+                </div>
             </td>
             <td class="py-3 px-3 text-slate-600 font-semibold">${rm.location || 'Warehouse Zone A'}</td>
             <td class="py-3 px-3 text-right font-black text-sm ${colorCfg.stockText}">
@@ -13276,6 +13348,7 @@ function handleInventoryKeyboardNavigation(e) {
 document.addEventListener('keydown', handleInventoryKeyboardNavigation);
 
 window.loadRawMaterials = loadRawMaterials;
+window.filterRawMaterialsBySupplier = filterRawMaterialsBySupplier;
 window.setRawMaterialStatusFilter = setRawMaterialStatusFilter;
 window.selectRawMaterialRow = selectRawMaterialRow;
 window.toggleRawMaterialFastMoving = toggleRawMaterialFastMoving;

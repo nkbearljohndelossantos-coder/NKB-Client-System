@@ -26,13 +26,18 @@ router.get('/', authenticateToken, (req, res) => {
         return res.status(403).json({ success: false, error: 'Access denied to Warehouse Raw Materials Inventory.' });
     }
 
-    const { category, status, search, fast_moving, sort = 'PRIORITIZED' } = req.query;
+    const { category, supplier, status, search, fast_moving, sort = 'PRIORITIZED' } = req.query;
     let query = 'SELECT * FROM raw_materials_inventory WHERE 1=1';
     const params = [];
 
     if (category) {
         query += ' AND category = ?';
         params.push(category);
+    }
+
+    if (supplier) {
+        query += ' AND supplier = ?';
+        params.push(supplier);
     }
 
     if (status === 'FAST_MOVING') {
@@ -81,7 +86,8 @@ router.get('/', authenticateToken, (req, res) => {
         outOfStockCount: allItems.filter(i => i.status === 'OUT_OF_STOCK').length,
         fastMovingCount: allItems.filter(i => Number(i.is_fast_moving) === 1).length,
         totalValuation: allItems.reduce((acc, i) => acc + ((Number(i.current_stock) || 0) * (Number(i.unit_cost) || 0)), 0),
-        categories: Array.from(new Set(allItems.map(i => i.category).filter(Boolean))).sort()
+        categories: Array.from(new Set(allItems.map(i => i.category).filter(Boolean))).sort(),
+        suppliers: Array.from(new Set(allItems.map(i => i.supplier).filter(Boolean))).sort()
     };
 
     return res.json({
@@ -330,11 +336,13 @@ router.post('/:id/adjust-stock', authenticateToken, (req, res) => {
     }
 
     let newStock = Number(existing.current_stock) || 0;
+    let newIssuanceCount = Number(existing.issuance_count) || 0;
     const typeUpper = String(adjustment_type).toUpperCase();
     if (typeUpper === 'ADD' || typeUpper === 'RESTOCK') {
         newStock = Number((newStock + qtyNum).toFixed(4));
     } else if (typeUpper === 'DEDUCT' || typeUpper === 'ISSUE' || typeUpper === 'CONSUME') {
         newStock = Math.max(0, Number((newStock - qtyNum).toFixed(4)));
+        newIssuanceCount += 1;
     } else if (typeUpper === 'SET') {
         newStock = Number(qtyNum.toFixed(4));
     } else {
@@ -348,9 +356,9 @@ router.post('/:id/adjust-stock', authenticateToken, (req, res) => {
 
     db.prepare(`
         UPDATE raw_materials_inventory
-        SET current_stock = ?, status = ?, batch_lot_number = ?, notes = ?, updated_by = ?, updated_at = ?
+        SET current_stock = ?, status = ?, batch_lot_number = ?, issuance_count = ?, notes = ?, updated_by = ?, updated_at = ?
         WHERE id = ?
-    `).run(newStock, newStatus, newLot, newNotes, req.user.name, now, id);
+    `).run(newStock, newStatus, newLot, newIssuanceCount, newNotes, req.user.name, now, id);
 
     const updated = db.prepare('SELECT * FROM raw_materials_inventory WHERE id = ?').get(id);
 

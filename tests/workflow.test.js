@@ -3243,7 +3243,7 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.strictEqual(toggleFastRes.status, 200);
         assert.strictEqual(Number(toggleFastRes.body.data.is_fast_moving), 1, 'Inventory Officer must be able to tag material as Fast Moving');
 
-        // Adjust stock (DEDUCT 12 kg -> leaves 3.5 kg which is <= 5.0 min -> LOW_STOCK)
+        // Adjust stock (DEDUCT 12 kg -> leaves 3.5 kg which is <= 5.0 min -> LOW_STOCK, and increments issuance_count)
         const adjustRmRes = await request(app)
             .post(`/api/raw-materials/${createdRmId}/adjust-stock`)
             .set('Authorization', `Bearer ${invToken}`)
@@ -3255,6 +3255,17 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.strictEqual(adjustRmRes.status, 200);
         assert.strictEqual(Number(adjustRmRes.body.data.current_stock), 3.5);
         assert.strictEqual(adjustRmRes.body.data.status, 'LOW_STOCK');
+        assert.strictEqual(Number(adjustRmRes.body.data.issuance_count), 1, 'DEDUCT adjustment must increment issuance_count');
+
+        // Verify Supplier filter query & summary.suppliers array
+        const supFilterRes = await request(app)
+            .get('/api/raw-materials?supplier=Korea%20BioActives%20Co.')
+            .set('Authorization', `Bearer ${invToken}`);
+        assert.strictEqual(supFilterRes.status, 200);
+        assert.strictEqual(supFilterRes.body.data.length, 1, 'Supplier filter must return only materials from that supplier');
+        assert.strictEqual(supFilterRes.body.data[0].id, createdRmId);
+        assert.ok(Array.isArray(supFilterRes.body.summary.suppliers), 'Summary must include distinct suppliers list');
+        assert.ok(supFilterRes.body.summary.suppliers.includes('Korea BioActives Co.'), 'Suppliers list must include created supplier');
 
         // Clean up test raw material
         const delRmRes = await request(app)
