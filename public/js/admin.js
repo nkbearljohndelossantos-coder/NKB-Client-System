@@ -209,14 +209,39 @@ function applyRoleBasedUI() {
         nameEl.textContent = NKB.user.name;
     }
 
-    // Role-specific sidebar tab visibility
+    // Role-specific sidebar tab & section group visibility
     const hideTab = (id) => {
         const btn = document.getElementById(`tab-btn-${id}`);
         if (btn) btn.style.display = 'none';
     };
+    const hideGroup = (groupId) => {
+        const grp = document.getElementById(`sidebar-group-${groupId}`);
+        if (grp) grp.style.display = 'none';
+    };
+
+    // Rule 1: In ALL accounts EXCEPT Super Admin and Executives (CEO & COO), remove Lab & Formulations and Management
+    const isSuperOrExecutive = ['SUPER_ADMIN', 'ADMIN', 'CEO', 'COO'].includes(role);
+    if (!isSuperOrExecutive) {
+        hideGroup('lab');
+        hideGroup('management');
+        hideTab('formulations');
+        hideTab('clients');
+        hideTab('products');
+        hideTab('users');
+        hideTab('reports');
+        hideTab('audit');
+        hideTab('apikeys');
+        hideTab('it-management');
+        const cmLink = document.getElementById('tab-link-concept-map');
+        if (cmLink) cmLink.style.display = 'none';
+    }
 
     if (role === 'INVENTORY') {
-        // Inventory role: No new tab created, focused directly on Orders with SO copy, confirmation, and supplies request
+        // Inventory Officer: remove Finance & Stock and Management (and Lab & Formulations).
+        // Has Warehouse Inventory (Raw Materials) and Purchase Orders / Requisitions.
+        hideGroup('finance');
+        hideGroup('management');
+        hideGroup('lab');
         hideTab('dashboard');
         hideTab('job-orders');
         hideTab('production');
@@ -230,8 +255,13 @@ function applyRoleBasedUI() {
         hideTab('users');
         hideTab('reports');
         hideTab('audit');
-        switchTab('orders');
+        hideTab('it-management');
+        switchTab('raw-materials');
     } else if (role === 'PURCHASING') {
+        // Purchasing Department: remove Management and Lab & Formulations
+        hideGroup('finance');
+        hideGroup('management');
+        hideGroup('lab');
         hideTab('dashboard');
         hideTab('job-orders');
         hideTab('production');
@@ -245,26 +275,52 @@ function applyRoleBasedUI() {
         hideTab('users');
         hideTab('reports');
         hideTab('audit');
+        hideTab('it-management');
         switchTab('purchasing');
     } else if (role === 'QC') {
-        hideTab('invoices');
-        hideTab('payments');
-        hideTab('payables');
-        hideTab('clients');
-        hideTab('users');
-        hideTab('audit');
-        hideTab('purchasing');
-        switchTab('production');
-    } else if (role === 'PRODUCTION') {
-        // PRODUCTION role now manages deliveries alongside ADMIN and WAREHOUSE
+        // QC: remove Finance & Stock, Management, Lab & Formulations, and Requisitions
+        hideGroup('finance');
+        hideGroup('management');
+        hideGroup('lab');
+        hideTab('raw-materials');
         hideTab('invoices');
         hideTab('payments');
         hideTab('payables');
         hideTab('buffer');
+        hideTab('clients');
+        hideTab('products');
         hideTab('users');
+        hideTab('reports');
         hideTab('audit');
+        hideTab('purchasing');
+        hideTab('it-management');
+        switchTab('production');
+    } else if (role === 'PRODUCTION') {
+        // Production Supervisor: remove Finance & Stock, Requisitions, Lab & Formulations, and Management.
+        // Dashboard customized to interactive Sales Orders & 4 Production KPIs.
+        hideGroup('finance');
+        hideGroup('management');
+        hideGroup('lab');
+        hideTab('purchasing');
+        hideTab('raw-materials');
+        hideTab('invoices');
+        hideTab('payments');
+        hideTab('payables');
+        hideTab('buffer');
+        hideTab('clients');
+        hideTab('products');
+        hideTab('users');
+        hideTab('reports');
+        hideTab('audit');
+        hideTab('it-management');
+        const soLabel = document.getElementById('sidebar-label-orders');
+        if (soLabel) soLabel.textContent = 'Sales Orders';
     } else if (role === 'WAREHOUSE') {
+        hideGroup('finance');
+        hideGroup('management');
+        hideGroup('lab');
         hideTab('orders');
+        hideTab('purchasing');
         hideTab('job-orders');
         hideTab('production');
         hideTab('invoices');
@@ -272,26 +328,25 @@ function applyRoleBasedUI() {
         hideTab('payables');
         hideTab('users');
         hideTab('audit');
+        hideTab('it-management');
     } else if (role === 'ACCOUNTING') {
+        // Senior Accountant: remove Requisitions, IT Management, Lab & Formulations, and Management
+        hideGroup('management');
+        hideGroup('lab');
+        hideTab('purchasing');
+        hideTab('raw-materials');
+        hideTab('it-management');
         hideTab('job-orders');
         hideTab('production');
         // Deliveries tab is visible for Accounting to record client receiving and issue invoices
+        hideTab('clients');
+        hideTab('products');
         hideTab('users');
+        hideTab('reports');
         hideTab('audit');
-    } else if (role === 'CEO' || role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'IT_ADMIN') {
-        // Full oversight
-    }
-
-    // Proprietary chemical formulations are strictly confidential trade secrets
-    const canViewFormulations = ['SUPER_ADMIN', 'ADMIN', 'IT_ADMIN', 'CEO', 'PRODUCTION', 'INVENTORY'].includes(role);
-    if (!canViewFormulations) {
-        hideTab('formulations');
-    }
-
-    // Developer API Keys management restricted to technical & company executives
-    const canManageApiKeys = ['SUPER_ADMIN', 'ADMIN', 'IT_ADMIN', 'CEO'].includes(role);
-    if (!canManageApiKeys) {
         hideTab('apikeys');
+    } else if (role === 'CEO' || role === 'COO' || role === 'ADMIN' || role === 'SUPER_ADMIN') {
+        // Full executive & superadmin oversight
     }
 }
 
@@ -410,6 +465,7 @@ function switchTab(tabId) {
     // Call tab-specific loader
     if (tabId === 'dashboard') loadDashboard();
     else if (tabId === 'orders') loadOrders();
+    else if (tabId === 'raw-materials') loadRawMaterials();
     else if (tabId === 'job-orders') loadJobOrders();
     else if (tabId === 'production') loadBatches();
     else if (tabId === 'deliveries') loadDeliveries();
@@ -432,6 +488,24 @@ function switchTab(tabId) {
 // 1. DASHBOARD LOADER
 // -------------------------------------------------------------
 async function loadDashboard() {
+    const role = NKB.user ? NKB.user.role : '';
+    const prodDash = document.getElementById('production-supervisor-dashboard');
+    const execDash = document.getElementById('executive-dashboard-content');
+    const dashTitle = document.getElementById('dashboard-main-title');
+    const dashSub = document.getElementById('dashboard-main-subtitle');
+
+    if (role === 'PRODUCTION') {
+        if (prodDash) prodDash.classList.remove('hidden');
+        if (execDash) execDash.classList.add('hidden');
+        if (dashTitle) dashTitle.textContent = 'Production Supervisor — Factory Floor & Sales Orders';
+        if (dashSub) dashSub.textContent = 'Assign Sales Order queue priority, decide what is active today in the factory, and monitor live batches & deliveries.';
+        await loadProductionSupervisorDashboard();
+        return;
+    } else {
+        if (prodDash) prodDash.classList.add('hidden');
+        if (execDash) execDash.classList.remove('hidden');
+    }
+
     const [kpiRes, unbilledRes, arRes, yieldRes] = await Promise.all([
         NKB.api('/api/reports/overview'),
         NKB.api('/api/reports/unbilled-drs'),
@@ -12117,6 +12191,436 @@ window.executeQuickPOReassignment = executeQuickPOReassignment;
 window.executeQuickStatusOverride = executeQuickStatusOverride;
 window.onITStatusTableChange = onITStatusTableChange;
 window.deleteITRecord = deleteITRecord;
+
+// =============================================================
+// PRODUCTION SUPERVISOR DASHBOARD & INTERACTIVE SALES ORDER BOARD
+// =============================================================
+let cachedProductionOrders = [];
+let currentProdBoardFilter = '';
+
+async function loadProductionSupervisorDashboard() {
+    try {
+        const [kpiRes, ordersRes] = await Promise.all([
+            NKB.api('/api/reports/overview'),
+            NKB.api('/api/orders')
+        ]);
+
+        const setElText = (id, text) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = text;
+        };
+
+        if (ordersRes && ordersRes.success && Array.isArray(ordersRes.data)) {
+            cachedProductionOrders = ordersRes.data.filter(o => o.status !== 'CANCELLED' && o.status !== 'VOIDED');
+        }
+
+        const totalPOCount = cachedProductionOrders.length || (kpiRes.data ? kpiRes.data.totalPOs : 0) || 0;
+        const openPOCount = cachedProductionOrders.filter(o => o.status !== 'COMPLETED').length;
+        const activeTodayCount = cachedProductionOrders.filter(o => Number(o.is_active_today) === 1).length;
+        const activeBatchesCount = (kpiRes && kpiRes.data && kpiRes.data.activeBatches != null) ? kpiRes.data.activeBatches : 0;
+        const ongoingDeliveriesCount = (kpiRes && kpiRes.data && kpiRes.data.ongoingDeliveries != null) ? kpiRes.data.ongoingDeliveries : 0;
+
+        setElText('prod-kpi-total-pos', NKB.formatNumber(totalPOCount));
+        setElText('prod-kpi-open-pos-sub', `${NKB.formatNumber(openPOCount)} active open sales orders →`);
+        setElText('prod-kpi-active-batches', NKB.formatNumber(activeBatchesCount));
+        setElText('prod-kpi-active-today', NKB.formatNumber(activeTodayCount));
+        setElText('prod-kpi-ongoing-deliveries', NKB.formatNumber(ongoingDeliveriesCount));
+
+        renderProductionSalesOrderBoard();
+    } catch (err) {
+        console.error('Error loading Production Supervisor dashboard:', err);
+    }
+}
+
+function setProdBoardFilter(filterVal) {
+    currentProdBoardFilter = filterVal || '';
+    const selectEl = document.getElementById('prod-so-filter-priority');
+    if (selectEl) selectEl.value = currentProdBoardFilter;
+
+    document.querySelectorAll('.prod-board-pill').forEach(pill => {
+        if (pill.getAttribute('data-filter') === currentProdBoardFilter) {
+            pill.className = 'prod-board-pill px-3 py-1.5 rounded-xl font-bold bg-slate-900 text-white transition';
+        } else {
+            pill.className = 'prod-board-pill px-3 py-1.5 rounded-xl font-semibold bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200 transition';
+        }
+    });
+
+    renderProductionSalesOrderBoard();
+}
+
+function renderProductionSalesOrderBoard() {
+    const tbody = document.getElementById('table-prod-supervisor-so-body');
+    if (!tbody) return;
+
+    const searchInput = document.getElementById('prod-so-search');
+    const selectFilter = document.getElementById('prod-so-filter-priority');
+    const searchTerm = (searchInput ? searchInput.value : '').trim().toLowerCase();
+    const filterVal = selectFilter ? selectFilter.value : currentProdBoardFilter;
+
+    const priorityRankWeight = {
+        'RUSH': 1,
+        'PRIORITIZED': 2,
+        'NORMAL': 3,
+        'ON_HOLD': 4
+    };
+
+    let list = [...cachedProductionOrders];
+
+    if (filterVal === 'ACTIVE_TODAY') {
+        list = list.filter(o => Number(o.is_active_today) === 1);
+    } else if (filterVal) {
+        list = list.filter(o => (o.priority_status || 'NORMAL') === filterVal);
+    }
+
+    if (searchTerm) {
+        list = list.filter(o => {
+            const soStr = (o.so_number || o.po_number || '').toLowerCase();
+            const poStr = (o.po_number || '').toLowerCase();
+            const clientStr = (o.company_name || '').toLowerCase();
+            const itemsStr = (o.items || []).map(i => (i.product_name || '')).join(' ').toLowerCase();
+            return soStr.includes(searchTerm) || poStr.includes(searchTerm) || clientStr.includes(searchTerm) || itemsStr.includes(searchTerm);
+        });
+    }
+
+    // Sort: Active Today first -> Priority Status weight (RUSH > PRIORITIZED > NORMAL > ON_HOLD) -> priority_order ASC -> created_at DESC
+    list.sort((a, b) => {
+        const actA = Number(a.is_active_today) ? 0 : 1;
+        const actB = Number(b.is_active_today) ? 0 : 1;
+        if (actA !== actB) return actA - actB;
+
+        const pA = priorityRankWeight[a.priority_status || 'NORMAL'] || 3;
+        const pB = priorityRankWeight[b.priority_status || 'NORMAL'] || 3;
+        if (pA !== pB) return pA - pB;
+
+        const ordA = a.priority_order != null ? Number(a.priority_order) : 100;
+        const ordB = b.priority_order != null ? Number(b.priority_order) : 100;
+        if (ordA !== ordB) return ordA - ordB;
+
+        return String(b.po_number || '').localeCompare(String(a.po_number || ''));
+    });
+
+    if (list.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" class="py-8 text-center text-slate-400">No matching Sales Orders found in queue.</td></tr>`;
+        return;
+    }
+
+    const priorityBadgeMap = {
+        'RUSH': '<span class="px-2.5 py-1 rounded-full bg-rose-100 text-rose-800 font-extrabold text-[10px] border border-rose-300">🔥 RUSH</span>',
+        'PRIORITIZED': '<span class="px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 font-extrabold text-[10px] border border-amber-300">⚡ PRIORITIZED</span>',
+        'NORMAL': '<span class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 font-bold text-[10px] border border-slate-200">📋 NORMAL</span>',
+        'ON_HOLD': '<span class="px-2.5 py-1 rounded-full bg-slate-200 text-slate-600 font-extrabold text-[10px] border border-slate-300">⏸️ ON HOLD</span>'
+    };
+
+    tbody.innerHTML = list.map((po, idx) => {
+        const soNum = po.so_number || po.po_number.replace('PO-', 'SO-');
+        const pStatus = po.priority_status || 'NORMAL';
+        const isActiveToday = Number(po.is_active_today) === 1;
+        const itemsSummary = (po.items || []).map(it => `${it.product_name} (${NKB.formatNumber(it.target_quantity)} ${it.unit || 'pcs'})`).join(', ') || 'No items';
+        const totalQty = po.total_target_quantity || (po.items || []).reduce((s, i) => s + (Number(i.target_quantity) || 0), 0);
+
+        return `
+            <tr class="${isActiveToday ? 'bg-emerald-50/50' : (pStatus === 'RUSH' ? 'bg-rose-50/30' : 'hover:bg-slate-50')} transition">
+                <td class="py-3 px-3">
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-6 h-6 rounded-full ${idx === 0 ? 'bg-indigo-600 text-white font-black' : 'bg-slate-200 text-slate-700 font-bold'} flex items-center justify-center text-[11px]">#${idx + 1}</span>
+                        <div class="flex flex-col gap-0.5">
+                            <button onclick="updateOrderProductionSchedule('${po.id}', { move_direction: 'FIRST' })" title="Assign Goes First (#1 in Queue)" class="text-[10px] px-1.5 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded font-bold border border-indigo-200">⏫ First</button>
+                        </div>
+                    </div>
+                </td>
+                <td class="py-3 px-3">
+                    <button onclick="openViewPOModal('${po.id}')" class="font-black text-indigo-600 hover:underline text-xs">${soNum}</button>
+                    <div class="text-[10px] text-slate-400 font-mono">${po.po_number} · ${po.po_date || ''}</div>
+                </td>
+                <td class="py-3 px-3 max-w-xs">
+                    <div class="font-bold text-slate-900 truncate">${po.company_name}</div>
+                    <div class="text-[11px] text-slate-500 truncate" title="${itemsSummary}">${itemsSummary}</div>
+                </td>
+                <td class="py-3 px-3 text-center font-extrabold text-slate-800">
+                    ${NKB.formatNumber(totalQty)} pcs
+                </td>
+                <td class="py-3 px-3 text-center">
+                    <span class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">${po.status}</span>
+                    <div class="text-[10px] text-slate-400 mt-0.5">${po.jo_count || 0} JOs · ${po.dr_count || 0} DRs</div>
+                </td>
+                <td class="py-3 px-3 text-center">
+                    <div class="mb-1">${priorityBadgeMap[pStatus] || priorityBadgeMap['NORMAL']}</div>
+                    <select onchange="updateOrderProductionSchedule('${po.id}', { priority_status: this.value })" class="text-[11px] px-2 py-1 border border-slate-300 rounded-lg bg-white font-bold text-slate-700 cursor-pointer">
+                        <option value="RUSH" ${pStatus === 'RUSH' ? 'selected' : ''}>🔥 Rush</option>
+                        <option value="PRIORITIZED" ${pStatus === 'PRIORITIZED' ? 'selected' : ''}>⚡ Prioritized</option>
+                        <option value="NORMAL" ${pStatus === 'NORMAL' ? 'selected' : ''}>📋 Normal</option>
+                        <option value="ON_HOLD" ${pStatus === 'ON_HOLD' ? 'selected' : ''}>⏸️ On Hold</option>
+                    </select>
+                </td>
+                <td class="py-3 px-3 text-center">
+                    <button onclick="updateOrderProductionSchedule('${po.id}', { is_active_today: ${isActiveToday ? 0 : 1} })"
+                        class="px-3 py-1.5 rounded-xl text-[11px] font-extrabold transition shadow-xs cursor-pointer ${isActiveToday ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 border border-slate-300'}">
+                        ${isActiveToday ? '🏭 ACTIVE TODAY ✓' : 'Set Active Today'}
+                    </button>
+                </td>
+                <td class="py-3 px-3 text-right whitespace-nowrap space-x-1">
+                    <button onclick="updateOrderProductionSchedule('${po.id}', { move_direction: 'UP' })" title="Move Up in Queue" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold text-xs">↑</button>
+                    <button onclick="updateOrderProductionSchedule('${po.id}', { move_direction: 'DOWN' })" title="Move Down in Queue" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold text-xs">↓</button>
+                    <button onclick="openViewPOModal('${po.id}')" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg font-bold text-xs">View SO</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+async function updateOrderProductionSchedule(poId, payload) {
+    try {
+        const res = await NKB.api(`/api/orders/${poId}/production-priority`, {
+            method: 'PUT',
+            body: payload
+        });
+        if (res && res.success) {
+            if (NKB.showToast) NKB.showToast(res.message || 'Sales Order priority updated!', 'success');
+            await loadProductionSupervisorDashboard();
+        } else {
+            alert((res && res.error) || 'Failed to update production schedule.');
+        }
+    } catch (err) {
+        console.error('Error updating production priority:', err);
+    }
+}
+
+window.loadProductionSupervisorDashboard = loadProductionSupervisorDashboard;
+window.setProdBoardFilter = setProdBoardFilter;
+window.renderProductionSalesOrderBoard = renderProductionSalesOrderBoard;
+window.updateOrderProductionSchedule = updateOrderProductionSchedule;
+
+// =============================================================
+// WAREHOUSE INVENTORY (RAW MATERIALS) MODULE
+// =============================================================
+let cachedRawMaterials = [];
+let currentRawMaterialStatusFilter = '';
+
+async function loadRawMaterials() {
+    try {
+        const catSelect = document.getElementById('rm-filter-category');
+        const searchInput = document.getElementById('rm-search-input');
+        const category = catSelect ? catSelect.value : '';
+        const search = searchInput ? searchInput.value.trim() : '';
+
+        const params = new URLSearchParams();
+        if (category) params.set('category', category);
+        if (currentRawMaterialStatusFilter) params.set('status', currentRawMaterialStatusFilter);
+        if (search) params.set('search', search);
+
+        const res = await NKB.api(`/api/raw-materials?${params.toString()}`);
+        if (!res || !res.success) return;
+
+        cachedRawMaterials = res.data || [];
+        const s = res.summary || {};
+
+        const setElText = (id, text) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = text;
+        };
+
+        setElText('rm-kpi-total', NKB.formatNumber(s.totalMaterials || cachedRawMaterials.length));
+        setElText('rm-kpi-instock', NKB.formatNumber(s.inStockCount || 0));
+        setElText('rm-kpi-lowstock', NKB.formatNumber(s.lowStockCount || 0));
+        setElText('rm-kpi-outofstock', NKB.formatNumber(s.outOfStockCount || 0));
+
+        renderRawMaterialsTable();
+    } catch (err) {
+        console.error('Error loading raw materials:', err);
+    }
+}
+
+function setRawMaterialStatusFilter(status) {
+    currentRawMaterialStatusFilter = status || '';
+    document.querySelectorAll('.rm-status-pill').forEach(pill => {
+        if (pill.getAttribute('data-status') === currentRawMaterialStatusFilter) {
+            pill.className = 'rm-status-pill px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-900 text-white transition';
+        } else {
+            pill.className = 'rm-status-pill px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200 transition';
+        }
+    });
+    loadRawMaterials();
+}
+
+function renderRawMaterialsTable() {
+    const tbody = document.getElementById('table-raw-materials-body');
+    if (!tbody) return;
+
+    if (!cachedRawMaterials || cachedRawMaterials.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" class="py-8 text-center text-slate-400">No raw materials matching filter criteria.</td></tr>`;
+        return;
+    }
+
+    const statusBadge = (st) => {
+        if (st === 'OUT_OF_STOCK') return '<span class="px-2.5 py-1 rounded-full bg-rose-100 text-rose-800 font-extrabold text-[10px] border border-rose-300">🚨 OUT OF STOCK</span>';
+        if (st === 'LOW_STOCK') return '<span class="px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 font-extrabold text-[10px] border border-amber-300">⚠️ LOW STOCK</span>';
+        return '<span class="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-extrabold text-[10px] border border-emerald-300">✅ IN STOCK</span>';
+    };
+
+    tbody.innerHTML = cachedRawMaterials.map(rm => `
+        <tr class="hover:bg-slate-50 transition">
+            <td class="py-3 px-3 font-mono font-bold text-teal-700">${rm.material_code}</td>
+            <td class="py-3 px-3">
+                <div class="font-bold text-slate-900">${rm.material_name}</div>
+                <div class="text-[10px] text-slate-500">${rm.category || 'Raw Material'}</div>
+            </td>
+            <td class="py-3 px-3">
+                <div class="font-semibold text-slate-700">${rm.supplier || 'Standard Supplier'}</div>
+                <div class="text-[10px] text-slate-400 font-mono">Lot: ${rm.batch_lot_number || 'N/A'} ${rm.expiry_date ? `· Exp: ${rm.expiry_date}` : ''}</div>
+            </td>
+            <td class="py-3 px-3 text-slate-600 font-semibold">${rm.location || 'Warehouse Zone A'}</td>
+            <td class="py-3 px-3 text-right font-black text-sm ${rm.status === 'OUT_OF_STOCK' ? 'text-rose-600' : (rm.status === 'LOW_STOCK' ? 'text-amber-600' : 'text-slate-900')}">
+                ${NKB.formatNumber(rm.current_stock)} <span class="text-xs font-bold text-slate-500">${rm.unit}</span>
+            </td>
+            <td class="py-3 px-3 text-right text-slate-500 font-semibold">
+                ${NKB.formatNumber(rm.minimum_stock_level)} ${rm.unit}
+            </td>
+            <td class="py-3 px-3 text-center">${statusBadge(rm.status)}</td>
+            <td class="py-3 px-3 text-right whitespace-nowrap space-x-1">
+                <button onclick="openAdjustRawMaterialModal('${rm.id}', 'ADD')" class="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg font-bold text-xs transition" title="Receive / Restock">+ Restock</button>
+                <button onclick="openAdjustRawMaterialModal('${rm.id}', 'DEDUCT')" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg font-bold text-xs transition" title="Issue to Production">- Issue</button>
+                <button onclick="openRawMaterialModal('${rm.id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold text-xs transition">✏️ Edit</button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function openRawMaterialModal(rmId = null) {
+    const existing = rmId ? cachedRawMaterials.find(r => r.id === rmId) : null;
+    const isEdit = !!existing;
+
+    const modalHtml = `
+        <div id="modal-raw-material" class="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="bg-white w-full max-w-xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+                <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+                    <h3 class="font-bold text-sm">${isEdit ? `Edit Raw Material: ${existing.material_code}` : '➕ Add New Warehouse Raw Material'}</h3>
+                    <button type="button" onclick="document.getElementById('modal-raw-material').remove()" class="text-slate-400 hover:text-white">✕</button>
+                </div>
+                <form onsubmit="submitRawMaterialForm(event, '${rmId || ''}')" class="p-6 space-y-4 text-xs">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block font-bold text-slate-700 mb-1">Material Code *</label>
+                            <input type="text" id="rm-form-code" required value="${existing ? existing.material_code : ''}" placeholder="e.g. RM-VITC-01" class="w-full p-2 border border-slate-300 rounded-xl">
+                        </div>
+                        <div>
+                            <label class="block font-bold text-slate-700 mb-1">Category *</label>
+                            <select id="rm-form-category" class="w-full p-2 border border-slate-300 rounded-xl">
+                                ${['Active Ingredients', 'Base & Solvents', 'Humectants & Emollients', 'Emulsifiers & Waxes', 'UV Filters & Actives', 'Preservatives & Stabilizers', 'Fragrances & Essential Oils', 'Packaging & Containers'].map(c => `<option value="${c}" ${existing && existing.category === c ? 'selected' : ''}>${c}</option>`).join('')}
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Material Name *</label>
+                        <input type="text" id="rm-form-name" required value="${existing ? existing.material_name : ''}" placeholder="e.g. Ascorbic Acid USP Fine Powder" class="w-full p-2 border border-slate-300 rounded-xl">
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                            <label class="block font-bold text-slate-700 mb-1">Current Stock *</label>
+                            <input type="number" step="0.01" id="rm-form-stock" required value="${existing ? existing.current_stock : 0}" class="w-full p-2 border border-slate-300 rounded-xl">
+                        </div>
+                        <div>
+                            <label class="block font-bold text-slate-700 mb-1">Unit *</label>
+                            <select id="rm-form-unit" class="w-full p-2 border border-slate-300 rounded-xl">
+                                ${['kg', 'g', 'L', 'mL', 'pcs', 'drums', 'boxes'].map(u => `<option value="${u}" ${existing && existing.unit === u ? 'selected' : ''}>${u}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block font-bold text-slate-700 mb-1">Min Reorder Level *</label>
+                            <input type="number" step="0.01" id="rm-form-min" required value="${existing ? existing.minimum_stock_level : 10}" class="w-full p-2 border border-slate-300 rounded-xl">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block font-bold text-slate-700 mb-1">Supplier</label>
+                            <input type="text" id="rm-form-supplier" value="${existing ? (existing.supplier || '') : ''}" placeholder="Supplier Company Name" class="w-full p-2 border border-slate-300 rounded-xl">
+                        </div>
+                        <div>
+                            <label class="block font-bold text-slate-700 mb-1">Warehouse Rack / Location</label>
+                            <input type="text" id="rm-form-location" value="${existing ? (existing.location || '') : 'Warehouse Zone A'}" placeholder="e.g. Cold Room B-02" class="w-full p-2 border border-slate-300 rounded-xl">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block font-bold text-slate-700 mb-1">Batch / Lot Number</label>
+                            <input type="text" id="rm-form-lot" value="${existing ? (existing.batch_lot_number || '') : ''}" placeholder="e.g. LOT-2026-091" class="w-full p-2 border border-slate-300 rounded-xl">
+                        </div>
+                        <div>
+                            <label class="block font-bold text-slate-700 mb-1">Expiry Date</label>
+                            <input type="text" id="rm-form-expiry" value="${existing ? (existing.expiry_date || '') : ''}" placeholder="YYYY-MM-DD" class="w-full p-2 border border-slate-300 rounded-xl">
+                        </div>
+                    </div>
+                    <div class="flex justify-end gap-2 pt-3 border-t border-slate-200">
+                        <button type="button" onclick="document.getElementById('modal-raw-material').remove()" class="px-4 py-2 border border-slate-300 rounded-xl font-bold text-slate-700">Cancel</button>
+                        <button type="submit" class="px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold shadow-md">${isEdit ? 'Save Changes' : 'Add Material'}</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+async function submitRawMaterialForm(e, rmId) {
+    e.preventDefault();
+    const body = {
+        material_code: document.getElementById('rm-form-code').value.trim(),
+        category: document.getElementById('rm-form-category').value,
+        material_name: document.getElementById('rm-form-name').value.trim(),
+        current_stock: Number(document.getElementById('rm-form-stock').value),
+        unit: document.getElementById('rm-form-unit').value,
+        minimum_stock_level: Number(document.getElementById('rm-form-min').value),
+        supplier: document.getElementById('rm-form-supplier').value.trim(),
+        location: document.getElementById('rm-form-location').value.trim(),
+        batch_lot_number: document.getElementById('rm-form-lot').value.trim(),
+        expiry_date: document.getElementById('rm-form-expiry').value.trim()
+    };
+
+    const res = await NKB.api(rmId ? `/api/raw-materials/${rmId}` : '/api/raw-materials', {
+        method: rmId ? 'PUT' : 'POST',
+        body
+    });
+
+    if (res && res.success) {
+        const modal = document.getElementById('modal-raw-material');
+        if (modal) modal.remove();
+        if (NKB.showToast) NKB.showToast(res.message || 'Raw material saved!', 'success');
+        loadRawMaterials();
+    } else {
+        alert((res && res.error) || 'Failed to save raw material.');
+    }
+}
+
+async function openAdjustRawMaterialModal(rmId, type = 'ADD') {
+    const rm = cachedRawMaterials.find(r => r.id === rmId);
+    if (!rm) return;
+    const actionLabel = type === 'ADD' ? 'Restock / Receive Quantity' : 'Issue / Deduct Quantity for Production';
+    const qtyStr = prompt(`${actionLabel} for ${rm.material_name} (${rm.material_code})\nCurrent Stock: ${rm.current_stock} ${rm.unit}\n\nEnter quantity (${rm.unit}) to ${type === 'ADD' ? 'ADD' : 'DEDUCT'}:`);
+    if (!qtyStr) return;
+    const quantity = Number(qtyStr);
+    if (isNaN(quantity) || quantity <= 0) {
+        alert('Please enter a valid positive number.');
+        return;
+    }
+    const reason = prompt('Optional Reference / Batch / PO Note:', type === 'ADD' ? 'Supplier Delivery' : 'Issued to Compounding');
+
+    const res = await NKB.api(`/api/raw-materials/${rmId}/adjust-stock`, {
+        method: 'POST',
+        body: { adjustment_type: type, quantity, reason: reason || '' }
+    });
+    if (res && res.success) {
+        if (NKB.showToast) NKB.showToast(res.message, 'success');
+        loadRawMaterials();
+    } else {
+        alert((res && res.error) || 'Failed to adjust stock.');
+    }
+}
+
+window.loadRawMaterials = loadRawMaterials;
+window.setRawMaterialStatusFilter = setRawMaterialStatusFilter;
+window.openRawMaterialModal = openRawMaterialModal;
+window.submitRawMaterialForm = submitRawMaterialForm;
+window.openAdjustRawMaterialModal = openAdjustRawMaterialModal;
+
 
 
 

@@ -3080,6 +3080,114 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.ok(adminJs.includes('executeQuickPOReassignment'), 'admin.js must implement executeQuickPOReassignment');
     });
 
+    test('41. Role-Based Navigation Restrictions, Production Supervisor Interactive Dashboard & Warehouse Raw Materials Inventory', async () => {
+        const prodToken = getAuthToken('PRODUCTION');
+        const invToken = getAuthToken('INVENTORY');
+        const acctToken = getAuthToken('ACCOUNTING');
+        const purchToken = getAuthToken('PURCHASING');
+        const qcToken = getAuthToken('QC');
+
+        // 1. Verify UI HTML & JS contain all role-based sidebar groups, Production Supervisor Dashboard, and Raw Materials Inventory
+        const adminHtml = fs.readFileSync(path.join(__dirname, '../public/admin.html'), 'utf8');
+        assert.ok(adminHtml.includes('id="sidebar-group-lab"'), 'admin.html must have sidebar-group-lab');
+        assert.ok(adminHtml.includes('id="sidebar-group-management"'), 'admin.html must have sidebar-group-management');
+        assert.ok(adminHtml.includes('id="sidebar-group-finance"'), 'admin.html must have sidebar-group-finance');
+        assert.ok(adminHtml.includes('id="production-supervisor-dashboard"'), 'admin.html must have production-supervisor-dashboard');
+        assert.ok(adminHtml.includes('id="prod-kpi-total-pos"'), 'admin.html must have prod-kpi-total-pos');
+        assert.ok(adminHtml.includes('id="prod-kpi-active-batches"'), 'admin.html must have prod-kpi-active-batches');
+        assert.ok(adminHtml.includes('id="prod-kpi-active-today"'), 'admin.html must have prod-kpi-active-today');
+        assert.ok(adminHtml.includes('id="prod-kpi-ongoing-deliveries"'), 'admin.html must have prod-kpi-ongoing-deliveries');
+        assert.ok(adminHtml.includes('id="view-raw-materials"'), 'admin.html must have view-raw-materials');
+        assert.ok(adminHtml.includes('id="tab-btn-raw-materials"'), 'admin.html must have tab-btn-raw-materials');
+
+        const adminJs = fs.readFileSync(path.join(__dirname, '../public/js/admin.js'), 'utf8');
+        assert.ok(adminJs.includes('isSuperOrExecutive'), 'admin.js must enforce Lab & Formulations and Management restriction to Super Admin & Executives');
+        assert.ok(adminJs.includes('loadProductionSupervisorDashboard'), 'admin.js must implement loadProductionSupervisorDashboard');
+        assert.ok(adminJs.includes('updateOrderProductionSchedule'), 'admin.js must implement updateOrderProductionSchedule');
+        assert.ok(adminJs.includes('loadRawMaterials'), 'admin.js must implement loadRawMaterials');
+
+        // 2. Test Production Supervisor Interactive Sales Order Priority & "Active Today in Factory" API
+        const samplePo = db.prepare("SELECT id, po_number FROM purchase_orders WHERE status NOT IN ('CANCELLED', 'VOIDED') LIMIT 1").get();
+        assert.ok(samplePo, 'Sample PO must exist for Production Supervisor priority testing');
+
+        const prioRes = await request(app)
+            .put(`/api/orders/${samplePo.id}/production-priority`)
+            .set('Authorization', `Bearer ${prodToken}`)
+            .send({
+                priority_status: 'RUSH',
+                is_active_today: 1,
+                move_direction: 'FIRST',
+                production_notes: 'Assigned to Line 1 compounding today'
+            });
+        assert.strictEqual(prioRes.status, 200);
+        assert.strictEqual(prioRes.body.success, true);
+        assert.strictEqual(prioRes.body.data.priority_status, 'RUSH');
+        assert.strictEqual(Number(prioRes.body.data.is_active_today), 1);
+
+        // Verify Overview KPI returns totalPOs and activeTodayPOs
+        const kpiRes = await request(app)
+            .get('/api/reports/overview')
+            .set('Authorization', `Bearer ${prodToken}`);
+        assert.strictEqual(kpiRes.status, 200);
+        assert.ok(kpiRes.body.data.totalPOs >= 1, 'Overview API must return totalPOs');
+        assert.ok(kpiRes.body.data.activeTodayPOs >= 1, 'Overview API must return activeTodayPOs');
+
+        // Verify Accounting role is blocked from changing factory floor priority
+        const acctBlockPrio = await request(app)
+            .put(`/api/orders/${samplePo.id}/production-priority`)
+            .set('Authorization', `Bearer ${acctToken}`)
+            .send({ priority_status: 'ON_HOLD' });
+        assert.strictEqual(acctBlockPrio.status, 403);
+
+        // 3. Test Inventory Officer Warehouse Raw Materials Inventory API
+        const listRmRes = await request(app)
+            .get('/api/raw-materials')
+            .set('Authorization', `Bearer ${invToken}`);
+        assert.strictEqual(listRmRes.status, 200);
+        assert.strictEqual(listRmRes.body.success, true);
+        assert.ok(listRmRes.body.data.length >= 10, 'Seeded warehouse raw materials must be returned');
+        assert.ok(listRmRes.body.summary.totalMaterials >= 10, 'Summary metrics must be included');
+
+        // Create a new raw material as Inventory Officer
+        const createRmRes = await request(app)
+            .post('/api/raw-materials')
+            .set('Authorization', `Bearer ${invToken}`)
+            .send({
+                material_code: 'RM-TEST-PDRN-99',
+                material_name: 'Sodium DNA (Salmon PDRN Extract 99%)',
+                category: 'Active Ingredients',
+                supplier: 'Korea BioActives Co.',
+                current_stock: 15.5,
+                unit: 'kg',
+                minimum_stock_level: 5.0,
+                unit_cost: 9500.0,
+                location: 'Cold Room B-05',
+                batch_lot_number: 'LOT-PDRN-2026'
+            });
+        assert.strictEqual(createRmRes.status, 201);
+        assert.strictEqual(createRmRes.body.data.status, 'IN_STOCK');
+        const createdRmId = createRmRes.body.data.id;
+
+        // Adjust stock (DEDUCT 12 kg -> leaves 3.5 kg which is <= 5.0 min -> LOW_STOCK)
+        const adjustRmRes = await request(app)
+            .post(`/api/raw-materials/${createdRmId}/adjust-stock`)
+            .set('Authorization', `Bearer ${invToken}`)
+            .send({
+                adjustment_type: 'DEDUCT',
+                quantity: 12.0,
+                reason: 'Issued for GEMS PDRN Batch'
+            });
+        assert.strictEqual(adjustRmRes.status, 200);
+        assert.strictEqual(Number(adjustRmRes.body.data.current_stock), 3.5);
+        assert.strictEqual(adjustRmRes.body.data.status, 'LOW_STOCK');
+
+        // Clean up test raw material
+        const delRmRes = await request(app)
+            .delete(`/api/raw-materials/${createdRmId}`)
+            .set('Authorization', `Bearer ${invToken}`);
+        assert.strictEqual(delRmRes.status, 200);
+    });
+
     after(() => {
         // Automatically delete all test decoys and temporary test database
         try {
@@ -3096,6 +3204,7 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         console.log('🧹 Cleaned up test database and decoys successfully');
     });
 });
+
 
 
 

@@ -1200,4 +1200,92 @@ router.delete('/:id', authenticateToken, (req, res) => {
     }
 });
 
+/**
+ * PUT / PATCH /api/orders/:id/production-priority
+ * Allows Production Supervisor, Executives, and Admins to assign queue priority,
+ * rank order ("which goes first"), and "Active Today in Factory" status.
+ */
+const updateProductionPriorityHandler = (req, res) => {
+    const { id } = req.params;
+    const allowedRoles = ['PRODUCTION', 'SUPER_ADMIN', 'ADMIN', 'CEO', 'COO', 'IT_ADMIN'];
+    if (!allowedRoles.includes(req.user.role)) {
+        return res.status(403).json({ success: false, error: 'Only Production Supervisor or Executives can manage factory floor priority.' });
+    }
+
+    const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
+    if (!po) {
+        return res.status(404).json({ success: false, error: 'Sales Order / Purchase Order not found.' });
+    }
+
+    const { priority_status, priority_order, is_active_today, production_notes, move_direction } = req.body || {};
+
+    const validPriorities = ['RUSH', 'PRIORITIZED', 'NORMAL', 'ON_HOLD'];
+    let newPriorityStatus = po.priority_status || 'NORMAL';
+    if (priority_status && validPriorities.includes(String(priority_status).toUpperCase())) {
+        newPriorityStatus = String(priority_status).toUpperCase();
+    }
+
+    let newPriorityOrder = po.priority_order != null ? Number(po.priority_order) : 100;
+    if (priority_order !== undefined && priority_order !== null && !isNaN(Number(priority_order))) {
+        newPriorityOrder = Number(priority_order);
+    }
+
+    if (move_direction === 'FIRST') {
+        const minRow = db.prepare('SELECT MIN(COALESCE(priority_order, 100)) as min_ord FROM purchase_orders').get();
+        newPriorityOrder = Math.max(1, (minRow && minRow.min_ord != null ? Number(minRow.min_ord) : 10) - 1);
+    } else if (move_direction === 'UP') {
+        newPriorityOrder = Math.max(1, newPriorityOrder - 5);
+    } else if (move_direction === 'DOWN') {
+        newPriorityOrder = newPriorityOrder + 5;
+    }
+
+    let newActiveToday = po.is_active_today ? 1 : 0;
+    if (is_active_today !== undefined && is_active_today !== null) {
+        newActiveToday = (is_active_today === true || is_active_today === 1 || is_active_today === '1' || is_active_today === 'true') ? 1 : 0;
+    }
+
+    const newProdNotes = production_notes !== undefined ? String(production_notes) : (po.production_notes || null);
+    const now = getManilaDateTime();
+
+    db.prepare(`
+        UPDATE purchase_orders
+        SET priority_status = ?,
+            priority_order = ?,
+            is_active_today = ?,
+            production_notes = ?,
+            updated_at = ?
+        WHERE id = ?
+    `).run(newPriorityStatus, newPriorityOrder, newActiveToday, newProdNotes, now, id);
+
+    const updated = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
+
+    logAudit({
+        userId: req.user.id,
+        userName: req.user.name,
+        userRole: req.user.role,
+        action: 'UPDATE_PRODUCTION_PRIORITY',
+        entityType: 'PURCHASE_ORDER',
+        entityId: po.po_number,
+        details: {
+            poNumber: po.po_number,
+            soNumber: po.so_number,
+            priority_status: newPriorityStatus,
+            priority_order: newPriorityOrder,
+            is_active_today: newActiveToday,
+            production_notes: newProdNotes
+        },
+        ipAddress: req.ip
+    });
+
+    return res.json({
+        success: true,
+        message: `Sales Order ${po.so_number || po.po_number} production schedule updated.`,
+        data: updated
+    });
+};
+
+router.put('/:id/production-priority', authenticateToken, updateProductionPriorityHandler);
+router.patch('/:id/production-priority', authenticateToken, updateProductionPriorityHandler);
+
 module.exports = router;
+

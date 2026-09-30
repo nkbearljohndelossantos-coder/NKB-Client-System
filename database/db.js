@@ -1127,6 +1127,99 @@ function runMigrations(dbInstance, isMysql) {
             console.warn('API keys table init note:', apiKeysErr.message);
         }
 
+        // Production Supervisor Priority & Active Today Columns on purchase_orders
+        try { dbInstance.exec(`ALTER TABLE purchase_orders ADD COLUMN priority_status ${textType} DEFAULT 'NORMAL';`); } catch (_) {}
+        try { dbInstance.exec(`ALTER TABLE purchase_orders ADD COLUMN priority_order ${intType} DEFAULT 100;`); } catch (_) {}
+        try { dbInstance.exec(`ALTER TABLE purchase_orders ADD COLUMN is_active_today ${intType} DEFAULT 0;`); } catch (_) {}
+        try { dbInstance.exec(`ALTER TABLE purchase_orders ADD COLUMN production_notes ${textType};`); } catch (_) {}
+
+        // Warehouse Raw Materials Inventory Table
+        try {
+            if (isMysql) {
+                dbInstance.exec(`
+                    CREATE TABLE IF NOT EXISTS raw_materials_inventory (
+                        id VARCHAR(36) NOT NULL PRIMARY KEY,
+                        material_code VARCHAR(100) UNIQUE NOT NULL,
+                        material_name VARCHAR(255) NOT NULL,
+                        category VARCHAR(100) NOT NULL DEFAULT 'Active Ingredients',
+                        supplier VARCHAR(255) NULL,
+                        current_stock DECIMAL(14,4) NOT NULL DEFAULT 0.0000,
+                        unit VARCHAR(50) NOT NULL DEFAULT 'kg',
+                        minimum_stock_level DECIMAL(14,4) NOT NULL DEFAULT 10.0000,
+                        unit_cost DECIMAL(14,4) NOT NULL DEFAULT 0.0000,
+                        location VARCHAR(100) DEFAULT 'Warehouse Zone A',
+                        batch_lot_number VARCHAR(100) NULL,
+                        expiry_date VARCHAR(50) NULL,
+                        status VARCHAR(50) NOT NULL DEFAULT 'IN_STOCK',
+                        notes TEXT NULL,
+                        updated_by VARCHAR(255) NULL,
+                        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        INDEX idx_rmi_code (material_code),
+                        INDEX idx_rmi_category (category),
+                        INDEX idx_rmi_status (status)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+                `);
+            } else {
+                dbInstance.exec(`
+                    CREATE TABLE IF NOT EXISTS raw_materials_inventory (
+                        id TEXT PRIMARY KEY,
+                        material_code TEXT UNIQUE NOT NULL,
+                        material_name TEXT NOT NULL,
+                        category TEXT NOT NULL DEFAULT 'Active Ingredients',
+                        supplier TEXT,
+                        current_stock REAL NOT NULL DEFAULT 0.0,
+                        unit TEXT NOT NULL DEFAULT 'kg',
+                        minimum_stock_level REAL NOT NULL DEFAULT 10.0,
+                        unit_cost REAL NOT NULL DEFAULT 0.0,
+                        location TEXT DEFAULT 'Warehouse Zone A',
+                        batch_lot_number TEXT,
+                        expiry_date TEXT,
+                        status TEXT NOT NULL DEFAULT 'IN_STOCK',
+                        notes TEXT,
+                        updated_by TEXT,
+                        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                        updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_rmi_code ON raw_materials_inventory(material_code);
+                    CREATE INDEX IF NOT EXISTS idx_rmi_category ON raw_materials_inventory(category);
+                    CREATE INDEX IF NOT EXISTS idx_rmi_status ON raw_materials_inventory(status);
+                `);
+            }
+
+            // Seed initial warehouse raw materials if table is empty
+            const rmCount = dbInstance.prepare('SELECT COUNT(*) as count FROM raw_materials_inventory').get()?.count || 0;
+            if (rmCount === 0) {
+                const defaultMaterials = [
+                    { code: 'RM-WTR-01', name: 'Deionized Water (Aqua USP)', category: 'Base & Solvents', supplier: 'NKB PureWater Plant', stock: 2500.0, unit: 'L', min: 500.0, cost: 20.0, loc: 'Tank Farm A-1', lot: 'LOT-AQ-202609', exp: '2027-09-30' },
+                    { code: 'RM-GLY-01', name: 'Vegetable Glycerin 99.7% USP', category: 'Humectants & Emollients', supplier: 'Chemrez Technologies', stock: 450.0, unit: 'kg', min: 100.0, cost: 180.0, loc: 'Rack A-02', lot: 'LOT-GLY-8821', exp: '2028-03-15' },
+                    { code: 'RM-NIA-01', name: 'Niacinamide USP (Vitamin B3)', category: 'Active Ingredients', supplier: 'DSM Nutritional Products', stock: 85.0, unit: 'kg', min: 25.0, cost: 1800.0, loc: 'Cold Room B-01', lot: 'LOT-NIA-4410', exp: '2027-12-01' },
+                    { code: 'RM-KJC-01', name: 'Kojic Acid Dipalmitate Pure', category: 'Active Ingredients', supplier: 'SinoLion Cosmetics', stock: 18.5, unit: 'kg', min: 25.0, cost: 4200.0, loc: 'Cold Room B-02', lot: 'LOT-KJC-9012', exp: '2027-08-20' },
+                    { code: 'RM-ARB-01', name: 'Alpha Arbutin Crystalline Powder', category: 'Active Ingredients', supplier: 'Pentapharm / DSM', stock: 12.0, unit: 'kg', min: 10.0, cost: 6500.0, loc: 'Cold Room B-03', lot: 'LOT-ARB-3319', exp: '2027-11-10' },
+                    { code: 'RM-HYA-01', name: 'Sodium Hyaluronate (Multi-Molecular HA)', category: 'Active Ingredients', supplier: 'Bloomage Freda Biopharm', stock: 8.0, unit: 'kg', min: 5.0, cost: 12000.0, loc: 'Cold Room B-04', lot: 'LOT-HYA-7741', exp: '2027-10-05' },
+                    { code: 'RM-CTA-01', name: 'Cetostearyl Alcohol 30/70 NF', category: 'Emulsifiers & Waxes', supplier: 'Kao Chemicals Global', stock: 320.0, unit: 'kg', min: 75.0, cost: 450.0, loc: 'Rack C-01', lot: 'LOT-CTA-5520', exp: '2028-05-01' },
+                    { code: 'RM-STA-01', name: 'Triple Pressed Stearic Acid', category: 'Emulsifiers & Waxes', supplier: 'Wilmar Oleochemicals', stock: 210.0, unit: 'kg', min: 50.0, cost: 350.0, loc: 'Rack C-02', lot: 'LOT-STA-6612', exp: '2028-06-15' },
+                    { code: 'RM-OMC-01', name: 'Octyl Methoxycinnamate (UVB Filter)', category: 'UV Filters & Actives', supplier: 'BASF Care Creations', stock: 65.0, unit: 'kg', min: 30.0, cost: 2200.0, loc: 'Rack D-01', lot: 'LOT-OMC-1190', exp: '2027-07-30' },
+                    { code: 'RM-TIO-01', name: 'Micronized Titanium Dioxide (SPF Grade)', category: 'UV Filters & Actives', supplier: 'Tayca Corporation', stock: 40.0, unit: 'kg', min: 20.0, cost: 1500.0, loc: 'Rack D-02', lot: 'LOT-TIO-2284', exp: '2028-09-01' },
+                    { code: 'RM-PHX-01', name: 'Phenoxyethanol & Ethylhexylglycerin', category: 'Preservatives & Stabilizers', supplier: 'Schülke & Mayr (Euxyl)', stock: 95.0, unit: 'kg', min: 20.0, cost: 950.0, loc: 'Rack E-01', lot: 'LOT-PHX-3091', exp: '2028-01-20' },
+                    { code: 'RM-FRG-01', name: 'Signature Floral & Dewdrop Fragrance Oil', category: 'Fragrances & Essential Oils', supplier: 'Givaudan Fragrances', stock: 14.0, unit: 'kg', min: 15.0, cost: 2500.0, loc: 'Aroma Vault F-01', lot: 'LOT-FRG-7102', exp: '2027-06-30' },
+                    { code: 'PK-BOT-100', name: '100mL Frosted Airless Pump Bottle (White/Gold)', category: 'Packaging & Containers', supplier: 'Manila Packaging Corp.', stock: 18500, unit: 'pcs', min: 5000, cost: 18.50, loc: 'Packaging Bay P-01', lot: 'LOT-PK-2026A', exp: 'N/A' },
+                    { code: 'PK-TUB-50', name: '50g Soft-Touch Cosmetic Squeeze Tube', category: 'Packaging & Containers', supplier: 'AsiaPlast Packaging', stock: 3200, unit: 'pcs', min: 5000, cost: 12.00, loc: 'Packaging Bay P-02', lot: 'LOT-PK-2026B', exp: 'N/A' }
+                ];
+                const insRm = dbInstance.prepare(`
+                    INSERT INTO raw_materials_inventory
+                    (id, material_code, material_name, category, supplier, current_stock, unit, minimum_stock_level, unit_cost, location, batch_lot_number, expiry_date, status, notes, updated_by)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'System Seed')
+                `);
+                for (const m of defaultMaterials) {
+                    const st = m.stock <= 0 ? 'OUT_OF_STOCK' : (m.stock <= m.min ? 'LOW_STOCK' : 'IN_STOCK');
+                    insRm.run(uuidv4(), m.code, m.name, m.category, m.supplier, m.stock, m.unit, m.min, m.cost, m.loc, m.lot, m.exp, st, 'Initial warehouse raw material inventory');
+                }
+            }
+        } catch (rmErr) {
+            console.warn('Raw materials inventory init note:', rmErr.message);
+        }
+
         // Idempotent migration: Shift historical UTC timestamps in SQLite to Philippine Time (Asia/Manila, UTC+8)
         if (!isMysql) {
             try {

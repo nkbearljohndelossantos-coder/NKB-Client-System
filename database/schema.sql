@@ -128,6 +128,10 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
     raw_materials_status TEXT DEFAULT 'PENDING_CHECK',
     formulation_converted INTEGER NOT NULL DEFAULT 0,
     formulation_converted_at TEXT,
+    priority_status TEXT NOT NULL DEFAULT 'NORMAL',
+    priority_order INTEGER NOT NULL DEFAULT 100,
+    is_active_today INTEGER NOT NULL DEFAULT 0,
+    production_notes TEXT,
     created_by TEXT NOT NULL,
     approved_by TEXT,
     approved_at TEXT,
@@ -736,6 +740,32 @@ CREATE INDEX IF NOT EXISTS idx_cps_status ON client_payment_submissions(status);
 CREATE INDEX IF NOT EXISTS idx_cps_invoice ON client_payment_submissions(invoice_id);
 CREATE INDEX IF NOT EXISTS idx_cps_client ON client_payment_submissions(client_id);
 
+-- Warehouse Raw Materials Inventory Table
+CREATE TABLE IF NOT EXISTS raw_materials_inventory (
+    id TEXT PRIMARY KEY,
+    material_code TEXT UNIQUE NOT NULL,
+    material_name TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'Active Ingredients',
+    supplier TEXT,
+    current_stock REAL NOT NULL DEFAULT 0.0,
+    unit TEXT NOT NULL DEFAULT 'kg',
+    minimum_stock_level REAL NOT NULL DEFAULT 10.0,
+    unit_cost REAL NOT NULL DEFAULT 0.0,
+    location TEXT DEFAULT 'Warehouse Zone A',
+    batch_lot_number TEXT,
+    expiry_date TEXT,
+    status TEXT NOT NULL DEFAULT 'IN_STOCK',
+    notes TEXT,
+    updated_by TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_rmi_code ON raw_materials_inventory(material_code);
+CREATE INDEX IF NOT EXISTS idx_rmi_category ON raw_materials_inventory(category);
+CREATE INDEX IF NOT EXISTS idx_rmi_status ON raw_materials_inventory(status);
+
 -- Initial Executive Super Admin Account (Email: admin@nkbmanufacturing.com | Password: Admin123!)
 INSERT OR REPLACE INTO users (id, name, email, password_hash, plain_password, role, is_active) VALUES
 ('a0000000-0000-0000-0000-000000000001', 'Executive Admin', 'admin@nkbmanufacturing.com', '$2b$10$jny3GQXy8GwL8vkYVtV4EeTH2QDo8tfg6hJO/vbpG3Xrwakfqgx2G', 'Admin123!', 'SUPER_ADMIN', 1);
+

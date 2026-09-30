@@ -82,7 +82,9 @@ router.get('/overview', authenticateToken, enforceClientIsolation, (req, res) =>
 
     // Admin Dashboard KPI
     const totalClients = db.prepare('SELECT COUNT(*) as count FROM clients WHERE is_active = 1').get().count;
+    const totalPOs = db.prepare("SELECT COUNT(*) as count FROM purchase_orders WHERE status NOT IN ('CANCELLED', 'VOIDED')").get().count;
     const openPOs = db.prepare("SELECT COUNT(*) as count FROM purchase_orders WHERE status NOT IN ('COMPLETED', 'CANCELLED', 'VOIDED')").get().count;
+    const activeTodayPOs = db.prepare("SELECT COUNT(*) as count FROM purchase_orders WHERE COALESCE(is_active_today, 0) = 1 AND status NOT IN ('CANCELLED', 'VOIDED')").get().count;
     const activeBatches = db.prepare("SELECT COUNT(*) as count FROM production_batches WHERE status IN ('MIXING', 'BOTTLING', 'QC_PASSED', 'EXCEPTION_REQUIRES_APPROVAL')").get().count;
     const pendingApprovalBatches = db.prepare("SELECT COUNT(*) as count FROM production_batches WHERE status = 'EXCEPTION_REQUIRES_APPROVAL'").get().count;
     const pendingAcceptanceDRs = db.prepare("SELECT COUNT(*) as count FROM delivery_receipts WHERE status = 'PENDING_CLIENT_ACCEPTANCE'").get().count;
@@ -178,7 +180,9 @@ router.get('/overview', authenticateToken, enforceClientIsolation, (req, res) =>
         success: true,
         data: {
             totalClients,
+            totalPOs,
             openPOs,
+            activeTodayPOs,
             activeBatches,
             pendingApprovalBatches,
             pendingAcceptanceDRs,
