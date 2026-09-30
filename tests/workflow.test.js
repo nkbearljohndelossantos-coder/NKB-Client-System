@@ -3333,6 +3333,108 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.strictEqual(delRmRes.status, 200);
     });
 
+    test('42. Strict Order Completion Rule, Unproduced / Incomplete Delivery Completion Lock (PO-2026-000007) & Continuous Partial Delivery', async () => {
+        const admin = db.prepare("SELECT * FROM users WHERE role = 'SUPER_ADMIN' OR role = 'ADMIN'").get();
+
+        // 1. Check or seed PO-2026-000007 with 0 produced batches
+        let po7 = db.prepare("SELECT * FROM purchase_orders WHERE po_number = 'PO-2026-000007'").get();
+        let seededPo7 = false;
+        if (!po7) {
+            seededPo7 = true;
+            const testPo7Id = 'test-po-7-id';
+            db.prepare(`
+                INSERT INTO purchase_orders (id, po_number, so_number, client_id, status, subtotal, grand_total, created_by)
+                VALUES (?, 'PO-2026-000007', 'SO-2026-000007', ?, 'IN_PRODUCTION', 300000, 300000, ?)
+            `).run(testPo7Id, demoClient.id, admin.id);
+            const p1 = db.prepare("SELECT * FROM products LIMIT 1").get();
+            const p2 = db.prepare("SELECT * FROM products WHERE id != ? LIMIT 1").get(p1.id);
+            db.prepare(`
+                INSERT INTO purchase_order_items (id, po_id, product_id, item_name, target_quantity, min_allowed_quantity, max_allowed_quantity, unit_price, subtotal)
+                VALUES ('item-po-7-1', ?, ?, 'HER CHOICE PH INTENSIVE BLEACHING BAR SOAP 120g', 5000, 4500, 5500, 30, 150000),
+                       ('item-po-7-2', ?, ?, 'HER CHOICE PH KOJIC PAPAYA BAR SOAP 120g', 5000, 4500, 5500, 30, 150000)
+            `).run(testPo7Id, p1.id, testPo7Id, p2.id);
+            po7 = db.prepare("SELECT * FROM purchase_orders WHERE id = ?").get(testPo7Id);
+        }
+
+        assert.ok(po7, 'PO-2026-000007 must exist in database');
+        assert.strictEqual(po7.status, 'IN_PRODUCTION');
+
+        // 2. Attempting to declare PO-2026-000007 finished MUST fail because products are not fully produced
+        const finishRes = await request(app)
+            .post(`/api/orders/${po7.id}/declare-finished`)
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({});
+        assert.strictEqual(finishRes.status, 400);
+        assert.strictEqual(finishRes.body.success, false);
+        assert.strictEqual(finishRes.body.code, 'UNPRODUCED_ITEMS');
+        assert.ok(finishRes.body.error.includes('HER CHOICE PH INTENSIVE BLEACHING BAR SOAP'));
+        assert.ok(finishRes.body.error.includes('Delivering cannot stop until all products needed are produced and delivered'));
+
+        if (seededPo7) {
+            db.prepare("DELETE FROM purchase_order_items WHERE po_id = ?").run(po7.id);
+            db.prepare("DELETE FROM purchase_orders WHERE id = ?").run(po7.id);
+        }
+
+        // 3. Verify invoiceService item-by-item check: create a multi-item PO where item 1 is delivered and item 2 is undelivered
+        const multiPoId = 'test-multi-po-completion';
+        const multiPoNum = 'PO-2026-999990';
+        db.prepare(`
+            INSERT INTO purchase_orders (id, po_number, client_id, status, subtotal, grand_total, created_by)
+            VALUES (?, ?, ?, 'IN_PRODUCTION', 20000, 20000, ?)
+        `).run(multiPoId, multiPoNum, demoClient.id, admin.id);
+
+        const prod1 = db.prepare("SELECT * FROM products LIMIT 1").get();
+        const prod2 = db.prepare("SELECT * FROM products WHERE id != ? LIMIT 1").get(prod1.id);
+
+        db.prepare(`
+            INSERT INTO purchase_order_items (id, po_id, product_id, target_quantity, min_allowed_quantity, max_allowed_quantity, unit_price, subtotal)
+            VALUES ('item-po-comp-1', ?, ?, 100, 100, 110, 100, 10000),
+                   ('item-po-comp-2', ?, ?, 100, 100, 110, 100, 10000)
+        `).run(multiPoId, prod1.id, multiPoId, prod2.id);
+
+        // JO for item 1 with completed batch & yield
+        const jo1Id = 'jo-comp-1';
+        db.prepare(`
+            INSERT INTO job_orders (id, jo_number, po_id, product_id, target_quantity, status, created_by)
+            VALUES (?, 'JO-TEST-COMP-1', ?, ?, 100, 'COMPLETED', ?)
+        `).run(jo1Id, multiPoId, prod1.id, admin.id);
+
+        const batch1Id = 'batch-comp-1';
+        db.prepare(`
+            INSERT INTO production_batches (id, batch_number, jo_id, product_id, status, actual_yield, target_quantity, production_date, expiry_date, created_by)
+            VALUES (?, 'BAT-COMP-01', ?, ?, 'QC_PASSED', 100, 100, '2026-09-30', '2028-09-30', ?)
+        `).run(batch1Id, jo1Id, prod1.id, admin.id);
+
+        // Deliver item 1 only
+        const drId = 'dr-comp-1';
+        db.prepare(`
+            INSERT INTO delivery_receipts (id, dr_number, client_id, po_id, jo_id, status, created_by)
+            VALUES (?, 'DR-2026-999990', ?, ?, ?, 'ACCEPTED', ?)
+        `).run(drId, demoClient.id, multiPoId, jo1Id, admin.id);
+
+        db.prepare(`
+            INSERT INTO delivery_items (id, dr_id, product_id, batch_id, delivered_quantity, accepted_quantity, unit_price)
+            VALUES ('di-comp-1', ?, ?, ?, 100, 100, 100)
+        `).run(drId, prod1.id, batch1Id);
+
+        // Calling invoiceService on drId: PO must become PARTIALLY_DELIVERED, NOT COMPLETED!
+        const { createInvoiceFromDR } = require('../services/invoiceService');
+        const invoiceRes = createInvoiceFromDR({ drId, userId: admin.id, userName: admin.name, userRole: admin.role, createdBy: admin.id });
+        assert.ok(invoiceRes.invoiceId);
+
+        const postInvoicePO = db.prepare("SELECT * FROM purchase_orders WHERE id = ?").get(multiPoId);
+        assert.strictEqual(postInvoicePO.status, 'PARTIALLY_DELIVERED', 'PO must NOT be marked COMPLETED when item 2 is undelivered and unproduced');
+
+        // Cleanup test PO
+        db.prepare("DELETE FROM sales_invoices WHERE dr_id = ?").run(drId);
+        db.prepare("DELETE FROM delivery_items WHERE dr_id = ?").run(drId);
+        db.prepare("DELETE FROM delivery_receipts WHERE id = ?").run(drId);
+        db.prepare("DELETE FROM production_batches WHERE id = ?").run(batch1Id);
+        db.prepare("DELETE FROM job_orders WHERE id = ?").run(jo1Id);
+        db.prepare("DELETE FROM purchase_order_items WHERE po_id = ?").run(multiPoId);
+        db.prepare("DELETE FROM purchase_orders WHERE id = ?").run(multiPoId);
+    });
+
     after(() => {
         // Automatically delete all test decoys and temporary test database
         try {

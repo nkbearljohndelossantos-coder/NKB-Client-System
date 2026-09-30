@@ -159,6 +159,19 @@ router.get('/', authenticateToken, enforceClientIsolation, (req, res) => {
     for (const po of orders) {
         po.items = db.prepare(`
             SELECT poi.*, COALESCE(poi.item_name, p.name) as product_name, p.sku, p.unit, p.category, p.formula_code, p.shelf_life_months,
+                   (
+                       SELECT COALESCE(SUM(di.delivered_quantity), 0)
+                       FROM delivery_items di
+                       JOIN delivery_receipts dr ON di.dr_id = dr.id
+                       WHERE dr.po_id = poi.po_id AND di.product_id = poi.product_id AND dr.status != 'CANCELLED'
+                   ) as total_delivered,
+                   (
+                       SELECT COALESCE(SUM(COALESCE(by.actual_yield, pb.actual_yield, 0)), 0)
+                       FROM job_orders jo
+                       JOIN production_batches pb ON pb.jo_id = jo.id AND pb.status IN ('QC_PASSED', 'APPROVED_FOR_DISPATCH', 'COMPLETED')
+                       LEFT JOIN batch_yields by ON by.batch_id = pb.id
+                       WHERE jo.po_id = poi.po_id AND jo.product_id = poi.product_id
+                   ) as total_produced,
                    (SELECT jo.id FROM job_orders jo WHERE jo.po_id = poi.po_id AND jo.product_id = poi.product_id ORDER BY jo.created_at DESC LIMIT 1) as jo_id,
                    (SELECT jo.jo_number FROM job_orders jo WHERE jo.po_id = poi.po_id AND jo.product_id = poi.product_id ORDER BY jo.created_at DESC LIMIT 1) as jo_number,
                    (SELECT jo.status FROM job_orders jo WHERE jo.po_id = poi.po_id AND jo.product_id = poi.product_id ORDER BY jo.created_at DESC LIMIT 1) as jo_status,
@@ -1534,6 +1547,109 @@ const updateProductionPriorityHandler = (req, res) => {
 
 router.put('/:id/production-priority', authenticateToken, updateProductionPriorityHandler);
 router.patch('/:id/production-priority', authenticateToken, updateProductionPriorityHandler);
+
+/**
+ * POST /api/orders/:id/declare-finished
+ * Declare a Sales Order / PO as fully finished and completed.
+ * Enforces that all products must be fully produced and delivered before it can be closed.
+ */
+router.post('/:id/declare-finished', authenticateToken, requireRoles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'PRODUCTION', 'WAREHOUSE'), (req, res) => {
+    const { id } = req.params;
+    const { force, notes } = req.body || {};
+
+    const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
+    if (!po) {
+        return res.status(404).json({ success: false, error: 'Purchase Order not found.' });
+    }
+
+    if (po.status === 'COMPLETED') {
+        return res.status(400).json({ success: false, error: `Order ${po.po_number} is already marked COMPLETED.` });
+    }
+
+    if (po.status === 'CANCELLED' || po.status === 'VOIDED' || po.status === 'DRAFT') {
+        return res.status(400).json({ success: false, error: `Cannot declare order in status "${po.status}" as finished.` });
+    }
+
+    // Inspect each line item
+    const poItems = db.prepare(`
+        SELECT poi.*, COALESCE(poi.item_name, p.name) as product_name, p.sku,
+               COALESCE(poi.min_allowed_quantity, poi.target_quantity) as min_qty,
+               (
+                   SELECT COALESCE(SUM(di.accepted_quantity), 0)
+                   FROM delivery_items di
+                   JOIN delivery_receipts d ON di.dr_id = d.id
+                   WHERE d.po_id = poi.po_id AND di.product_id = poi.product_id AND d.status != 'CANCELLED'
+               ) as total_delivered,
+               (
+                   SELECT COALESCE(SUM(COALESCE(by.actual_yield, pb.actual_yield, 0)), 0)
+                   FROM job_orders jo
+                   JOIN production_batches pb ON pb.jo_id = jo.id AND pb.status IN ('QC_PASSED', 'APPROVED_FOR_DISPATCH', 'COMPLETED')
+                   LEFT JOIN batch_yields by ON by.batch_id = pb.id
+                   WHERE jo.po_id = poi.po_id AND jo.product_id = poi.product_id
+               ) as total_produced
+        FROM purchase_order_items poi
+        LEFT JOIN products p ON poi.product_id = p.id
+        WHERE poi.po_id = ?
+    `).all(id);
+
+    if (poItems.length === 0) {
+        return res.status(400).json({ success: false, error: 'Order has no items.' });
+    }
+
+    // Check production completion
+    const unproduced = poItems.filter(i => i.total_produced < i.min_qty);
+    if (unproduced.length > 0 && !force) {
+        const details = unproduced.map(u => `• ${u.product_name}: Produced ${Number(u.total_produced).toLocaleString()} of ${Number(u.target_quantity).toLocaleString()} pcs`).join('\n');
+        return res.status(400).json({
+            success: false,
+            code: 'UNPRODUCED_ITEMS',
+            error: `Cannot declare order as finished: One or more products have not been fully produced yet.\n${details}\n\nDelivering cannot stop until all products needed are produced and delivered.`,
+            unproduced
+        });
+    }
+
+    // Check delivery completion
+    const undelivered = poItems.filter(i => i.total_delivered < i.min_qty);
+    if (undelivered.length > 0 && !force) {
+        const details = undelivered.map(u => `• ${u.product_name}: Delivered ${Number(u.total_delivered).toLocaleString()} of ${Number(u.target_quantity).toLocaleString()} pcs (Remaining: ${Math.max(0, u.target_quantity - u.total_delivered).toLocaleString()} pcs)`).join('\n');
+        return res.status(400).json({
+            success: false,
+            code: 'UNDELIVERED_ITEMS',
+            can_force: true,
+            error: `Cannot declare order as finished: Deliveries are still ongoing.\n${details}\n\nDelivering will not stop until all required items are delivered.`,
+            undelivered
+        });
+    }
+
+    db.prepare(`
+        UPDATE purchase_orders
+        SET status = 'COMPLETED', updated_at = datetime('now', 'localtime')
+        WHERE id = ?
+    `).run(id);
+
+    logAudit({
+        userId: req.user.id,
+        userName: req.user.name,
+        userRole: req.user.role,
+        action: 'DECLARE_ORDER_FINISHED',
+        entityType: 'PURCHASE_ORDER',
+        entityId: po.po_number,
+        details: {
+            poId: po.id,
+            poNumber: po.po_number,
+            soNumber: po.so_number,
+            force: !!force,
+            notes: notes || null
+        },
+        ipAddress: req.ip
+    });
+
+    return res.json({
+        success: true,
+        message: `Sales Order ${po.so_number || po.po_number} successfully declared finished and completed!`,
+        poNumber: po.po_number
+    });
+});
 
 router.evaluateOrderRemindersAndAutoPrioritize = evaluateOrderRemindersAndAutoPrioritize;
 

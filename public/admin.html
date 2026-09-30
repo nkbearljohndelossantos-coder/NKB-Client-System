@@ -320,23 +320,19 @@
                             <button type="button" onclick="setProdBoardFilter('ON_HOLD')" class="prod-board-pill px-3 py-1.5 rounded-xl font-semibold bg-slate-100 text-slate-600 border border-slate-300 hover:bg-slate-200 transition" data-filter="ON_HOLD">⏸️ On Hold</button>
                         </div>
 
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-left text-xs">
+                        <div class="w-full overflow-hidden">
+                            <table class="w-full text-left text-xs table-auto">
                                 <thead class="bg-slate-50 border-y border-slate-200 text-slate-600 font-bold uppercase tracking-wider">
                                     <tr>
-                                        <th class="py-3 px-3">Queue Rank</th>
-                                        <th class="py-3 px-3">Sales Order</th>
-                                        <th class="py-3 px-3">Client & Products</th>
-                                        <th class="py-3 px-3 text-center">Target Qty</th>
-                                        <th class="py-3 px-3 text-center">Order Stage</th>
-                                        <th class="py-3 px-3 text-center">Priority Assignment</th>
-                                        <th class="py-3 px-3 text-center">⏰ Reminder & Auto-Prioritize</th>
-                                        <th class="py-3 px-3 text-center">Active Today in Factory</th>
-                                        <th class="py-3 px-3 text-right">Queue Action</th>
+                                        <th class="py-2.5 px-3 w-32 sm:w-36">Queue & Order</th>
+                                        <th class="py-2.5 px-3 min-w-[200px]">Client & Ordered Products</th>
+                                        <th class="py-2.5 px-3 w-48 text-center">Stage & Priority</th>
+                                        <th class="py-2.5 px-2 w-32 text-center">Factory Today</th>
+                                        <th class="py-2.5 px-3 w-28 text-right">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody id="table-prod-supervisor-so-body" class="divide-y divide-slate-100 font-medium">
-                                    <tr><td colspan="9" class="py-8 text-center text-slate-400">Loading interactive Sales Orders queue...</td></tr>
+                                    <tr><td colspan="5" class="py-8 text-center text-slate-400">Loading interactive Sales Orders queue...</td></tr>
                                 </tbody>
                             </table>
                         </div>

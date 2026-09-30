@@ -218,21 +218,33 @@ function createInvoiceFromDR({ drId, createdBy, userId, userRole, userName, note
             WHERE id = ?
         `).run(drId);
 
-        // Check if all PO items are delivered & update PO status
-        const totalDeliveredForPO = db.prepare(`
-            SELECT SUM(di.accepted_quantity) as total_accepted
-            FROM delivery_items di
-            JOIN delivery_receipts d ON di.dr_id = d.id
-            WHERE d.po_id = ? AND d.status IN ('ACCEPTED', 'INVOICED')
-        `).get(dr.po_id);
+        // Check if all PO items are delivered & fully produced before completing PO
+        const poItems = db.prepare(`
+            SELECT poi.id, poi.product_id, poi.target_quantity, COALESCE(poi.min_allowed_quantity, poi.target_quantity) as min_qty,
+                   (
+                       SELECT COALESCE(SUM(di.accepted_quantity), 0)
+                       FROM delivery_items di
+                       JOIN delivery_receipts d ON di.dr_id = d.id
+                       WHERE d.po_id = poi.po_id AND di.product_id = poi.product_id AND d.status IN ('ACCEPTED', 'INVOICED')
+                   ) as total_accepted,
+                   (
+                       SELECT COALESCE(SUM(COALESCE(by.actual_yield, pb.actual_yield, 0)), 0)
+                       FROM job_orders jo
+                       JOIN production_batches pb ON pb.jo_id = jo.id AND pb.status IN ('QC_PASSED', 'APPROVED_FOR_DISPATCH', 'COMPLETED')
+                       LEFT JOIN batch_yields by ON by.batch_id = pb.id
+                       WHERE jo.po_id = poi.po_id AND jo.product_id = poi.product_id
+                   ) as total_produced
+            FROM purchase_order_items poi
+            WHERE poi.po_id = ?
+        `).all(dr.po_id);
 
-        const totalPOTarget = db.prepare(`
-            SELECT SUM(target_quantity) as total_target
-            FROM purchase_order_items
-            WHERE po_id = ?
-        `).get(dr.po_id);
+        const allItemsCompleted = poItems.length > 0 && poItems.every(item => {
+            const deliveredEnough = item.total_accepted >= item.min_qty;
+            const producedEnough = item.total_produced >= item.min_qty;
+            return deliveredEnough && producedEnough;
+        });
 
-        if (totalDeliveredForPO && totalPOTarget && totalDeliveredForPO.total_accepted >= totalPOTarget.total_target) {
+        if (allItemsCompleted) {
             db.prepare(`
                 UPDATE purchase_orders
                 SET status = 'COMPLETED', updated_at = datetime('now', 'localtime')

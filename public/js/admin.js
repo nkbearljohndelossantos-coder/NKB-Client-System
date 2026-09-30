@@ -810,7 +810,7 @@ async function loadOrders() {
             const totalItemsCount = po.items ? po.items.length : 0;
             const allJOsStarted = totalItemsCount > 0 && (po.jo_count >= totalItemsCount);
             const allBatchesStarted = totalItemsCount > 0 && po.items && po.items.every(it => it.batch_number);
-            const allDispatched = totalItemsCount > 0 && po.items && po.items.every(it => it.dr_number);
+            const hasBatchesReady = po.items && po.items.some(it => it.batch_number || it.batch_id || (Number(it.actual_yield) > 0));
             const isVoided = po.status === 'VOIDED';
 
             const statusBorderColor = isVoided ? 'border-l-rose-500' :
@@ -885,18 +885,18 @@ async function loadOrders() {
                             <button onclick="approvePO('${po.id}', '${po.po_number}')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer" title="Approve Purchase Order">
                                 Approve
                             </button>
-                        ` : (canManageProduction && (po.status === 'APPROVED' || po.status === 'IN_PRODUCTION' || po.status === 'PARTIALLY_DELIVERED') && !allDispatched) ? `
+                        ` : (canManageProduction && (po.status === 'APPROVED' || po.status === 'IN_PRODUCTION' || po.status === 'PARTIALLY_DELIVERED') && po.status !== 'COMPLETED') ? `
                             ${!allJOsStarted ? `
                                 <button onclick="openCreateJOModal('${po.id}', '${po.po_number}', '${po.company_name.replace(/'/g, "\\'")}')" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-extrabold transition inline-flex items-center gap-1.5 shadow-sm cursor-pointer" title="Start Job Orders for all products in this order">
                                     <span>🏭 Start JO</span>
                                 </button>
-                            ` : !allBatchesStarted ? `
-                                <button onclick="openCreateAllBatchesModal('${po.client_id}', '${po.id}', '${po.company_name.replace(/'/g, "\\'")}')" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-xl text-xs font-extrabold transition inline-flex items-center gap-1.5 shadow-sm cursor-pointer" title="Record batch numbers and yield">
-                                    <span>⚗️ Batch</span>
-                                </button>
-                            ` : `
+                            ` : (po.status === 'PARTIALLY_DELIVERED' || hasBatchesReady) ? `
                                 <button onclick="openCreateAllDRModal('${po.client_id}', '${po.id}', '${po.company_name.replace(/'/g, "\\'")}')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-extrabold transition inline-flex items-center gap-1.5 shadow-sm cursor-pointer" title="Create Delivery Receipt">
                                     <span>🚚 Deliver (DR)</span>
+                                </button>
+                            ` : `
+                                <button onclick="openCreateAllBatchesModal('${po.client_id}', '${po.id}', '${po.company_name.replace(/'/g, "\\'")}')" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-xl text-xs font-extrabold transition inline-flex items-center gap-1.5 shadow-sm cursor-pointer" title="Record batch numbers and yield">
+                                    <span>⚗️ Batch</span>
                                 </button>
                             `}
                         ` : `
@@ -952,6 +952,14 @@ async function loadOrders() {
                                     ${(canConfirmInventory && po.status !== 'CANCELLED' && po.status !== 'VOIDED') ? `
                                         <button onclick="openSupplyRequestModal('${po.id}', '${po.po_number}', '${(po.company_name || '').replace(/'/g, "\\'")}')" class="w-full flex items-center gap-2 px-3 py-1.5 text-slate-700 hover:bg-slate-50 transition text-left cursor-pointer">
                                             <span>📋</span><span>Request Supplies</span>
+                                        </button>
+                                    ` : ''}
+                                    ${(canManageProduction && po.status !== 'COMPLETED' && po.status !== 'CANCELLED' && po.status !== 'VOIDED' && po.status !== 'DRAFT') ? `
+                                        <button onclick="openCreateAllDRModal('${po.client_id}', '${po.id}', '${(po.company_name || '').replace(/'/g, "\\'")}')" class="w-full flex items-center gap-2 px-3 py-1.5 text-emerald-700 hover:bg-emerald-50 transition text-left font-bold cursor-pointer">
+                                            <span>🚚</span><span>Deliver Products (DR)</span>
+                                        </button>
+                                        <button onclick="promptDeclareOrderFinished('${po.id}', '${po.po_number}')" class="w-full flex items-center gap-2 px-3 py-1.5 text-indigo-700 hover:bg-indigo-50 transition text-left font-bold cursor-pointer">
+                                            <span>✅</span><span>Declare Order Finished</span>
                                         </button>
                                     ` : ''}
                                     ${(po.supply_requests_count > 0) ? `
@@ -7611,9 +7619,8 @@ async function openCreateAllDRModal(clientId, poId, companyName) {
         return;
     }
 
-    // Filter items not yet dispatched, or list all batched items
-    const pendingDispatchJOs = batchedJOs.filter(j => !j.latest_dr_number);
-    const itemsToRender = pendingDispatchJOs.length > 0 ? pendingDispatchJOs : batchedJOs;
+    // All batched products can be dispatched across continuous partial deliveries
+    const itemsToRender = batchedJOs;
 
     const clientCompName = companyName || itemsToRender[0]?.company_name || 'Client Order';
     const primaryPoId = poId || itemsToRender[0]?.po_id;
@@ -7621,11 +7628,20 @@ async function openCreateAllDRModal(clientId, poId, companyName) {
     const clientSO = primaryPoNum ? primaryPoNum.replace('PO-', 'SO-') : 'SO-2026-000001';
 
     const itemsRowsHtml = itemsToRender.map((jo, idx) => {
-        const defaultQty = jo.total_yield || jo.target_quantity;
-        const alreadyDispatched = !!jo.latest_dr_number;
+        const targetQty = Number(jo.target_quantity) || 0;
+        const deliveredSoFar = Number(jo.delivered_quantity != null ? jo.delivered_quantity : (jo.cumulative_delivered_quantity || 0));
+        const remainingQty = Math.max(0, targetQty - deliveredSoFar);
+        const batchYield = Number(jo.latest_batch_yield || jo.total_yield || targetQty);
+        // Default quantity to remaining undelivered quantity, or available batch yield
+        const defaultQty = remainingQty > 0 ? remainingQty : batchYield;
+        const isTargetMet = targetQty > 0 && deliveredSoFar >= targetQty;
+
         return `
         <tr class="hover:bg-slate-50 transition border-b border-slate-100 last:border-b-0 dr-item-row"
             data-jo-id="${jo.id}" data-product-id="${jo.product_id}" data-batch-id="${jo.latest_batch_id}">
+            <td class="py-2.5 px-3">
+                <input type="checkbox" class="dr-item-include accent-emerald-600 w-4 h-4 cursor-pointer" ${remainingQty > 0 || !isTargetMet ? 'checked' : ''} onchange="this.closest('tr').classList.toggle('opacity-50', !this.checked); const inp = this.closest('tr').querySelector('.dr-item-qty'); if (inp) inp.disabled = !this.checked;">
+            </td>
             <td class="py-2.5 px-3 font-mono font-bold text-indigo-600">${jo.jo_number}</td>
             <td class="py-2.5 px-3 font-mono font-bold text-purple-700">
                 <span class="px-2 py-0.5 bg-purple-50 text-purple-800 border border-purple-200 rounded-md font-mono text-[11px]">
@@ -7636,18 +7652,15 @@ async function openCreateAllDRModal(clientId, poId, companyName) {
                 <div class="font-bold text-slate-800">${jo.product_name}</div>
                 ${jo.sku ? `<div class="text-[10px] text-slate-400 font-mono">SKU: ${jo.sku}</div>` : ''}
             </td>
-            <td class="py-2.5 px-3 text-right font-mono font-bold text-slate-700">
-                ${NKB.formatNumber(defaultQty)} pcs
+            <td class="py-2.5 px-3 text-right">
+                <div class="font-mono font-bold text-slate-800">${NKB.formatNumber(deliveredSoFar)} / ${NKB.formatNumber(targetQty)} pcs</div>
+                <div class="text-[10px] ${remainingQty > 0 ? 'text-amber-700 font-bold' : 'text-emerald-700 font-extrabold'}">
+                    ${remainingQty > 0 ? `(${NKB.formatNumber(remainingQty)} pcs remaining)` : '✓ Target Reached'}
+                </div>
             </td>
             <td class="py-2.5 px-3 text-right">
-                ${alreadyDispatched ? `
-                    <span class="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-xs font-mono font-bold">
-                        Dispatched (${jo.latest_dr_number})
-                    </span>
-                ` : `
-                    <input type="number" min="1" max="${Math.ceil(defaultQty * 1.2)}" value="${defaultQty}" required
-                        class="dr-item-qty w-28 px-2.5 py-1 text-xs border rounded-lg bg-emerald-50 border-emerald-300 font-bold text-emerald-900 text-right">
-                `}
+                <input type="number" min="1" max="${Math.max(100000, defaultQty * 2)}" value="${defaultQty}" required
+                    class="dr-item-qty w-28 px-2.5 py-1 text-xs border rounded-lg bg-emerald-50 border-emerald-300 font-bold text-emerald-900 text-right">
             </td>
         </tr>
         `;
@@ -7710,11 +7723,12 @@ async function openCreateAllDRModal(clientId, poId, companyName) {
                             <table class="w-full text-left text-xs">
                                 <thead class="bg-slate-100 text-slate-700 font-bold uppercase text-[10px]">
                                     <tr>
+                                        <th class="py-2.5 px-3 w-8">Ship</th>
                                         <th class="py-2.5 px-3">JO Ref</th>
                                         <th class="py-2.5 px-3">Batch Number</th>
                                         <th class="py-2.5 px-3">Product Name & SKU</th>
-                                        <th class="py-2.5 px-3 text-right">Available Yield</th>
-                                        <th class="py-2.5 px-3 text-right">Delivered Qty (pcs)</th>
+                                        <th class="py-2.5 px-3 text-right">Delivered Progress</th>
+                                        <th class="py-2.5 px-3 text-right">Dispatch Qty (pcs)</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-slate-100 font-medium">
@@ -7754,6 +7768,8 @@ async function submitCreateAllDR(e, poId, companyName) {
 
     const items = [];
     document.querySelectorAll('.dr-item-row').forEach(row => {
+        const includeCb = row.querySelector('.dr-item-include');
+        if (includeCb && !includeCb.checked) return;
         const productId = row.dataset.productId;
         const batchId = row.dataset.batchId;
         const qtyInput = row.querySelector('.dr-item-qty');
@@ -12950,7 +12966,7 @@ function renderProductionSalesOrderBoard() {
     });
 
     if (list.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-slate-400">No matching Sales Orders found in queue.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-slate-400">No matching Sales Orders found in queue.</td></tr>`;
         return;
     }
 
@@ -12967,8 +12983,26 @@ function renderProductionSalesOrderBoard() {
         const soNum = po.so_number || po.po_number.replace('PO-', 'SO-');
         const pStatus = po.priority_status || 'NORMAL';
         const isActiveToday = Number(po.is_active_today) === 1;
-        const itemsSummary = (po.items || []).map(it => `${it.product_name} (${NKB.formatNumber(it.target_quantity)} ${it.unit || 'pcs'})`).join(', ') || 'No items';
         const totalQty = po.total_target_quantity || (po.items || []).reduce((s, i) => s + (Number(i.target_quantity) || 0), 0);
+        const totalDelivered = (po.items || []).reduce((s, i) => s + Number(i.delivered_quantity != null ? i.delivered_quantity : (i.total_delivered || 0)), 0);
+
+        const itemsHtml = (po.items && po.items.length > 0)
+            ? po.items.map(it => {
+                const target = Number(it.target_quantity) || 0;
+                const del = Number(it.delivered_quantity != null ? it.delivered_quantity : (it.total_delivered || 0));
+                const isFullDel = del >= target && target > 0;
+                return `
+                    <div class="flex items-center justify-between text-[11px] gap-2 py-0.5 border-b border-slate-100/80 last:border-b-0">
+                        <span class="font-bold text-slate-800 truncate text-[11px]" title="${it.product_name}">${it.product_name}</span>
+                        <div class="flex items-center gap-1 shrink-0">
+                            <span class="px-1.5 py-0.2 rounded font-mono text-[9.5px] font-bold ${isFullDel ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : (del > 0 ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-slate-100 text-slate-600')}">
+                                🚚 ${NKB.formatNumber(del)} / ${NKB.formatNumber(target)} pcs
+                            </span>
+                        </div>
+                    </div>
+                `;
+            }).join('')
+            : '<span class="text-slate-400 italic text-[11px]">No items recorded</span>';
 
         // Reminder & Automatic Prioritizing cell HTML
         const hasReminder = !!(po.reminder_at && String(po.reminder_at).trim() !== '');
@@ -12988,80 +13022,134 @@ function renderProductionSalesOrderBoard() {
                 : (isRemToday ? `⏰ TODAY ${formatReminderDisplay(po.reminder_at).slice(11)} → ${autoTarget}` : `⏰ ${formatReminderDisplay(po.reminder_at)} → ${autoTarget}`);
 
             reminderCellHtml = `
-                <div class="flex flex-col items-center gap-1">
-                    <span class="px-2 py-0.5 rounded-full border font-extrabold text-[10px] inline-flex items-center gap-1 ${badgeStyle}">
+                <div class="flex flex-col items-center gap-0.5 mt-1">
+                    <span class="px-2 py-0.5 rounded-full border font-extrabold text-[9.5px] inline-flex items-center gap-1 ${badgeStyle}">
                         ${badgeText}
                     </span>
-                    ${po.reminder_note ? `<div class="text-[10px] text-slate-600 italic truncate max-w-[160px]" title="${po.reminder_note}">"${po.reminder_note}"</div>` : ''}
-                    ${higherPrioAheadCount > 0 ? `<div class="text-[9.5px] font-extrabold text-amber-700" title="You have ${higherPrioAheadCount} more prioritized order(s) ahead in queue">⚠️ ${higherPrioAheadCount} prioritized ahead</div>` : ''}
+                    ${po.reminder_note ? `<div class="text-[9.5px] text-slate-600 italic truncate max-w-[170px]" title="${po.reminder_note}">"${po.reminder_note}"</div>` : ''}
                     <div class="flex items-center gap-1 mt-0.5">
-                        <button type="button" onclick="openSOReminderModal('${po.id}')" class="px-2 py-0.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded text-[10px] font-bold cursor-pointer">✏️ Edit</button>
-                        <button type="button" onclick="clearSOReminder('${po.id}')" class="px-1.5 py-0.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded text-[10px] font-bold cursor-pointer" title="Clear Reminder">✕</button>
+                        <button type="button" onclick="openSOReminderModal('${po.id}')" class="px-1.5 py-0.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded text-[9.5px] font-bold cursor-pointer">✏️ Edit</button>
+                        <button type="button" onclick="clearSOReminder('${po.id}')" class="px-1 py-0.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded text-[9.5px] font-bold cursor-pointer" title="Clear Reminder">✕</button>
                     </div>
                 </div>
             `;
         } else {
             reminderCellHtml = `
-                <div class="flex flex-col items-center gap-1">
-                    <button type="button" onclick="openSOReminderModal('${po.id}')" class="px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition inline-flex items-center gap-1 cursor-pointer shadow-2xs">
-                        <span>⏰ Set Reminder</span>
+                <div class="flex items-center justify-center gap-1 mt-1">
+                    <button type="button" onclick="openSOReminderModal('${po.id}')" class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition inline-flex items-center gap-1 cursor-pointer">
+                        <span>⏰ + Reminder</span>
                     </button>
-                    ${higherPrioAheadCount > 0 ? `<span class="text-[9.5px] font-semibold text-amber-700">⚡ ${higherPrioAheadCount} prioritized ahead</span>` : `<span class="text-[9.5px] text-slate-400">Auto-prioritize timer</span>`}
                 </div>
             `;
         }
 
         return `
-            <tr class="${isActiveToday ? 'bg-emerald-50/50' : (pStatus === 'RUSH' ? 'bg-rose-50/30' : 'hover:bg-slate-50')} transition">
-                <td class="py-3 px-3">
-                    <div class="flex items-center gap-1.5">
-                        <span class="w-6 h-6 rounded-full ${idx === 0 ? 'bg-indigo-600 text-white font-black' : 'bg-slate-200 text-slate-700 font-bold'} flex items-center justify-center text-[11px]">#${idx + 1}</span>
-                        <div class="flex flex-col gap-0.5">
-                            <button onclick="updateOrderProductionSchedule('${po.id}', { move_direction: 'FIRST' })" title="Assign Goes First (#1 in Queue)" class="text-[10px] px-1.5 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded font-bold border border-indigo-200 cursor-pointer">⏫ First</button>
+            <tr class="${isActiveToday ? 'bg-emerald-50/40' : (pStatus === 'RUSH' ? 'bg-rose-50/25' : 'hover:bg-slate-50/80')} transition border-b border-slate-100">
+                <!-- Col 1: Queue Rank & Order Details -->
+                <td class="py-2.5 px-3 w-32 sm:w-36 align-top">
+                    <div class="flex flex-col gap-1.5">
+                        <div class="flex items-center gap-1">
+                            <span class="w-6 h-6 rounded-full ${idx === 0 ? 'bg-indigo-600 text-white font-black' : 'bg-slate-200 text-slate-700 font-bold'} flex items-center justify-center text-[11px] shrink-0">#${idx + 1}</span>
+                            <button onclick="updateOrderProductionSchedule('${po.id}', { move_direction: 'FIRST' })" title="Move to Top (#1 in Queue)" class="text-[9.5px] px-1 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded font-bold border border-indigo-200 cursor-pointer">⏫</button>
+                            <button onclick="updateOrderProductionSchedule('${po.id}', { move_direction: 'UP' })" title="Move Up in Queue" class="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-bold cursor-pointer">↑</button>
+                            <button onclick="updateOrderProductionSchedule('${po.id}', { move_direction: 'DOWN' })" title="Move Down in Queue" class="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-bold cursor-pointer">↓</button>
+                        </div>
+                        <div>
+                            <button onclick="openViewPOModal('${po.id}')" class="font-black text-indigo-600 hover:underline text-xs cursor-pointer block leading-tight text-left">${soNum}</button>
+                            <div class="text-[9.5px] text-slate-400 font-mono mt-0.5">${po.po_number} · ${po.po_date ? po.po_date.slice(5) : ''}</div>
                         </div>
                     </div>
                 </td>
-                <td class="py-3 px-3">
-                    <button onclick="openViewPOModal('${po.id}')" class="font-black text-indigo-600 hover:underline text-xs cursor-pointer">${soNum}</button>
-                    <div class="text-[10px] text-slate-400 font-mono">${po.po_number} · ${po.po_date || ''}</div>
+
+                <!-- Col 2: Client & Ordered Products with Progress -->
+                <td class="py-2.5 px-3 min-w-[200px] align-top">
+                    <div class="space-y-1">
+                        <div class="flex items-center justify-between gap-1">
+                            <span class="font-black text-slate-900 text-xs truncate max-w-[200px] sm:max-w-xs" title="${po.company_name}">${po.company_name}</span>
+                            <span class="text-[10px] font-extrabold text-slate-600 font-mono bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 shrink-0">Total: ${NKB.formatNumber(totalQty)} pcs</span>
+                        </div>
+                        <div class="bg-slate-50/80 rounded-xl p-1.5 border border-slate-200/70 max-h-24 overflow-y-auto">
+                            ${itemsHtml}
+                        </div>
+                    </div>
                 </td>
-                <td class="py-3 px-3 max-w-xs">
-                    <div class="font-bold text-slate-900 truncate">${po.company_name}</div>
-                    <div class="text-[11px] text-slate-500 truncate" title="${itemsSummary}">${itemsSummary}</div>
+
+                <!-- Col 3: Stage & Priority & Reminder -->
+                <td class="py-2.5 px-3 w-48 text-center align-top">
+                    <div class="flex flex-col items-center gap-1">
+                        <div class="flex items-center gap-1.5">
+                            <span class="px-2 py-0.5 rounded-lg text-[9.5px] font-bold ${po.status === 'PARTIALLY_DELIVERED' ? 'bg-purple-50 text-purple-700 border border-purple-200' : 'bg-blue-50 text-blue-700 border border-blue-200'}">${po.status}</span>
+                            <span class="text-[9.5px] text-slate-500 font-medium">${po.jo_count || 0} JOs · ${po.dr_count || 0} DRs</span>
+                        </div>
+                        <select onchange="updateOrderProductionSchedule('${po.id}', { priority_status: this.value })" class="w-full text-[10.5px] px-2 py-1 border rounded-lg cursor-pointer transition ${prioritySelectStyleMap[pStatus] || prioritySelectStyleMap['NORMAL']}">
+                            <option value="RUSH" ${pStatus === 'RUSH' ? 'selected' : ''}>🔥 Rush</option>
+                            <option value="PRIORITIZED" ${pStatus === 'PRIORITIZED' ? 'selected' : ''}>⚡ Prioritized</option>
+                            <option value="NORMAL" ${pStatus === 'NORMAL' ? 'selected' : ''}>📋 Normal</option>
+                            <option value="ON_HOLD" ${pStatus === 'ON_HOLD' ? 'selected' : ''}>⏸️ On Hold</option>
+                        </select>
+                        <div class="w-full">
+                            ${reminderCellHtml}
+                        </div>
+                    </div>
                 </td>
-                <td class="py-3 px-3 text-center font-extrabold text-slate-800">
-                    ${NKB.formatNumber(totalQty)} pcs
-                </td>
-                <td class="py-3 px-3 text-center">
-                    <span class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">${po.status}</span>
-                    <div class="text-[10px] text-slate-400 mt-0.5">${po.jo_count || 0} JOs · ${po.dr_count || 0} DRs</div>
-                </td>
-                <td class="py-3 px-3 text-center">
-                    <select onchange="updateOrderProductionSchedule('${po.id}', { priority_status: this.value })" class="text-[11px] px-2.5 py-1.5 border rounded-xl cursor-pointer transition ${prioritySelectStyleMap[pStatus] || prioritySelectStyleMap['NORMAL']}">
-                        <option value="RUSH" ${pStatus === 'RUSH' ? 'selected' : ''}>🔥 Rush</option>
-                        <option value="PRIORITIZED" ${pStatus === 'PRIORITIZED' ? 'selected' : ''}>⚡ Prioritized</option>
-                        <option value="NORMAL" ${pStatus === 'NORMAL' ? 'selected' : ''}>📋 Normal</option>
-                        <option value="ON_HOLD" ${pStatus === 'ON_HOLD' ? 'selected' : ''}>⏸️ On Hold</option>
-                    </select>
-                </td>
-                <td class="py-3 px-3 text-center">
-                    ${reminderCellHtml}
-                </td>
-                <td class="py-3 px-3 text-center">
+
+                <!-- Col 4: Factory Today Floor Assignment -->
+                <td class="py-2.5 px-2 w-32 text-center align-middle">
                     <button onclick="updateOrderProductionSchedule('${po.id}', { is_active_today: ${isActiveToday ? 0 : 1} })"
-                        class="px-3 py-1.5 rounded-xl text-[11px] font-extrabold transition shadow-xs cursor-pointer ${isActiveToday ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 border border-slate-300'}">
-                        ${isActiveToday ? '🏭 ACTIVE TODAY ✓' : 'Set Active Today'}
+                        class="w-full py-1.5 px-2 rounded-xl text-[10.5px] font-black transition shadow-2xs cursor-pointer ${isActiveToday ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 border border-slate-300'}">
+                        ${isActiveToday ? '🏭 ACTIVE ✓' : 'Set Active'}
                     </button>
                 </td>
-                <td class="py-3 px-3 text-right whitespace-nowrap space-x-1">
-                    <button onclick="updateOrderProductionSchedule('${po.id}', { move_direction: 'UP' })" title="Move Up in Queue" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold text-xs cursor-pointer">↑</button>
-                    <button onclick="updateOrderProductionSchedule('${po.id}', { move_direction: 'DOWN' })" title="Move Down in Queue" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold text-xs cursor-pointer">↓</button>
-                    <button onclick="openViewPOModal('${po.id}')" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg font-bold text-xs cursor-pointer">View SO</button>
+
+                <!-- Col 5: Actions -->
+                <td class="py-2.5 px-3 w-28 text-right align-middle">
+                    <div class="flex flex-col gap-1 items-end">
+                        <button onclick="openViewPOModal('${po.id}')" class="w-full px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold text-[10.5px] transition cursor-pointer text-center">👁️ View</button>
+                        ${(po.status !== 'COMPLETED' && po.status !== 'CANCELLED' && po.status !== 'VOIDED' && po.status !== 'DRAFT') ? `
+                            <button onclick="openCreateAllDRModal('${po.client_id}', '${po.id}', '${po.company_name.replace(/'/g, "\\'")}')" class="w-full px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[10.5px] transition shadow-xs cursor-pointer text-center">🚚 Deliver</button>
+                            <button onclick="promptDeclareOrderFinished('${po.id}', '${po.po_number}')" class="w-full px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg font-bold text-[9.5px] transition cursor-pointer text-center" title="Declare Order Finished">✓ Finish</button>
+                        ` : ''}
+                    </div>
                 </td>
             </tr>
         `;
     }).join('');
 }
+
+async function promptDeclareOrderFinished(poId, poNumber) {
+    if (!confirm(`Declare Sales Order (${poNumber}) as fully finished and completed?\n\nDelivering will only complete if all products needed have been fully produced and delivered.`)) {
+        return;
+    }
+    const res = await NKB.api(`/api/orders/${poId}/declare-finished`, {
+        method: 'POST',
+        body: JSON.stringify({})
+    });
+    if (res.success) {
+        NKB.showToast(res.message || `Order ${poNumber} declared finished!`, 'success');
+        if (typeof loadProductionSupervisorDashboard === 'function') loadProductionSupervisorDashboard();
+        if (typeof loadOrders === 'function') loadOrders();
+    } else {
+        if (res.can_force) {
+            if (confirm(`${res.error}\n\nDo you want to override and declare the order completed anyway?`)) {
+                const forceRes = await NKB.api(`/api/orders/${poId}/declare-finished`, {
+                    method: 'POST',
+                    body: JSON.stringify({ force: true, notes: 'Supervisor approved completion override' })
+                });
+                if (forceRes.success) {
+                    NKB.showToast(`Order ${poNumber} declared finished (override)!`, 'success');
+                    if (typeof loadProductionSupervisorDashboard === 'function') loadProductionSupervisorDashboard();
+                    if (typeof loadOrders === 'function') loadOrders();
+                    return;
+                } else {
+                    NKB.showToast(forceRes.error || 'Failed to complete order.', 'error');
+                }
+            }
+        } else {
+            alert(res.error || 'Cannot declare order as finished.');
+        }
+    }
+}
+window.promptDeclareOrderFinished = promptDeclareOrderFinished;
 
 function openSOReminderModal(poId) {
     const po = cachedProductionOrders.find(o => o.id === poId);
