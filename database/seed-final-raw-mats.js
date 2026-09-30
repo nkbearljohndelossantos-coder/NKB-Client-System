@@ -15,7 +15,7 @@ function computeStockStatus(currentStock, minLevel) {
     const stock = Number(currentStock) || 0;
     const min = Number(minLevel) || 0;
     if (stock <= 0) return 'OUT_OF_STOCK';
-    if (stock <= min) return 'LOW_STOCK';
+    if (min > 0 && stock <= min) return 'LOW_STOCK';
     return 'IN_STOCK';
 }
 
@@ -52,11 +52,10 @@ function loadFinalRawMatsFromExcel() {
             if (!rawCode && !rawName) continue;
 
             const code = getUniqueCode(rawCode, 'PL');
-            const brand = String(row[2] || '').trim();
-            const supplier = String(row[3] || '').trim();
-            const storage = String(row[4] || 'Warehouse').trim() || 'Warehouse';
+            const brand = String(row[2] || '').trim() || 'None';
+            const supplier = String(row[3] || '').trim() || 'None';
+            const storage = String(row[4] || '').trim() || 'None';
             const unitCost = Math.max(0, parseNumeric(row[5]));
-            const usage2026 = Math.max(0, parseNumeric(row[11]));
             const rawStockCell = row[12];
             const rawStockStr = String(rawStockCell ?? '').trim();
 
@@ -69,29 +68,24 @@ function loadFinalRawMatsFromExcel() {
                 currentStock = Math.max(0, Number(parseNumeric(rawStockCell).toFixed(4)));
             }
 
-            const minLevel = unit === 'boxes' ? 1 : 10;
+            const minLevel = 0;
             const status = computeStockStatus(currentStock, minLevel);
-            const isFastMoving = usage2026 >= 500 ? 1 : 0;
-
-            const notesParts = ['Section: PEELING LOTION'];
-            if (brand) notesParts.push(`Brand: ${brand}`);
-            if (usage2026 > 0) notesParts.push(`2026 Usage: ${usage2026} ${unit}`);
 
             items.push({
                 material_code: code,
-                material_name: rawName || code,
+                material_name: rawName || 'None',
                 category: 'Peeling Lotion',
-                supplier: supplier || 'Standard Supplier',
+                supplier,
                 current_stock: currentStock,
                 unit,
                 minimum_stock_level: minLevel,
                 unit_cost: unitCost,
                 location: storage,
-                batch_lot_number: brand || 'PEELING-LOTION',
-                expiry_date: '',
+                batch_lot_number: brand,
+                expiry_date: 'None',
                 status,
-                is_fast_moving: isFastMoving,
-                notes: notesParts.join(' | ')
+                is_fast_moving: 0,
+                notes: 'None'
             });
         }
     }
@@ -107,13 +101,11 @@ function loadFinalRawMatsFromExcel() {
             if (!rawCode && !rawName) continue;
 
             const code = getUniqueCode(rawCode, 'COS');
-            const brandOrExp = String(row[2] || '').trim();
-            const supplier = String(row[3] || '').trim();
-            const application = String(row[4] || '').trim();
-            const sheetCat = String(row[5] || '').trim();
-            const storage = String(row[6] || 'Warehouse').trim() || 'Warehouse';
+            const brandOrExp = String(row[2] || '').trim() || 'None';
+            const supplier = String(row[3] || '').trim() || 'None';
+            const application = String(row[4] || '').trim() || 'None';
+            const storage = String(row[6] || '').trim() || 'None';
             const unitCost = Math.max(0, parseNumeric(row[7]));
-            const usage2026 = Math.max(0, parseNumeric(row[13]));
             const rawStockCell = row[14];
             const rawStockStr = String(rawStockCell ?? '').trim();
 
@@ -124,32 +116,24 @@ function loadFinalRawMatsFromExcel() {
                 currentStock = Math.max(0, Number(parseNumeric(rawStockStr).toFixed(4)));
             }
 
-            const minLevel = 5;
+            const minLevel = 0;
             const status = computeStockStatus(currentStock, minLevel);
-            const isFastMoving = usage2026 >= 50 ? 1 : 0;
-
-            const notesParts = ['Section: COSMETICS'];
-            if (application) notesParts.push(`Application: ${application}`);
-            if (sheetCat && sheetCat !== 'COSMETICS') notesParts.push(`Type: ${sheetCat}`);
-            if (brandOrExp) notesParts.push(`Brand/Note: ${brandOrExp}`);
-            if (/sample/i.test(rawStockStr)) notesParts.push('Stock Note: SAMPLE');
-            if (usage2026 > 0) notesParts.push(`2026 Usage: ${usage2026} kg`);
 
             items.push({
                 material_code: code,
-                material_name: rawName || code,
+                material_name: rawName || 'None',
                 category: 'Cosmetics',
-                supplier: supplier || 'Standard Supplier',
+                supplier,
                 current_stock: currentStock,
                 unit: 'kg',
                 minimum_stock_level: minLevel,
                 unit_cost: unitCost,
                 location: storage,
-                batch_lot_number: application || brandOrExp || 'COSMETICS',
-                expiry_date: '',
+                batch_lot_number: brandOrExp,
+                expiry_date: 'None',
                 status,
-                is_fast_moving: isFastMoving,
-                notes: notesParts.join(' | ')
+                is_fast_moving: 0,
+                notes: application
             });
         }
     }
@@ -167,23 +151,19 @@ function seedFinalRawMaterialsInventory(dbInstance) {
         `);
     } catch (_) {}
 
-    const migrationKey = 'raw_materials_excel_peeling_cosmetics_v1';
+    const migrationKey = 'raw_materials_excel_peeling_cosmetics_v2';
     let alreadyApplied = false;
     try {
         const row = dbInstance.prepare('SELECT key FROM _meta_migrations WHERE key = ?').get(migrationKey);
         alreadyApplied = Boolean(row);
     } catch (_) {}
 
-    // Also check if legacy demo codes (RM-WTR-01, RM-GLY-01) are still present or table is empty
-    let hasLegacyDemo = false;
     let totalCount = 0;
     try {
         totalCount = dbInstance.prepare('SELECT COUNT(*) as count FROM raw_materials_inventory').get()?.count || 0;
-        const legacyRow = dbInstance.prepare("SELECT id FROM raw_materials_inventory WHERE material_code IN ('RM-WTR-01', 'RM-GLY-01', 'RM-NIA-01', 'PK-BOT-100') LIMIT 1").get();
-        hasLegacyDemo = Boolean(legacyRow);
     } catch (_) {}
 
-    if (alreadyApplied && !hasLegacyDemo && totalCount > 0) {
+    if (alreadyApplied && totalCount > 0) {
         return { skipped: true, count: totalCount };
     }
 
@@ -192,7 +172,7 @@ function seedFinalRawMaterialsInventory(dbInstance) {
         return { skipped: true, count: totalCount };
     }
 
-    // Remove previously recorded inventory and replace with Peeling Lotion + Cosmetics sections from Excel
+    // Remove previously recorded inventory and replace with exact Peeling Lotion + Cosmetics sections from Excel
     dbInstance.prepare('DELETE FROM raw_materials_inventory').run();
 
     const insRm = dbInstance.prepare(`
@@ -201,7 +181,7 @@ function seedFinalRawMaterialsInventory(dbInstance) {
             current_stock, unit, minimum_stock_level, unit_cost,
             location, batch_lot_number, expiry_date, status,
             is_fast_moving, issuance_count, notes, updated_by
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'FINAL RAW MATS EXCEL')
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, 'None')
     `);
 
     for (const item of items) {
@@ -219,7 +199,6 @@ function seedFinalRawMaterialsInventory(dbInstance) {
             item.batch_lot_number,
             item.expiry_date,
             item.status,
-            item.is_fast_moving,
             item.notes
         );
     }
@@ -238,7 +217,7 @@ function seedFinalRawMaterialsInventory(dbInstance) {
         } catch (__) {}
     }
 
-    console.log(`✅ Imported ${items.length} raw materials from FINAL RAW MATS FOR RE-INVENTORY.xlsx (Peeling Lotion & Cosmetics only).`);
+    console.log(`✅ Imported ${items.length} raw materials from FINAL RAW MATS FOR RE-INVENTORY.xlsx (exact values, missing fields set to None or 0).`);
     return { skipped: false, count: items.length };
 }
 

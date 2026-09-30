@@ -12930,7 +12930,7 @@ function selectRawMaterialRow(index, scrollIntoView = false) {
 }
 
 function getRawMaterialFefoInfo(expiryDateStr) {
-    if (!expiryDateStr) return null;
+    if (!expiryDateStr || expiryDateStr === 'None') return null;
     const exp = new Date(expiryDateStr);
     if (isNaN(exp.getTime())) return null;
     const now = new Date();
@@ -12989,7 +12989,7 @@ function renderRawMaterialsTable() {
         const isFastMoving = Number(rm.is_fast_moving) === 1;
         const issuanceCount = Number(rm.issuance_count || 0);
         const suggestFastMoving = !isFastMoving && issuanceCount >= 3;
-        const supplierName = rm.supplier || 'Standard Supplier';
+        const supplierName = rm.supplier ? String(rm.supplier).trim() : 'None';
         const escapedSupplier = supplierName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         const isSupplierActive = currentRawMaterialSupplierFilter && currentRawMaterialSupplierFilter === supplierName;
         const selectedStyle = isSelected
@@ -13003,16 +13003,16 @@ function renderRawMaterialsTable() {
                 ${colorCfg.dot}
             </td>
             <td class="py-3 px-3 font-mono font-bold text-teal-800">
-                <div>${rm.material_code}</div>
+                <div>${rm.material_code || 'None'}</div>
                 ${isSelected ? '<span class="text-[9px] font-black uppercase text-teal-700 tracking-wider">▶ Selected</span>' : ''}
             </td>
             <td class="py-3 px-3">
                 <div class="flex items-center gap-1.5 flex-wrap">
-                    <span class="font-bold text-slate-900">${rm.material_name}</span>
+                    <span class="font-bold text-slate-900">${rm.material_name || 'None'}</span>
                     ${isFastMoving ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black" style="background-color: #ffedd5; color: #9a3412; border: 1px solid #fdba74;">🔥 FAST MOVING</span>' : ''}
                     ${suggestFastMoving ? `<button type="button" onclick="event.stopPropagation(); toggleRawMaterialFastMoving('${rm.id}')" class="px-2 py-0.5 rounded-full text-[10px] font-bold cursor-pointer" style="background-color: #f0fdf4; color: #166534; border: 1px dashed #4ade80;" title="Issued ${issuanceCount} times — Click to tag as Fast Moving">📈 Suggested Fast Moving (${issuanceCount}x)</button>` : ''}
                 </div>
-                <div class="text-[10px] text-slate-500 mt-0.5">${rm.category || 'Raw Material'}</div>
+                <div class="text-[10px] text-slate-500 mt-0.5">${rm.category || 'None'}</div>
             </td>
             <td class="py-3 px-3">
                 <button type="button" onclick="event.stopPropagation(); filterRawMaterialsBySupplier('${escapedSupplier}')"
@@ -13022,16 +13022,16 @@ function renderRawMaterialsTable() {
                     <span>🏭 ${supplierName}</span>
                 </button>
                 <div class="text-[10px] text-slate-400 font-mono flex items-center gap-1.5 flex-wrap mt-0.5">
-                    <span>Lot: ${rm.batch_lot_number || 'N/A'} ${rm.expiry_date ? `· Exp: ${rm.expiry_date}` : ''}</span>
+                    <span>Brand/Lot: ${rm.batch_lot_number || 'None'}${rm.expiry_date && rm.expiry_date !== 'None' ? ` · Exp: ${rm.expiry_date}` : ''}</span>
                     ${fefoInfo ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-black" style="${fefoInfo.isExpired ? 'background-color: #ffe4e6; color: #9f1239; border: 1px solid #fda4af;' : 'background-color: #f3e8ff; color: #6b21a8; border: 1px solid #d8b4fe;'}">${fefoInfo.label}</span>` : ''}
                 </div>
             </td>
-            <td class="py-3 px-3 text-slate-600 font-semibold">${rm.location || 'Warehouse Zone A'}</td>
+            <td class="py-3 px-3 text-slate-600 font-semibold">${rm.location || 'None'}</td>
             <td class="py-3 px-3 text-right font-black text-sm ${colorCfg.stockText}">
-                ${NKB.formatNumber(rm.current_stock)} <span class="text-xs font-bold text-slate-500">${rm.unit}</span>
+                ${NKB.formatNumber(rm.current_stock || 0)} <span class="text-xs font-bold text-slate-500">${rm.unit || 'kg'}</span>
             </td>
             <td class="py-3 px-3 text-right text-slate-500 font-semibold">
-                ${NKB.formatNumber(rm.minimum_stock_level)} ${rm.unit}
+                ${NKB.formatNumber(rm.minimum_stock_level || 0)} ${rm.unit || 'kg'}
             </td>
             <td class="py-3 px-3 text-right whitespace-nowrap space-x-1" onclick="event.stopPropagation()">
                 <button onclick="toggleRawMaterialFastMoving('${rm.id}')"
@@ -13119,7 +13119,7 @@ function openRawMaterialModal(rmId = null) {
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                             <label class="block font-bold text-slate-700 mb-1">Material Code *</label>
-                            <input type="text" id="rm-form-code" required value="${existing ? existing.material_code : ''}" placeholder="e.g. RM-VITC-01" class="w-full p-2 border border-slate-300 rounded-xl">
+                            <input type="text" id="rm-form-code" required value="${existing ? existing.material_code : ''}" placeholder="e.g. L015 or COOO223" class="w-full p-2 border border-slate-300 rounded-xl">
                         </div>
                         <div>
                             <label class="block font-bold text-slate-700 mb-1">Category / Section *</label>
@@ -13130,7 +13130,7 @@ function openRawMaterialModal(rmId = null) {
                     </div>
                     <div>
                         <label class="block font-bold text-slate-700 mb-1">Material Name *</label>
-                        <input type="text" id="rm-form-name" required value="${existing ? existing.material_name : ''}" placeholder="e.g. Ascorbic Acid USP Fine Powder" class="w-full p-2 border border-slate-300 rounded-xl">
+                        <input type="text" id="rm-form-name" required value="${existing ? existing.material_name : ''}" placeholder="Material Name" class="w-full p-2 border border-slate-300 rounded-xl">
                     </div>
                     <div class="p-3 rounded-xl bg-orange-50 border border-orange-200">
                         <label class="flex items-center gap-2.5 cursor-pointer">
@@ -13151,27 +13151,27 @@ function openRawMaterialModal(rmId = null) {
                         </div>
                         <div>
                             <label class="block font-bold text-slate-700 mb-1">Min Reorder Level *</label>
-                            <input type="number" step="0.01" id="rm-form-min" required value="${existing ? existing.minimum_stock_level : 10}" class="w-full p-2 border border-slate-300 rounded-xl">
+                            <input type="number" step="0.01" id="rm-form-min" required value="${existing ? existing.minimum_stock_level : 0}" class="w-full p-2 border border-slate-300 rounded-xl">
                         </div>
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                             <label class="block font-bold text-slate-700 mb-1">Supplier</label>
-                            <input type="text" id="rm-form-supplier" value="${existing ? (existing.supplier || '') : ''}" placeholder="Supplier Company Name" class="w-full p-2 border border-slate-300 rounded-xl">
+                            <input type="text" id="rm-form-supplier" value="${existing ? (existing.supplier || 'None') : 'None'}" placeholder="None" class="w-full p-2 border border-slate-300 rounded-xl">
                         </div>
                         <div>
                             <label class="block font-bold text-slate-700 mb-1">Warehouse Rack / Location</label>
-                            <input type="text" id="rm-form-location" value="${existing ? (existing.location || '') : 'Warehouse Zone A'}" placeholder="e.g. Cold Room B-02" class="w-full p-2 border border-slate-300 rounded-xl">
+                            <input type="text" id="rm-form-location" value="${existing ? (existing.location || 'None') : 'None'}" placeholder="None" class="w-full p-2 border border-slate-300 rounded-xl">
                         </div>
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                            <label class="block font-bold text-slate-700 mb-1">Batch / Lot Number</label>
-                            <input type="text" id="rm-form-lot" value="${existing ? (existing.batch_lot_number || '') : ''}" placeholder="e.g. LOT-2026-091" class="w-full p-2 border border-slate-300 rounded-xl">
+                            <label class="block font-bold text-slate-700 mb-1">Brand / Lot Number</label>
+                            <input type="text" id="rm-form-lot" value="${existing ? (existing.batch_lot_number || 'None') : 'None'}" placeholder="None" class="w-full p-2 border border-slate-300 rounded-xl">
                         </div>
                         <div>
                             <label class="block font-bold text-slate-700 mb-1">Expiry Date</label>
-                            <input type="text" id="rm-form-expiry" value="${existing ? (existing.expiry_date || '') : ''}" placeholder="YYYY-MM-DD" class="w-full p-2 border border-slate-300 rounded-xl">
+                            <input type="text" id="rm-form-expiry" value="${existing ? (existing.expiry_date || 'None') : 'None'}" placeholder="None" class="w-full p-2 border border-slate-300 rounded-xl">
                         </div>
                     </div>
                     <div class="flex justify-end gap-2 pt-3 border-t border-slate-200">

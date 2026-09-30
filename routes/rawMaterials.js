@@ -13,7 +13,7 @@ function computeStockStatus(currentStock, minLevel) {
     const stock = Number(currentStock) || 0;
     const min = Number(minLevel) || 0;
     if (stock <= 0) return 'OUT_OF_STOCK';
-    if (stock <= min) return 'LOW_STOCK';
+    if (min > 0 && stock <= min) return 'LOW_STOCK';
     return 'IN_STOCK';
 }
 
@@ -109,17 +109,17 @@ router.post('/', authenticateToken, (req, res) => {
     const {
         material_code,
         material_name,
-        category = 'Active Ingredients',
-        supplier = '',
+        category = 'Cosmetics',
+        supplier = 'None',
         current_stock = 0,
         unit = 'kg',
-        minimum_stock_level = 10,
+        minimum_stock_level = 0,
         unit_cost = 0,
-        location = 'Warehouse Zone A',
-        batch_lot_number = '',
-        expiry_date = '',
+        location = 'None',
+        batch_lot_number = 'None',
+        expiry_date = 'None',
         is_fast_moving = 0,
-        notes = ''
+        notes = 'None'
     } = req.body || {};
 
     if (!material_code || !material_name) {
@@ -148,10 +148,10 @@ router.post('/', authenticateToken, (req, res) => {
             updated_by, created_at, updated_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-        id, codeClean, String(material_name).trim(), String(category).trim(), String(supplier || '').trim(),
+        id, codeClean, String(material_name).trim(), String(category || 'None').trim() || 'None', String(supplier || '').trim() || 'None',
         stockNum, String(unit || 'kg').trim(), minNum, costNum,
-        String(location || 'Warehouse Zone A').trim(), String(batch_lot_number || '').trim(), String(expiry_date || '').trim(),
-        status, fastMovingNum, String(notes || '').trim(), req.user.name, now, now
+        String(location || '').trim() || 'None', String(batch_lot_number || '').trim() || 'None', String(expiry_date || '').trim() || 'None',
+        status, fastMovingNum, String(notes || '').trim() || 'None', req.user.name, now, now
     );
 
     const created = db.prepare('SELECT * FROM raw_materials_inventory WHERE id = ?').get(id);

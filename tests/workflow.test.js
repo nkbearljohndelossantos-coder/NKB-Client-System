@@ -3187,10 +3187,12 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.strictEqual(listRmRes.body.summary.totalMaterials, 388, 'Summary totalMaterials must equal 388');
         assert.deepStrictEqual(listRmRes.body.summary.categories, ['Cosmetics', 'Peeling Lotion'], 'Only Peeling Lotion and Cosmetics sections must be imported');
         assert.ok(!listRmRes.body.data.some(r => r.material_code === 'RM-WTR-01'), 'Old recorded demo inventory must be removed');
-        assert.ok(listRmRes.body.data.some(r => r.material_code === 'L001' && r.category === 'Peeling Lotion'), 'Peeling Lotion L001 must be present');
+        const l001 = listRmRes.body.data.find(r => r.material_code === 'L001' && r.category === 'Peeling Lotion');
+        assert.ok(l001, 'Peeling Lotion L001 must be present');
+        assert.strictEqual(l001.batch_lot_number, 'None', 'Missing brand/lot in Excel must be None');
+        assert.strictEqual(Number(l001.minimum_stock_level), 0, 'Missing min stock level in Excel must be 0');
         assert.ok(listRmRes.body.data.some(r => r.material_code === 'COOO1A' && r.category === 'Cosmetics'), 'Cosmetics COOO1A must be present');
-        assert.ok(listRmRes.body.summary.fastMovingCount >= 1, 'Summary must include fastMovingCount');
-        assert.strictEqual(Number(listRmRes.body.data[0].is_fast_moving), 1, 'PRIORITIZED sort must place Fast Moving materials first');
+        assert.strictEqual(listRmRes.body.summary.fastMovingCount, 0, 'No items should be pre-tagged as Fast Moving unless tagged by user');
 
         // Verify ALPHABETICAL_ASC sort
         const alphaAscRes = await request(app)
@@ -3246,6 +3248,11 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
             .send({});
         assert.strictEqual(toggleFastRes.status, 200);
         assert.strictEqual(Number(toggleFastRes.body.data.is_fast_moving), 1, 'Inventory Officer must be able to tag material as Fast Moving');
+
+        const prioAfterTagRes = await request(app)
+            .get('/api/raw-materials?sort=PRIORITIZED')
+            .set('Authorization', `Bearer ${invToken}`);
+        assert.strictEqual(Number(prioAfterTagRes.body.data[0].is_fast_moving), 1, 'PRIORITIZED sort must place Fast Moving materials first');
 
         // Adjust stock (DEDUCT 12 kg -> leaves 3.5 kg which is <= 5.0 min -> LOW_STOCK, and increments issuance_count)
         const adjustRmRes = await request(app)
