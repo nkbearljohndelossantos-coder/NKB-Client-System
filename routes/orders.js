@@ -73,7 +73,7 @@ router.get('/', authenticateToken, enforceClientIsolation, (req, res) => {
         params.push(term, term, term);
     }
 
-    query += ' ORDER BY po.created_at DESC';
+    query += ' ORDER BY po.po_number DESC, po.created_at DESC';
     const orders = db.prepare(query).all(...params);
 
     // Attach ordered products separately to each PO

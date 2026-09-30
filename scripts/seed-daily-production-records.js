@@ -93,7 +93,7 @@ function seedDailyProductionRecords(db) {
                 'COD / Bank Transfer', ?, 0.0, 0.0, ?,
                 1, '2026-09-09 10:00:00', ?,
                 1, '2026-09-09 10:30:00', ?,
-                'SUFFICIENT', 1, ?, '2026-09-09 09:30:00', '2026-09-26 18:00:00'
+                'SUFFICIENT', 1, ?, '2026-09-28 09:30:00', '2026-09-26 18:00:00'
             )
         `).run(po1Id, po1Number, so1Number, skeencare.id, po1Total, po1Total, adminId, adminId, adminId);
 
@@ -165,7 +165,7 @@ function seedDailyProductionRecords(db) {
                 'COD / Bank Transfer', ?, 0.0, 0.0, ?,
                 1, '2026-09-14 10:00:00', ?,
                 1, '2026-09-14 10:30:00', ?,
-                'SUFFICIENT', 1, ?, '2026-09-14 09:30:00', '2026-09-26 18:00:00'
+                'SUFFICIENT', 1, ?, '2026-09-28 09:45:00', '2026-09-26 18:00:00'
             )
         `).run(po2Id, po2Number, so2Number, herChoice.id, po2Total, po2Total, adminId, adminId, adminId);
 
@@ -293,7 +293,7 @@ function seedDailyProductionRecords(db) {
                 'COD / Bank Transfer', ?, 0.0, 0.0, ?,
                 1, '2026-09-19 10:00:00', ?,
                 1, '2026-09-19 10:30:00', ?,
-                'SUFFICIENT', 1, ?, '2026-09-19 09:30:00', '2026-09-26 18:00:00'
+                'SUFFICIENT', 1, ?, '2026-09-28 10:00:00', '2026-09-26 18:00:00'
             )
         `).run(po3Id, po3Number, so3Number, herChoice.id, po3Total, po3Total, adminId, adminId, adminId);
 

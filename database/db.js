@@ -1465,6 +1465,13 @@ if (useMysql) {
         console.error('PO-2026-000021 GEMS migration error:', err.message);
     }
 
+    // Migration: Ensure PO-2026-000024, 25, 26 created_at timestamps reflect registration order on Sep 28
+    try {
+        db.prepare("UPDATE purchase_orders SET created_at = '2026-09-28 09:30:00' WHERE po_number = 'PO-2026-000024' AND created_at < '2026-09-28'").run();
+        db.prepare("UPDATE purchase_orders SET created_at = '2026-09-28 09:45:00' WHERE po_number = 'PO-2026-000025' AND created_at < '2026-09-28'").run();
+        db.prepare("UPDATE purchase_orders SET created_at = '2026-09-28 10:00:00' WHERE po_number = 'PO-2026-000026' AND created_at < '2026-09-28'").run();
+    } catch (_) {}
+
     // Auto-initialize Document Sequences
     try {
         const year = new Date().getFullYear();
