@@ -12853,17 +12853,14 @@ function selectRawMaterialRow(index, scrollIntoView = false) {
     selectedRawMaterialIndex = boundedIdx;
     selectedRawMaterialId = cachedRawMaterials[boundedIdx].id;
 
-    document.querySelectorAll('#table-raw-materials-body tr[data-rm-index]').forEach(tr => {
-        const rowIdx = Number(tr.getAttribute('data-rm-index'));
-        if (rowIdx === selectedRawMaterialIndex) {
-            tr.classList.add('ring-2', 'ring-teal-500', 'ring-inset', 'bg-teal-50/80');
-            if (scrollIntoView && typeof tr.scrollIntoView === 'function') {
-                tr.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-            }
-        } else {
-            tr.classList.remove('ring-2', 'ring-teal-500', 'ring-inset', 'bg-teal-50/80');
+    renderRawMaterialsTable();
+
+    if (scrollIntoView) {
+        const selectedTr = document.querySelector(`#table-raw-materials-body tr[data-rm-index="${selectedRawMaterialIndex}"]`);
+        if (selectedTr && typeof selectedTr.scrollIntoView === 'function') {
+            selectedTr.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         }
-    });
+    }
 
     updateSelectedRawMaterialBanner();
 }
@@ -12881,21 +12878,21 @@ function renderRawMaterialsTable() {
     const getRowColorClasses = (st) => {
         if (st === 'OUT_OF_STOCK') {
             return {
-                rowTint: 'border-l-4 border-l-rose-600 bg-rose-50/35 hover:bg-rose-50/70',
-                dot: '<span class="w-3.5 h-3.5 rounded-full bg-rose-600 inline-block ring-4 ring-rose-100 shadow-xs" title="Red Zone (Depleted)"></span>',
+                rowStyle: 'border-left: 4px solid #e11d48; background-color: rgba(255, 228, 230, 0.45);',
+                dot: '<span class="rounded-full inline-block" style="width: 14px; height: 14px; background-color: #e11d48; box-shadow: 0 0 0 4px #ffe4e6;" title="Red Zone (Depleted)"></span>',
                 stockText: 'text-rose-600'
             };
         }
         if (st === 'LOW_STOCK') {
             return {
-                rowTint: 'border-l-4 border-l-amber-500 bg-amber-50/35 hover:bg-amber-50/70',
-                dot: '<span class="w-3.5 h-3.5 rounded-full bg-amber-500 inline-block ring-4 ring-amber-100 shadow-xs" title="Amber Zone (Below Minimum)"></span>',
+                rowStyle: 'border-left: 4px solid #f59e0b; background-color: rgba(254, 243, 199, 0.45);',
+                dot: '<span class="rounded-full inline-block" style="width: 14px; height: 14px; background-color: #f59e0b; box-shadow: 0 0 0 4px #fef3c7;" title="Amber Zone (Below Minimum)"></span>',
                 stockText: 'text-amber-600'
             };
         }
         return {
-            rowTint: 'border-l-4 border-l-emerald-500 bg-emerald-50/15 hover:bg-emerald-50/45',
-            dot: '<span class="w-3.5 h-3.5 rounded-full bg-emerald-500 inline-block ring-4 ring-emerald-100 shadow-xs" title="Green Zone (Sufficient)"></span>',
+            rowStyle: 'border-left: 4px solid #10b981; background-color: rgba(209, 250, 229, 0.22);',
+            dot: '<span class="rounded-full inline-block" style="width: 14px; height: 14px; background-color: #10b981; box-shadow: 0 0 0 4px #d1fae5;" title="Green Zone (Sufficient)"></span>',
             stockText: 'text-emerald-700'
         };
     };
@@ -12906,21 +12903,24 @@ function renderRawMaterialsTable() {
         const colorCfg = getRowColorClasses(rm.status);
         const isSelected = idx === selectedRawMaterialIndex;
         const isFastMoving = Number(rm.is_fast_moving) === 1;
+        const selectedStyle = isSelected
+            ? 'outline: 2px solid #0d9488; outline-offset: -2px; background-color: rgba(204, 251, 241, 0.65);'
+            : '';
 
         return `
         <tr data-rm-index="${idx}" data-rm-id="${rm.id}" onclick="selectRawMaterialRow(${idx}, false)"
-            class="transition cursor-pointer ${colorCfg.rowTint} ${isSelected ? 'ring-2 ring-teal-500 ring-inset bg-teal-50/80' : ''}">
+            class="transition cursor-pointer hover:bg-slate-50" style="${colorCfg.rowStyle} ${selectedStyle}">
             <td class="py-3 px-2 text-center align-middle">
                 ${colorCfg.dot}
             </td>
             <td class="py-3 px-3 font-mono font-bold text-teal-800">
                 <div>${rm.material_code}</div>
-                ${isSelected ? '<span class="text-[9px] font-black uppercase text-teal-600 tracking-wider">▶ Selected</span>' : ''}
+                ${isSelected ? '<span class="text-[9px] font-black uppercase text-teal-700 tracking-wider">▶ Selected</span>' : ''}
             </td>
             <td class="py-3 px-3">
                 <div class="flex items-center gap-1.5 flex-wrap">
                     <span class="font-bold text-slate-900">${rm.material_name}</span>
-                    ${isFastMoving ? '<span class="px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 text-[10px] font-black border border-orange-300 shadow-2xs">🔥 FAST MOVING</span>' : ''}
+                    ${isFastMoving ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black" style="background-color: #ffedd5; color: #9a3412; border: 1px solid #fdba74;">🔥 FAST MOVING</span>' : ''}
                 </div>
                 <div class="text-[10px] text-slate-500 mt-0.5">${rm.category || 'Raw Material'}</div>
             </td>
@@ -12937,7 +12937,8 @@ function renderRawMaterialsTable() {
             </td>
             <td class="py-3 px-3 text-right whitespace-nowrap space-x-1" onclick="event.stopPropagation()">
                 <button onclick="toggleRawMaterialFastMoving('${rm.id}')"
-                    class="px-2 py-1 rounded-lg font-bold text-[11px] transition border cursor-pointer ${isFastMoving ? 'bg-orange-500 text-white border-orange-600 hover:bg-orange-600' : 'bg-white text-slate-500 border-slate-300 hover:bg-orange-50 hover:text-orange-700'}"
+                    class="px-2 py-1 rounded-lg font-bold text-[11px] transition cursor-pointer"
+                    style="${isFastMoving ? 'background-color: #ea580c; color: #ffffff; border: 1px solid #c2410c;' : 'background-color: #ffffff; color: #475569; border: 1px solid #cbd5e1;'}"
                     title="${isFastMoving ? 'Remove Fast Moving Tag' : 'Tag as Fast Moving (Frequently Used)'}${isInvOfficer ? ' [Shortcut: F]' : ''}">
                     🔥 ${isFastMoving ? 'Fast' : 'Tag'}
                 </button>
