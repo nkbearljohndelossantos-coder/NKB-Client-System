@@ -161,8 +161,66 @@ router.get('/pending', authenticateToken, (req, res) => {
             }
         }
 
-        // 5. Production Department: Ready for Job Order / Compounding Batches
+        // 5. Production Department: Ready for Job Order / Compounding Batches & SO Queue Reminders
         if (role === ROLES.SUPER_ADMIN || role === ROLES.IT_ADMIN || role === ROLES.ADMIN || role === ROLES.PRODUCTION) {
+            try {
+                const ordersRouter = require('./orders');
+                if (ordersRouter && typeof ordersRouter.evaluateOrderRemindersAndAutoPrioritize === 'function') {
+                    ordersRouter.evaluateOrderRemindersAndAutoPrioritize(db);
+                }
+                const { getManilaDate, getManilaDateTime } = require('../helpers/timezone');
+                const today = getManilaDate();
+                const now = getManilaDateTime();
+
+                const highPrioCount = db.prepare(`
+                    SELECT COUNT(*) as cnt
+                    FROM purchase_orders
+                    WHERE status NOT IN ('COMPLETED', 'CANCELLED', 'VOIDED')
+                      AND (priority_status IN ('RUSH', 'PRIORITIZED') OR is_active_today = 1)
+                `).get()?.cnt || 0;
+
+                const reminderPOs = db.prepare(`
+                    SELECT po.id, po.po_number, po.so_number, po.priority_status, po.is_active_today,
+                           po.reminder_at, po.auto_priority_target, po.reminder_note, po.reminder_triggered,
+                           c.company_name
+                    FROM purchase_orders po
+                    JOIN clients c ON po.client_id = c.id
+                    WHERE po.status NOT IN ('COMPLETED', 'CANCELLED', 'VOIDED')
+                      AND po.reminder_at IS NOT NULL
+                      AND po.reminder_at != ''
+                      AND COALESCE(po.reminder_dismissed, 0) = 0
+                    ORDER BY po.reminder_at ASC
+                `).all();
+
+                for (const rpo of reminderPOs) {
+                    const normRem = String(rpo.reminder_at).replace('T', ' ');
+                    const isDueNowOrToday = normRem <= now || normRem.startsWith(today) || Number(rpo.reminder_triggered) === 1;
+                    if (isDueNowOrToday) {
+                        const soLabel = rpo.so_number || rpo.po_number.replace('PO-', 'SO-');
+                        const otherPrioCount = Math.max(0, highPrioCount - 1);
+                        const moreWorkNote = otherPrioCount > 0
+                            ? ` ⚠️ Supervisor Advisory: You also have ${otherPrioCount} other Rush/Prioritized order(s) in the factory queue.`
+                            : '';
+                        items.unshift({
+                            id: `so-rem-${rpo.id}`,
+                            category: 'PRODUCTION_REMINDER',
+                            title: `⏰ SO Reminder: ${soLabel} Needs To Be Done Today`,
+                            description: `${rpo.company_name} — Auto-prioritized to ${rpo.priority_status || 'RUSH'}${rpo.reminder_note ? ` ("${rpo.reminder_note}")` : ''}.${moreWorkNote}`,
+                            urgency: 'CRITICAL',
+                            icon: '⏰',
+                            target: {
+                                tab: 'overview',
+                                poId: rpo.id,
+                                poNumber: rpo.po_number,
+                                action: 'VIEW_SO_REMINDER'
+                            }
+                        });
+                    }
+                }
+            } catch (remErr) {
+                console.warn('Notification SO reminder check note:', remErr.message);
+            }
+
             const readyPOs = db.prepare(`
                 SELECT po.id, po.po_number, c.company_name,
                        (SELECT COUNT(*) FROM job_orders WHERE po_id = po.id) as jo_count

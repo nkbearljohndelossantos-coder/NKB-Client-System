@@ -30,12 +30,91 @@ function cleanItemNameForVyuceutical(rawName) {
     return cleaned.trim() || rawName;
 }
 
+function normalizeReminderDateTime(str) {
+    if (!str) return null;
+    const s = String(str).trim().replace('T', ' ');
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return `${s} 00:00:00`;
+    if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}$/.test(s)) return `${s}:00`;
+    return s;
+}
+
+/**
+ * Evaluates all open Sales Orders with a scheduled reminder_at.
+ * When the reminder time is reached (or due today), automatically escalates
+ * priority_status (e.g., to RUSH or PRIORITIZED), marks is_active_today = 1 if configured,
+ * and moves the order up in the queue.
+ */
+function evaluateOrderRemindersAndAutoPrioritize(database = db) {
+    const now = getManilaDateTime();
+    const today = getManilaDate();
+    const escalated = [];
+
+    try {
+        const dueReminders = database.prepare(`
+            SELECT id, po_number, so_number, priority_status, priority_order, is_active_today,
+                   reminder_at, auto_priority_target, auto_active_today, reminder_note, reminder_triggered
+            FROM purchase_orders
+            WHERE status NOT IN ('COMPLETED', 'CANCELLED', 'VOIDED')
+              AND reminder_at IS NOT NULL
+              AND reminder_at != ''
+              AND COALESCE(reminder_triggered, 0) = 0
+        `).all();
+
+        for (const po of dueReminders) {
+            const normRem = normalizeReminderDateTime(po.reminder_at);
+            if (!normRem) continue;
+
+            // Trigger automatic prioritizing when reminder timestamp is reached
+            if (normRem <= now) {
+                const target = (po.auto_priority_target && ['RUSH', 'PRIORITIZED'].includes(String(po.auto_priority_target).toUpperCase()))
+                    ? String(po.auto_priority_target).toUpperCase()
+                    : 'RUSH';
+                const currentPrio = po.priority_status || 'NORMAL';
+                const newPrio = (currentPrio === 'RUSH') ? 'RUSH' : target;
+                const newActiveToday = (po.auto_active_today === undefined || po.auto_active_today === null || Number(po.auto_active_today) === 1 || normRem.startsWith(today))
+                    ? 1
+                    : (Number(po.is_active_today) ? 1 : 0);
+
+                const minRow = database.prepare('SELECT MIN(COALESCE(priority_order, 100)) as min_ord FROM purchase_orders').get();
+                const newOrder = Math.max(1, (minRow && minRow.min_ord != null ? Number(minRow.min_ord) : 10) - 1);
+
+                database.prepare(`
+                    UPDATE purchase_orders
+                    SET priority_status = ?,
+                        priority_order = ?,
+                        is_active_today = ?,
+                        reminder_triggered = 1,
+                        updated_at = ?
+                    WHERE id = ?
+                `).run(newPrio, newOrder, newActiveToday, now, po.id);
+
+                escalated.push({
+                    id: po.id,
+                    po_number: po.po_number,
+                    so_number: po.so_number || po.po_number.replace('PO-', 'SO-'),
+                    priority_status: newPrio,
+                    is_active_today: newActiveToday,
+                    reminder_at: normRem,
+                    reminder_note: po.reminder_note
+                });
+            }
+        }
+    } catch (err) {
+        console.warn('evaluateOrderRemindersAndAutoPrioritize note:', err.message);
+    }
+
+    return escalated;
+}
+
 /**
  * GET /api/orders
  * Supports filtering by client, status, search
  */
 router.get('/', authenticateToken, enforceClientIsolation, (req, res) => {
     const { status, clientId, search } = req.query;
+
+    // Automatically evaluate any due SO reminders & auto-prioritize before returning queue
+    evaluateOrderRemindersAndAutoPrioritize(db);
 
     let query = `
         SELECT po.*, c.company_name, c.contact_person, c.email as client_email, c.is_vyuceutical_ops,
@@ -113,6 +192,89 @@ router.get('/', authenticateToken, enforceClientIsolation, (req, res) => {
     }
 
     return res.json({ success: true, data: orders });
+});
+
+/**
+ * GET /api/orders/supervisor-reminders
+ * Evaluates due reminders, triggers automatic prioritizing, and returns supervisor notifications
+ * for orders that need to be done today and competing prioritized work in the queue.
+ */
+router.get('/supervisor-reminders', authenticateToken, (req, res) => {
+    const allowedRoles = ['PRODUCTION', 'SUPER_ADMIN', 'ADMIN', 'CEO', 'COO', 'IT_ADMIN'];
+    if (!allowedRoles.includes(req.user.role)) {
+        return res.status(403).json({ success: false, error: 'Only Production Supervisor or Executives can access supervisor queue reminders.' });
+    }
+
+    const newlyEscalated = evaluateOrderRemindersAndAutoPrioritize(db);
+    const now = getManilaDateTime();
+    const today = getManilaDate();
+
+    const openOrders = db.prepare(`
+        SELECT po.id, po.po_number, po.so_number, po.status, po.priority_status, po.priority_order,
+               po.is_active_today, po.production_notes, po.reminder_at, po.auto_priority_target,
+               po.auto_active_today, po.reminder_note, po.reminder_triggered, po.reminder_dismissed,
+               c.company_name,
+               (SELECT SUM(target_quantity) FROM purchase_order_items WHERE po_id = po.id) as total_target_quantity
+        FROM purchase_orders po
+        JOIN clients c ON po.client_id = c.id
+        WHERE po.status NOT IN ('COMPLETED', 'CANCELLED', 'VOIDED')
+        ORDER BY po.is_active_today DESC,
+                 CASE COALESCE(po.priority_status, 'NORMAL')
+                     WHEN 'RUSH' THEN 1
+                     WHEN 'PRIORITIZED' THEN 2
+                     WHEN 'NORMAL' THEN 3
+                     WHEN 'ON_HOLD' THEN 4
+                     ELSE 3
+                 END ASC,
+                 COALESCE(po.priority_order, 100) ASC
+    `).all();
+
+    const dueTodayOrTriggered = openOrders.filter(o => {
+        if (Number(o.reminder_dismissed) === 1) return false;
+        if (!o.reminder_at) return false;
+        const norm = normalizeReminderDateTime(o.reminder_at);
+        return norm && (norm <= now || norm.startsWith(today) || Number(o.reminder_triggered) === 1);
+    });
+
+    const upcomingReminders = openOrders.filter(o => {
+        if (!o.reminder_at) return false;
+        const norm = normalizeReminderDateTime(o.reminder_at);
+        return norm && norm > now && !norm.startsWith(today);
+    });
+
+    const rushOrders = openOrders.filter(o => o.priority_status === 'RUSH');
+    const prioritizedOrders = openOrders.filter(o => o.priority_status === 'PRIORITIZED');
+    const activeTodayOrders = openOrders.filter(o => Number(o.is_active_today) === 1);
+    const highPriorityQueue = openOrders.filter(o => o.priority_status === 'RUSH' || o.priority_status === 'PRIORITIZED' || Number(o.is_active_today) === 1);
+
+    const hasMorePrioritizedWork = highPriorityQueue.length > 1;
+    const topOrder = openOrders[0] || null;
+
+    let advisoryMessage = '';
+    if (dueTodayOrTriggered.length > 0 && hasMorePrioritizedWork) {
+        advisoryMessage = `🔔 ${dueTodayOrTriggered.length} Sales Order(s) need to be done today (${dueTodayOrTriggered.map(o => o.so_number || o.po_number).join(', ')}) AND you have ${rushOrders.length} Rush + ${prioritizedOrders.length} Prioritized orders competing in the queue!`;
+    } else if (dueTodayOrTriggered.length > 0) {
+        advisoryMessage = `🔔 ${dueTodayOrTriggered.length} Sales Order(s) scheduled via reminder need to be done today (${dueTodayOrTriggered.map(o => o.so_number || o.po_number).join(', ')}).`;
+    } else if (hasMorePrioritizedWork) {
+        advisoryMessage = `⚡ Workload Alert: You have ${highPriorityQueue.length} high-priority Sales Orders (${rushOrders.length} Rush, ${prioritizedOrders.length} Prioritized, ${activeTodayOrders.length} Active Today). Top in queue: ${topOrder ? (topOrder.so_number || topOrder.po_number) : 'N/A'}.`;
+    }
+
+    return res.json({
+        success: true,
+        data: {
+            now,
+            today,
+            newlyEscalated,
+            dueTodayOrTriggered,
+            upcomingReminders,
+            rushCount: rushOrders.length,
+            prioritizedCount: prioritizedOrders.length,
+            activeTodayCount: activeTodayOrders.length,
+            hasMorePrioritizedWork,
+            topQueueOrder: topOrder ? (topOrder.so_number || topOrder.po_number) : null,
+            advisoryMessage
+        }
+    });
 });
 
 /**
@@ -1217,7 +1379,19 @@ const updateProductionPriorityHandler = (req, res) => {
         return res.status(404).json({ success: false, error: 'Sales Order / Purchase Order not found.' });
     }
 
-    const { priority_status, priority_order, is_active_today, production_notes, move_direction } = req.body || {};
+    const {
+        priority_status,
+        priority_order,
+        is_active_today,
+        production_notes,
+        move_direction,
+        reminder_at,
+        auto_priority_target,
+        auto_active_today,
+        reminder_note,
+        clear_reminder,
+        reminder_dismissed
+    } = req.body || {};
 
     const validPriorities = ['RUSH', 'PRIORITIZED', 'NORMAL', 'ON_HOLD'];
     let newPriorityStatus = po.priority_status || 'NORMAL';
@@ -1245,6 +1419,41 @@ const updateProductionPriorityHandler = (req, res) => {
     }
 
     const newProdNotes = production_notes !== undefined ? String(production_notes) : (po.production_notes || null);
+
+    // Handle Reminder & Automatic Prioritizing fields
+    let newReminderAt = po.reminder_at || null;
+    let newAutoPriorityTarget = po.auto_priority_target || 'RUSH';
+    let newAutoActiveToday = po.auto_active_today !== undefined && po.auto_active_today !== null ? Number(po.auto_active_today) : 1;
+    let newReminderNote = po.reminder_note || null;
+    let newReminderTriggered = po.reminder_triggered ? 1 : 0;
+    let newReminderDismissed = po.reminder_dismissed ? 1 : 0;
+
+    if (clear_reminder === true || clear_reminder === 1 || reminder_at === null || reminder_at === '') {
+        if (clear_reminder || reminder_at !== undefined) {
+            newReminderAt = null;
+            newReminderNote = null;
+            newReminderTriggered = 0;
+            newReminderDismissed = 0;
+        }
+    } else if (reminder_at !== undefined) {
+        newReminderAt = normalizeReminderDateTime(reminder_at);
+        newReminderTriggered = 0;
+        newReminderDismissed = 0;
+    }
+
+    if (auto_priority_target && ['RUSH', 'PRIORITIZED'].includes(String(auto_priority_target).toUpperCase())) {
+        newAutoPriorityTarget = String(auto_priority_target).toUpperCase();
+    }
+    if (auto_active_today !== undefined && auto_active_today !== null) {
+        newAutoActiveToday = (auto_active_today === true || auto_active_today === 1 || auto_active_today === '1' || auto_active_today === 'true') ? 1 : 0;
+    }
+    if (reminder_note !== undefined && !clear_reminder) {
+        newReminderNote = reminder_note ? String(reminder_note).trim() : null;
+    }
+    if (reminder_dismissed !== undefined && reminder_dismissed !== null) {
+        newReminderDismissed = (reminder_dismissed === true || reminder_dismissed === 1 || reminder_dismissed === '1' || reminder_dismissed === 'true') ? 1 : 0;
+    }
+
     const now = getManilaDateTime();
 
     db.prepare(`
@@ -1253,9 +1462,31 @@ const updateProductionPriorityHandler = (req, res) => {
             priority_order = ?,
             is_active_today = ?,
             production_notes = ?,
+            reminder_at = ?,
+            auto_priority_target = ?,
+            auto_active_today = ?,
+            reminder_note = ?,
+            reminder_triggered = ?,
+            reminder_dismissed = ?,
             updated_at = ?
         WHERE id = ?
-    `).run(newPriorityStatus, newPriorityOrder, newActiveToday, newProdNotes, now, id);
+    `).run(
+        newPriorityStatus,
+        newPriorityOrder,
+        newActiveToday,
+        newProdNotes,
+        newReminderAt,
+        newAutoPriorityTarget,
+        newAutoActiveToday,
+        newReminderNote,
+        newReminderTriggered,
+        newReminderDismissed,
+        now,
+        id
+    );
+
+    // Immediately evaluate due reminders in case reminder_at is already due
+    evaluateOrderRemindersAndAutoPrioritize(db);
 
     const updated = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
 
@@ -1269,17 +1500,19 @@ const updateProductionPriorityHandler = (req, res) => {
         details: {
             poNumber: po.po_number,
             soNumber: po.so_number,
-            priority_status: newPriorityStatus,
-            priority_order: newPriorityOrder,
-            is_active_today: newActiveToday,
-            production_notes: newProdNotes
+            priority_status: updated.priority_status,
+            priority_order: updated.priority_order,
+            is_active_today: updated.is_active_today,
+            reminder_at: updated.reminder_at,
+            auto_priority_target: updated.auto_priority_target,
+            reminder_note: updated.reminder_note
         },
         ipAddress: req.ip
     });
 
     return res.json({
         success: true,
-        message: `Sales Order ${po.so_number || po.po_number} production schedule updated.`,
+        message: `Sales Order ${po.so_number || po.po_number} production schedule & reminder updated.`,
         data: updated
     });
 };
@@ -1287,5 +1520,8 @@ const updateProductionPriorityHandler = (req, res) => {
 router.put('/:id/production-priority', authenticateToken, updateProductionPriorityHandler);
 router.patch('/:id/production-priority', authenticateToken, updateProductionPriorityHandler);
 
+router.evaluateOrderRemindersAndAutoPrioritize = evaluateOrderRemindersAndAutoPrioritize;
+
 module.exports = router;
+
 

@@ -1127,11 +1127,17 @@ function runMigrations(dbInstance, isMysql) {
             console.warn('API keys table init note:', apiKeysErr.message);
         }
 
-        // Production Supervisor Priority & Active Today Columns on purchase_orders
+        // Production Supervisor Priority, Active Today & Reminder Auto-Prioritization Columns on purchase_orders
         try { dbInstance.exec(`ALTER TABLE purchase_orders ADD COLUMN priority_status ${textType} DEFAULT 'NORMAL';`); } catch (_) {}
         try { dbInstance.exec(`ALTER TABLE purchase_orders ADD COLUMN priority_order ${intType} DEFAULT 100;`); } catch (_) {}
         try { dbInstance.exec(`ALTER TABLE purchase_orders ADD COLUMN is_active_today ${intType} DEFAULT 0;`); } catch (_) {}
         try { dbInstance.exec(`ALTER TABLE purchase_orders ADD COLUMN production_notes ${textType};`); } catch (_) {}
+        try { dbInstance.exec(`ALTER TABLE purchase_orders ADD COLUMN reminder_at ${textType};`); } catch (_) {}
+        try { dbInstance.exec(`ALTER TABLE purchase_orders ADD COLUMN auto_priority_target ${textType} DEFAULT 'PRIORITIZED';`); } catch (_) {}
+        try { dbInstance.exec(`ALTER TABLE purchase_orders ADD COLUMN auto_active_today ${intType} DEFAULT 1;`); } catch (_) {}
+        try { dbInstance.exec(`ALTER TABLE purchase_orders ADD COLUMN reminder_note ${textType};`); } catch (_) {}
+        try { dbInstance.exec(`ALTER TABLE purchase_orders ADD COLUMN reminder_triggered ${intType} DEFAULT 0;`); } catch (_) {}
+        try { dbInstance.exec(`ALTER TABLE purchase_orders ADD COLUMN reminder_dismissed ${intType} DEFAULT 0;`); } catch (_) {}
 
         // Warehouse Raw Materials Inventory Table
         try {

@@ -12206,13 +12206,40 @@ window.deleteITRecord = deleteITRecord;
 // PRODUCTION SUPERVISOR DASHBOARD & INTERACTIVE SALES ORDER BOARD
 // =============================================================
 let cachedProductionOrders = [];
+let cachedSupervisorReminders = null;
 let currentProdBoardFilter = '';
+let supervisorReminderTimer = null;
+const notifiedEscalatedSOIds = new Set();
+
+function formatReminderDisplay(remStr) {
+    if (!remStr) return '';
+    const clean = String(remStr).trim().replace('T', ' ');
+    return clean.length > 16 ? clean.slice(0, 16) : clean;
+}
+
+function getLocalManilaStrings() {
+    const now = new Date();
+    const manilaOffsetMs = 8 * 60 * 60 * 1000;
+    const manilaDate = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + manilaOffsetMs);
+    const yyyy = manilaDate.getFullYear();
+    const mm = String(manilaDate.getMonth() + 1).padStart(2, '0');
+    const dd = String(manilaDate.getDate()).padStart(2, '0');
+    const hh = String(manilaDate.getHours()).padStart(2, '0');
+    const min = String(manilaDate.getMinutes()).padStart(2, '0');
+    const ss = String(manilaDate.getSeconds()).padStart(2, '0');
+    return {
+        today: `${yyyy}-${mm}-${dd}`,
+        now: `${yyyy}-${mm}-${dd} ${hh}:${min}:${ss}`,
+        datetimeLocal: `${yyyy}-${mm}-${dd}T${hh}:${min}`
+    };
+}
 
 async function loadProductionSupervisorDashboard() {
     try {
-        const [kpiRes, ordersRes] = await Promise.all([
+        const [kpiRes, ordersRes, remRes] = await Promise.all([
             NKB.api('/api/reports/overview'),
-            NKB.api('/api/orders')
+            NKB.api('/api/orders'),
+            NKB.api('/api/orders/supervisor-reminders').catch(() => null)
         ]);
 
         const setElText = (id, text) => {
@@ -12222,6 +12249,20 @@ async function loadProductionSupervisorDashboard() {
 
         if (ordersRes && ordersRes.success && Array.isArray(ordersRes.data)) {
             cachedProductionOrders = ordersRes.data.filter(o => o.status !== 'CANCELLED' && o.status !== 'VOIDED');
+        }
+        if (remRes && remRes.success && remRes.data) {
+            cachedSupervisorReminders = remRes.data;
+            // Notify supervisor via toast if any order was newly auto-prioritized or due today
+            const dueList = remRes.data.dueTodayOrTriggered || [];
+            for (const item of dueList) {
+                if (!notifiedEscalatedSOIds.has(item.id)) {
+                    notifiedEscalatedSOIds.add(item.id);
+                    const soNum = item.so_number || (item.po_number || '').replace('PO-', 'SO-');
+                    const msg = `⏰ Reminder Alert: ${soNum} (${item.company_name}) needs to be done today! Priority: ${item.priority_status || 'RUSH'}.`;
+                    if (NKB.showToast) NKB.showToast(msg, 'warning');
+                    else if (NKB.toast) NKB.toast(msg);
+                }
+            }
         }
 
         const totalPOCount = cachedProductionOrders.length || (kpiRes.data ? kpiRes.data.totalPOs : 0) || 0;
@@ -12236,10 +12277,102 @@ async function loadProductionSupervisorDashboard() {
         setElText('prod-kpi-active-today', NKB.formatNumber(activeTodayCount));
         setElText('prod-kpi-ongoing-deliveries', NKB.formatNumber(ongoingDeliveriesCount));
 
+        renderSupervisorReminderBanner();
         renderProductionSalesOrderBoard();
+
+        if (!supervisorReminderTimer) {
+            supervisorReminderTimer = setInterval(() => {
+                const dashEl = document.getElementById('production-supervisor-dashboard');
+                if (dashEl && !dashEl.classList.contains('hidden')) {
+                    loadProductionSupervisorDashboard();
+                }
+            }, 30000);
+        }
     } catch (err) {
         console.error('Error loading Production Supervisor dashboard:', err);
     }
+}
+
+function renderSupervisorReminderBanner() {
+    const bannerEl = document.getElementById('prod-supervisor-reminder-banner');
+    if (!bannerEl) return;
+
+    const { today, now } = getLocalManilaStrings();
+    const openOrders = cachedProductionOrders.filter(o => o.status !== 'COMPLETED');
+    const rushOrders = openOrders.filter(o => o.priority_status === 'RUSH');
+    const prioritizedOrders = openOrders.filter(o => o.priority_status === 'PRIORITIZED');
+    const activeTodayOrders = openOrders.filter(o => Number(o.is_active_today) === 1);
+
+    const dueReminders = openOrders.filter(o => {
+        if (!o.reminder_at || Number(o.reminder_dismissed) === 1) return false;
+        const norm = String(o.reminder_at).replace('T', ' ');
+        return norm <= now || norm.startsWith(today) || Number(o.reminder_triggered) === 1;
+    });
+
+    const hasMorePrioritizedWork = (rushOrders.length + prioritizedOrders.length) > 1 || (dueReminders.length > 0 && (rushOrders.length + prioritizedOrders.length) > 0);
+
+    if (dueReminders.length === 0 && !hasMorePrioritizedWork) {
+        bannerEl.classList.add('hidden');
+        bannerEl.innerHTML = '';
+        return;
+    }
+
+    bannerEl.classList.remove('hidden');
+
+    const dueCardsHtml = dueReminders.map(po => {
+        const soNum = po.so_number || po.po_number.replace('PO-', 'SO-');
+        const isTriggered = Number(po.reminder_triggered) === 1 || String(po.reminder_at).replace('T', ' ') <= now;
+        return `
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-white/90 p-3 rounded-xl border ${isTriggered ? 'border-rose-300' : 'border-amber-300'} shadow-xs">
+                <div class="flex items-start gap-2.5">
+                    <span class="text-lg">${isTriggered ? '🚨' : '⏰'}</span>
+                    <div>
+                        <div class="flex flex-wrap items-center gap-1.5">
+                            <span class="font-black text-slate-900 text-xs">${soNum} (${po.company_name})</span>
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold ${isTriggered ? 'bg-rose-100 text-rose-800 border border-rose-300' : 'bg-amber-100 text-amber-800 border border-amber-300'}">
+                                ${isTriggered ? `AUTO-PRIORITIZED TO ${po.priority_status || 'RUSH'} · NEEDS TO BE DONE TODAY` : `DUE TODAY @ ${formatReminderDisplay(po.reminder_at)}`}
+                            </span>
+                        </div>
+                        <div class="text-[11px] text-slate-600 mt-0.5">
+                            ${po.reminder_note ? `<span class="font-bold text-slate-800">Note: "${po.reminder_note}"</span> · ` : ''}
+                            Target Auto-Priority: <strong>${po.auto_priority_target || 'RUSH'}</strong>
+                            ${(rushOrders.length + prioritizedOrders.length) > 1 ? ` · <span class="text-rose-700 font-bold">⚠️ You have ${(rushOrders.length + prioritizedOrders.length) - 1} other Rush/Prioritized SO(s) in queue!</span>` : ''}
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-1.5 self-end sm:self-center">
+                    <button type="button" onclick="openSOReminderModal('${po.id}')" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-[11px] font-bold border border-indigo-200 cursor-pointer">✏️ Adjust</button>
+                    <button type="button" onclick="updateOrderProductionSchedule('${po.id}', { reminder_dismissed: 1 })" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold cursor-pointer">✓ Acknowledge</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    bannerEl.innerHTML = `
+        <div class="p-4 rounded-2xl ${dueReminders.length > 0 ? 'bg-rose-50/90 border border-rose-200' : 'bg-amber-50/90 border border-amber-200'} space-y-3">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                    <span class="text-base">${dueReminders.length > 0 ? '🔔' : '⚡'}</span>
+                    <div>
+                        <h4 class="font-black text-xs sm:text-sm ${dueReminders.length > 0 ? 'text-rose-950' : 'text-amber-950'}">
+                            ${dueReminders.length > 0
+                                ? `Supervisor Reminder Alert: ${dueReminders.length} Sales Order(s) Need To Be Done Today!`
+                                : `Supervisor Prioritized Workload Notice: ${rushOrders.length} Rush & ${prioritizedOrders.length} Prioritized Orders Active`}
+                        </h4>
+                        <p class="text-[11px] ${dueReminders.length > 0 ? 'text-rose-800' : 'text-amber-800'}">
+                            ${hasMorePrioritizedWork
+                                ? `You currently have <strong>${rushOrders.length} Rush</strong>, <strong>${prioritizedOrders.length} Prioritized</strong>, and <strong>${activeTodayOrders.length} Active Today</strong> Sales Orders competing in the factory floor queue.`
+                                : `Scheduled reminder has automatically prioritized this order for today's factory production.`}
+                        </p>
+                    </div>
+                </div>
+                <button type="button" onclick="setProdBoardFilter('HAS_REMINDER')" class="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 rounded-xl text-[11px] font-extrabold shadow-2xs self-start sm:self-center cursor-pointer">
+                    ⏰ View All Reminders
+                </button>
+            </div>
+            ${dueCardsHtml ? `<div class="space-y-2">${dueCardsHtml}</div>` : ''}
+        </div>
+    `;
 }
 
 function setProdBoardFilter(filterVal) {
@@ -12266,6 +12399,7 @@ function renderProductionSalesOrderBoard() {
     const selectFilter = document.getElementById('prod-so-filter-priority');
     const searchTerm = (searchInput ? searchInput.value : '').trim().toLowerCase();
     const filterVal = selectFilter ? selectFilter.value : currentProdBoardFilter;
+    const { today, now } = getLocalManilaStrings();
 
     const priorityRankWeight = {
         'RUSH': 1,
@@ -12278,6 +12412,8 @@ function renderProductionSalesOrderBoard() {
 
     if (filterVal === 'ACTIVE_TODAY') {
         list = list.filter(o => Number(o.is_active_today) === 1);
+    } else if (filterVal === 'HAS_REMINDER') {
+        list = list.filter(o => o.reminder_at && String(o.reminder_at).trim() !== '');
     } else if (filterVal) {
         list = list.filter(o => (o.priority_status || 'NORMAL') === filterVal);
     }
@@ -12288,7 +12424,8 @@ function renderProductionSalesOrderBoard() {
             const poStr = (o.po_number || '').toLowerCase();
             const clientStr = (o.company_name || '').toLowerCase();
             const itemsStr = (o.items || []).map(i => (i.product_name || '')).join(' ').toLowerCase();
-            return soStr.includes(searchTerm) || poStr.includes(searchTerm) || clientStr.includes(searchTerm) || itemsStr.includes(searchTerm);
+            const remStr = (o.reminder_note || '').toLowerCase();
+            return soStr.includes(searchTerm) || poStr.includes(searchTerm) || clientStr.includes(searchTerm) || itemsStr.includes(searchTerm) || remStr.includes(searchTerm);
         });
     }
 
@@ -12310,9 +12447,11 @@ function renderProductionSalesOrderBoard() {
     });
 
     if (list.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" class="py-8 text-center text-slate-400">No matching Sales Orders found in queue.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-slate-400">No matching Sales Orders found in queue.</td></tr>`;
         return;
     }
+
+    const totalHighPrioInQueue = list.filter(o => o.priority_status === 'RUSH' || o.priority_status === 'PRIORITIZED' || Number(o.is_active_today) === 1).length;
 
     const priorityBadgeMap = {
         'RUSH': '<span class="px-2.5 py-1 rounded-full bg-rose-100 text-rose-800 font-extrabold text-[10px] border border-rose-300">🔥 RUSH</span>',
@@ -12328,18 +12467,59 @@ function renderProductionSalesOrderBoard() {
         const itemsSummary = (po.items || []).map(it => `${it.product_name} (${NKB.formatNumber(it.target_quantity)} ${it.unit || 'pcs'})`).join(', ') || 'No items';
         const totalQty = po.total_target_quantity || (po.items || []).reduce((s, i) => s + (Number(i.target_quantity) || 0), 0);
 
+        // Reminder & Automatic Prioritizing cell HTML
+        const hasReminder = !!(po.reminder_at && String(po.reminder_at).trim() !== '');
+        const normRem = hasReminder ? String(po.reminder_at).replace('T', ' ') : '';
+        const isRemTriggered = hasReminder && (Number(po.reminder_triggered) === 1 || normRem <= now);
+        const isRemToday = hasReminder && normRem.startsWith(today);
+        const autoTarget = po.auto_priority_target || 'RUSH';
+        const higherPrioAheadCount = list.slice(0, idx).filter(o => o.priority_status === 'RUSH' || o.priority_status === 'PRIORITIZED' || Number(o.is_active_today) === 1).length;
+
+        let reminderCellHtml = '';
+        if (hasReminder) {
+            const badgeStyle = isRemTriggered
+                ? 'bg-rose-100 text-rose-800 border-rose-300 animate-pulse'
+                : (isRemToday ? 'bg-amber-100 text-amber-800 border-amber-300' : 'bg-indigo-50 text-indigo-700 border-indigo-200');
+            const badgeText = isRemTriggered
+                ? `🔔 DUE TODAY · AUTO-${autoTarget}`
+                : (isRemToday ? `⏰ TODAY ${formatReminderDisplay(po.reminder_at).slice(11)} → ${autoTarget}` : `⏰ ${formatReminderDisplay(po.reminder_at)} → ${autoTarget}`);
+
+            reminderCellHtml = `
+                <div class="flex flex-col items-center gap-1">
+                    <span class="px-2 py-0.5 rounded-full border font-extrabold text-[10px] inline-flex items-center gap-1 ${badgeStyle}">
+                        ${badgeText}
+                    </span>
+                    ${po.reminder_note ? `<div class="text-[10px] text-slate-600 italic truncate max-w-[160px]" title="${po.reminder_note}">"${po.reminder_note}"</div>` : ''}
+                    ${higherPrioAheadCount > 0 ? `<div class="text-[9.5px] font-extrabold text-amber-700" title="You have ${higherPrioAheadCount} more prioritized order(s) ahead in queue">⚠️ ${higherPrioAheadCount} prioritized ahead</div>` : ''}
+                    <div class="flex items-center gap-1 mt-0.5">
+                        <button type="button" onclick="openSOReminderModal('${po.id}')" class="px-2 py-0.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded text-[10px] font-bold cursor-pointer">✏️ Edit</button>
+                        <button type="button" onclick="clearSOReminder('${po.id}')" class="px-1.5 py-0.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded text-[10px] font-bold cursor-pointer" title="Clear Reminder">✕</button>
+                    </div>
+                </div>
+            `;
+        } else {
+            reminderCellHtml = `
+                <div class="flex flex-col items-center gap-1">
+                    <button type="button" onclick="openSOReminderModal('${po.id}')" class="px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition inline-flex items-center gap-1 cursor-pointer shadow-2xs">
+                        <span>⏰ Set Reminder</span>
+                    </button>
+                    ${higherPrioAheadCount > 0 ? `<span class="text-[9.5px] font-semibold text-amber-700">⚡ ${higherPrioAheadCount} prioritized ahead</span>` : `<span class="text-[9.5px] text-slate-400">Auto-prioritize timer</span>`}
+                </div>
+            `;
+        }
+
         return `
             <tr class="${isActiveToday ? 'bg-emerald-50/50' : (pStatus === 'RUSH' ? 'bg-rose-50/30' : 'hover:bg-slate-50')} transition">
                 <td class="py-3 px-3">
                     <div class="flex items-center gap-1.5">
                         <span class="w-6 h-6 rounded-full ${idx === 0 ? 'bg-indigo-600 text-white font-black' : 'bg-slate-200 text-slate-700 font-bold'} flex items-center justify-center text-[11px]">#${idx + 1}</span>
                         <div class="flex flex-col gap-0.5">
-                            <button onclick="updateOrderProductionSchedule('${po.id}', { move_direction: 'FIRST' })" title="Assign Goes First (#1 in Queue)" class="text-[10px] px-1.5 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded font-bold border border-indigo-200">⏫ First</button>
+                            <button onclick="updateOrderProductionSchedule('${po.id}', { move_direction: 'FIRST' })" title="Assign Goes First (#1 in Queue)" class="text-[10px] px-1.5 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded font-bold border border-indigo-200 cursor-pointer">⏫ First</button>
                         </div>
                     </div>
                 </td>
                 <td class="py-3 px-3">
-                    <button onclick="openViewPOModal('${po.id}')" class="font-black text-indigo-600 hover:underline text-xs">${soNum}</button>
+                    <button onclick="openViewPOModal('${po.id}')" class="font-black text-indigo-600 hover:underline text-xs cursor-pointer">${soNum}</button>
                     <div class="text-[10px] text-slate-400 font-mono">${po.po_number} · ${po.po_date || ''}</div>
                 </td>
                 <td class="py-3 px-3 max-w-xs">
@@ -12363,19 +12543,176 @@ function renderProductionSalesOrderBoard() {
                     </select>
                 </td>
                 <td class="py-3 px-3 text-center">
+                    ${reminderCellHtml}
+                </td>
+                <td class="py-3 px-3 text-center">
                     <button onclick="updateOrderProductionSchedule('${po.id}', { is_active_today: ${isActiveToday ? 0 : 1} })"
                         class="px-3 py-1.5 rounded-xl text-[11px] font-extrabold transition shadow-xs cursor-pointer ${isActiveToday ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 border border-slate-300'}">
                         ${isActiveToday ? '🏭 ACTIVE TODAY ✓' : 'Set Active Today'}
                     </button>
                 </td>
                 <td class="py-3 px-3 text-right whitespace-nowrap space-x-1">
-                    <button onclick="updateOrderProductionSchedule('${po.id}', { move_direction: 'UP' })" title="Move Up in Queue" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold text-xs">↑</button>
-                    <button onclick="updateOrderProductionSchedule('${po.id}', { move_direction: 'DOWN' })" title="Move Down in Queue" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold text-xs">↓</button>
-                    <button onclick="openViewPOModal('${po.id}')" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg font-bold text-xs">View SO</button>
+                    <button onclick="updateOrderProductionSchedule('${po.id}', { move_direction: 'UP' })" title="Move Up in Queue" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold text-xs cursor-pointer">↑</button>
+                    <button onclick="updateOrderProductionSchedule('${po.id}', { move_direction: 'DOWN' })" title="Move Down in Queue" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold text-xs cursor-pointer">↓</button>
+                    <button onclick="openViewPOModal('${po.id}')" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg font-bold text-xs cursor-pointer">View SO</button>
                 </td>
             </tr>
         `;
     }).join('');
+}
+
+function openSOReminderModal(poId) {
+    const po = cachedProductionOrders.find(o => o.id === poId);
+    if (!po) return;
+
+    const existingModal = document.getElementById('modal-so-reminder');
+    if (existingModal) existingModal.remove();
+
+    const soNum = po.so_number || po.po_number.replace('PO-', 'SO-');
+    const { datetimeLocal } = getLocalManilaStrings();
+    const initialDateTime = po.reminder_at
+        ? String(po.reminder_at).trim().replace(' ', 'T').slice(0, 16)
+        : datetimeLocal;
+    const initialTarget = po.auto_priority_target || 'RUSH';
+    const initialActiveToday = po.auto_active_today !== undefined && po.auto_active_today !== null ? Number(po.auto_active_today) === 1 : true;
+    const initialNote = po.reminder_note || '';
+
+    const rushCount = cachedProductionOrders.filter(o => o.status !== 'COMPLETED' && o.priority_status === 'RUSH').length;
+    const prioCount = cachedProductionOrders.filter(o => o.status !== 'COMPLETED' && o.priority_status === 'PRIORITIZED').length;
+
+    const modalHtml = `
+        <div id="modal-so-reminder" class="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+            <div class="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+                <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <span class="text-lg">⏰</span>
+                        <div>
+                            <h3 class="font-black text-sm">Set Reminder & Automatic Prioritizing</h3>
+                            <p class="text-[11px] text-slate-300 font-mono">${soNum} · ${po.company_name}</p>
+                        </div>
+                    </div>
+                    <button type="button" onclick="document.getElementById('modal-so-reminder').remove()" class="text-slate-400 hover:text-white cursor-pointer">✕</button>
+                </div>
+
+                <form onsubmit="submitSOReminderForm(event, '${po.id}')" class="p-6 space-y-4 text-xs">
+                    ${(rushCount + prioCount) > 0 ? `
+                        <div class="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[11px] flex items-start gap-2">
+                            <span class="text-base">⚡</span>
+                            <div>
+                                <strong>Supervisor Queue Workload Notice:</strong> You currently have <strong>${rushCount} Rush</strong> and <strong>${prioCount} Prioritized</strong> Sales Order(s) in the queue. Setting this reminder will notify you when ${soNum} needs to be done and automatically escalate its priority at the scheduled time.
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    <div>
+                        <label class="block font-extrabold text-slate-700 mb-1.5">Quick Schedule Presets</label>
+                        <div class="flex flex-wrap gap-1.5">
+                            <button type="button" onclick="applySOReminderPreset('NOW')" class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg font-bold text-[11px] cursor-pointer">🔥 Due Right Now (Today)</button>
+                            <button type="button" onclick="applySOReminderPreset('30M')" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg font-bold text-[11px] cursor-pointer">+30 Mins</button>
+                            <button type="button" onclick="applySOReminderPreset('1H')" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg font-bold text-[11px] cursor-pointer">+1 Hour</button>
+                            <button type="button" onclick="applySOReminderPreset('TODAY_13')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg font-bold text-[11px] cursor-pointer">Today 1:00 PM</button>
+                            <button type="button" onclick="applySOReminderPreset('TODAY_16')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg font-bold text-[11px] cursor-pointer">Today 4:00 PM</button>
+                            <button type="button" onclick="applySOReminderPreset('TOMORROW_08')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg font-bold text-[11px] cursor-pointer">Tomorrow 8:00 AM</button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block font-extrabold text-slate-700 mb-1">Reminder Date & Time *</label>
+                            <input type="datetime-local" id="so-rem-datetime" required value="${initialDateTime}" class="w-full p-2.5 border border-slate-300 rounded-xl font-mono text-xs bg-slate-50 focus:bg-white">
+                        </div>
+                        <div>
+                            <label class="block font-extrabold text-slate-700 mb-1">Auto-Prioritize To *</label>
+                            <select id="so-rem-target" class="w-full p-2.5 border border-slate-300 rounded-xl font-bold text-slate-800 bg-slate-50 focus:bg-white">
+                                <option value="RUSH" ${initialTarget === 'RUSH' ? 'selected' : ''}>🔥 Escalate to RUSH (#1 Priority)</option>
+                                <option value="PRIORITIZED" ${initialTarget === 'PRIORITIZED' ? 'selected' : ''}>⚡ Escalate to PRIORITIZED</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="p-3 rounded-xl bg-emerald-50/70 border border-emerald-200">
+                        <label class="flex items-center gap-2.5 cursor-pointer">
+                            <input type="checkbox" id="so-rem-active-today" ${initialActiveToday ? 'checked' : ''} class="w-4 h-4 accent-emerald-600 rounded">
+                            <span class="font-bold text-emerald-950 text-xs">🏭 Automatically mark as "Needs to be done that day" (Active Today in Factory)</span>
+                        </label>
+                    </div>
+
+                    <div>
+                        <label class="block font-extrabold text-slate-700 mb-1">Supervisor Reminder Note (Optional)</label>
+                        <input type="text" id="so-rem-note" value="${initialNote.replace(/"/g, '&quot;')}" placeholder="e.g. Must finish compounding today before 4 PM client dispatch" class="w-full p-2.5 border border-slate-300 rounded-xl text-xs">
+                    </div>
+
+                    <div class="flex items-center justify-between pt-3 border-t border-slate-200">
+                        ${po.reminder_at ? `
+                            <button type="button" onclick="clearSOReminder('${po.id}')" class="px-3 py-2 text-rose-600 hover:bg-rose-50 rounded-xl font-bold cursor-pointer">🗑️ Remove Reminder</button>
+                        ` : '<div></div>'}
+                        <div class="flex items-center gap-2">
+                            <button type="button" onclick="document.getElementById('modal-so-reminder').remove()" class="px-4 py-2 border border-slate-300 rounded-xl font-bold text-slate-700 cursor-pointer">Cancel</button>
+                            <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-extrabold shadow-md cursor-pointer">⏰ Save Reminder</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+function applySOReminderPreset(preset) {
+    const input = document.getElementById('so-rem-datetime');
+    if (!input) return;
+
+    const now = new Date();
+    const manilaOffsetMs = 8 * 60 * 60 * 1000;
+    const manilaNow = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + manilaOffsetMs);
+
+    let target = new Date(manilaNow.getTime());
+    if (preset === '30M') {
+        target = new Date(manilaNow.getTime() + 30 * 60000);
+    } else if (preset === '1H') {
+        target = new Date(manilaNow.getTime() + 60 * 60000);
+    } else if (preset === 'TODAY_13') {
+        target.setHours(13, 0, 0, 0);
+    } else if (preset === 'TODAY_16') {
+        target.setHours(16, 0, 0, 0);
+    } else if (preset === 'TOMORROW_08') {
+        target.setDate(target.getDate() + 1);
+        target.setHours(8, 0, 0, 0);
+    }
+
+    const yyyy = target.getFullYear();
+    const mm = String(target.getMonth() + 1).padStart(2, '0');
+    const dd = String(target.getDate()).padStart(2, '0');
+    const hh = String(target.getHours()).padStart(2, '0');
+    const min = String(target.getMinutes()).padStart(2, '0');
+    input.value = `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+}
+
+async function submitSOReminderForm(e, poId) {
+    e.preventDefault();
+    const reminder_at = document.getElementById('so-rem-datetime').value;
+    const auto_priority_target = document.getElementById('so-rem-target').value;
+    const auto_active_today = document.getElementById('so-rem-active-today').checked ? 1 : 0;
+    const reminder_note = document.getElementById('so-rem-note').value.trim();
+
+    const modal = document.getElementById('modal-so-reminder');
+    if (modal) modal.remove();
+
+    await updateOrderProductionSchedule(poId, {
+        reminder_at,
+        auto_priority_target,
+        auto_active_today,
+        reminder_note
+    });
+}
+
+async function clearSOReminder(poId) {
+    const modal = document.getElementById('modal-so-reminder');
+    if (modal) modal.remove();
+    await updateOrderProductionSchedule(poId, {
+        clear_reminder: true
+    });
 }
 
 async function updateOrderProductionSchedule(poId, payload) {
@@ -12385,8 +12722,11 @@ async function updateOrderProductionSchedule(poId, payload) {
             body: payload
         });
         if (res && res.success) {
-            if (NKB.showToast) NKB.showToast(res.message || 'Sales Order priority updated!', 'success');
+            if (NKB.showToast) NKB.showToast(res.message || 'Sales Order priority & reminder updated!', 'success');
             await loadProductionSupervisorDashboard();
+            if (window.NKB_Agents && typeof window.NKB_Agents.refresh === 'function') {
+                window.NKB_Agents.refresh();
+            }
         } else {
             alert((res && res.error) || 'Failed to update production schedule.');
         }
@@ -12399,6 +12739,10 @@ window.loadProductionSupervisorDashboard = loadProductionSupervisorDashboard;
 window.setProdBoardFilter = setProdBoardFilter;
 window.renderProductionSalesOrderBoard = renderProductionSalesOrderBoard;
 window.updateOrderProductionSchedule = updateOrderProductionSchedule;
+window.openSOReminderModal = openSOReminderModal;
+window.applySOReminderPreset = applySOReminderPreset;
+window.submitSOReminderForm = submitSOReminderForm;
+window.clearSOReminder = clearSOReminder;
 
 // =============================================================
 // WAREHOUSE INVENTORY (RAW MATERIALS) MODULE

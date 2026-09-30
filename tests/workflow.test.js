@@ -3109,23 +3109,53 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.ok(acctRoleBlock.includes("showTab('clients')"), 'Senior Accountant must have Clients tab visible');
         assert.ok(acctRoleBlock.includes("showTab('products')"), 'Senior Accountant must have Cosmetic Products tab visible');
 
-        // 2. Test Production Supervisor Interactive Sales Order Priority & "Active Today in Factory" API
-        const samplePo = db.prepare("SELECT id, po_number FROM purchase_orders WHERE status NOT IN ('CANCELLED', 'VOIDED') LIMIT 1").get();
+        // 2. Test Production Supervisor Interactive Sales Order Priority, Reminder Auto-Prioritizing & "Active Today in Factory" API
+        const samplePo = db.prepare("SELECT id, po_number FROM purchase_orders WHERE status NOT IN ('COMPLETED', 'CANCELLED', 'VOIDED') LIMIT 1").get();
         assert.ok(samplePo, 'Sample PO must exist for Production Supervisor priority testing');
 
+        // First set to NORMAL and not active today
+        await request(app)
+            .put(`/api/orders/${samplePo.id}/production-priority`)
+            .set('Authorization', `Bearer ${prodToken}`)
+            .send({
+                priority_status: 'NORMAL',
+                is_active_today: 0,
+                clear_reminder: true
+            });
+
+        // Now set a due reminder with automatic prioritizing to RUSH + Active Today
         const prioRes = await request(app)
             .put(`/api/orders/${samplePo.id}/production-priority`)
             .set('Authorization', `Bearer ${prodToken}`)
             .send({
-                priority_status: 'RUSH',
-                is_active_today: 1,
-                move_direction: 'FIRST',
+                reminder_at: '2026-01-01T08:00',
+                auto_priority_target: 'RUSH',
+                auto_active_today: 1,
+                reminder_note: 'Must finish compounding today before 4 PM dispatch',
                 production_notes: 'Assigned to Line 1 compounding today'
             });
         assert.strictEqual(prioRes.status, 200);
         assert.strictEqual(prioRes.body.success, true);
-        assert.strictEqual(prioRes.body.data.priority_status, 'RUSH');
-        assert.strictEqual(Number(prioRes.body.data.is_active_today), 1);
+        assert.strictEqual(prioRes.body.data.priority_status, 'RUSH', 'Reminder due timestamp must automatically escalate priority_status to RUSH');
+        assert.strictEqual(Number(prioRes.body.data.is_active_today), 1, 'Reminder due timestamp must automatically set is_active_today = 1');
+        assert.strictEqual(Number(prioRes.body.data.reminder_triggered), 1, 'Reminder must be marked as triggered');
+        assert.strictEqual(prioRes.body.data.reminder_note, 'Must finish compounding today before 4 PM dispatch');
+
+        // Verify /api/orders/supervisor-reminders returns due reminders and workload advisory
+        const supRemRes = await request(app)
+            .get('/api/orders/supervisor-reminders')
+            .set('Authorization', `Bearer ${prodToken}`);
+        assert.strictEqual(supRemRes.status, 200);
+        assert.strictEqual(supRemRes.body.success, true);
+        assert.ok(supRemRes.body.data.dueTodayOrTriggered.some(o => o.id === samplePo.id), 'Supervisor reminders endpoint must list due SO');
+        assert.ok(supRemRes.body.data.advisoryMessage.includes('need to be done today'), 'Supervisor advisory message must notify that SO needs to be done today');
+
+        // Verify Bell Notification Agent (/api/notifications/pending) alerts the Production Supervisor
+        const notifRes = await request(app)
+            .get('/api/notifications/pending')
+            .set('Authorization', `Bearer ${prodToken}`);
+        assert.strictEqual(notifRes.status, 200);
+        assert.ok(notifRes.body.items.some(i => i.category === 'PRODUCTION_REMINDER' && i.id === `so-rem-${samplePo.id}`), 'Bell Notification Agent must notify supervisor of due SO reminder');
 
         // Verify Overview KPI returns totalPOs and activeTodayPOs
         const kpiRes = await request(app)

@@ -291,13 +291,14 @@
                                     <h3 class="font-black text-slate-900 text-base sm:text-lg">Interactive Sales Order Queue & Factory Floor Schedule</h3>
                                     <span class="px-2.5 py-0.5 bg-amber-100 text-amber-800 text-[11px] font-extrabold rounded-full border border-amber-200">Supervisor Control</span>
                                 </div>
-                                <p class="text-xs text-slate-500 mt-0.5">Assign which Sales Order goes first, set priority status (<strong>Rush</strong>, <strong>Prioritized</strong>, <strong>Normal</strong>, or <strong>On Hold</strong>), and toggle what is <strong>Active Today in Factory</strong>.</p>
+                                <p class="text-xs text-slate-500 mt-0.5">Assign which Sales Order goes first, set priority status (<strong>Rush</strong>, <strong>Prioritized</strong>, <strong>Normal</strong>, or <strong>On Hold</strong>), schedule <strong>automatic prioritizing reminders</strong>, and toggle what is <strong>Active Today in Factory</strong>.</p>
                             </div>
                             <div class="flex flex-wrap items-center gap-2">
                                 <input type="text" id="prod-so-search" oninput="renderProductionSalesOrderBoard()" placeholder="Search SO#, Client, Product..." class="text-xs px-3 py-2 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white w-48 sm:w-56">
                                 <select id="prod-so-filter-priority" onchange="renderProductionSalesOrderBoard()" class="text-xs px-3 py-2 border border-slate-300 rounded-xl bg-slate-50 font-semibold text-slate-700">
                                     <option value="">All Priorities</option>
                                     <option value="ACTIVE_TODAY">🏭 Active Today Only</option>
+                                    <option value="HAS_REMINDER">⏰ Scheduled Reminders</option>
                                     <option value="RUSH">🔥 Rush Orders</option>
                                     <option value="PRIORITIZED">⚡ Prioritized</option>
                                     <option value="NORMAL">📋 Normal Queue</option>
@@ -306,10 +307,14 @@
                             </div>
                         </div>
 
+                        <!-- Supervisor Reminder & Prioritized Workload Advisory Banner -->
+                        <div id="prod-supervisor-reminder-banner" class="hidden"></div>
+
                         <!-- Priority Filter Quick Pills -->
                         <div class="flex flex-wrap items-center gap-2 text-xs">
                             <button type="button" onclick="setProdBoardFilter('')" class="prod-board-pill px-3 py-1.5 rounded-xl font-bold bg-slate-900 text-white transition" data-filter="">All Active Sales Orders</button>
                             <button type="button" onclick="setProdBoardFilter('ACTIVE_TODAY')" class="prod-board-pill px-3 py-1.5 rounded-xl font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition" data-filter="ACTIVE_TODAY">🏭 Active Today in Factory</button>
+                            <button type="button" onclick="setProdBoardFilter('HAS_REMINDER')" class="prod-board-pill px-3 py-1.5 rounded-xl font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition" data-filter="HAS_REMINDER">⏰ Scheduled Reminders</button>
                             <button type="button" onclick="setProdBoardFilter('RUSH')" class="prod-board-pill px-3 py-1.5 rounded-xl font-semibold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition" data-filter="RUSH">🔥 Rush</button>
                             <button type="button" onclick="setProdBoardFilter('PRIORITIZED')" class="prod-board-pill px-3 py-1.5 rounded-xl font-semibold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition" data-filter="PRIORITIZED">⚡ Prioritized</button>
                             <button type="button" onclick="setProdBoardFilter('ON_HOLD')" class="prod-board-pill px-3 py-1.5 rounded-xl font-semibold bg-slate-100 text-slate-600 border border-slate-300 hover:bg-slate-200 transition" data-filter="ON_HOLD">⏸️ On Hold</button>
@@ -325,12 +330,13 @@
                                         <th class="py-3 px-3 text-center">Target Qty</th>
                                         <th class="py-3 px-3 text-center">Order Stage</th>
                                         <th class="py-3 px-3 text-center">Priority Assignment</th>
+                                        <th class="py-3 px-3 text-center">⏰ Reminder & Auto-Prioritize</th>
                                         <th class="py-3 px-3 text-center">Active Today in Factory</th>
                                         <th class="py-3 px-3 text-right">Queue Action</th>
                                     </tr>
                                 </thead>
                                 <tbody id="table-prod-supervisor-so-body" class="divide-y divide-slate-100 font-medium">
-                                    <tr><td colspan="8" class="py-8 text-center text-slate-400">Loading interactive Sales Orders queue...</td></tr>
+                                    <tr><td colspan="9" class="py-8 text-center text-slate-400">Loading interactive Sales Orders queue...</td></tr>
                                 </tbody>
                             </table>
                         </div>
