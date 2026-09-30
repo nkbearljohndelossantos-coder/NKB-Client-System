@@ -1877,20 +1877,106 @@
                             <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold" style="background-color: #1e293b; border: 1px solid #475569; color: #f8fafc;">
                                 <kbd class="px-1.5 py-0.5 rounded text-[10px] font-black" style="background-color: #334155; color: #ffffff;">↑</kbd>
                                 <kbd class="px-1.5 py-0.5 rounded text-[10px] font-black" style="background-color: #334155; color: #ffffff;">↓</kbd>
-                                <span>Scroll / Choose Material</span>
+                                <span>Scroll / Choose</span>
                             </span>
-                            <button type="button" onclick="triggerSelectedRawMaterialAction('RESTOCK')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition cursor-pointer font-bold" style="background-color: #065f46; border: 1px solid #10b981; color: #ecfdf5;">
+                            <button type="button" onclick="triggerSelectedRawMaterialAction('RESTOCK')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition cursor-pointer font-bold" style="background-color: #065f46; border: 1px solid #10b981; color: #ecfdf5;" title="Shortcut: Press R or + to Restock selected material">
                                 <kbd class="px-1.5 py-0.5 rounded text-[10px] font-black" style="background-color: #059669; color: #ffffff;">R</kbd>
-                                <span>Restock Selected</span>
+                                <span>+ Restock</span>
                             </button>
-                            <button type="button" onclick="triggerSelectedRawMaterialAction('ISSUE')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition cursor-pointer font-bold" style="background-color: #78350f; border: 1px solid #f59e0b; color: #fffbeb;">
+                            <button type="button" onclick="triggerSelectedRawMaterialAction('ISSUE')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition cursor-pointer font-bold" style="background-color: #78350f; border: 1px solid #f59e0b; color: #fffbeb;" title="Shortcut: Press I or - to Issue selected material">
                                 <kbd class="px-1.5 py-0.5 rounded text-[10px] font-black" style="background-color: #d97706; color: #ffffff;">I</kbd>
-                                <span>Issue Material</span>
+                                <span>- Issue</span>
                             </button>
-                            <button type="button" onclick="triggerSelectedRawMaterialAction('FAST_MOVING')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition cursor-pointer font-bold" style="background-color: #7c2d12; border: 1px solid #f97316; color: #fff7ed;">
+                            <button type="button" id="rm-shortcut-fast-btn" onclick="triggerSelectedRawMaterialAction('FAST_MOVING')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition cursor-pointer font-bold" style="background-color: #7c2d12; border: 1px solid #f97316; color: #fff7ed;" title="Shortcut: Press F or T to Tag / Untag selected material as Fast Moving">
                                 <kbd class="px-1.5 py-0.5 rounded text-[10px] font-black" style="background-color: #ea580c; color: #ffffff;">F</kbd>
-                                <span>Toggle Fast Moving</span>
+                                <span class="text-[10px] opacity-80">/</span>
+                                <kbd class="px-1.5 py-0.5 rounded text-[10px] font-black" style="background-color: #ea580c; color: #ffffff;">T</kbd>
+                                <span id="rm-shortcut-fast-label">🔥 Tag Fast Moving</span>
                             </button>
+                            <button type="button" onclick="toggleInventoryShortcutSuggestions()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition cursor-pointer font-bold" style="background-color: #312e81; border: 1px solid #818cf8; color: #e0e7ff;" title="Press ? to view all Inventory Shortcut Key Suggestions">
+                                <kbd class="px-1.5 py-0.5 rounded text-[10px] font-black" style="background-color: #4f46e5; color: #ffffff;">?</kbd>
+                                <span>💡 Shortcut Suggestions</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Expandable Shortcut Keys Suggestions & Quick Reference Panel -->
+                    <div id="rm-shortcut-suggestions-panel" class="mt-3 pt-3" style="border-top: 1px solid rgba(148, 163, 184, 0.25);">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-[11px] font-black uppercase tracking-wider" style="color: #99f6e4;">⌨️ Recommended Inventory Officer Shortcut Keys (Press Key Anytime in Inventory View)</span>
+                            <button type="button" onclick="toggleInventoryShortcutSuggestions()" class="text-[11px] font-bold cursor-pointer" style="color: #94a3b8;">Hide ▲</button>
+                        </div>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 text-[11px]">
+                            <div onclick="triggerSelectedRawMaterialAction('FAST_MOVING')" class="p-2 rounded-xl cursor-pointer transition flex items-center gap-2" style="background-color: rgba(124, 45, 18, 0.45); border: 1px solid rgba(249, 115, 22, 0.5);">
+                                <span class="px-1.5 py-0.5 rounded font-mono font-black text-[10px]" style="background-color: #ea580c; color: #fff;">F / T</span>
+                                <div>
+                                    <div class="font-bold text-white">🔥 Tag Fast Moving</div>
+                                    <div class="text-[10px]" style="color: #fed7aa;">Toggle frequent tag</div>
+                                </div>
+                            </div>
+                            <div onclick="triggerSelectedRawMaterialAction('RESTOCK')" class="p-2 rounded-xl cursor-pointer transition flex items-center gap-2" style="background-color: rgba(6, 95, 70, 0.45); border: 1px solid rgba(16, 185, 129, 0.5);">
+                                <span class="px-1.5 py-0.5 rounded font-mono font-black text-[10px]" style="background-color: #059669; color: #fff;">R / +</span>
+                                <div>
+                                    <div class="font-bold text-white">📥 Restock Material</div>
+                                    <div class="text-[10px]" style="color: #a7f3d0;">Receive delivery (+)</div>
+                                </div>
+                            </div>
+                            <div onclick="triggerSelectedRawMaterialAction('ISSUE')" class="p-2 rounded-xl cursor-pointer transition flex items-center gap-2" style="background-color: rgba(120, 53, 15, 0.45); border: 1px solid rgba(245, 158, 11, 0.5);">
+                                <span class="px-1.5 py-0.5 rounded font-mono font-black text-[10px]" style="background-color: #d97706; color: #fff;">I / -</span>
+                                <div>
+                                    <div class="font-bold text-white">📤 Issue Material</div>
+                                    <div class="text-[10px]" style="color: #fde68a;">Deduct for batch (-)</div>
+                                </div>
+                            </div>
+                            <div onclick="triggerSelectedRawMaterialAction('EDIT')" class="p-2 rounded-xl cursor-pointer transition flex items-center gap-2" style="background-color: rgba(30, 41, 59, 0.75); border: 1px solid rgba(100, 116, 139, 0.5);">
+                                <span class="px-1.5 py-0.5 rounded font-mono font-black text-[10px]" style="background-color: #475569; color: #fff;">E / ↵</span>
+                                <div>
+                                    <div class="font-bold text-white">✏️ Edit Selected</div>
+                                    <div class="text-[10px]" style="color: #cbd5e1;">Edit rack, lot, min</div>
+                                </div>
+                            </div>
+                            <div onclick="openRawMaterialModal()" class="p-2 rounded-xl cursor-pointer transition flex items-center gap-2" style="background-color: rgba(19, 78, 74, 0.65); border: 1px solid rgba(45, 212, 191, 0.45);">
+                                <span class="px-1.5 py-0.5 rounded font-mono font-black text-[10px]" style="background-color: #0d9488; color: #fff;">N</span>
+                                <div>
+                                    <div class="font-bold text-white">➕ New Material</div>
+                                    <div class="text-[10px]" style="color: #99f6e4;">Add new SKU</div>
+                                </div>
+                            </div>
+                            <div onclick="cycleRawMaterialSortMode()" class="p-2 rounded-xl cursor-pointer transition flex items-center gap-2" style="background-color: rgba(30, 41, 59, 0.75); border: 1px solid rgba(100, 116, 139, 0.5);">
+                                <span class="px-1.5 py-0.5 rounded font-mono font-black text-[10px]" style="background-color: #4f46e5; color: #fff;">S</span>
+                                <div>
+                                    <div class="font-bold text-white">🔃 Cycle Sort Mode</div>
+                                    <div class="text-[10px]" style="color: #cbd5e1;">Prioritized / Critical / A-Z</div>
+                                </div>
+                            </div>
+                            <div onclick="const s=document.getElementById('rm-search-input'); if(s) s.focus();" class="p-2 rounded-xl cursor-pointer transition flex items-center gap-2" style="background-color: rgba(30, 41, 59, 0.75); border: 1px solid rgba(100, 116, 139, 0.5);">
+                                <span class="px-1.5 py-0.5 rounded font-mono font-black text-[10px]" style="background-color: #0284c7; color: #fff;">/</span>
+                                <div>
+                                    <div class="font-bold text-white">🔍 Quick Search</div>
+                                    <div class="text-[10px]" style="color: #cbd5e1;">Jump to search box</div>
+                                </div>
+                            </div>
+                            <div onclick="setRawMaterialStatusFilter('FAST_MOVING')" class="p-2 rounded-xl cursor-pointer transition flex items-center gap-2" style="background-color: rgba(30, 41, 59, 0.75); border: 1px solid rgba(100, 116, 139, 0.5);">
+                                <span class="px-1.5 py-0.5 rounded font-mono font-black text-[10px]" style="background-color: #ea580c; color: #fff;">1 - 5</span>
+                                <div>
+                                    <div class="font-bold text-white">🎨 Filter Zones</div>
+                                    <div class="text-[10px]" style="color: #cbd5e1;">1:All 2:🔥 3:🟢 4:🟡 5:🔴</div>
+                                </div>
+                            </div>
+                            <div onclick="filterRawMaterialsBySupplier(''); setRawMaterialStatusFilter('');" class="p-2 rounded-xl cursor-pointer transition flex items-center gap-2" style="background-color: rgba(30, 41, 59, 0.75); border: 1px solid rgba(100, 116, 139, 0.5);">
+                                <span class="px-1.5 py-0.5 rounded font-mono font-black text-[10px]" style="background-color: #64748b; color: #fff;">X</span>
+                                <div>
+                                    <div class="font-bold text-white">🧹 Reset Filters</div>
+                                    <div class="text-[10px]" style="color: #cbd5e1;">Show all materials</div>
+                                </div>
+                            </div>
+                            <div onclick="loadRawMaterials()" class="p-2 rounded-xl cursor-pointer transition flex items-center gap-2" style="background-color: rgba(30, 41, 59, 0.75); border: 1px solid rgba(100, 116, 139, 0.5);">
+                                <span class="px-1.5 py-0.5 rounded font-mono font-black text-[10px]" style="background-color: #334155; color: #fff;">↑ / ↓</span>
+                                <div>
+                                    <div class="font-bold text-white">↕️ Row Navigation</div>
+                                    <div class="text-[10px]" style="color: #cbd5e1;">Scroll & highlight row</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1947,26 +2033,27 @@
                 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
                     <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-3 border-b border-slate-100 pb-4">
                         <div class="flex flex-wrap items-center gap-2">
-                            <button type="button" onclick="setRawMaterialStatusFilter('')" class="rm-status-pill px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-900 text-white transition flex items-center gap-1.5 cursor-pointer" data-status="">
+                            <button type="button" onclick="setRawMaterialStatusFilter('')" class="rm-status-pill px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-900 text-white transition flex items-center gap-1.5 cursor-pointer" data-status="" title="Shortcut: Press 1">
                                 <span>All Materials</span>
                             </button>
-                            <button type="button" onclick="setRawMaterialStatusFilter('FAST_MOVING')" class="rm-status-pill px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition flex items-center gap-1.5 cursor-pointer" data-status="FAST_MOVING" title="Filter Frequently Used / Fast Moving Materials">
+                            <button type="button" onclick="setRawMaterialStatusFilter('FAST_MOVING')" class="rm-status-pill px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition flex items-center gap-1.5 cursor-pointer" data-status="FAST_MOVING" title="Filter Frequently Used / Fast Moving Materials (Shortcut: Press 2)">
                                 <span>🔥 Fast Moving</span>
                             </button>
-                            <button type="button" onclick="setRawMaterialStatusFilter('IN_STOCK')" class="rm-status-pill px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition flex items-center gap-1.5 cursor-pointer" data-status="IN_STOCK" title="Filter Green Zone (Sufficient)">
+                            <button type="button" onclick="setRawMaterialStatusFilter('IN_STOCK')" class="rm-status-pill px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition flex items-center gap-1.5 cursor-pointer" data-status="IN_STOCK" title="Filter Green Zone (Shortcut: Press 3)">
                                 <span class="rounded-full inline-block" style="width: 10px; height: 10px; background-color: #10b981;"></span>
                                 <span>Green</span>
                             </button>
-                            <button type="button" onclick="setRawMaterialStatusFilter('LOW_STOCK')" class="rm-status-pill px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition flex items-center gap-1.5 cursor-pointer" data-status="LOW_STOCK" title="Filter Amber Zone (Reorder)">
+                            <button type="button" onclick="setRawMaterialStatusFilter('LOW_STOCK')" class="rm-status-pill px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition flex items-center gap-1.5 cursor-pointer" data-status="LOW_STOCK" title="Filter Amber Zone (Shortcut: Press 4)">
                                 <span class="rounded-full inline-block" style="width: 10px; height: 10px; background-color: #f59e0b;"></span>
                                 <span>Amber</span>
                             </button>
-                            <button type="button" onclick="setRawMaterialStatusFilter('OUT_OF_STOCK')" class="rm-status-pill px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition flex items-center gap-1.5 cursor-pointer" data-status="OUT_OF_STOCK" title="Filter Red Zone (Critical)">
+                            <button type="button" onclick="setRawMaterialStatusFilter('OUT_OF_STOCK')" class="rm-status-pill px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition flex items-center gap-1.5 cursor-pointer" data-status="OUT_OF_STOCK" title="Filter Red Zone (Shortcut: Press 5)">
                                 <span class="rounded-full inline-block" style="width: 10px; height: 10px; background-color: #e11d48;"></span>
                                 <span>Red</span>
                             </button>
-                            <span id="rm-active-supplier-chip" class="hidden items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold cursor-pointer transition" style="background-color: #e0f2fe; color: #0369a1; border: 1px solid #7dd3fc;" onclick="filterRawMaterialsBySupplier('')" title="Click to clear supplier filter">
-                                <span id="rm-active-supplier-chip-text">🏭 Supplier</span>
+                            <span id="rm-active-supplier-chip" class="hidden inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold cursor-pointer transition" style="background-color: #e0f2fe; color: #0369a1; border: 1px solid #7dd3fc;" onclick="filterRawMaterialsBySupplier('')" title="Click to clear supplier filter">
+                                <span>🏭 Supplier:</span>
+                                <span id="rm-active-supplier-label">All</span>
                                 <span class="font-black">✕</span>
                             </span>
                         </div>
@@ -2074,8 +2161,8 @@
     </div>
 
     <script src="/js/xlsx.full.min.js"></script>
-    <script src="/js/app.js?v=2.3.2"></script>
-    <script src="/js/admin.js?v=2.3.2"></script>
-    <script src="/js/agent-widgets.js?v=2.3.2"></script>
+    <script src="/js/app.js?v=2.3.3"></script>
+    <script src="/js/admin.js?v=2.3.3"></script>
+    <script src="/js/agent-widgets.js?v=2.3.3"></script>
 </body>
 </html>

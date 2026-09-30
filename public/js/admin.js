@@ -12769,14 +12769,40 @@ function updateInventoryShortcutsBarVisibility() {
 
 function updateSelectedRawMaterialBanner() {
     const label = document.getElementById('rm-selected-material-label');
+    const fastBtnLabel = document.getElementById('rm-shortcut-fast-label');
     if (!label) return;
     const rm = cachedRawMaterials[selectedRawMaterialIndex] || cachedRawMaterials.find(r => r.id === selectedRawMaterialId);
     if (!rm) {
         label.textContent = 'Use ↑ / ↓ arrows or click a row to select';
+        if (fastBtnLabel) fastBtnLabel.textContent = '🔥 Tag Fast Moving';
         return;
     }
-    const fastTag = Number(rm.is_fast_moving) === 1 ? ' 🔥 Fast Moving' : '';
+    const isFast = Number(rm.is_fast_moving) === 1;
+    const fastTag = isFast ? ' 🔥 Fast Moving' : '';
     label.textContent = `[${rm.material_code}] ${rm.material_name} — ${NKB.formatNumber(rm.current_stock)} ${rm.unit}${fastTag}`;
+    if (fastBtnLabel) {
+        fastBtnLabel.textContent = isFast ? '🔥 Untag Fast Moving' : '🔥 Tag Fast Moving';
+    }
+}
+
+function toggleInventoryShortcutSuggestions() {
+    const panel = document.getElementById('rm-shortcut-suggestions-panel');
+    if (!panel) return;
+    panel.classList.toggle('hidden');
+}
+
+function cycleRawMaterialSortMode() {
+    const sortSelect = document.getElementById('rm-sort-select');
+    if (!sortSelect) return;
+    const modes = ['PRIORITIZED', 'MOST_CRITICAL', 'ALPHABETICAL_ASC', 'STOCK_LOW'];
+    const currentIdx = modes.indexOf(sortSelect.value);
+    const nextMode = modes[(currentIdx + 1) % modes.length];
+    sortSelect.value = nextMode;
+    const selectedOpt = sortSelect.options[sortSelect.selectedIndex];
+    if (NKB.showToast && selectedOpt) {
+        NKB.showToast(`Sorted by: ${selectedOpt.textContent}`, 'info');
+    }
+    loadRawMaterials();
 }
 
 function filterRawMaterialsBySupplier(supplierName) {
@@ -13011,8 +13037,8 @@ function renderRawMaterialsTable() {
                 <button onclick="toggleRawMaterialFastMoving('${rm.id}')"
                     class="px-2 py-1 rounded-lg font-bold text-[11px] transition cursor-pointer"
                     style="${isFastMoving ? 'background-color: #ea580c; color: #ffffff; border: 1px solid #c2410c;' : 'background-color: #ffffff; color: #475569; border: 1px solid #cbd5e1;'}"
-                    title="${isFastMoving ? 'Remove Fast Moving Tag' : 'Tag as Fast Moving (Frequently Used)'}${isInvOfficer ? ' [Shortcut: F]' : ''}">
-                    🔥 ${isFastMoving ? 'Fast' : 'Tag'}
+                    title="${isFastMoving ? 'Remove Fast Moving Tag' : 'Tag as Fast Moving (Frequently Used)'}${isInvOfficer ? ' [Shortcut: F or T]' : ''}">
+                    🔥 ${isFastMoving ? 'Fast' : 'Tag'}${isInvOfficer ? ' (F)' : ''}
                 </button>
                 <button onclick="openAdjustRawMaterialModal('${rm.id}', 'ADD')"
                     class="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg font-bold text-xs transition cursor-pointer"
@@ -13026,8 +13052,8 @@ function renderRawMaterialsTable() {
                 </button>
                 <button onclick="openRawMaterialModal('${rm.id}')"
                     class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold text-xs transition cursor-pointer"
-                    title="Edit Material">
-                    ✏️
+                    title="Edit Material${isInvOfficer ? ' [Shortcut: E or Enter]' : ''}">
+                    ✏️${isInvOfficer ? ' (E)' : ''}
                 </button>
             </td>
         </tr>
@@ -13069,6 +13095,8 @@ function triggerSelectedRawMaterialAction(actionType) {
         openAdjustRawMaterialModal(rm.id, 'DEDUCT');
     } else if (actionType === 'FAST_MOVING') {
         toggleRawMaterialFastMoving(rm.id);
+    } else if (actionType === 'EDIT') {
+        openRawMaterialModal(rm.id);
     }
 }
 
@@ -13280,7 +13308,7 @@ async function submitAdjustRawMaterialForm(e, rmId, type) {
     }
 }
 
-// Keyboard navigation (ArrowUp / ArrowDown to scroll & choose) + Exclusive INVENTORY account shortcuts (R = Restock, I = Issue, F = Fast Moving)
+// Keyboard navigation (ArrowUp / ArrowDown to scroll & choose) + Exclusive INVENTORY account shortcuts (F/T = Tag Fast Moving, R = Restock, I = Issue, E = Edit, N = New, S = Cycle Sort, / = Search, 1-5 = Filter Zones, X = Reset, ? = Shortcut Guide)
 function handleInventoryKeyboardNavigation(e) {
     const viewEl = document.getElementById('view-raw-materials');
     if (!viewEl || viewEl.classList.contains('hidden')) return;
@@ -13299,6 +13327,11 @@ function handleInventoryKeyboardNavigation(e) {
             e.preventDefault();
             return;
         }
+        if (document.activeElement && document.activeElement.id === 'rm-search-input') {
+            document.activeElement.blur();
+            e.preventDefault();
+            return;
+        }
     }
 
     // Do not intercept keys when a modal is open or user is typing in an input/select/textarea
@@ -13309,17 +13342,15 @@ function handleInventoryKeyboardNavigation(e) {
     }
     if (e.ctrlKey || e.altKey || e.metaKey) return;
 
-    if (!cachedRawMaterials || cachedRawMaterials.length === 0) return;
-
     // ArrowUp / ArrowDown: Scroll and choose material row in Warehouse Inventory
-    if (e.key === 'ArrowDown') {
+    if (e.key === 'ArrowDown' && cachedRawMaterials && cachedRawMaterials.length > 0) {
         e.preventDefault();
         const nextIdx = selectedRawMaterialIndex < cachedRawMaterials.length - 1 ? selectedRawMaterialIndex + 1 : 0;
         selectRawMaterialRow(nextIdx, true);
         return;
     }
 
-    if (e.key === 'ArrowUp') {
+    if (e.key === 'ArrowUp' && cachedRawMaterials && cachedRawMaterials.length > 0) {
         e.preventDefault();
         const prevIdx = selectedRawMaterialIndex > 0 ? selectedRawMaterialIndex - 1 : cachedRawMaterials.length - 1;
         selectRawMaterialRow(prevIdx, true);
@@ -13329,19 +13360,78 @@ function handleInventoryKeyboardNavigation(e) {
     // Exclusive shortcut keys for the Inventory Officer account (role === 'INVENTORY')
     if (!isInventoryOfficerAccount()) return;
 
+    const keyUpper = String(e.key).toUpperCase();
+
+    // Global Inventory View Shortcuts (do not require a selected row)
+    if (e.key === '?') {
+        e.preventDefault();
+        toggleInventoryShortcutSuggestions();
+        return;
+    }
+    if (e.key === '/') {
+        e.preventDefault();
+        const searchEl = document.getElementById('rm-search-input');
+        if (searchEl) searchEl.focus();
+        return;
+    }
+    if (keyUpper === 'N') {
+        e.preventDefault();
+        openRawMaterialModal();
+        return;
+    }
+    if (keyUpper === 'S') {
+        e.preventDefault();
+        cycleRawMaterialSortMode();
+        return;
+    }
+    if (keyUpper === 'X') {
+        e.preventDefault();
+        filterRawMaterialsBySupplier('');
+        setRawMaterialStatusFilter('');
+        return;
+    }
+    if (e.key === '1') {
+        e.preventDefault();
+        setRawMaterialStatusFilter('');
+        return;
+    }
+    if (e.key === '2') {
+        e.preventDefault();
+        setRawMaterialStatusFilter('FAST_MOVING');
+        return;
+    }
+    if (e.key === '3') {
+        e.preventDefault();
+        setRawMaterialStatusFilter('IN_STOCK');
+        return;
+    }
+    if (e.key === '4') {
+        e.preventDefault();
+        setRawMaterialStatusFilter('LOW_STOCK');
+        return;
+    }
+    if (e.key === '5') {
+        e.preventDefault();
+        setRawMaterialStatusFilter('OUT_OF_STOCK');
+        return;
+    }
+
+    if (!cachedRawMaterials || cachedRawMaterials.length === 0) return;
     const selectedRm = cachedRawMaterials[selectedRawMaterialIndex] || cachedRawMaterials.find(r => r.id === selectedRawMaterialId);
     if (!selectedRm) return;
 
-    const keyUpper = String(e.key).toUpperCase();
     if (keyUpper === 'R' || e.key === '+') {
         e.preventDefault();
         openAdjustRawMaterialModal(selectedRm.id, 'ADD');
     } else if (keyUpper === 'I' || e.key === '-') {
         e.preventDefault();
         openAdjustRawMaterialModal(selectedRm.id, 'DEDUCT');
-    } else if (keyUpper === 'F') {
+    } else if (keyUpper === 'F' || keyUpper === 'T') {
         e.preventDefault();
         toggleRawMaterialFastMoving(selectedRm.id);
+    } else if (keyUpper === 'E' || e.key === 'Enter') {
+        e.preventDefault();
+        openRawMaterialModal(selectedRm.id);
     }
 }
 
@@ -13353,6 +13443,8 @@ window.setRawMaterialStatusFilter = setRawMaterialStatusFilter;
 window.selectRawMaterialRow = selectRawMaterialRow;
 window.toggleRawMaterialFastMoving = toggleRawMaterialFastMoving;
 window.triggerSelectedRawMaterialAction = triggerSelectedRawMaterialAction;
+window.toggleInventoryShortcutSuggestions = toggleInventoryShortcutSuggestions;
+window.cycleRawMaterialSortMode = cycleRawMaterialSortMode;
 window.openRawMaterialModal = openRawMaterialModal;
 window.submitRawMaterialForm = submitRawMaterialForm;
 window.openAdjustRawMaterialModal = openAdjustRawMaterialModal;
