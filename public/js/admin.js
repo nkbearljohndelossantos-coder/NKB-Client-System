@@ -12749,17 +12749,51 @@ window.clearSOReminder = clearSOReminder;
 // =============================================================
 let cachedRawMaterials = [];
 let currentRawMaterialStatusFilter = '';
+let selectedRawMaterialId = null;
+let selectedRawMaterialIndex = 0;
+
+function isInventoryOfficerAccount() {
+    return Boolean(currentUser && currentUser.role === 'INVENTORY');
+}
+
+function updateInventoryShortcutsBarVisibility() {
+    const bar = document.getElementById('rm-inventory-shortcuts-bar');
+    if (!bar) return;
+    if (isInventoryOfficerAccount()) {
+        bar.classList.remove('hidden');
+    } else {
+        bar.classList.add('hidden');
+    }
+    updateSelectedRawMaterialBanner();
+}
+
+function updateSelectedRawMaterialBanner() {
+    const label = document.getElementById('rm-selected-material-label');
+    if (!label) return;
+    const rm = cachedRawMaterials[selectedRawMaterialIndex] || cachedRawMaterials.find(r => r.id === selectedRawMaterialId);
+    if (!rm) {
+        label.textContent = 'Use ↑ / ↓ arrows or click a row to select';
+        return;
+    }
+    const fastTag = Number(rm.is_fast_moving) === 1 ? ' 🔥 Fast Moving' : '';
+    label.textContent = `[${rm.material_code}] ${rm.material_name} — ${NKB.formatNumber(rm.current_stock)} ${rm.unit}${fastTag}`;
+}
 
 async function loadRawMaterials() {
     try {
+        updateInventoryShortcutsBarVisibility();
+
         const catSelect = document.getElementById('rm-filter-category');
+        const sortSelect = document.getElementById('rm-sort-select');
         const searchInput = document.getElementById('rm-search-input');
         const category = catSelect ? catSelect.value : '';
+        const sort = sortSelect ? sortSelect.value : 'PRIORITIZED';
         const search = searchInput ? searchInput.value.trim() : '';
 
         const params = new URLSearchParams();
         if (category) params.set('category', category);
         if (currentRawMaterialStatusFilter) params.set('status', currentRawMaterialStatusFilter);
+        if (sort) params.set('sort', sort);
         if (search) params.set('search', search);
 
         const res = await NKB.api(`/api/raw-materials?${params.toString()}`);
@@ -12768,17 +12802,35 @@ async function loadRawMaterials() {
         cachedRawMaterials = res.data || [];
         const s = res.summary || {};
 
+        if (cachedRawMaterials.length > 0) {
+            const existingIdx = selectedRawMaterialId
+                ? cachedRawMaterials.findIndex(r => r.id === selectedRawMaterialId)
+                : -1;
+            if (existingIdx >= 0) {
+                selectedRawMaterialIndex = existingIdx;
+            } else {
+                selectedRawMaterialIndex = Math.min(selectedRawMaterialIndex, cachedRawMaterials.length - 1);
+                if (selectedRawMaterialIndex < 0) selectedRawMaterialIndex = 0;
+                selectedRawMaterialId = cachedRawMaterials[selectedRawMaterialIndex].id;
+            }
+        } else {
+            selectedRawMaterialIndex = -1;
+            selectedRawMaterialId = null;
+        }
+
         const setElText = (id, text) => {
             const el = document.getElementById(id);
             if (el) el.textContent = text;
         };
 
         setElText('rm-kpi-total', NKB.formatNumber(s.totalMaterials || cachedRawMaterials.length));
+        setElText('rm-kpi-fastmoving', NKB.formatNumber(s.fastMovingCount || cachedRawMaterials.filter(i => Number(i.is_fast_moving) === 1).length));
         setElText('rm-kpi-instock', NKB.formatNumber(s.inStockCount || 0));
         setElText('rm-kpi-lowstock', NKB.formatNumber(s.lowStockCount || 0));
         setElText('rm-kpi-outofstock', NKB.formatNumber(s.outOfStockCount || 0));
 
         renderRawMaterialsTable();
+        updateSelectedRawMaterialBanner();
     } catch (err) {
         console.error('Error loading raw materials:', err);
     }
@@ -12788,12 +12840,33 @@ function setRawMaterialStatusFilter(status) {
     currentRawMaterialStatusFilter = status || '';
     document.querySelectorAll('.rm-status-pill').forEach(pill => {
         if (pill.getAttribute('data-status') === currentRawMaterialStatusFilter) {
-            pill.className = 'rm-status-pill px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-900 text-white transition';
+            pill.className = 'rm-status-pill px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-900 text-white transition flex items-center gap-1.5';
         } else {
-            pill.className = 'rm-status-pill px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200 transition';
+            pill.className = 'rm-status-pill px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200 transition flex items-center gap-1.5';
         }
     });
     loadRawMaterials();
+}
+
+function selectRawMaterialRow(index, scrollIntoView = false) {
+    if (!cachedRawMaterials || cachedRawMaterials.length === 0) return;
+    const boundedIdx = Math.max(0, Math.min(index, cachedRawMaterials.length - 1));
+    selectedRawMaterialIndex = boundedIdx;
+    selectedRawMaterialId = cachedRawMaterials[boundedIdx].id;
+
+    document.querySelectorAll('#table-raw-materials-body tr[data-rm-index]').forEach(tr => {
+        const rowIdx = Number(tr.getAttribute('data-rm-index'));
+        if (rowIdx === selectedRawMaterialIndex) {
+            tr.classList.add('ring-2', 'ring-teal-500', 'ring-inset', 'bg-teal-50/80');
+            if (scrollIntoView && typeof tr.scrollIntoView === 'function') {
+                tr.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
+        } else {
+            tr.classList.remove('ring-2', 'ring-teal-500', 'ring-inset', 'bg-teal-50/80');
+        }
+    });
+
+    updateSelectedRawMaterialBanner();
 }
 
 function renderRawMaterialsTable() {
@@ -12805,43 +12878,135 @@ function renderRawMaterialsTable() {
         return;
     }
 
-    const statusBadge = (st) => {
-        if (st === 'OUT_OF_STOCK') return '<span class="px-2.5 py-1 rounded-full bg-rose-100 text-rose-800 font-extrabold text-[10px] border border-rose-300">🚨 OUT OF STOCK</span>';
-        if (st === 'LOW_STOCK') return '<span class="px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 font-extrabold text-[10px] border border-amber-300">⚠️ LOW STOCK</span>';
-        return '<span class="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-extrabold text-[10px] border border-emerald-300">✅ IN STOCK</span>';
+    // Color-coded indicator only (no text status label)
+    const getRowColorClasses = (st) => {
+        if (st === 'OUT_OF_STOCK') {
+            return {
+                rowTint: 'border-l-4 border-l-rose-600 bg-rose-50/35 hover:bg-rose-50/70',
+                dot: '<span class="w-3.5 h-3.5 rounded-full bg-rose-600 inline-block ring-4 ring-rose-100 shadow-xs" title="Red Zone (Depleted)"></span>',
+                stockText: 'text-rose-600'
+            };
+        }
+        if (st === 'LOW_STOCK') {
+            return {
+                rowTint: 'border-l-4 border-l-amber-500 bg-amber-50/35 hover:bg-amber-50/70',
+                dot: '<span class="w-3.5 h-3.5 rounded-full bg-amber-500 inline-block ring-4 ring-amber-100 shadow-xs" title="Amber Zone (Below Minimum)"></span>',
+                stockText: 'text-amber-600'
+            };
+        }
+        return {
+            rowTint: 'border-l-4 border-l-emerald-500 bg-emerald-50/15 hover:bg-emerald-50/45',
+            dot: '<span class="w-3.5 h-3.5 rounded-full bg-emerald-500 inline-block ring-4 ring-emerald-100 shadow-xs" title="Green Zone (Sufficient)"></span>',
+            stockText: 'text-emerald-700'
+        };
     };
 
-    tbody.innerHTML = cachedRawMaterials.map(rm => `
-        <tr class="hover:bg-slate-50 transition">
-            <td class="py-3 px-3 font-mono font-bold text-teal-700">${rm.material_code}</td>
+    const isInvOfficer = isInventoryOfficerAccount();
+
+    tbody.innerHTML = cachedRawMaterials.map((rm, idx) => {
+        const colorCfg = getRowColorClasses(rm.status);
+        const isSelected = idx === selectedRawMaterialIndex;
+        const isFastMoving = Number(rm.is_fast_moving) === 1;
+
+        return `
+        <tr data-rm-index="${idx}" data-rm-id="${rm.id}" onclick="selectRawMaterialRow(${idx}, false)"
+            class="transition cursor-pointer ${colorCfg.rowTint} ${isSelected ? 'ring-2 ring-teal-500 ring-inset bg-teal-50/80' : ''}">
+            <td class="py-3 px-2 text-center align-middle">
+                ${colorCfg.dot}
+            </td>
+            <td class="py-3 px-3 font-mono font-bold text-teal-800">
+                <div>${rm.material_code}</div>
+                ${isSelected ? '<span class="text-[9px] font-black uppercase text-teal-600 tracking-wider">▶ Selected</span>' : ''}
+            </td>
             <td class="py-3 px-3">
-                <div class="font-bold text-slate-900">${rm.material_name}</div>
-                <div class="text-[10px] text-slate-500">${rm.category || 'Raw Material'}</div>
+                <div class="flex items-center gap-1.5 flex-wrap">
+                    <span class="font-bold text-slate-900">${rm.material_name}</span>
+                    ${isFastMoving ? '<span class="px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 text-[10px] font-black border border-orange-300 shadow-2xs">🔥 FAST MOVING</span>' : ''}
+                </div>
+                <div class="text-[10px] text-slate-500 mt-0.5">${rm.category || 'Raw Material'}</div>
             </td>
             <td class="py-3 px-3">
                 <div class="font-semibold text-slate-700">${rm.supplier || 'Standard Supplier'}</div>
                 <div class="text-[10px] text-slate-400 font-mono">Lot: ${rm.batch_lot_number || 'N/A'} ${rm.expiry_date ? `· Exp: ${rm.expiry_date}` : ''}</div>
             </td>
             <td class="py-3 px-3 text-slate-600 font-semibold">${rm.location || 'Warehouse Zone A'}</td>
-            <td class="py-3 px-3 text-right font-black text-sm ${rm.status === 'OUT_OF_STOCK' ? 'text-rose-600' : (rm.status === 'LOW_STOCK' ? 'text-amber-600' : 'text-slate-900')}">
+            <td class="py-3 px-3 text-right font-black text-sm ${colorCfg.stockText}">
                 ${NKB.formatNumber(rm.current_stock)} <span class="text-xs font-bold text-slate-500">${rm.unit}</span>
             </td>
             <td class="py-3 px-3 text-right text-slate-500 font-semibold">
                 ${NKB.formatNumber(rm.minimum_stock_level)} ${rm.unit}
             </td>
-            <td class="py-3 px-3 text-center">${statusBadge(rm.status)}</td>
-            <td class="py-3 px-3 text-right whitespace-nowrap space-x-1">
-                <button onclick="openAdjustRawMaterialModal('${rm.id}', 'ADD')" class="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg font-bold text-xs transition" title="Receive / Restock">+ Restock</button>
-                <button onclick="openAdjustRawMaterialModal('${rm.id}', 'DEDUCT')" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg font-bold text-xs transition" title="Issue to Production">- Issue</button>
-                <button onclick="openRawMaterialModal('${rm.id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold text-xs transition">✏️ Edit</button>
+            <td class="py-3 px-3 text-right whitespace-nowrap space-x-1" onclick="event.stopPropagation()">
+                <button onclick="toggleRawMaterialFastMoving('${rm.id}')"
+                    class="px-2 py-1 rounded-lg font-bold text-[11px] transition border cursor-pointer ${isFastMoving ? 'bg-orange-500 text-white border-orange-600 hover:bg-orange-600' : 'bg-white text-slate-500 border-slate-300 hover:bg-orange-50 hover:text-orange-700'}"
+                    title="${isFastMoving ? 'Remove Fast Moving Tag' : 'Tag as Fast Moving (Frequently Used)'}${isInvOfficer ? ' [Shortcut: F]' : ''}">
+                    🔥 ${isFastMoving ? 'Fast' : 'Tag'}
+                </button>
+                <button onclick="openAdjustRawMaterialModal('${rm.id}', 'ADD')"
+                    class="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg font-bold text-xs transition cursor-pointer"
+                    title="Receive / Restock Material${isInvOfficer ? ' [Shortcut: R]' : ''}">
+                    + Restock${isInvOfficer ? ' (R)' : ''}
+                </button>
+                <button onclick="openAdjustRawMaterialModal('${rm.id}', 'DEDUCT')"
+                    class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg font-bold text-xs transition cursor-pointer"
+                    title="Issue Material to Production${isInvOfficer ? ' [Shortcut: I]' : ''}">
+                    - Issue${isInvOfficer ? ' (I)' : ''}
+                </button>
+                <button onclick="openRawMaterialModal('${rm.id}')"
+                    class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold text-xs transition cursor-pointer"
+                    title="Edit Material">
+                    ✏️
+                </button>
             </td>
         </tr>
-    `).join('');
+        `;
+    }).join('');
+}
+
+async function toggleRawMaterialFastMoving(rmId) {
+    const rm = cachedRawMaterials.find(r => r.id === rmId);
+    if (!rm) return;
+
+    const nextState = Number(rm.is_fast_moving) === 1 ? 0 : 1;
+    const res = await NKB.api(`/api/raw-materials/${rmId}/toggle-fast-moving`, {
+        method: 'POST',
+        body: { is_fast_moving: nextState }
+    });
+
+    if (res && res.success) {
+        if (NKB.showToast) NKB.showToast(res.message, 'success');
+        await loadRawMaterials();
+    } else {
+        alert((res && res.error) || 'Failed to update Fast Moving tag.');
+    }
+}
+
+function triggerSelectedRawMaterialAction(actionType) {
+    if (!isInventoryOfficerAccount()) {
+        alert('Shortcut actions for Restock / Issue / Fast Moving are exclusive to the Inventory Officer account.');
+        return;
+    }
+    const rm = cachedRawMaterials[selectedRawMaterialIndex] || cachedRawMaterials.find(r => r.id === selectedRawMaterialId);
+    if (!rm) {
+        if (NKB.showToast) NKB.showToast('Select a material row first using ↑ / ↓ arrows or clicking a row.', 'warning');
+        return;
+    }
+    if (actionType === 'RESTOCK') {
+        openAdjustRawMaterialModal(rm.id, 'ADD');
+    } else if (actionType === 'ISSUE') {
+        openAdjustRawMaterialModal(rm.id, 'DEDUCT');
+    } else if (actionType === 'FAST_MOVING') {
+        toggleRawMaterialFastMoving(rm.id);
+    }
 }
 
 function openRawMaterialModal(rmId = null) {
     const existing = rmId ? cachedRawMaterials.find(r => r.id === rmId) : null;
     const isEdit = !!existing;
+    const isFastMoving = existing ? Number(existing.is_fast_moving) === 1 : false;
+
+    const existingModal = document.getElementById('modal-raw-material');
+    if (existingModal) existingModal.remove();
 
     const modalHtml = `
         <div id="modal-raw-material" class="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -12866,6 +13031,12 @@ function openRawMaterialModal(rmId = null) {
                     <div>
                         <label class="block font-bold text-slate-700 mb-1">Material Name *</label>
                         <input type="text" id="rm-form-name" required value="${existing ? existing.material_name : ''}" placeholder="e.g. Ascorbic Acid USP Fine Powder" class="w-full p-2 border border-slate-300 rounded-xl">
+                    </div>
+                    <div class="p-3 rounded-xl bg-orange-50 border border-orange-200">
+                        <label class="flex items-center gap-2.5 cursor-pointer">
+                            <input type="checkbox" id="rm-form-fast-moving" ${isFastMoving ? 'checked' : ''} class="w-4 h-4 accent-orange-600 rounded">
+                            <span class="font-extrabold text-orange-950 text-xs">🔥 Tag as Fast Moving Material (Frequently Used in Production)</span>
+                        </label>
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div>
@@ -12916,10 +13087,12 @@ function openRawMaterialModal(rmId = null) {
 
 async function submitRawMaterialForm(e, rmId) {
     e.preventDefault();
+    const fastMovingEl = document.getElementById('rm-form-fast-moving');
     const body = {
         material_code: document.getElementById('rm-form-code').value.trim(),
         category: document.getElementById('rm-form-category').value,
         material_name: document.getElementById('rm-form-name').value.trim(),
+        is_fast_moving: fastMovingEl && fastMovingEl.checked ? 1 : 0,
         current_stock: Number(document.getElementById('rm-form-stock').value),
         unit: document.getElementById('rm-form-unit').value,
         minimum_stock_level: Number(document.getElementById('rm-form-min').value),
@@ -12944,24 +13117,90 @@ async function submitRawMaterialForm(e, rmId) {
     }
 }
 
-async function openAdjustRawMaterialModal(rmId, type = 'ADD') {
+function openAdjustRawMaterialModal(rmId, type = 'ADD') {
     const rm = cachedRawMaterials.find(r => r.id === rmId);
     if (!rm) return;
-    const actionLabel = type === 'ADD' ? 'Restock / Receive Quantity' : 'Issue / Deduct Quantity for Production';
-    const qtyStr = prompt(`${actionLabel} for ${rm.material_name} (${rm.material_code})\nCurrent Stock: ${rm.current_stock} ${rm.unit}\n\nEnter quantity (${rm.unit}) to ${type === 'ADD' ? 'ADD' : 'DEDUCT'}:`);
-    if (!qtyStr) return;
-    const quantity = Number(qtyStr);
+
+    const existingModal = document.getElementById('modal-adjust-raw-material');
+    if (existingModal) existingModal.remove();
+
+    const isRestock = type === 'ADD';
+    const headerBg = isRestock ? 'bg-emerald-900' : 'bg-amber-900';
+    const badgeText = isRestock ? '+ RESTOCK / RECEIVE MATERIAL' : '- ISSUE MATERIAL TO PRODUCTION';
+    const defaultReason = isRestock ? 'Supplier Delivery / Restock' : 'Issued to Production Batch';
+
+    const modalHtml = `
+        <div id="modal-adjust-raw-material" class="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+            <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+                <div class="px-6 py-4 ${headerBg} text-white flex items-center justify-between">
+                    <div>
+                        <span class="text-[10px] font-black uppercase tracking-widest opacity-80">${badgeText}</span>
+                        <h3 class="font-black text-sm mt-0.5">${rm.material_name} (${rm.material_code})</h3>
+                    </div>
+                    <button type="button" onclick="document.getElementById('modal-adjust-raw-material').remove()" class="text-white/70 hover:text-white cursor-pointer">✕</button>
+                </div>
+                <form onsubmit="submitAdjustRawMaterialForm(event, '${rm.id}', '${type}')" class="p-6 space-y-4 text-xs">
+                    <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                        <span class="font-bold text-slate-600">Current Warehouse Stock:</span>
+                        <span class="text-base font-black text-slate-900">${NKB.formatNumber(rm.current_stock)} ${rm.unit}</span>
+                    </div>
+
+                    <div>
+                        <label class="block font-extrabold text-slate-700 mb-1">Quantity (${rm.unit}) to ${isRestock ? 'Restock (+)' : 'Issue (-)'} *</label>
+                        <div class="flex flex-wrap gap-1.5 mb-2">
+                            ${[5, 10, 25, 50, 100].map(q => `
+                                <button type="button" onclick="document.getElementById('rm-adj-qty').value='${q}'; document.getElementById('rm-adj-qty').focus();"
+                                    class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold text-[11px] cursor-pointer">
+                                    ${isRestock ? '+' : '-'}${q} ${rm.unit}
+                                </button>
+                            `).join('')}
+                        </div>
+                        <input type="number" step="0.01" min="0.01" id="rm-adj-qty" required placeholder="Enter quantity in ${rm.unit}"
+                            class="w-full p-2.5 border border-slate-300 rounded-xl font-black text-sm bg-white focus:ring-2 focus:ring-teal-500">
+                    </div>
+
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Reference / Batch / PO Note</label>
+                        <input type="text" id="rm-adj-reason" value="${defaultReason}" placeholder="Reference note"
+                            class="w-full p-2 border border-slate-300 rounded-xl">
+                    </div>
+
+                    <div class="flex justify-end gap-2 pt-3 border-t border-slate-200">
+                        <button type="button" onclick="document.getElementById('modal-adjust-raw-material').remove()" class="px-4 py-2 border border-slate-300 rounded-xl font-bold text-slate-700 cursor-pointer">Cancel (Esc)</button>
+                        <button type="submit" class="px-5 py-2 ${isRestock ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-amber-600 hover:bg-amber-700'} text-white rounded-xl font-black shadow-md cursor-pointer">
+                            ${isRestock ? '✅ Confirm Restock' : '📤 Confirm Issue'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    setTimeout(() => {
+        const qtyInput = document.getElementById('rm-adj-qty');
+        if (qtyInput) qtyInput.focus();
+    }, 30);
+}
+
+async function submitAdjustRawMaterialForm(e, rmId, type) {
+    e.preventDefault();
+    const qtyEl = document.getElementById('rm-adj-qty');
+    const reasonEl = document.getElementById('rm-adj-reason');
+    const quantity = qtyEl ? Number(qtyEl.value) : 0;
+    const reason = reasonEl ? reasonEl.value.trim() : '';
+
     if (isNaN(quantity) || quantity <= 0) {
-        alert('Please enter a valid positive number.');
+        alert('Please enter a valid positive quantity.');
         return;
     }
-    const reason = prompt('Optional Reference / Batch / PO Note:', type === 'ADD' ? 'Supplier Delivery' : 'Issued to Compounding');
 
     const res = await NKB.api(`/api/raw-materials/${rmId}/adjust-stock`, {
         method: 'POST',
-        body: { adjustment_type: type, quantity, reason: reason || '' }
+        body: { adjustment_type: type, quantity, reason }
     });
     if (res && res.success) {
+        const modal = document.getElementById('modal-adjust-raw-material');
+        if (modal) modal.remove();
         if (NKB.showToast) NKB.showToast(res.message, 'success');
         loadRawMaterials();
     } else {
@@ -12969,12 +13208,79 @@ async function openAdjustRawMaterialModal(rmId, type = 'ADD') {
     }
 }
 
+// Keyboard navigation (ArrowUp / ArrowDown to scroll & choose) + Exclusive INVENTORY account shortcuts (R = Restock, I = Issue, F = Fast Moving)
+function handleInventoryKeyboardNavigation(e) {
+    const viewEl = document.getElementById('view-raw-materials');
+    if (!viewEl || viewEl.classList.contains('hidden')) return;
+
+    // Close adjust modal on Escape
+    if (e.key === 'Escape') {
+        const adjModal = document.getElementById('modal-adjust-raw-material');
+        if (adjModal) {
+            adjModal.remove();
+            e.preventDefault();
+            return;
+        }
+        const editModal = document.getElementById('modal-raw-material');
+        if (editModal) {
+            editModal.remove();
+            e.preventDefault();
+            return;
+        }
+    }
+
+    // Do not intercept keys when a modal is open or user is typing in an input/select/textarea
+    if (document.getElementById('modal-adjust-raw-material') || document.getElementById('modal-raw-material')) return;
+    const activeTag = document.activeElement ? document.activeElement.tagName.toUpperCase() : '';
+    if (activeTag === 'INPUT' || activeTag === 'TEXTAREA' || activeTag === 'SELECT' || (document.activeElement && document.activeElement.isContentEditable)) {
+        return;
+    }
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
+
+    if (!cachedRawMaterials || cachedRawMaterials.length === 0) return;
+
+    // ArrowUp / ArrowDown: Scroll and choose material row in Warehouse Inventory
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const nextIdx = selectedRawMaterialIndex < cachedRawMaterials.length - 1 ? selectedRawMaterialIndex + 1 : 0;
+        selectRawMaterialRow(nextIdx, true);
+        return;
+    }
+
+    if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const prevIdx = selectedRawMaterialIndex > 0 ? selectedRawMaterialIndex - 1 : cachedRawMaterials.length - 1;
+        selectRawMaterialRow(prevIdx, true);
+        return;
+    }
+
+    // Exclusive shortcut keys for the Inventory Officer account (role === 'INVENTORY')
+    if (!isInventoryOfficerAccount()) return;
+
+    const selectedRm = cachedRawMaterials[selectedRawMaterialIndex] || cachedRawMaterials.find(r => r.id === selectedRawMaterialId);
+    if (!selectedRm) return;
+
+    const keyUpper = String(e.key).toUpperCase();
+    if (keyUpper === 'R' || e.key === '+') {
+        e.preventDefault();
+        openAdjustRawMaterialModal(selectedRm.id, 'ADD');
+    } else if (keyUpper === 'I' || e.key === '-') {
+        e.preventDefault();
+        openAdjustRawMaterialModal(selectedRm.id, 'DEDUCT');
+    } else if (keyUpper === 'F') {
+        e.preventDefault();
+        toggleRawMaterialFastMoving(selectedRm.id);
+    }
+}
+
+document.addEventListener('keydown', handleInventoryKeyboardNavigation);
+
 window.loadRawMaterials = loadRawMaterials;
 window.setRawMaterialStatusFilter = setRawMaterialStatusFilter;
+window.selectRawMaterialRow = selectRawMaterialRow;
+window.toggleRawMaterialFastMoving = toggleRawMaterialFastMoving;
+window.triggerSelectedRawMaterialAction = triggerSelectedRawMaterialAction;
 window.openRawMaterialModal = openRawMaterialModal;
 window.submitRawMaterialForm = submitRawMaterialForm;
 window.openAdjustRawMaterialModal = openAdjustRawMaterialModal;
-
-
-
-
+window.submitAdjustRawMaterialForm = submitAdjustRawMaterialForm;

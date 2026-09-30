@@ -1848,11 +1848,11 @@
             <section id="view-raw-materials" class="space-y-6 hidden">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                        <div class="flex items-center gap-2.5">
+                        <div class="flex items-center gap-2.5 flex-wrap">
                             <h2 class="text-2xl font-black text-slate-900">Warehouse Inventory — Raw Materials</h2>
-                            <span class="px-2.5 py-0.5 rounded-full bg-teal-100 text-teal-800 text-xs font-extrabold border border-teal-200">Warehouse & Formulation Stock</span>
+                            <span class="px-2.5 py-0.5 rounded-full bg-teal-100 text-teal-800 text-xs font-extrabold border border-teal-200">Color-Coded Stock & Fast-Moving Control</span>
                         </div>
-                        <p class="text-sm text-slate-500 mt-1">Monitor, restock, issue, and audit raw materials, active ingredients, solvents, and packaging supplies.</p>
+                        <p class="text-sm text-slate-500 mt-1">Color-coded stock indicators, fast-moving (frequently used) material tagging, multi-mode sorting, and keyboard navigation.</p>
                     </div>
                     <div class="flex items-center gap-2">
                         <button onclick="loadRawMaterials()" class="px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 shadow-sm flex items-center gap-1.5 transition">
@@ -1864,21 +1864,61 @@
                     </div>
                 </div>
 
-                <!-- Raw Materials KPI Cards -->
-                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- Exclusive Inventory Officer Keyboard Shortcut Bar -->
+                <div id="rm-inventory-shortcuts-bar" class="hidden bg-gradient-to-r from-slate-900 via-teal-950 to-slate-900 text-white rounded-2xl p-4 shadow-md border border-teal-700/50">
+                    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                        <div class="flex items-center gap-3">
+                            <span class="px-2.5 py-1 rounded-lg bg-teal-500/20 border border-teal-400/40 text-teal-300 text-[11px] font-black uppercase tracking-wider">⚡ Inventory Exclusive Shortcuts</span>
+                            <div class="text-xs text-slate-200">
+                                Selected Material: <span id="rm-selected-material-label" class="font-black text-amber-300">Use ↑ / ↓ arrows or click a row</span>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2 text-xs">
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-200">
+                                <kbd class="px-1.5 py-0.5 bg-slate-700 rounded text-[10px] font-black text-white">↑</kbd>
+                                <kbd class="px-1.5 py-0.5 bg-slate-700 rounded text-[10px] font-black text-white">↓</kbd>
+                                <span>Scroll / Choose Material</span>
+                            </span>
+                            <button type="button" onclick="triggerSelectedRawMaterialAction('RESTOCK')" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-900/60 hover:bg-emerald-800/80 border border-emerald-500/40 text-emerald-200 transition cursor-pointer">
+                                <kbd class="px-1.5 py-0.5 bg-emerald-600 rounded text-[10px] font-black text-white">R</kbd>
+                                <span class="font-bold">Restock Selected</span>
+                            </button>
+                            <button type="button" onclick="triggerSelectedRawMaterialAction('ISSUE')" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-900/60 hover:bg-amber-800/80 border border-amber-500/40 text-amber-200 transition cursor-pointer">
+                                <kbd class="px-1.5 py-0.5 bg-amber-600 rounded text-[10px] font-black text-white">I</kbd>
+                                <span class="font-bold">Issue Material</span>
+                            </button>
+                            <button type="button" onclick="triggerSelectedRawMaterialAction('FAST_MOVING')" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-orange-900/60 hover:bg-orange-800/80 border border-orange-500/40 text-orange-200 transition cursor-pointer">
+                                <kbd class="px-1.5 py-0.5 bg-orange-600 rounded text-[10px] font-black text-white">F</kbd>
+                                <span class="font-bold">Toggle Fast Moving</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Raw Materials KPI Cards (Color-Coded) -->
+                <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
                     <div class="bg-white p-5 rounded-2xl border border-slate-200 border-t-4 border-t-teal-600 shadow-sm">
                         <div class="flex items-center justify-between">
-                            <span class="text-xs font-extrabold text-slate-500 uppercase tracking-wider">Total Raw Materials</span>
+                            <span class="text-xs font-extrabold text-slate-500 uppercase tracking-wider">Total Materials</span>
                             <span class="px-2 py-0.5 rounded bg-teal-50 text-teal-700 text-xs font-bold">SKUs</span>
                         </div>
                         <div id="rm-kpi-total" class="text-3xl font-black text-slate-900 mt-2">0</div>
                         <div class="text-xs text-slate-500 mt-1">Tracked warehouse items</div>
                     </div>
 
-                    <div class="bg-white p-5 rounded-2xl border border-slate-200 border-t-4 border-t-emerald-600 shadow-sm">
+                    <div class="bg-white p-5 rounded-2xl border border-slate-200 border-t-4 border-t-orange-500 shadow-sm">
                         <div class="flex items-center justify-between">
-                            <span class="text-xs font-extrabold text-slate-500 uppercase tracking-wider">Sufficient Stock</span>
-                            <span class="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 text-xs font-bold">IN STOCK</span>
+                            <span class="text-xs font-extrabold text-slate-500 uppercase tracking-wider">Fast Moving</span>
+                            <span class="px-2 py-0.5 rounded bg-orange-50 text-orange-700 text-xs font-bold">🔥 FREQUENT</span>
+                        </div>
+                        <div id="rm-kpi-fastmoving" class="text-3xl font-black text-orange-600 mt-2">0</div>
+                        <div class="text-xs text-orange-700 font-semibold mt-1">Frequently used materials</div>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-2xl border border-slate-200 border-t-4 border-t-emerald-500 shadow-sm">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-extrabold text-slate-500 uppercase tracking-wider">Green Zone</span>
+                            <span class="w-3.5 h-3.5 rounded-full bg-emerald-500 inline-block ring-4 ring-emerald-100" title="Sufficient Stock"></span>
                         </div>
                         <div id="rm-kpi-instock" class="text-3xl font-black text-emerald-600 mt-2">0</div>
                         <div class="text-xs text-emerald-700 font-semibold mt-1">Above reorder threshold</div>
@@ -1886,8 +1926,8 @@
 
                     <div class="bg-white p-5 rounded-2xl border border-slate-200 border-t-4 border-t-amber-500 shadow-sm">
                         <div class="flex items-center justify-between">
-                            <span class="text-xs font-extrabold text-slate-500 uppercase tracking-wider">Low Stock Alerts</span>
-                            <span class="px-2 py-0.5 rounded bg-amber-50 text-amber-700 text-xs font-bold">REORDER</span>
+                            <span class="text-xs font-extrabold text-slate-500 uppercase tracking-wider">Amber Zone</span>
+                            <span class="w-3.5 h-3.5 rounded-full bg-amber-500 inline-block ring-4 ring-amber-100" title="Below Minimum Stock Level"></span>
                         </div>
                         <div id="rm-kpi-lowstock" class="text-3xl font-black text-amber-600 mt-2">0</div>
                         <div class="text-xs text-amber-700 font-semibold mt-1">Below minimum stock level</div>
@@ -1895,24 +1935,52 @@
 
                     <div class="bg-white p-5 rounded-2xl border border-slate-200 border-t-4 border-t-rose-600 shadow-sm">
                         <div class="flex items-center justify-between">
-                            <span class="text-xs font-extrabold text-slate-500 uppercase tracking-wider">Out of Stock</span>
-                            <span class="px-2 py-0.5 rounded bg-rose-50 text-rose-700 text-xs font-bold">CRITICAL</span>
+                            <span class="text-xs font-extrabold text-slate-500 uppercase tracking-wider">Red Zone</span>
+                            <span class="w-3.5 h-3.5 rounded-full bg-rose-600 inline-block ring-4 ring-rose-100" title="Depleted / Critical"></span>
                         </div>
                         <div id="rm-kpi-outofstock" class="text-3xl font-black text-rose-600 mt-2">0</div>
-                        <div class="text-xs text-rose-700 font-semibold mt-1">Requires immediate requisition</div>
+                        <div class="text-xs text-rose-700 font-semibold mt-1">Requires immediate restock</div>
                     </div>
                 </div>
 
-                <!-- Raw Materials Filter & Table Card -->
+                <!-- Raw Materials Filter, Sort & Table Card -->
                 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
-                    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                    <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-3 border-b border-slate-100 pb-4">
                         <div class="flex flex-wrap items-center gap-2">
-                            <button type="button" onclick="setRawMaterialStatusFilter('')" class="rm-status-pill px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-900 text-white transition" data-status="">All Items</button>
-                            <button type="button" onclick="setRawMaterialStatusFilter('IN_STOCK')" class="rm-status-pill px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition" data-status="IN_STOCK">✅ In Stock</button>
-                            <button type="button" onclick="setRawMaterialStatusFilter('LOW_STOCK')" class="rm-status-pill px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition" data-status="LOW_STOCK">⚠️ Low Stock</button>
-                            <button type="button" onclick="setRawMaterialStatusFilter('OUT_OF_STOCK')" class="rm-status-pill px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition" data-status="OUT_OF_STOCK">🚨 Out of Stock</button>
+                            <button type="button" onclick="setRawMaterialStatusFilter('')" class="rm-status-pill px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-900 text-white transition flex items-center gap-1.5" data-status="">
+                                <span>All Materials</span>
+                            </button>
+                            <button type="button" onclick="setRawMaterialStatusFilter('FAST_MOVING')" class="rm-status-pill px-3 py-1.5 rounded-xl text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100 transition flex items-center gap-1.5" data-status="FAST_MOVING" title="Filter Frequently Used / Fast Moving Materials">
+                                <span>🔥 Fast Moving</span>
+                            </button>
+                            <button type="button" onclick="setRawMaterialStatusFilter('IN_STOCK')" class="rm-status-pill px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition flex items-center gap-1.5" data-status="IN_STOCK" title="Filter Green Zone (Sufficient)">
+                                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
+                                <span>Green</span>
+                            </button>
+                            <button type="button" onclick="setRawMaterialStatusFilter('LOW_STOCK')" class="rm-status-pill px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition flex items-center gap-1.5" data-status="LOW_STOCK" title="Filter Amber Zone (Reorder)">
+                                <span class="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
+                                <span>Amber</span>
+                            </button>
+                            <button type="button" onclick="setRawMaterialStatusFilter('OUT_OF_STOCK')" class="rm-status-pill px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition flex items-center gap-1.5" data-status="OUT_OF_STOCK" title="Filter Red Zone (Critical)">
+                                <span class="w-2.5 h-2.5 rounded-full bg-rose-600 inline-block"></span>
+                                <span>Red</span>
+                            </button>
                         </div>
+
                         <div class="flex flex-wrap items-center gap-2">
+                            <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-1.5">
+                                <span class="text-[11px] font-extrabold text-slate-500 uppercase">Sort:</span>
+                                <select id="rm-sort-select" onchange="loadRawMaterials()" class="text-xs bg-transparent font-bold text-slate-800 focus:outline-none">
+                                    <option value="PRIORITIZED">🔥 Prioritized (Fast Moving First)</option>
+                                    <option value="MOST_CRITICAL">🚨 Most Critical Stock First</option>
+                                    <option value="ALPHABETICAL_ASC">🔤 Alphabetical (A → Z)</option>
+                                    <option value="ALPHABETICAL_DESC">🔤 Alphabetical (Z → A)</option>
+                                    <option value="CODE_ASC">🏷️ Material Code (A → Z)</option>
+                                    <option value="STOCK_LOW">📉 Lowest Stock First</option>
+                                    <option value="STOCK_HIGH">📈 Highest Stock First</option>
+                                </select>
+                            </div>
+
                             <select id="rm-filter-category" onchange="loadRawMaterials()" class="text-xs px-3 py-2 border border-slate-300 rounded-xl bg-slate-50 font-semibold text-slate-700">
                                 <option value="">All Categories</option>
                                 <option value="Active Ingredients">Active Ingredients</option>
@@ -1924,7 +1992,7 @@
                                 <option value="Fragrances & Essential Oils">Fragrances & Essential Oils</option>
                                 <option value="Packaging & Containers">Packaging & Containers</option>
                             </select>
-                            <input type="text" id="rm-search-input" oninput="loadRawMaterials()" placeholder="Search code, material, supplier, rack..." class="text-xs px-3 py-2 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white w-60">
+                            <input type="text" id="rm-search-input" oninput="loadRawMaterials()" placeholder="Search code, material, supplier, rack..." class="text-xs px-3 py-2 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white w-56">
                         </div>
                     </div>
 
@@ -1932,13 +2000,13 @@
                         <table class="w-full text-left text-xs">
                             <thead class="bg-slate-50 border-y border-slate-200 text-slate-600 font-bold uppercase tracking-wider">
                                 <tr>
+                                    <th class="py-3 px-2 text-center w-10" title="Color-Coded Stock Level">Color</th>
                                     <th class="py-3 px-3">Material Code</th>
-                                    <th class="py-3 px-3">Material Name & Category</th>
+                                    <th class="py-3 px-3">Material Name, Tag & Category</th>
                                     <th class="py-3 px-3">Supplier & Lot #</th>
                                     <th class="py-3 px-3">Warehouse Location</th>
                                     <th class="py-3 px-3 text-right">Current Stock</th>
-                                    <th class="py-3 px-3 text-right">Min. Reorder Level</th>
-                                    <th class="py-3 px-3 text-center">Status</th>
+                                    <th class="py-3 px-3 text-right">Min. Level</th>
                                     <th class="py-3 px-3 text-right">Actions</th>
                                 </tr>
                             </thead>

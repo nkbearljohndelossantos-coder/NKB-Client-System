@@ -3172,14 +3172,46 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
             .send({ priority_status: 'ON_HOLD' });
         assert.strictEqual(acctBlockPrio.status, 403);
 
-        // 3. Test Inventory Officer Warehouse Raw Materials Inventory API
+        // 3. Test Inventory Officer Warehouse Raw Materials Inventory API (Color-Coded Status, Fast Moving Tag, Multi-Sort & Exclusive Shortcuts)
+        assert.ok(adminHtml.includes('id="rm-sort-select"'), 'admin.html must include raw material sort dropdown');
+        assert.ok(adminHtml.includes('id="rm-inventory-shortcuts-bar"'), 'admin.html must include exclusive Inventory shortcut bar');
+        assert.ok(adminJs.includes('isInventoryOfficerAccount'), 'admin.js must enforce exclusive Inventory Officer shortcut check');
+        assert.ok(adminJs.includes('handleInventoryKeyboardNavigation'), 'admin.js must implement ArrowUp/ArrowDown and R/I/F shortcut handler');
+
         const listRmRes = await request(app)
-            .get('/api/raw-materials')
+            .get('/api/raw-materials?sort=PRIORITIZED')
             .set('Authorization', `Bearer ${invToken}`);
         assert.strictEqual(listRmRes.status, 200);
         assert.strictEqual(listRmRes.body.success, true);
         assert.ok(listRmRes.body.data.length >= 10, 'Seeded warehouse raw materials must be returned');
         assert.ok(listRmRes.body.summary.totalMaterials >= 10, 'Summary metrics must be included');
+        assert.ok(listRmRes.body.summary.fastMovingCount >= 1, 'Summary must include fastMovingCount');
+        assert.strictEqual(Number(listRmRes.body.data[0].is_fast_moving), 1, 'PRIORITIZED sort must place Fast Moving materials first');
+
+        // Verify ALPHABETICAL_ASC sort
+        const alphaAscRes = await request(app)
+            .get('/api/raw-materials?sort=ALPHABETICAL_ASC')
+            .set('Authorization', `Bearer ${invToken}`);
+        assert.strictEqual(alphaAscRes.status, 200);
+        assert.ok(
+            alphaAscRes.body.data[0].material_name.localeCompare(alphaAscRes.body.data[alphaAscRes.body.data.length - 1].material_name) <= 0,
+            'ALPHABETICAL_ASC sort must order materials A -> Z'
+        );
+
+        // Verify MOST_CRITICAL sort places critical stock (OUT_OF_STOCK / LOW_STOCK) ahead of IN_STOCK
+        const critSortRes = await request(app)
+            .get('/api/raw-materials?sort=MOST_CRITICAL')
+            .set('Authorization', `Bearer ${invToken}`);
+        assert.strictEqual(critSortRes.status, 200);
+        assert.ok(
+            ['OUT_OF_STOCK', 'LOW_STOCK'].includes(critSortRes.body.data[0].status),
+            'MOST_CRITICAL sort must place critical (OUT_OF_STOCK or LOW_STOCK) items first'
+        );
+        assert.strictEqual(
+            critSortRes.body.data[critSortRes.body.data.length - 1].status,
+            'IN_STOCK',
+            'MOST_CRITICAL sort must place healthy IN_STOCK items last'
+        );
 
         // Create a new raw material as Inventory Officer
         const createRmRes = await request(app)
@@ -3195,11 +3227,21 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
                 minimum_stock_level: 5.0,
                 unit_cost: 9500.0,
                 location: 'Cold Room B-05',
-                batch_lot_number: 'LOT-PDRN-2026'
+                batch_lot_number: 'LOT-PDRN-2026',
+                is_fast_moving: 0
             });
         assert.strictEqual(createRmRes.status, 201);
         assert.strictEqual(createRmRes.body.data.status, 'IN_STOCK');
+        assert.strictEqual(Number(createRmRes.body.data.is_fast_moving), 0);
         const createdRmId = createRmRes.body.data.id;
+
+        // Toggle Fast Moving tag ON as Inventory Officer
+        const toggleFastRes = await request(app)
+            .post(`/api/raw-materials/${createdRmId}/toggle-fast-moving`)
+            .set('Authorization', `Bearer ${invToken}`)
+            .send({});
+        assert.strictEqual(toggleFastRes.status, 200);
+        assert.strictEqual(Number(toggleFastRes.body.data.is_fast_moving), 1, 'Inventory Officer must be able to tag material as Fast Moving');
 
         // Adjust stock (DEDUCT 12 kg -> leaves 3.5 kg which is <= 5.0 min -> LOW_STOCK)
         const adjustRmRes = await request(app)

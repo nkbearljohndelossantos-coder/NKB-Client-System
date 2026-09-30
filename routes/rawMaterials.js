@@ -26,7 +26,7 @@ router.get('/', authenticateToken, (req, res) => {
         return res.status(403).json({ success: false, error: 'Access denied to Warehouse Raw Materials Inventory.' });
     }
 
-    const { category, status, search } = req.query;
+    const { category, status, search, fast_moving, sort = 'PRIORITIZED' } = req.query;
     let query = 'SELECT * FROM raw_materials_inventory WHERE 1=1';
     const params = [];
 
@@ -35,9 +35,15 @@ router.get('/', authenticateToken, (req, res) => {
         params.push(category);
     }
 
-    if (status) {
+    if (status === 'FAST_MOVING') {
+        query += ' AND is_fast_moving = 1';
+    } else if (status) {
         query += ' AND status = ?';
         params.push(status);
+    }
+
+    if (fast_moving === '1' || fast_moving === 'true') {
+        query += ' AND is_fast_moving = 1';
     }
 
     if (search) {
@@ -46,7 +52,25 @@ router.get('/', authenticateToken, (req, res) => {
         params.push(term, term, term, term, term);
     }
 
-    query += ' ORDER BY CASE status WHEN \'OUT_OF_STOCK\' THEN 1 WHEN \'LOW_STOCK\' THEN 2 ELSE 3 END, material_code ASC';
+    const sortMode = String(sort || 'PRIORITIZED').toUpperCase();
+    if (sortMode === 'PRIORITIZED') {
+        query += ` ORDER BY COALESCE(is_fast_moving, 0) DESC, CASE status WHEN 'OUT_OF_STOCK' THEN 1 WHEN 'LOW_STOCK' THEN 2 ELSE 3 END, material_name ASC`;
+    } else if (sortMode === 'MOST_CRITICAL') {
+        query += ` ORDER BY CASE status WHEN 'OUT_OF_STOCK' THEN 1 WHEN 'LOW_STOCK' THEN 2 ELSE 3 END, (CAST(current_stock AS REAL) / CASE WHEN COALESCE(minimum_stock_level, 0) <= 0 THEN 1 ELSE minimum_stock_level END) ASC, COALESCE(is_fast_moving, 0) DESC, material_name ASC`;
+    } else if (sortMode === 'ALPHABETICAL_ASC' || sortMode === 'ALPHABETICAL') {
+        query += ` ORDER BY material_name COLLATE NOCASE ASC, material_code ASC`;
+    } else if (sortMode === 'ALPHABETICAL_DESC') {
+        query += ` ORDER BY material_name COLLATE NOCASE DESC, material_code ASC`;
+    } else if (sortMode === 'CODE_ASC') {
+        query += ` ORDER BY material_code ASC`;
+    } else if (sortMode === 'STOCK_LOW') {
+        query += ` ORDER BY current_stock ASC, material_name ASC`;
+    } else if (sortMode === 'STOCK_HIGH') {
+        query += ` ORDER BY current_stock DESC, material_name ASC`;
+    } else {
+        query += ` ORDER BY COALESCE(is_fast_moving, 0) DESC, CASE status WHEN 'OUT_OF_STOCK' THEN 1 WHEN 'LOW_STOCK' THEN 2 ELSE 3 END, material_code ASC`;
+    }
+
     const items = db.prepare(query).all(...params);
 
     const allItems = db.prepare('SELECT * FROM raw_materials_inventory').all();
@@ -55,6 +79,7 @@ router.get('/', authenticateToken, (req, res) => {
         inStockCount: allItems.filter(i => i.status === 'IN_STOCK').length,
         lowStockCount: allItems.filter(i => i.status === 'LOW_STOCK').length,
         outOfStockCount: allItems.filter(i => i.status === 'OUT_OF_STOCK').length,
+        fastMovingCount: allItems.filter(i => Number(i.is_fast_moving) === 1).length,
         totalValuation: allItems.reduce((acc, i) => acc + ((Number(i.current_stock) || 0) * (Number(i.unit_cost) || 0)), 0),
         categories: Array.from(new Set(allItems.map(i => i.category).filter(Boolean))).sort()
     };
@@ -87,6 +112,7 @@ router.post('/', authenticateToken, (req, res) => {
         location = 'Warehouse Zone A',
         batch_lot_number = '',
         expiry_date = '',
+        is_fast_moving = 0,
         notes = ''
     } = req.body || {};
 
@@ -104,6 +130,7 @@ router.post('/', authenticateToken, (req, res) => {
     const stockNum = Number(current_stock) || 0;
     const minNum = Number(minimum_stock_level) || 0;
     const costNum = Number(unit_cost) || 0;
+    const fastMovingNum = (is_fast_moving === true || Number(is_fast_moving) === 1) ? 1 : 0;
     const status = computeStockStatus(stockNum, minNum);
     const now = getManilaDateTime();
 
@@ -111,14 +138,14 @@ router.post('/', authenticateToken, (req, res) => {
         INSERT INTO raw_materials_inventory (
             id, material_code, material_name, category, supplier,
             current_stock, unit, minimum_stock_level, unit_cost,
-            location, batch_lot_number, expiry_date, status, notes,
+            location, batch_lot_number, expiry_date, status, is_fast_moving, notes,
             updated_by, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
         id, codeClean, String(material_name).trim(), String(category).trim(), String(supplier || '').trim(),
         stockNum, String(unit || 'kg').trim(), minNum, costNum,
         String(location || 'Warehouse Zone A').trim(), String(batch_lot_number || '').trim(), String(expiry_date || '').trim(),
-        status, String(notes || '').trim(), req.user.name, now, now
+        status, fastMovingNum, String(notes || '').trim(), req.user.name, now, now
     );
 
     const created = db.prepare('SELECT * FROM raw_materials_inventory WHERE id = ?').get(id);
@@ -130,7 +157,7 @@ router.post('/', authenticateToken, (req, res) => {
         action: 'CREATE_RAW_MATERIAL',
         entityType: 'RAW_MATERIAL',
         entityId: codeClean,
-        details: { material_code: codeClean, material_name, current_stock: stockNum, unit, status },
+        details: { material_code: codeClean, material_name, current_stock: stockNum, unit, status, is_fast_moving: fastMovingNum },
         ipAddress: req.ip
     });
 
@@ -168,6 +195,7 @@ router.put('/:id', authenticateToken, (req, res) => {
         location,
         batch_lot_number,
         expiry_date,
+        is_fast_moving,
         notes
     } = req.body || {};
 
@@ -182,6 +210,9 @@ router.put('/:id', authenticateToken, (req, res) => {
     const newLoc = location !== undefined ? String(location).trim() : existing.location;
     const newLot = batch_lot_number !== undefined ? String(batch_lot_number).trim() : existing.batch_lot_number;
     const newExp = expiry_date !== undefined ? String(expiry_date).trim() : existing.expiry_date;
+    const newFastMoving = is_fast_moving !== undefined
+        ? ((is_fast_moving === true || Number(is_fast_moving) === 1) ? 1 : 0)
+        : (Number(existing.is_fast_moving) === 1 ? 1 : 0);
     const newNotes = notes !== undefined ? String(notes).trim() : existing.notes;
     const newStatus = computeStockStatus(newStock, newMin);
     const now = getManilaDateTime();
@@ -191,13 +222,13 @@ router.put('/:id', authenticateToken, (req, res) => {
         SET material_code = ?, material_name = ?, category = ?, supplier = ?,
             current_stock = ?, unit = ?, minimum_stock_level = ?, unit_cost = ?,
             location = ?, batch_lot_number = ?, expiry_date = ?, status = ?,
-            notes = ?, updated_by = ?, updated_at = ?
+            is_fast_moving = ?, notes = ?, updated_by = ?, updated_at = ?
         WHERE id = ?
     `).run(
         newCode, newName, newCategory, newSupplier,
         newStock, newUnit, newMin, newCost,
         newLoc, newLot, newExp, newStatus,
-        newNotes, req.user.name, now, id
+        newFastMoving, newNotes, req.user.name, now, id
     );
 
     const updated = db.prepare('SELECT * FROM raw_materials_inventory WHERE id = ?').get(id);
@@ -212,7 +243,8 @@ router.put('/:id', authenticateToken, (req, res) => {
         details: {
             previous_stock: existing.current_stock,
             new_stock: newStock,
-            status: newStatus
+            status: newStatus,
+            is_fast_moving: newFastMoving
         },
         ipAddress: req.ip
     });
@@ -220,6 +252,58 @@ router.put('/:id', authenticateToken, (req, res) => {
     return res.json({
         success: true,
         message: `Raw material ${newCode} updated.`,
+        data: updated
+    });
+});
+
+/**
+ * POST /api/raw-materials/:id/toggle-fast-moving
+ * Assign or remove the Fast Moving (Frequently Used) tag on a raw material
+ */
+router.post('/:id/toggle-fast-moving', authenticateToken, (req, res) => {
+    if (!ALLOWED_EDIT_ROLES.includes(req.user.role)) {
+        return res.status(403).json({ success: false, error: 'Only Inventory Officer or authorized roles can assign Fast Moving tags.' });
+    }
+
+    const { id } = req.params;
+    const existing = db.prepare('SELECT * FROM raw_materials_inventory WHERE id = ?').get(id);
+    if (!existing) {
+        return res.status(404).json({ success: false, error: 'Raw material not found.' });
+    }
+
+    const requestedState = req.body && req.body.is_fast_moving !== undefined
+        ? ((req.body.is_fast_moving === true || Number(req.body.is_fast_moving) === 1) ? 1 : 0)
+        : (Number(existing.is_fast_moving) === 1 ? 0 : 1);
+
+    const now = getManilaDateTime();
+    db.prepare(`
+        UPDATE raw_materials_inventory
+        SET is_fast_moving = ?, updated_by = ?, updated_at = ?
+        WHERE id = ?
+    `).run(requestedState, req.user.name, now, id);
+
+    const updated = db.prepare('SELECT * FROM raw_materials_inventory WHERE id = ?').get(id);
+
+    logAudit({
+        userId: req.user.id,
+        userName: req.user.name,
+        userRole: req.user.role,
+        action: 'TOGGLE_RAW_MATERIAL_FAST_MOVING',
+        entityType: 'RAW_MATERIAL',
+        entityId: existing.material_code,
+        details: {
+            material_code: existing.material_code,
+            material_name: existing.material_name,
+            is_fast_moving: requestedState
+        },
+        ipAddress: req.ip
+    });
+
+    return res.json({
+        success: true,
+        message: requestedState === 1
+            ? `${existing.material_name} tagged as Fast Moving (Frequently Used).`
+            : `Fast Moving tag removed from ${existing.material_name}.`,
         data: updated
     });
 });
