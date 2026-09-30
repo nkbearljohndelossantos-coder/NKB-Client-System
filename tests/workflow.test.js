@@ -3183,8 +3183,12 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
             .set('Authorization', `Bearer ${invToken}`);
         assert.strictEqual(listRmRes.status, 200);
         assert.strictEqual(listRmRes.body.success, true);
-        assert.ok(listRmRes.body.data.length >= 10, 'Seeded warehouse raw materials must be returned');
-        assert.ok(listRmRes.body.summary.totalMaterials >= 10, 'Summary metrics must be included');
+        assert.strictEqual(listRmRes.body.data.length, 388, 'Must contain all 388 raw materials from Peeling Lotion (14) and Cosmetics (374) Excel sections');
+        assert.strictEqual(listRmRes.body.summary.totalMaterials, 388, 'Summary totalMaterials must equal 388');
+        assert.deepStrictEqual(listRmRes.body.summary.categories, ['Cosmetics', 'Peeling Lotion'], 'Only Peeling Lotion and Cosmetics sections must be imported');
+        assert.ok(!listRmRes.body.data.some(r => r.material_code === 'RM-WTR-01'), 'Old recorded demo inventory must be removed');
+        assert.ok(listRmRes.body.data.some(r => r.material_code === 'L001' && r.category === 'Peeling Lotion'), 'Peeling Lotion L001 must be present');
+        assert.ok(listRmRes.body.data.some(r => r.material_code === 'COOO1A' && r.category === 'Cosmetics'), 'Cosmetics COOO1A must be present');
         assert.ok(listRmRes.body.summary.fastMovingCount >= 1, 'Summary must include fastMovingCount');
         assert.strictEqual(Number(listRmRes.body.data[0].is_fast_moving), 1, 'PRIORITIZED sort must place Fast Moving materials first');
 

@@ -13122,9 +13122,9 @@ function openRawMaterialModal(rmId = null) {
                             <input type="text" id="rm-form-code" required value="${existing ? existing.material_code : ''}" placeholder="e.g. RM-VITC-01" class="w-full p-2 border border-slate-300 rounded-xl">
                         </div>
                         <div>
-                            <label class="block font-bold text-slate-700 mb-1">Category *</label>
+                            <label class="block font-bold text-slate-700 mb-1">Category / Section *</label>
                             <select id="rm-form-category" class="w-full p-2 border border-slate-300 rounded-xl">
-                                ${['Active Ingredients', 'Base & Solvents', 'Humectants & Emollients', 'Emulsifiers & Waxes', 'UV Filters & Actives', 'Preservatives & Stabilizers', 'Fragrances & Essential Oils', 'Packaging & Containers'].map(c => `<option value="${c}" ${existing && existing.category === c ? 'selected' : ''}>${c}</option>`).join('')}
+                                ${['Cosmetics', 'Peeling Lotion', 'Active Ingredients', 'Base & Solvents', 'Humectants & Emollients', 'Emulsifiers & Waxes', 'UV Filters & Actives', 'Preservatives & Stabilizers', 'Fragrances & Essential Oils', 'Packaging & Containers'].map(c => `<option value="${c}" ${existing && existing.category === c ? 'selected' : ''}>${c}</option>`).join('')}
                             </select>
                         </div>
                     </div>
