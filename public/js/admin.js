@@ -12453,11 +12453,11 @@ function renderProductionSalesOrderBoard() {
 
     const totalHighPrioInQueue = list.filter(o => o.priority_status === 'RUSH' || o.priority_status === 'PRIORITIZED' || Number(o.is_active_today) === 1).length;
 
-    const priorityBadgeMap = {
-        'RUSH': '<span class="px-2.5 py-1 rounded-full bg-rose-100 text-rose-800 font-extrabold text-[10px] border border-rose-300">🔥 RUSH</span>',
-        'PRIORITIZED': '<span class="px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 font-extrabold text-[10px] border border-amber-300">⚡ PRIORITIZED</span>',
-        'NORMAL': '<span class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 font-bold text-[10px] border border-slate-200">📋 NORMAL</span>',
-        'ON_HOLD': '<span class="px-2.5 py-1 rounded-full bg-slate-200 text-slate-600 font-extrabold text-[10px] border border-slate-300">⏸️ ON HOLD</span>'
+    const prioritySelectStyleMap = {
+        'RUSH': 'bg-rose-100 text-rose-800 border-rose-300 font-extrabold',
+        'PRIORITIZED': 'bg-amber-100 text-amber-800 border-amber-300 font-extrabold',
+        'NORMAL': 'bg-slate-100 text-slate-700 border-slate-300 font-bold',
+        'ON_HOLD': 'bg-slate-200 text-slate-600 border-slate-300 font-extrabold'
     };
 
     tbody.innerHTML = list.map((po, idx) => {
@@ -12534,8 +12534,7 @@ function renderProductionSalesOrderBoard() {
                     <div class="text-[10px] text-slate-400 mt-0.5">${po.jo_count || 0} JOs · ${po.dr_count || 0} DRs</div>
                 </td>
                 <td class="py-3 px-3 text-center">
-                    <div class="mb-1">${priorityBadgeMap[pStatus] || priorityBadgeMap['NORMAL']}</div>
-                    <select onchange="updateOrderProductionSchedule('${po.id}', { priority_status: this.value })" class="text-[11px] px-2 py-1 border border-slate-300 rounded-lg bg-white font-bold text-slate-700 cursor-pointer">
+                    <select onchange="updateOrderProductionSchedule('${po.id}', { priority_status: this.value })" class="text-[11px] px-2.5 py-1.5 border rounded-xl cursor-pointer transition ${prioritySelectStyleMap[pStatus] || prioritySelectStyleMap['NORMAL']}">
                         <option value="RUSH" ${pStatus === 'RUSH' ? 'selected' : ''}>🔥 Rush</option>
                         <option value="PRIORITIZED" ${pStatus === 'PRIORITIZED' ? 'selected' : ''}>⚡ Prioritized</option>
                         <option value="NORMAL" ${pStatus === 'NORMAL' ? 'selected' : ''}>📋 Normal</option>
