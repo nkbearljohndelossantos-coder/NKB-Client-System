@@ -12752,7 +12752,7 @@ let selectedRawMaterialId = null;
 let selectedRawMaterialIndex = 0;
 
 function isInventoryOfficerAccount() {
-    return Boolean(currentUser && currentUser.role === 'INVENTORY');
+    return Boolean(typeof NKB !== 'undefined' && NKB.user && NKB.user.role === 'INVENTORY');
 }
 
 function updateInventoryShortcutsBarVisibility() {
