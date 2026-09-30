@@ -7,6 +7,13 @@ const { v4: uuidv4 } = require('uuid');
 
 function seedDailyProductionRecords(db) {
     if (!db) throw new Error('Database instance is required.');
+
+    // Only permit seeding in automated test mode, NEVER in production/live database
+    const isTest = process.env.NODE_ENV === 'test' || (process.env.DATABASE_PATH && process.env.DATABASE_PATH.includes('test'));
+    if (!isTest) {
+        return { success: false, message: 'Daily production spreadsheet seeding is disabled in production.' };
+    }
+
     const { getNextDocumentNumber } = require('../services/documentNumberService');
 
     // Find or Auto-provision Clients

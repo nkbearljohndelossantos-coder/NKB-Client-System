@@ -1465,12 +1465,44 @@ if (useMysql) {
         console.error('PO-2026-000021 GEMS migration error:', err.message);
     }
 
-    // Migration: Ensure PO-2026-000024, 25, 26 created_at timestamps reflect registration order on Sep 28
+    // Migration: Cleanup error POs (0004, HCI_063, HCI_065), renumber Bella Skin to PO-2026-000024, and reset document sequences
     try {
-        db.prepare("UPDATE purchase_orders SET created_at = '2026-09-28 09:30:00' WHERE po_number = 'PO-2026-000024' AND created_at < '2026-09-28'").run();
-        db.prepare("UPDATE purchase_orders SET created_at = '2026-09-28 09:45:00' WHERE po_number = 'PO-2026-000025' AND created_at < '2026-09-28'").run();
-        db.prepare("UPDATE purchase_orders SET created_at = '2026-09-28 10:00:00' WHERE po_number = 'PO-2026-000026' AND created_at < '2026-09-28'").run();
-    } catch (_) {}
+        const errorPOs = db.prepare("SELECT id FROM purchase_orders WHERE notes LIKE '%0004%' OR notes LIKE '%HCI_063_2026%' OR notes LIKE '%HCI_065_2026%'").all();
+        if (errorPOs.length > 0) {
+            const errorPoIds = errorPOs.map(p => p.id);
+            const errorJOs = db.prepare(`SELECT id FROM job_orders WHERE po_id IN (${errorPoIds.map(() => '?').join(',')})`).all(...errorPoIds);
+            const errorJoIds = errorJOs.map(j => j.id);
+            if (errorJoIds.length > 0) {
+                db.prepare(`DELETE FROM production_batches WHERE jo_id IN (${errorJoIds.map(() => '?').join(',')})`).run(...errorJoIds);
+            }
+            db.prepare(`DELETE FROM job_orders WHERE po_id IN (${errorPoIds.map(() => '?').join(',')})`).run(...errorPoIds);
+            db.prepare(`DELETE FROM purchase_order_items WHERE po_id IN (${errorPoIds.map(() => '?').join(',')})`).run(...errorPoIds);
+            db.prepare(`DELETE FROM purchase_orders WHERE id IN (${errorPoIds.map(() => '?').join(',')})`).run(...errorPoIds);
+            console.log(`🧹 Cleaned up ${errorPoIds.length} error POs and their associated records`);
+        }
+
+        // Renumber Bella Skin to PO-2026-000024
+        const bellaPO = db.prepare("SELECT id, po_number FROM purchase_orders WHERE client_id = 'c0000000-0000-0000-0000-000000000002' AND po_date = '2026-09-28'").get();
+        if (bellaPO && bellaPO.po_number !== 'PO-2026-000024') {
+            db.prepare("UPDATE purchase_orders SET po_number = 'PO-2026-000024', so_number = 'SO-2026-000024' WHERE id = ?").run(bellaPO.id);
+            console.log('🔄 Renumbered Bella Skin to PO-2026-000024');
+        }
+
+        // Reset document_sequences
+        const maxPo = db.prepare("SELECT MAX(CAST(SUBSTR(po_number, 9) AS INTEGER)) as m FROM purchase_orders WHERE po_number LIKE 'PO-2026-%'").get();
+        const poSeqVal = (maxPo && maxPo.m) ? maxPo.m : 24;
+        db.prepare("UPDATE document_sequences SET last_sequence = ? WHERE doc_type = 'PO'").run(poSeqVal);
+
+        const maxJo = db.prepare("SELECT MAX(CAST(SUBSTR(jo_number, 9) AS INTEGER)) as m FROM job_orders WHERE jo_number LIKE 'JO-2026-%'").get();
+        const joSeqVal = (maxJo && maxJo.m) ? maxJo.m : 46;
+        db.prepare("UPDATE document_sequences SET last_sequence = ? WHERE doc_type = 'JO'").run(joSeqVal);
+
+        const maxBat = db.prepare("SELECT MAX(CAST(SUBSTR(batch_number, 10) AS INTEGER)) as m FROM production_batches WHERE batch_number LIKE 'BAT-2026-%'").get();
+        const batSeqVal = (maxBat && maxBat.m) ? maxBat.m : 13;
+        db.prepare("UPDATE document_sequences SET last_sequence = ? WHERE doc_type = 'BAT'").run(batSeqVal);
+    } catch (cleanErr) {
+        console.error('Error PO cleanup migration error:', cleanErr.message);
+    }
 
     // Auto-initialize Document Sequences
     try {
@@ -1488,11 +1520,3 @@ if (useMysql) {
 }
 
 module.exports = db;
-
-// Auto-provision authentic factory daily production batch records asynchronously
-setImmediate(() => {
-    try {
-        const { seedDailyProductionRecords } = require('../scripts/seed-daily-production-records');
-        seedDailyProductionRecords(db);
-    } catch (_) {}
-});
