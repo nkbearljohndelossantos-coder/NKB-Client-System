@@ -210,7 +210,7 @@ router.get('/categories', authenticateToken, (req, res) => {
  * POST /api/products/categories
  * Add a new product category
  */
-router.post('/categories', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'SUPER_ADMIN'), (req, res) => {
+router.post('/categories', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'ACCOUNTING', 'SUPER_ADMIN'), (req, res) => {
     const { name } = req.body;
     if (!name || !name.trim()) {
         return res.status(400).json({ success: false, error: 'Category name is required.' });
@@ -282,9 +282,9 @@ router.get('/:id', authenticateToken, (req, res) => {
 
 /**
  * POST /api/products
- * Admin/Production only
+ * Admin/Production/Accounting
  */
-router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'SUPER_ADMIN'), (req, res) => {
+router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'ACCOUNTING', 'SUPER_ADMIN'), (req, res) => {
     let { sku, name, category, description, unit, default_price, formula_code, shelf_life_months, client_id } = req.body;
 
     if (!name || default_price === undefined || default_price === null || default_price === '') {
@@ -384,7 +384,7 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'SUPER_A
 /**
  * PUT /api/products/:id
  */
-router.put('/:id', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'SUPER_ADMIN'), (req, res) => {
+router.put('/:id', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'ACCOUNTING', 'SUPER_ADMIN'), (req, res) => {
     const { name, category, description, unit, default_price, formula_code, shelf_life_months, is_active, client_id } = req.body;
     const { id } = req.params;
 

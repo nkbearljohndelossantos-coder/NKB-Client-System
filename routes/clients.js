@@ -255,7 +255,7 @@ router.post('/:id/credentials/reset', authenticateToken, requireRoles('ADMIN', '
  * PUT /api/clients/:id
  * Update Client details (Admin only)
  */
-router.put('/:id', authenticateToken, requireRoles('ADMIN', 'SUPER_ADMIN'), (req, res) => {
+router.put('/:id', authenticateToken, requireRoles('ADMIN', 'ACCOUNTING', 'SUPER_ADMIN'), (req, res) => {
     const { id } = req.params;
     const { company_name, contact_person, email, phone, address, tin, default_billing_policy, default_tolerance_percent, credit_limit, is_active, is_vyuceutical_ops } = req.body;
 
@@ -457,9 +457,9 @@ router.get('/:id/pricing', authenticateToken, enforceClientIsolation, (req, res)
 
 /**
  * POST /api/clients/:id/pricing
- * Set or update product assignment, custom name, SKU, price, and formula for a client (Admin only)
+ * Set or update product assignment, custom name, SKU, price, and formula for a client (Admin/Accounting)
  */
-router.post('/:id/pricing', authenticateToken, requireRoles('ADMIN', 'SUPER_ADMIN'), (req, res) => {
+router.post('/:id/pricing', authenticateToken, requireRoles('ADMIN', 'ACCOUNTING', 'SUPER_ADMIN'), (req, res) => {
     const { id: clientId } = req.params;
     const { product_id, custom_name, custom_price, custom_sku, custom_formula_code, is_active, is_assigned } = req.body;
 
@@ -521,7 +521,7 @@ router.post('/:id/pricing', authenticateToken, requireRoles('ADMIN', 'SUPER_ADMI
  * POST /api/clients/:id/pricing/batch
  * Bulk save product assignments, custom names, SKUs, and pricing for a client
  */
-router.post('/:id/pricing/batch', authenticateToken, requireRoles('ADMIN', 'SUPER_ADMIN'), (req, res) => {
+router.post('/:id/pricing/batch', authenticateToken, requireRoles('ADMIN', 'ACCOUNTING', 'SUPER_ADMIN'), (req, res) => {
     const { id: clientId } = req.params;
     const { items } = req.body;
 
@@ -587,7 +587,7 @@ router.post('/:id/pricing/batch', authenticateToken, requireRoles('ADMIN', 'SUPE
  * POST /api/clients/:id/products
  * Create a new product and directly assign it to this client
  */
-router.post('/:id/products', authenticateToken, requireRoles('ADMIN', 'SUPER_ADMIN'), (req, res) => {
+router.post('/:id/products', authenticateToken, requireRoles('ADMIN', 'ACCOUNTING', 'SUPER_ADMIN'), (req, res) => {
     const { id: clientId } = req.params;
     const { name, sku, category, description, unit, default_price, formula_code, shelf_life_months } = req.body;
 
@@ -668,7 +668,7 @@ router.post('/:id/products', authenticateToken, requireRoles('ADMIN', 'SUPER_ADM
  * DELETE /api/clients/:id/pricing/:productId
  * Remove custom pricing for a product (reverts to default product price)
  */
-router.delete('/:id/pricing/:productId', authenticateToken, requireRoles('ADMIN', 'SUPER_ADMIN'), (req, res) => {
+router.delete('/:id/pricing/:productId', authenticateToken, requireRoles('ADMIN', 'ACCOUNTING', 'SUPER_ADMIN'), (req, res) => {
     const { id: clientId, productId } = req.params;
 
     db.prepare('DELETE FROM client_product_prices WHERE client_id = ? AND product_id = ?').run(clientId, productId);

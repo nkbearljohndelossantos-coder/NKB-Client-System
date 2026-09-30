@@ -3105,6 +3105,9 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.ok(adminJs.includes('loadProductionSupervisorDashboard'), 'admin.js must implement loadProductionSupervisorDashboard');
         assert.ok(adminJs.includes('updateOrderProductionSchedule'), 'admin.js must implement updateOrderProductionSchedule');
         assert.ok(adminJs.includes('loadRawMaterials'), 'admin.js must implement loadRawMaterials');
+        const acctRoleBlock = adminJs.substring(adminJs.indexOf("role === 'ACCOUNTING'"), adminJs.indexOf("role === 'CEO'"));
+        assert.ok(acctRoleBlock.includes("showTab('clients')"), 'Senior Accountant must have Clients tab visible');
+        assert.ok(acctRoleBlock.includes("showTab('products')"), 'Senior Accountant must have Cosmetic Products tab visible');
 
         // 2. Test Production Supervisor Interactive Sales Order Priority & "Active Today in Factory" API
         const samplePo = db.prepare("SELECT id, po_number FROM purchase_orders WHERE status NOT IN ('CANCELLED', 'VOIDED') LIMIT 1").get();

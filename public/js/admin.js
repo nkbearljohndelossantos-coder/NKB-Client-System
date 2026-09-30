@@ -219,6 +219,15 @@ function applyRoleBasedUI() {
         if (grp) grp.style.display = 'none';
     };
 
+    const showTab = (id) => {
+        const btn = document.getElementById(`tab-btn-${id}`);
+        if (btn) btn.style.display = '';
+    };
+    const showGroup = (groupId) => {
+        const grp = document.getElementById(`sidebar-group-${groupId}`);
+        if (grp) grp.style.display = '';
+    };
+
     // Rule 1: In ALL accounts EXCEPT Super Admin and Executives (CEO & COO), remove Lab & Formulations and Management
     const isSuperOrExecutive = ['SUPER_ADMIN', 'ADMIN', 'CEO', 'COO'].includes(role);
     if (!isSuperOrExecutive) {
@@ -330,17 +339,18 @@ function applyRoleBasedUI() {
         hideTab('audit');
         hideTab('it-management');
     } else if (role === 'ACCOUNTING') {
-        // Senior Accountant: remove Requisitions, IT Management, Lab & Formulations, and Management
-        hideGroup('management');
+        // Senior Accountant: remove Requisitions, IT Management, and Lab & Formulations.
+        // Keep Clients and Cosmetic Products visible for Senior Accountant, while hiding Staff & Roles, Reports, Audit Trails, Developer API, and IT Management.
         hideGroup('lab');
+        showGroup('management');
+        showTab('clients');
+        showTab('products');
         hideTab('purchasing');
         hideTab('raw-materials');
         hideTab('it-management');
         hideTab('job-orders');
         hideTab('production');
         // Deliveries tab is visible for Accounting to record client receiving and issue invoices
-        hideTab('clients');
-        hideTab('products');
         hideTab('users');
         hideTab('reports');
         hideTab('audit');
