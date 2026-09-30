@@ -1009,17 +1009,30 @@ router.post('/:id/inventory-confirm', authenticateToken, requireRoles('INVENTORY
  * POST /api/orders/:id/request-supplies
  * Inventory submits supply request to Purchasing Department for missing raw materials
  */
-router.post('/:id/request-supplies', authenticateToken, requireRoles('INVENTORY', 'ADMIN', 'IT_ADMIN', 'SUPER_ADMIN'), (req, res) => {
+router.post('/:id/request-supplies', authenticateToken, requireRoles('INVENTORY', 'PURCHASING', 'ADMIN', 'IT_ADMIN', 'SUPER_ADMIN'), (req, res) => {
     const { id } = req.params;
-    const { materials_needed, urgency, target_date, notes, affected_products } = req.body || {};
+    const { materials_needed, urgency, target_date, notes, affected_products, bom_items } = req.body || {};
 
     const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
     if (!po) {
         return res.status(404).json({ success: false, error: 'Purchase Order not found.' });
     }
 
-    if (!materials_needed || !materials_needed.trim()) {
-        return res.status(400).json({ success: false, error: 'Please describe the raw materials/supplies needed for the Purchasing Department.' });
+    const parsedBomItems = Array.isArray(bom_items)
+        ? bom_items.filter(it => it && (it.material_name || it.material_code) && Number(it.requested_qty) > 0)
+        : [];
+
+    let finalMaterialsNeeded = (materials_needed || '').trim();
+    if (!finalMaterialsNeeded && parsedBomItems.length > 0) {
+        finalMaterialsNeeded = parsedBomItems.map(it => {
+            const codePart = it.material_code && it.material_code !== 'None' ? `[${it.material_code}] ` : '';
+            const supPart = it.supplier && it.supplier !== 'None' ? ` (Supplier: ${it.supplier})` : '';
+            return `• ${codePart}${it.material_name || 'Raw Material'}: ${it.requested_qty} ${it.unit || 'kg'}${supPart}`;
+        }).join('\n');
+    }
+
+    if (!finalMaterialsNeeded) {
+        return res.status(400).json({ success: false, error: 'Please select Bill of Materials (BOM) items or describe the raw materials needed.' });
     }
 
     const reqId = uuidv4();
@@ -1027,19 +1040,21 @@ router.post('/:id/request-supplies', authenticateToken, requireRoles('INVENTORY'
         affected_products ? `Affected Products: ${affected_products}` : null,
         notes ? `Notes: ${notes}` : null
     ].filter(Boolean).join('\n');
+    const bomJson = parsedBomItems.length > 0 ? JSON.stringify(parsedBomItems) : null;
 
     db.prepare(`
         INSERT INTO supply_requests
-        (id, po_id, requested_by, department, materials_needed, urgency, target_date, notes, status, created_at, updated_at)
-        VALUES (?, ?, ?, 'Purchasing Department', ?, ?, ?, ?, 'SUBMITTED', datetime('now', 'localtime'), datetime('now', 'localtime'))
+        (id, po_id, requested_by, department, materials_needed, urgency, target_date, notes, bom_items, status, created_at, updated_at)
+        VALUES (?, ?, ?, 'Purchasing Department', ?, ?, ?, ?, ?, 'SUBMITTED', datetime('now', 'localtime'), datetime('now', 'localtime'))
     `).run(
         reqId,
         id,
         req.user.id,
-        materials_needed.trim(),
+        finalMaterialsNeeded,
         urgency || 'NORMAL',
         target_date || null,
-        formattedNotes || null
+        formattedNotes || null,
+        bomJson
     );
 
     // Update PO raw materials status
@@ -1057,7 +1072,7 @@ router.post('/:id/request-supplies', authenticateToken, requireRoles('INVENTORY'
         action: 'CREATE_SUPPLY_REQUEST',
         entityType: 'PURCHASE_ORDER',
         entityId: po.po_number,
-        details: { poId: id, requestId: reqId, materials: materials_needed.trim(), urgency }
+        details: { poId: id, requestId: reqId, materials: finalMaterialsNeeded, bomCount: parsedBomItems.length, urgency }
     });
 
     const createdReq = db.prepare('SELECT * FROM supply_requests WHERE id = ?').get(reqId);

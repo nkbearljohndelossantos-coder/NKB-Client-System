@@ -3278,6 +3278,54 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.ok(Array.isArray(supFilterRes.body.summary.suppliers), 'Summary must include distinct suppliers list');
         assert.ok(supFilterRes.body.summary.suppliers.includes('Korea BioActives Co.'), 'Suppliers list must include created supplier');
 
+        // Verify Inventory Officer can submit a Bill of Materials (BOM) raw material requisition directly
+        const bomReqRes = await request(app)
+            .post('/api/supply-requests')
+            .set('Authorization', `Bearer ${invToken}`)
+            .send({
+                po_id: 'WAREHOUSE-STOCK',
+                urgency: 'HIGH',
+                target_date: '2026-10-15',
+                notes: 'Urgent replenishment for Peeling Lotion & Cosmetics raw materials',
+                bom_items: [
+                    {
+                        raw_material_id: createdRmId,
+                        material_code: 'RM-TEST-PDRN-99',
+                        material_name: 'Sodium DNA (Salmon PDRN Extract 99%)',
+                        category: 'Active Ingredients',
+                        current_stock: 3.5,
+                        requested_qty: 25,
+                        unit: 'kg',
+                        supplier: 'Korea BioActives Co.'
+                    },
+                    {
+                        raw_material_id: 'rm-final-peel-1',
+                        material_code: 'L001',
+                        material_name: 'ETHYL ALCOHOL',
+                        category: 'Peeling Lotion',
+                        current_stock: 0,
+                        requested_qty: 50,
+                        unit: 'kg',
+                        supplier: 'None'
+                    }
+                ]
+            });
+        assert.strictEqual(bomReqRes.status, 201);
+        assert.strictEqual(bomReqRes.body.success, true);
+        assert.ok(bomReqRes.body.data.id, 'BOM supply requisition must return an ID');
+
+        // Verify GET /api/supply-requests returns the structured bom_items JSON and WH-STOCK-BOM reference
+        const getReqsRes = await request(app)
+            .get(`/api/supply-requests/${bomReqRes.body.data.id}`)
+            .set('Authorization', `Bearer ${invToken}`);
+        assert.strictEqual(getReqsRes.status, 200);
+        assert.strictEqual(getReqsRes.body.data.po_number, 'WH-STOCK-BOM');
+        const storedBom = JSON.parse(getReqsRes.body.data.bom_items || '[]');
+        assert.strictEqual(storedBom.length, 2, 'Stored BOM must contain 2 raw material items');
+        assert.strictEqual(storedBom[1].material_code, 'L001');
+
+        db.prepare('DELETE FROM supply_requests WHERE id = ?').run(bomReqRes.body.data.id);
+
         // Clean up test raw material
         const delRmRes = await request(app)
             .delete(`/api/raw-materials/${createdRmId}`)

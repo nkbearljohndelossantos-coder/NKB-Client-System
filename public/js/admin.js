@@ -1164,48 +1164,398 @@ async function confirmInventoryPO(id, poNumber) {
     }
 }
 
-async function openSupplyRequestModal(poId, poNumber, companyName) {
+let srBomItems = [];
+
+function renderSrBomTable() {
+    const tbody = document.getElementById('sr-bom-table-body');
+    const countBadge = document.getElementById('sr-bom-count-badge');
+    if (!tbody) return;
+
+    if (countBadge) {
+        const checkedCount = srBomItems.filter(it => it.checked !== false).length;
+        countBadge.textContent = `${checkedCount} Material${checkedCount === 1 ? '' : 's'} Selected`;
+    }
+
+    if (!srBomItems || srBomItems.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" class="py-6 text-center text-slate-400 text-xs font-medium">
+                    No raw materials added to Bill of Materials yet. Pick from Warehouse Inventory, load a Product Formulation BOM above, or click <b>+ Custom Row</b>.
+                </td>
+            </tr>
+        `;
+        syncSrBomToMaterialsTextarea();
+        return;
+    }
+
+    tbody.innerHTML = srBomItems.map((it, idx) => {
+        const stockNum = Number(it.current_stock || 0);
+        const stockBadge = stockNum <= 0
+            ? `<span class="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-200 font-mono text-[10px] font-black">${stockNum} ${it.unit || 'kg'}</span>`
+            : `<span class="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono text-[10px] font-bold">${stockNum} ${it.unit || 'kg'}</span>`;
+
+        return `
+            <tr class="border-b border-slate-100 hover:bg-amber-50/40 transition ${it.checked === false ? 'opacity-50 bg-slate-50' : 'bg-white'}">
+                <td class="py-2 px-2.5 text-center">
+                    <input type="checkbox" ${it.checked !== false ? 'checked' : ''} onchange="updateSrBomItem(${idx}, 'checked', this.checked)" class="w-3.5 h-3.5 accent-amber-600 rounded cursor-pointer">
+                </td>
+                <td class="py-2 px-2.5">
+                    <input type="text" value="${(it.material_code || 'None').replace(/"/g, '&quot;')}" onchange="updateSrBomItem(${idx}, 'material_code', this.value)"
+                        class="w-20 px-1.5 py-1 border border-slate-200 rounded-lg font-mono font-black text-[11px] text-slate-900 bg-slate-50 focus:bg-white">
+                </td>
+                <td class="py-2 px-2.5">
+                    <input type="text" value="${(it.material_name || '').replace(/"/g, '&quot;')}" onchange="updateSrBomItem(${idx}, 'material_name', this.value)" placeholder="Raw Material Name"
+                        class="w-full min-w-[150px] px-2 py-1 border border-slate-200 rounded-lg font-bold text-xs text-slate-900 bg-white focus:ring-1 focus:ring-amber-500">
+                </td>
+                <td class="py-2 px-2.5">
+                    <span class="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold text-[10px] whitespace-nowrap">${it.category || it.phase || 'Cosmetics'}</span>
+                </td>
+                <td class="py-2 px-2.5 text-right whitespace-nowrap">
+                    ${stockBadge}
+                </td>
+                <td class="py-2 px-2.5">
+                    <div class="flex items-center gap-1 justify-end">
+                        <input type="number" step="0.01" min="0.01" value="${it.requested_qty || 1}" oninput="updateSrBomItem(${idx}, 'requested_qty', this.value)"
+                            class="w-20 px-2 py-1 border border-amber-300 rounded-lg font-black text-xs text-right text-slate-950 bg-amber-50/40 focus:bg-white focus:ring-1 focus:ring-amber-500">
+                        <select onchange="updateSrBomItem(${idx}, 'unit', this.value)" class="px-1.5 py-1 border border-slate-200 rounded-lg font-bold text-[11px] text-slate-700 bg-slate-50">
+                            ${['kg', 'g', 'L', 'mL', 'pcs', 'boxes', 'drums'].map(u => `<option value="${u}" ${(it.unit || 'kg') === u ? 'selected' : ''}>${u}</option>`).join('')}
+                        </select>
+                    </div>
+                </td>
+                <td class="py-2 px-2 text-center">
+                    <button type="button" onclick="removeSrBomRow(${idx})" class="w-6 h-6 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-xs inline-flex items-center justify-center transition cursor-pointer" title="Remove row">✕</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    syncSrBomToMaterialsTextarea();
+}
+
+function updateSrBomItem(idx, field, value) {
+    if (!srBomItems[idx]) return;
+    if (field === 'requested_qty') {
+        srBomItems[idx].requested_qty = Number(value) || 0;
+    } else if (field === 'checked') {
+        srBomItems[idx].checked = Boolean(value);
+    } else {
+        srBomItems[idx][field] = value;
+    }
+    if (field === 'checked') {
+        renderSrBomTable();
+    } else {
+        syncSrBomToMaterialsTextarea();
+    }
+}
+
+function removeSrBomRow(idx) {
+    srBomItems.splice(idx, 1);
+    renderSrBomTable();
+}
+
+function syncSrBomToMaterialsTextarea() {
+    const textarea = document.getElementById('sr-materials-needed');
+    if (!textarea) return;
+    const activeItems = srBomItems.filter(it => it.checked !== false && (it.material_name || '').trim() !== '');
+    if (activeItems.length === 0) return;
+
+    const lines = activeItems.map((it, i) => {
+        const codeStr = it.material_code && it.material_code !== 'None' ? `[${it.material_code}] ` : '';
+        const catStr = it.category || it.phase ? ` (${it.category || it.phase})` : '';
+        return `${i + 1}. ${codeStr}${it.material_name}${catStr} — ${it.requested_qty || 0} ${it.unit || 'kg'}`;
+    });
+    textarea.value = `BILL OF MATERIALS (BOM) REQUISITION:\n` + lines.join('\n');
+}
+
+function addRawMaterialToSrBom() {
+    const selectEl = document.getElementById('sr-rm-inventory-picker');
+    const qtyEl = document.getElementById('sr-rm-picker-qty');
+    if (!selectEl || !selectEl.value) {
+        if (NKB.showToast) NKB.showToast('Please select a raw material from the dropdown first.', 'warning');
+        return;
+    }
+    const rmId = selectEl.value;
+    const reqQty = qtyEl ? (Number(qtyEl.value) || 10) : 10;
+    const rm = (typeof cachedRawMaterials !== 'undefined' ? cachedRawMaterials : []).find(r => r.id === rmId);
+    if (!rm) return;
+
+    const existingIdx = srBomItems.findIndex(x => x.raw_material_id === rm.id || (x.material_code === rm.material_code && x.material_name === rm.material_name));
+    if (existingIdx >= 0) {
+        srBomItems[existingIdx].requested_qty = Number((Number(srBomItems[existingIdx].requested_qty || 0) + reqQty).toFixed(2));
+        srBomItems[existingIdx].checked = true;
+    } else {
+        srBomItems.push({
+            checked: true,
+            raw_material_id: rm.id,
+            material_code: rm.material_code || 'None',
+            material_name: rm.material_name,
+            category: rm.category || 'Cosmetics',
+            current_stock: Number(rm.current_stock || 0),
+            requested_qty: reqQty,
+            unit: rm.unit || 'kg',
+            supplier: rm.supplier || 'None'
+        });
+    }
+    renderSrBomTable();
+}
+
+function addCustomSrBomRow() {
+    srBomItems.push({
+        checked: true,
+        raw_material_id: null,
+        material_code: 'CUSTOM',
+        material_name: '',
+        category: 'Cosmetics',
+        current_stock: 0,
+        requested_qty: 10,
+        unit: 'kg',
+        supplier: 'None'
+    });
+    renderSrBomTable();
+}
+
+function addOutOfStockRawMaterialsToSrBom() {
+    const list = typeof cachedRawMaterials !== 'undefined' ? cachedRawMaterials : [];
+    const depleted = list.filter(r => Number(r.current_stock || 0) <= 0).slice(0, 25);
+    if (depleted.length === 0) {
+        if (NKB.showToast) NKB.showToast('No out-of-stock (0 kg) raw materials found.', 'info');
+        return;
+    }
+    let added = 0;
+    depleted.forEach(rm => {
+        const exists = srBomItems.some(x => x.raw_material_id === rm.id || (x.material_code === rm.material_code && x.material_name === rm.material_name));
+        if (!exists) {
+            srBomItems.push({
+                checked: true,
+                raw_material_id: rm.id,
+                material_code: rm.material_code || 'None',
+                material_name: rm.material_name,
+                category: rm.category || 'Cosmetics',
+                current_stock: Number(rm.current_stock || 0),
+                requested_qty: 10,
+                unit: rm.unit || 'kg',
+                supplier: rm.supplier || 'None'
+            });
+            added++;
+        }
+    });
+    renderSrBomTable();
+    if (NKB.showToast) NKB.showToast(`Added ${added} Red-Zone (0 stock) raw materials to Bill of Materials.`, 'success');
+}
+
+async function loadFormulationBomIntoRequisition() {
+    const formSelect = document.getElementById('sr-formulation-picker');
+    const batchQtyEl = document.getElementById('sr-formulation-batch-qty');
+    if (!formSelect || !formSelect.value) {
+        if (NKB.showToast) NKB.showToast('Select a Product Formulation first to load its Bill of Materials.', 'warning');
+        return;
+    }
+    const formId = formSelect.value;
+    const targetUnits = batchQtyEl ? (Number(batchQtyEl.value) || 1000) : 1000;
+
+    const res = await NKB.api(`/api/formulations/${formId}`);
+    if (!res.success || !res.data) {
+        if (NKB.showToast) NKB.showToast('Failed to load formulation BOM.', 'error');
+        return;
+    }
+
+    const f = res.data;
+    const baseBatchKg = Number(f.standard_batch_size_kg || 100);
+    const unitWeightGrams = Number(f.unit_weight_grams || 50);
+    const totalBatchKgNeeded = (targetUnits * unitWeightGrams) / 1000;
+    const scaleFactor = baseBatchKg > 0 ? (totalBatchKgNeeded / baseBatchKg) : 1;
+
+    const ingredients = f.ingredients || [];
+    if (ingredients.length === 0) {
+        if (NKB.showToast) NKB.showToast('This formulation has no ingredients defined.', 'warning');
+        return;
+    }
+
+    const rmList = typeof cachedRawMaterials !== 'undefined' ? cachedRawMaterials : [];
+    ingredients.forEach(ing => {
+        const rawName = ing.raw_material_name || ing.ingredient_name || 'Raw Material';
+        const matchedRm = rmList.find(r =>
+            (ing.raw_material_id && r.id === ing.raw_material_id) ||
+            (r.material_name && r.material_name.toLowerCase() === rawName.toLowerCase())
+        );
+        const baseQtyKg = Number(ing.grams_per_batch ? (ing.grams_per_batch / 1000) : (ing.percentage || 1));
+        const reqKg = Number(Math.max(0.1, baseQtyKg * scaleFactor).toFixed(2));
+
+        srBomItems.push({
+            checked: true,
+            raw_material_id: matchedRm ? matchedRm.id : null,
+            material_code: matchedRm ? matchedRm.material_code : (ing.phase ? `PH-${ing.phase}` : 'BOM'),
+            material_name: rawName,
+            category: matchedRm ? matchedRm.category : (ing.phase ? `Phase ${ing.phase} (${ing.function_role || 'Active'})` : 'Formulation BOM'),
+            current_stock: matchedRm ? Number(matchedRm.current_stock || 0) : 0,
+            requested_qty: reqKg,
+            unit: matchedRm ? (matchedRm.unit || 'kg') : 'kg',
+            supplier: matchedRm ? (matchedRm.supplier || 'None') : 'None'
+        });
+    });
+
+    renderSrBomTable();
+    if (NKB.showToast) NKB.showToast(`Loaded ${ingredients.length} BOM ingredients from ${f.product_name} (${targetUnits} pcs batch)!`, 'success');
+}
+
+async function handleSrPoChange(selectedPoId) {
+    if (!selectedPoId || selectedPoId === 'WAREHOUSE-STOCK') return;
+    const breakdownRes = await NKB.api(`/api/formulations/orders/${selectedPoId}/breakdown`);
+    if (breakdownRes && breakdownRes.success && breakdownRes.data && Array.isArray(breakdownRes.data.aggregated_raw_materials)) {
+        const agg = breakdownRes.data.aggregated_raw_materials;
+        if (agg.length > 0) {
+            const rmList = typeof cachedRawMaterials !== 'undefined' ? cachedRawMaterials : [];
+            agg.forEach(item => {
+                const matchedRm = rmList.find(r => r.material_name && r.material_name.toLowerCase() === (item.raw_material_name || '').toLowerCase());
+                const reqKg = Number(Math.max(0.1, Number(item.shortage_kg > 0 ? item.shortage_kg : item.total_required_kg || 1)).toFixed(2));
+                srBomItems.push({
+                    checked: true,
+                    raw_material_id: matchedRm ? matchedRm.id : null,
+                    material_code: matchedRm ? matchedRm.material_code : 'PO-BOM',
+                    material_name: item.raw_material_name,
+                    category: matchedRm ? matchedRm.category : `Phase ${item.phase || 'A'}`,
+                    current_stock: matchedRm ? Number(matchedRm.current_stock || 0) : Number(item.warehouse_stock_kg || 0),
+                    requested_qty: reqKg,
+                    unit: 'kg',
+                    supplier: matchedRm ? (matchedRm.supplier || 'None') : 'None'
+                });
+            });
+            renderSrBomTable();
+            if (NKB.showToast) NKB.showToast(`Loaded ${agg.length} BOM raw materials from PO #${breakdownRes.data.po_number}!`, 'success');
+        }
+    }
+}
+
+async function openSupplyRequestModal(poId = null, poNumber = null, companyName = null, preselectedRmId = null) {
     const root = document.getElementById('modals-root');
     if (!root) return;
 
-    // Fetch PO details to get ordered items
-    const res = await NKB.api(`/api/orders/${poId}`);
-    const po = (res.success && res.data) ? res.data : null;
-    const items = po?.items || [];
+    srBomItems = [];
+
+    // Ensure Warehouse Raw Materials are loaded so the BOM inventory selector is populated
+    if (typeof cachedRawMaterials === 'undefined' || !cachedRawMaterials || cachedRawMaterials.length === 0) {
+        const rmRes = await NKB.api('/api/raw-materials');
+        if (rmRes && rmRes.success && Array.isArray(rmRes.data)) {
+            cachedRawMaterials = rmRes.data;
+        }
+    }
+
+    // Load formulations list for the BOM Recipe loader
+    const formRes = await NKB.api('/api/formulations');
+    const formulations = (formRes && formRes.success && Array.isArray(formRes.data)) ? formRes.data : [];
+
+    // Load PO details or active PO list if opened standalone via shortcut [B]
+    let po = null;
+    let items = [];
+    let availableOrders = [];
+
+    if (poId && poId !== 'WAREHOUSE-STOCK') {
+        const res = await NKB.api(`/api/orders/${poId}`);
+        po = (res.success && res.data) ? res.data : null;
+        items = po?.items || [];
+    } else {
+        const ordersRes = await NKB.api('/api/orders');
+        if (ordersRes && ordersRes.success && Array.isArray(ordersRes.data)) {
+            availableOrders = ordersRes.data.filter(o => o.overall_status !== 'DELIVERED' && o.overall_status !== 'CANCELLED');
+        }
+    }
+
+    // If triggered from a selected raw material row or shortcut [B], pre-populate it in the BOM
+    if (preselectedRmId && typeof cachedRawMaterials !== 'undefined') {
+        const preRm = cachedRawMaterials.find(r => r.id === preselectedRmId);
+        if (preRm) {
+            srBomItems.push({
+                checked: true,
+                raw_material_id: preRm.id,
+                material_code: preRm.material_code || 'None',
+                material_name: preRm.material_name,
+                category: preRm.category || 'Cosmetics',
+                current_stock: Number(preRm.current_stock || 0),
+                requested_qty: 25,
+                unit: preRm.unit || 'kg',
+                supplier: preRm.supplier || 'None'
+            });
+        }
+    }
+
+    // Also auto-load PO BOM breakdown if opened for a specific PO
+    if (poId && poId !== 'WAREHOUSE-STOCK') {
+        const breakdownRes = await NKB.api(`/api/formulations/orders/${poId}/breakdown`);
+        if (breakdownRes && breakdownRes.success && breakdownRes.data && Array.isArray(breakdownRes.data.aggregated_raw_materials)) {
+            const rmList = typeof cachedRawMaterials !== 'undefined' ? cachedRawMaterials : [];
+            breakdownRes.data.aggregated_raw_materials.forEach(item => {
+                const matchedRm = rmList.find(r => r.material_name && r.material_name.toLowerCase() === (item.raw_material_name || '').toLowerCase());
+                const reqKg = Number(Math.max(0.1, Number(item.shortage_kg > 0 ? item.shortage_kg : item.total_required_kg || 1)).toFixed(2));
+                srBomItems.push({
+                    checked: true,
+                    raw_material_id: matchedRm ? matchedRm.id : null,
+                    material_code: matchedRm ? matchedRm.material_code : 'PO-BOM',
+                    material_name: item.raw_material_name,
+                    category: matchedRm ? matchedRm.category : `Phase ${item.phase || 'A'}`,
+                    current_stock: matchedRm ? Number(matchedRm.current_stock || 0) : Number(item.warehouse_stock_kg || 0),
+                    requested_qty: reqKg,
+                    unit: 'kg',
+                    supplier: matchedRm ? (matchedRm.supplier || 'None') : 'None'
+                });
+            });
+        }
+    }
+
+    const rmOptionsHtml = (typeof cachedRawMaterials !== 'undefined' ? cachedRawMaterials : []).map(rm =>
+        `<option value="${rm.id}" ${preselectedRmId === rm.id ? 'selected' : ''}>[${rm.material_code}] ${rm.material_name} — (${rm.category} • Stock: ${rm.current_stock} ${rm.unit})</option>`
+    ).join('');
 
     root.innerHTML = `
-        <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-            <div class="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 my-auto">
+        <div id="modal-supply-requisition-bom" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+            <div class="bg-white rounded-3xl max-w-4xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 my-auto max-h-[92vh] overflow-y-auto">
                 <div class="flex justify-between items-center border-b border-slate-100 pb-3">
-                    <div class="flex items-center gap-2">
-                        <div class="w-8 h-8 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 text-base font-bold">📋</div>
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-9 h-9 rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-800 text-lg font-bold">📋</div>
                         <div>
-                            <h3 class="text-base font-extrabold text-slate-900">Supply Requisition Form</h3>
-                            <p class="text-[11px] text-slate-500">Request missing raw materials/supplies to Purchasing Department</p>
+                            <div class="flex items-center gap-2">
+                                <h3 class="text-base font-extrabold text-slate-900">Supply Requisition & Bill of Materials (BOM) Form</h3>
+                                <span class="px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-800 font-mono text-[10px] font-black">Shortcut: B</span>
+                            </div>
+                            <p class="text-[11px] text-slate-500">Build a structured Raw Material Bill of Materials (BOM) for Purchasing Department procurement</p>
                         </div>
                     </div>
-                    <button onclick="closeModal()" class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 font-bold flex items-center justify-center transition">✕</button>
+                    <button onclick="closeModal()" class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 font-bold flex items-center justify-center transition cursor-pointer">✕</button>
                 </div>
 
-                <div class="p-3 bg-amber-50/70 border border-amber-200 rounded-2xl text-xs space-y-1">
-                    <div class="flex justify-between">
+                ${poId && poId !== 'WAREHOUSE-STOCK' ? `
+                <div class="p-3 bg-amber-50/70 border border-amber-200 rounded-2xl text-xs flex flex-wrap justify-between items-center gap-2">
+                    <div>
                         <span class="text-amber-800 font-bold">PO Reference:</span>
-                        <span class="font-mono font-extrabold text-amber-950">${poNumber}</span>
+                        <span class="font-mono font-extrabold text-amber-950 ml-1">${poNumber || po?.po_number || poId}</span>
                     </div>
-                    <div class="flex justify-between">
+                    <div>
                         <span class="text-amber-800 font-bold">Client:</span>
-                        <span class="font-bold text-amber-950">${companyName}</span>
+                        <span class="font-bold text-amber-950 ml-1">${companyName || po?.company_name || 'Client Order'}</span>
                     </div>
                 </div>
+                ` : `
+                <div class="p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                    <div>
+                        <label class="block text-slate-700 font-extrabold mb-1">Requisition Allocation Target:</label>
+                        <select id="sr-target-po-select" onchange="handleSrPoChange(this.value)" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white font-bold text-slate-900">
+                            <option value="WAREHOUSE-STOCK">🏭 Warehouse Raw Material Stock Replenishment (General BOM)</option>
+                            ${availableOrders.map(o => `<option value="${o.id}">${o.po_number} — ${o.company_name || 'Client'} (${o.overall_status})</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="text-[11px] text-slate-500">
+                        Select <strong class="text-slate-700">Warehouse Stock Replenishment</strong> to request raw materials for Peeling Lotion & Cosmetics inventory, or link directly to an active Client Purchase Order.
+                    </div>
+                </div>
+                `}
 
-                <form onsubmit="submitSupplyRequest(event, '${poId}', '${poNumber}')" class="space-y-3.5 text-xs">
+                <form onsubmit="submitSupplyRequest(event, '${poId || ''}', '${poNumber || ''}')" class="space-y-4 text-xs">
                     ${items.length > 0 ? `
                         <div>
                             <label class="block text-slate-700 mb-1.5 font-bold">Select Ordered Products Needing Supplies:</label>
-                            <div class="max-h-32 overflow-y-auto border border-slate-200 rounded-xl p-2 space-y-1.5 bg-slate-50">
-                                ${items.map((it, idx) => `
+                            <div class="max-h-28 overflow-y-auto border border-slate-200 rounded-xl p-2 space-y-1.5 bg-slate-50">
+                                ${items.map(it => `
                                     <label class="flex items-center gap-2 text-[11px] hover:bg-white p-1 rounded-lg transition cursor-pointer">
-                                        <input type="checkbox" name="sr_product" value="${it.product_name} (${it.sku})" class="rounded text-amber-600 focus:ring-amber-500">
+                                        <input type="checkbox" name="sr_product" value="${it.product_name} (${it.sku})" checked class="rounded text-amber-600 focus:ring-amber-500">
                                         <span class="font-black text-slate-950">${it.product_name}</span>
                                         <span class="text-[10px] font-mono text-indigo-900 font-bold bg-indigo-50 border border-indigo-200 px-1 rounded">${it.sku}</span>
                                         <span class="text-slate-900 ml-auto font-black font-mono">${NKB.formatNumber(it.target_quantity)} pcs</span>
@@ -1215,9 +1565,87 @@ async function openSupplyRequestModal(poId, poNumber, companyName) {
                         </div>
                     ` : ''}
 
+                    <!-- BILL OF MATERIALS (BOM) BUILDER -->
+                    <div class="p-4 rounded-2xl border-2 border-amber-200 bg-amber-50/30 space-y-3">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <div class="flex items-center gap-2">
+                                <span class="text-sm font-black text-slate-900">🧪 Bill of Materials (BOM) Raw Material Selector</span>
+                                <span id="sr-bom-count-badge" class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 font-black text-[10px]">0 Materials Selected</span>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-1.5">
+                                <button type="button" onclick="addOutOfStockRawMaterialsToSrBom()" class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg font-bold text-[11px] transition cursor-pointer">
+                                    🚨 + Add Red-Zone (0 Stock)
+                                </button>
+                                <button type="button" onclick="addCustomSrBomRow()" class="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-lg font-bold text-[11px] transition cursor-pointer">
+                                    ➕ Custom BOM Row
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Picker Row 1: Warehouse Raw Materials Inventory (Peeling Lotion & Cosmetics) -->
+                        <div class="grid grid-cols-1 md:grid-cols-12 gap-2 items-end bg-white p-2.5 rounded-xl border border-slate-200">
+                            <div class="md:col-span-7">
+                                <label class="block text-[10px] font-extrabold uppercase tracking-wider text-slate-500 mb-1">1. Pick from Warehouse Raw Materials (Peeling Lotion & Cosmetics)</label>
+                                <select id="sr-rm-inventory-picker" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg font-bold text-xs text-slate-900 bg-slate-50 focus:bg-white">
+                                    <option value="">-- Select Raw Material (${typeof cachedRawMaterials !== 'undefined' ? cachedRawMaterials.length : 0} items) --</option>
+                                    ${rmOptionsHtml}
+                                </select>
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-[10px] font-extrabold uppercase tracking-wider text-slate-500 mb-1">Req. Qty</label>
+                                <input type="number" id="sr-rm-picker-qty" step="0.01" min="0.01" value="25" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg font-black text-xs text-slate-900">
+                            </div>
+                            <div class="md:col-span-3">
+                                <button type="button" onclick="addRawMaterialToSrBom()" class="w-full py-1.5 px-3 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-black text-xs shadow-xs transition cursor-pointer">
+                                    + Add to BOM
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Picker Row 2: Load from Product Formulation Recipe BOM -->
+                        <div class="grid grid-cols-1 md:grid-cols-12 gap-2 items-end bg-white p-2.5 rounded-xl border border-slate-200">
+                            <div class="md:col-span-7">
+                                <label class="block text-[10px] font-extrabold uppercase tracking-wider text-indigo-600 mb-1">2. Or Auto-Calculate BOM from Product Formulation Recipe</label>
+                                <select id="sr-formulation-picker" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg font-bold text-xs text-slate-900 bg-slate-50 focus:bg-white">
+                                    <option value="">-- Select Product Formulation to Load Ingredients --</option>
+                                    ${formulations.map(f => `<option value="${f.id}">${f.product_name} (${f.product_code || f.category || 'Formula'}) — ${f.ingredient_count || ''} ingredients</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-[10px] font-extrabold uppercase tracking-wider text-slate-500 mb-1">Target Units (pcs)</label>
+                                <input type="number" id="sr-formulation-batch-qty" step="1" min="1" value="1000" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg font-black text-xs text-slate-900">
+                            </div>
+                            <div class="md:col-span-3">
+                                <button type="button" onclick="loadFormulationBomIntoRequisition()" class="w-full py-1.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-black text-xs shadow-xs transition cursor-pointer">
+                                    🧪 Load Formula BOM
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Interactive BOM Table -->
+                        <div class="border border-slate-200 rounded-xl overflow-hidden bg-white">
+                            <div class="max-h-56 overflow-y-auto">
+                                <table class="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr class="bg-slate-900 text-white text-[10px] uppercase tracking-wider">
+                                            <th class="py-2 px-2.5 text-center w-8">✓</th>
+                                            <th class="py-2 px-2.5">Code</th>
+                                            <th class="py-2 px-2.5">Raw Material Name</th>
+                                            <th class="py-2 px-2.5">Section / Phase</th>
+                                            <th class="py-2 px-2.5 text-right">Whse Stock</th>
+                                            <th class="py-2 px-2.5 text-right">Qty to Request</th>
+                                            <th class="py-2 px-2 text-center w-8"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="sr-bom-table-body"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
                     <div>
-                        <label class="block text-slate-700 mb-1 font-bold">Raw Materials & Supplies Needed <span class="text-rose-500">*</span></label>
-                        <textarea id="sr-materials-needed" rows="3" required placeholder="Specify raw materials needed by Purchasing Dept (e.g. 5,000 pcs 50ml Amber Glass Dropper Bottles, 25kg Niacinamide Raw Powder, 5,000 pcs Gold Matte Pump Caps)..." class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition font-bold text-slate-900"></textarea>
+                        <label class="block text-slate-700 mb-1 font-bold">Requisition Summary / Raw Materials & Supplies Needed <span class="text-rose-500">*</span></label>
+                        <textarea id="sr-materials-needed" rows="3" required placeholder="Auto-populated from the Bill of Materials (BOM) above, or type additional packaging/raw material requirements..." class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition font-bold text-slate-900"></textarea>
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1237,19 +1665,21 @@ async function openSupplyRequestModal(poId, poNumber, companyName) {
 
                     <div>
                         <label class="block text-slate-700 mb-1 font-bold">Additional Notes / Preferred Supplier</label>
-                        <textarea id="sr-notes" rows="2" placeholder="Optional notes for Purchasing Department (e.g. check supplier X for available stock, rush courier)..." class="w-full px-3.5 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white text-slate-800"></textarea>
+                        <textarea id="sr-notes" rows="2" placeholder="Optional notes for Purchasing Department (e.g. check supplier for available stock, rush courier)..." class="w-full px-3.5 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white text-slate-800"></textarea>
                     </div>
 
                     <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
-                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition">Cancel</button>
-                        <button type="submit" id="btn-submit-supply-request" class="px-5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-bold shadow-lg shadow-amber-600/20 transition flex items-center gap-1.5">
-                            <span>📤</span><span>Submit to Purchasing Department</span>
+                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition cursor-pointer">Cancel (Esc)</button>
+                        <button type="submit" id="btn-submit-supply-request" class="px-5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-bold shadow-lg shadow-amber-600/20 transition flex items-center gap-1.5 cursor-pointer">
+                            <span>📤</span><span>Submit BOM Requisition to Purchasing</span>
                         </button>
                     </div>
                 </form>
             </div>
         </div>
     `;
+
+    renderSrBomTable();
 }
 
 async function submitSupplyRequest(e, poId, poNumber) {
@@ -1257,8 +1687,11 @@ async function submitSupplyRequest(e, poId, poNumber) {
     const btn = document.getElementById('btn-submit-supply-request');
     if (btn) {
         btn.disabled = true;
-        btn.innerText = 'Submitting Requisition...';
+        btn.innerText = 'Submitting BOM Requisition...';
     }
+
+    const selectedTargetPo = document.getElementById('sr-target-po-select')?.value;
+    const effectivePoId = (poId && poId !== '') ? poId : (selectedTargetPo || 'WAREHOUSE-STOCK');
 
     const checkedBoxes = Array.from(document.querySelectorAll('input[name="sr_product"]:checked'));
     const affectedProducts = checkedBoxes.map(cb => cb.value).join(', ');
@@ -1267,11 +1700,30 @@ async function submitSupplyRequest(e, poId, poNumber) {
     const targetDate = document.getElementById('sr-target-date')?.value || '';
     const notes = document.getElementById('sr-notes')?.value || '';
 
+    const activeBomItems = (srBomItems || [])
+        .filter(it => it.checked !== false && (it.material_name || '').trim() !== '')
+        .map(it => ({
+            raw_material_id: it.raw_material_id || null,
+            material_code: it.material_code || 'None',
+            material_name: it.material_name.trim(),
+            category: it.category || 'Cosmetics',
+            current_stock: Number(it.current_stock || 0),
+            requested_qty: Number(it.requested_qty || 0),
+            unit: it.unit || 'kg',
+            supplier: it.supplier || 'None'
+        }));
+
     try {
-        const res = await NKB.api(`/api/orders/${poId}/request-supplies`, {
+        const endpoint = (effectivePoId && effectivePoId !== 'WAREHOUSE-STOCK')
+            ? `/api/orders/${effectivePoId}/request-supplies`
+            : `/api/supply-requests`;
+
+        const res = await NKB.api(endpoint, {
             method: 'POST',
             body: {
+                po_id: effectivePoId,
                 materials_needed: materialsNeeded,
+                bom_items: activeBomItems,
                 urgency,
                 target_date: targetDate,
                 notes,
@@ -1280,23 +1732,64 @@ async function submitSupplyRequest(e, poId, poNumber) {
         });
 
         if (res.success) {
-            NKB.showToast(`Supply requisition submitted to Purchasing Department for ${poNumber}!`, 'success');
+            NKB.showToast(res.message || `BOM Supply requisition submitted to Purchasing Department!`, 'success');
             closeModal();
-            loadOrders();
+            if (typeof loadOrders === 'function') loadOrders();
+            if (typeof loadPurchasingRequisitions === 'function') loadPurchasingRequisitions();
         } else {
             NKB.showToast(res.error || 'Failed to submit supply requisition.', 'error');
             if (btn) {
                 btn.disabled = false;
-                btn.innerHTML = '<span>📤</span><span>Submit to Purchasing Department</span>';
+                btn.innerHTML = '<span>📤</span><span>Submit BOM Requisition to Purchasing</span>';
             }
         }
     } catch (err) {
         NKB.showToast('Network error while submitting requisition.', 'error');
         if (btn) {
             btn.disabled = false;
-            btn.innerHTML = '<span>📤</span><span>Submit to Purchasing Department</span>';
+            btn.innerHTML = '<span>📤</span><span>Submit BOM Requisition to Purchasing</span>';
         }
     }
+}
+
+function formatRequisitionBomHtml(bomItemsRaw) {
+    if (!bomItemsRaw) return '';
+    let parsed = [];
+    try {
+        parsed = typeof bomItemsRaw === 'string' ? JSON.parse(bomItemsRaw) : bomItemsRaw;
+    } catch (_) {
+        parsed = [];
+    }
+    if (!Array.isArray(parsed) || parsed.length === 0) return '';
+
+    return `
+        <div class="mt-2 border border-amber-200 rounded-xl overflow-hidden bg-white">
+            <div class="px-3 py-1.5 bg-amber-50 border-b border-amber-200 flex items-center justify-between">
+                <span class="text-[10px] font-black uppercase tracking-wider text-amber-900">📋 Bill of Materials (BOM) Breakdown</span>
+                <span class="text-[10px] font-bold text-amber-800">${parsed.length} Item${parsed.length === 1 ? '' : 's'}</span>
+            </div>
+            <table class="w-full text-left border-collapse text-[11px]">
+                <thead>
+                    <tr class="bg-slate-50 text-slate-500 border-b border-slate-200 text-[10px] uppercase">
+                        <th class="py-1.5 px-2.5">Code</th>
+                        <th class="py-1.5 px-2.5">Material Name</th>
+                        <th class="py-1.5 px-2.5">Section</th>
+                        <th class="py-1.5 px-2.5 text-right">Requested Qty</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    ${parsed.map(item => `
+                        <tr>
+                            <td class="py-1.5 px-2.5 font-mono font-bold text-slate-700">${item.material_code || 'None'}</td>
+                            <td class="py-1.5 px-2.5 font-bold text-slate-900">${item.material_name || '-'}</td>
+                            <td class="py-1.5 px-2.5 text-slate-500">${item.category || '-'}</td>
+                            <td class="py-1.5 px-2.5 text-right font-mono font-black text-amber-800">${item.requested_qty || 0} ${item.unit || 'kg'}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
 }
 
 async function viewSupplyRequestsModal(poId, poNumber) {
@@ -1335,6 +1828,7 @@ async function viewSupplyRequestsModal(poId, poNumber) {
                                     </div>
                                     <span class="text-[11px] text-slate-400 font-mono">${NKB.formatDate(r.created_at)}</span>
                                 </div>
+                                ${formatRequisitionBomHtml(r.bom_items)}
                                 <div class="p-3 bg-white rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 whitespace-pre-line">
                                     ${r.materials_needed}
                                 </div>
@@ -1363,6 +1857,13 @@ async function viewSupplyRequestsModal(poId, poNumber) {
 window.confirmAccountingPO = confirmAccountingPO;
 window.confirmInventoryPO = confirmInventoryPO;
 window.openSupplyRequestModal = openSupplyRequestModal;
+window.updateSrBomItem = updateSrBomItem;
+window.removeSrBomRow = removeSrBomRow;
+window.addRawMaterialToSrBom = addRawMaterialToSrBom;
+window.addCustomSrBomRow = addCustomSrBomRow;
+window.addOutOfStockRawMaterialsToSrBom = addOutOfStockRawMaterialsToSrBom;
+window.loadFormulationBomIntoRequisition = loadFormulationBomIntoRequisition;
+window.handleSrPoChange = handleSrPoChange;
 window.submitSupplyRequest = submitSupplyRequest;
 window.viewSupplyRequestsModal = viewSupplyRequestsModal;
 
@@ -9673,9 +10174,10 @@ async function loadPurchasingRequisitions() {
                 <div class="font-black text-indigo-700 font-mono">${r.po_number}</div>
                 <div class="text-[11px] text-slate-500 font-medium">${r.client_name}</div>
             </td>
-            <td class="py-3 px-4 max-w-xs">
+            <td class="py-3 px-4 max-w-sm">
                 <div class="text-xs font-bold text-slate-800 line-clamp-2">${r.materials_needed}</div>
-                ${r.notes ? `<div class="text-[10px] text-slate-400 truncate mt-0.5">${r.notes}</div>` : ''}
+                ${formatRequisitionBomHtml(r.bom_items)}
+                ${r.notes ? `<div class="text-[10px] text-slate-400 truncate mt-1">${r.notes}</div>` : ''}
             </td>
             <td class="py-3 px-4">
                 <span class="inline-block px-2.5 py-0.5 rounded-full text-[10px] border ${urgencyBadges[r.urgency] || 'bg-slate-100 text-slate-700'}">
@@ -9695,7 +10197,7 @@ async function loadPurchasingRequisitions() {
                 <div class="text-[10px] text-slate-400 font-mono">${NKB.formatDate(r.created_at)}</div>
             </td>
             <td class="py-3 px-4 text-right whitespace-nowrap">
-                <button onclick="openUpdateRequisitionModal('${r.id}')" class="px-2.5 py-1 bg-teal-50 border border-teal-200 hover:bg-teal-100 text-teal-700 rounded-lg text-xs font-bold shadow-sm transition inline-flex items-center gap-1">
+                <button onclick="openUpdateRequisitionModal('${r.id}')" class="px-2.5 py-1 bg-teal-50 border border-teal-200 hover:bg-teal-100 text-teal-700 rounded-lg text-xs font-bold shadow-sm transition inline-flex items-center gap-1 cursor-pointer">
                     <span>✏️</span> Manage
                 </button>
             </td>
@@ -9715,8 +10217,8 @@ async function openUpdateRequisitionModal(reqId) {
     if (!root) return;
 
     root.innerHTML = `
-        <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+        <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+            <div class="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 my-auto max-h-[90vh] overflow-y-auto">
                 <div class="flex justify-between items-center border-b border-slate-100 pb-3">
                     <div class="flex items-center gap-2">
                         <div class="w-8 h-8 rounded-xl bg-teal-50 border border-teal-100 flex items-center justify-center text-teal-600 text-base font-bold">🛒</div>
@@ -9725,13 +10227,14 @@ async function openUpdateRequisitionModal(reqId) {
                             <p class="text-[11px] text-slate-500">${r.po_number} • ${r.client_name}</p>
                         </div>
                     </div>
-                    <button onclick="closeModal()" class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 font-bold flex items-center justify-center transition">✕</button>
+                    <button onclick="closeModal()" class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 font-bold flex items-center justify-center transition cursor-pointer">✕</button>
                 </div>
 
                 <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-1">
                     <div class="font-bold text-slate-700">Materials Needed:</div>
-                    <div class="text-slate-900 font-medium">${r.materials_needed}</div>
-                    <div class="text-[11px] text-slate-500 pt-1">Requested by: <b>${r.requested_by_name}</b> | Urgency: <b class="text-rose-600">${r.urgency}</b></div>
+                    <div class="text-slate-900 font-medium whitespace-pre-line">${r.materials_needed}</div>
+                    ${formatRequisitionBomHtml(r.bom_items)}
+                    <div class="text-[11px] text-slate-500 pt-1 border-t border-slate-200/60 mt-1">Requested by: <b>${r.requested_by_name}</b> | Urgency: <b class="text-rose-600">${r.urgency}</b></div>
                 </div>
 
                 <form onsubmit="submitUpdateRequisition(event, '${r.id}')" class="space-y-3.5 text-xs">
@@ -13040,6 +13543,11 @@ function renderRawMaterialsTable() {
                     title="${isFastMoving ? 'Remove Fast Moving Tag' : 'Tag as Fast Moving (Frequently Used)'}${isInvOfficer ? ' [Shortcut: F or T]' : ''}">
                     🔥 ${isFastMoving ? 'Fast' : 'Tag'}${isInvOfficer ? ' (F)' : ''}
                 </button>
+                <button onclick="openSupplyRequestModal(null, null, null, '${rm.id}')"
+                    class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg font-black text-xs transition cursor-pointer"
+                    title="Request Raw Material via Bill of Materials (BOM)${isInvOfficer ? ' [Shortcut: B or Q]' : ''}">
+                    📋 BOM${isInvOfficer ? ' (B)' : ''}
+                </button>
                 <button onclick="openAdjustRawMaterialModal('${rm.id}', 'ADD')"
                     class="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg font-bold text-xs transition cursor-pointer"
                     title="Receive / Restock Material${isInvOfficer ? ' [Shortcut: R]' : ''}">
@@ -13081,10 +13589,14 @@ async function toggleRawMaterialFastMoving(rmId) {
 
 function triggerSelectedRawMaterialAction(actionType) {
     if (!isInventoryOfficerAccount()) {
-        alert('Shortcut actions for Restock / Issue / Fast Moving are exclusive to the Inventory Officer account.');
+        alert('Shortcut actions are exclusive to the Inventory Officer account.');
         return;
     }
     const rm = cachedRawMaterials[selectedRawMaterialIndex] || cachedRawMaterials.find(r => r.id === selectedRawMaterialId);
+    if (actionType === 'BOM_REQUISITION') {
+        openSupplyRequestModal(null, null, null, rm ? rm.id : null);
+        return;
+    }
     if (!rm) {
         if (NKB.showToast) NKB.showToast('Select a material row first using ↑ / ↓ arrows or clicking a row.', 'warning');
         return;
@@ -13308,13 +13820,23 @@ async function submitAdjustRawMaterialForm(e, rmId, type) {
     }
 }
 
-// Keyboard navigation (ArrowUp / ArrowDown to scroll & choose) + Exclusive INVENTORY account shortcuts (F/T = Tag Fast Moving, R = Restock, I = Issue, E = Edit, N = New, S = Cycle Sort, / = Search, 1-5 = Filter Zones, X = Reset, ? = Shortcut Guide)
+// Keyboard navigation (ArrowUp / ArrowDown to scroll & choose) + Exclusive INVENTORY account shortcuts (B/Q = Request BOM, F/T = Tag Fast Moving, R = Restock, I = Issue, E = Edit, N = New, S = Cycle Sort, / = Search, 1-5 = Filter Zones, X = Reset, ? = Shortcut Guide)
 function handleInventoryKeyboardNavigation(e) {
-    const viewEl = document.getElementById('view-raw-materials');
-    if (!viewEl || viewEl.classList.contains('hidden')) return;
+    const rawViewEl = document.getElementById('view-raw-materials');
+    const purchViewEl = document.getElementById('view-purchasing');
+    const isRawViewActive = rawViewEl && !rawViewEl.classList.contains('hidden');
+    const isPurchViewActive = purchViewEl && !purchViewEl.classList.contains('hidden');
 
-    // Close adjust modal on Escape
+    if (!isRawViewActive && !isPurchViewActive) return;
+
+    // Close adjust modal or BOM modal on Escape
     if (e.key === 'Escape') {
+        const bomModal = document.getElementById('modal-supply-requisition-bom');
+        if (bomModal) {
+            closeModal();
+            e.preventDefault();
+            return;
+        }
         const adjModal = document.getElementById('modal-adjust-raw-material');
         if (adjModal) {
             adjModal.remove();
@@ -13335,12 +13857,24 @@ function handleInventoryKeyboardNavigation(e) {
     }
 
     // Do not intercept keys when a modal is open or user is typing in an input/select/textarea
-    if (document.getElementById('modal-adjust-raw-material') || document.getElementById('modal-raw-material')) return;
+    if (document.getElementById('modal-adjust-raw-material') || document.getElementById('modal-raw-material') || document.getElementById('modal-supply-requisition-bom')) return;
     const activeTag = document.activeElement ? document.activeElement.tagName.toUpperCase() : '';
     if (activeTag === 'INPUT' || activeTag === 'TEXTAREA' || activeTag === 'SELECT' || (document.activeElement && document.activeElement.isContentEditable)) {
         return;
     }
     if (e.ctrlKey || e.altKey || e.metaKey) return;
+
+    const keyUpper = String(e.key).toUpperCase();
+
+    // Universal Shortcut B or Q: Open Bill of Materials (BOM) Supply Requisition Form
+    if (keyUpper === 'B' || keyUpper === 'Q') {
+        e.preventDefault();
+        const curRm = (cachedRawMaterials && cachedRawMaterials[selectedRawMaterialIndex]) || (cachedRawMaterials && cachedRawMaterials.find(r => r.id === selectedRawMaterialId));
+        openSupplyRequestModal(null, null, null, curRm ? curRm.id : null);
+        return;
+    }
+
+    if (!isRawViewActive) return;
 
     // ArrowUp / ArrowDown: Scroll and choose material row in Warehouse Inventory
     if (e.key === 'ArrowDown' && cachedRawMaterials && cachedRawMaterials.length > 0) {
@@ -13357,10 +13891,8 @@ function handleInventoryKeyboardNavigation(e) {
         return;
     }
 
-    // Exclusive shortcut keys for the Inventory Officer account (role === 'INVENTORY')
+    // Exclusive shortcut keys for the Inventory Officer account (role === 'INVENTORY' or ADMIN/IT_ADMIN)
     if (!isInventoryOfficerAccount()) return;
-
-    const keyUpper = String(e.key).toUpperCase();
 
     // Global Inventory View Shortcuts (do not require a selected row)
     if (e.key === '?') {

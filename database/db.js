@@ -802,13 +802,14 @@ function runMigrations(dbInstance, isMysql) {
                 dbInstance.exec(`
                     CREATE TABLE IF NOT EXISTS supply_requests (
                         id VARCHAR(36) PRIMARY KEY,
-                        po_id VARCHAR(36) NOT NULL,
+                        po_id VARCHAR(36) NOT NULL DEFAULT 'WAREHOUSE-STOCK',
                         requested_by VARCHAR(36) NOT NULL,
                         department VARCHAR(100) NOT NULL DEFAULT 'Purchasing Department',
                         materials_needed TEXT NOT NULL,
                         urgency VARCHAR(50) NOT NULL DEFAULT 'NORMAL',
                         target_date VARCHAR(50),
                         notes TEXT,
+                        bom_items TEXT,
                         status VARCHAR(50) NOT NULL DEFAULT 'SUBMITTED',
                         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                         updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -819,19 +820,51 @@ function runMigrations(dbInstance, isMysql) {
                 dbInstance.exec(`
                     CREATE TABLE IF NOT EXISTS supply_requests (
                         id TEXT PRIMARY KEY,
-                        po_id TEXT NOT NULL,
+                        po_id TEXT NOT NULL DEFAULT 'WAREHOUSE-STOCK',
                         requested_by TEXT NOT NULL,
                         department TEXT NOT NULL DEFAULT 'Purchasing Department',
                         materials_needed TEXT NOT NULL,
                         urgency TEXT NOT NULL DEFAULT 'NORMAL',
                         target_date TEXT,
                         notes TEXT,
+                        bom_items TEXT,
                         status TEXT NOT NULL DEFAULT 'SUBMITTED',
                         created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
                         updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
                     );
                 `);
+                // Migrate legacy SQLite supply_requests table if it still has a strict FOREIGN KEY (po_id) REFERENCES purchase_orders(id)
+                try {
+                    const srSqlRow = dbInstance.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='supply_requests'").get();
+                    if (srSqlRow && srSqlRow.sql && srSqlRow.sql.includes('REFERENCES purchase_orders')) {
+                        dbInstance.exec(`
+                            PRAGMA foreign_keys = OFF;
+                            CREATE TABLE supply_requests_new (
+                                id TEXT PRIMARY KEY,
+                                po_id TEXT NOT NULL DEFAULT 'WAREHOUSE-STOCK',
+                                requested_by TEXT NOT NULL,
+                                department TEXT NOT NULL DEFAULT 'Purchasing Department',
+                                materials_needed TEXT NOT NULL,
+                                urgency TEXT NOT NULL DEFAULT 'NORMAL',
+                                target_date TEXT,
+                                notes TEXT,
+                                bom_items TEXT,
+                                status TEXT NOT NULL DEFAULT 'SUBMITTED',
+                                created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                                updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+                            );
+                            INSERT INTO supply_requests_new (id, po_id, requested_by, department, materials_needed, urgency, target_date, notes, status, created_at, updated_at)
+                            SELECT id, po_id, requested_by, department, materials_needed, urgency, target_date, notes, status, created_at, updated_at FROM supply_requests;
+                            DROP TABLE supply_requests;
+                            ALTER TABLE supply_requests_new RENAME TO supply_requests;
+                            PRAGMA foreign_keys = ON;
+                        `);
+                    }
+                } catch (_) {
+                    try { dbInstance.exec('PRAGMA foreign_keys = ON;'); } catch (__) {}
+                }
             }
+            try { dbInstance.exec(`ALTER TABLE supply_requests ADD COLUMN bom_items TEXT;`); } catch (_) {}
         } catch (srErr) {
             console.warn('Supply requests table init note:', srErr.message);
         }

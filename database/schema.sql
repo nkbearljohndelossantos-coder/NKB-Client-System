@@ -144,17 +144,17 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
 -- Supply Requisitions for Purchasing Department
 CREATE TABLE IF NOT EXISTS supply_requests (
     id TEXT PRIMARY KEY,
-    po_id TEXT NOT NULL,
+    po_id TEXT NOT NULL DEFAULT 'WAREHOUSE-STOCK',
     requested_by TEXT NOT NULL,
     department TEXT NOT NULL DEFAULT 'Purchasing Department',
     materials_needed TEXT NOT NULL,
     urgency TEXT NOT NULL DEFAULT 'NORMAL',
     target_date TEXT,
     notes TEXT,
+    bom_items TEXT,
     status TEXT NOT NULL DEFAULT 'SUBMITTED',
     created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-    FOREIGN KEY (po_id) REFERENCES purchase_orders(id) ON DELETE CASCADE,
     FOREIGN KEY (requested_by) REFERENCES users(id)
 );
 
@@ -479,17 +479,17 @@ CREATE TABLE IF NOT EXISTS inventory_movements (
 -- Supply Requests (Purchasing Department requisitions from Inventory)
 CREATE TABLE IF NOT EXISTS supply_requests (
     id TEXT PRIMARY KEY,
-    po_id TEXT NOT NULL,
+    po_id TEXT NOT NULL DEFAULT 'WAREHOUSE-STOCK',
     requested_by TEXT NOT NULL,
     department TEXT NOT NULL DEFAULT 'Purchasing Department',
     materials_needed TEXT NOT NULL,
     urgency TEXT NOT NULL DEFAULT 'NORMAL',
     target_date TEXT,
     notes TEXT,
+    bom_items TEXT,
     status TEXT NOT NULL DEFAULT 'SUBMITTED',
     created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-    FOREIGN KEY (po_id) REFERENCES purchase_orders(id) ON DELETE CASCADE,
     FOREIGN KEY (requested_by) REFERENCES users(id) ON DELETE RESTRICT
 );
 

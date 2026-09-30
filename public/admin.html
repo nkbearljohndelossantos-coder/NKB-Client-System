@@ -1547,7 +1547,11 @@
                         <p class="text-sm text-slate-500">Manage inventory supply requests, order from raw material vendors, and fulfill incoming batches.</p>
                     </div>
                     <div class="flex items-center gap-2">
-                        <button onclick="loadPurchasingRequisitions()" class="px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 shadow-sm transition">
+                        <button onclick="openSupplyRequestModal()" title="Shortcut: Press B to open Bill of Materials Requisition Form" class="px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-600/20 flex items-center gap-1.5 transition cursor-pointer">
+                            <span>📋 Request Raw Materials (BOM)</span>
+                            <kbd class="px-1.5 py-0.5 rounded text-[10px] font-mono font-black bg-amber-700 text-white">B</kbd>
+                        </button>
+                        <button onclick="loadPurchasingRequisitions()" class="px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 shadow-sm transition cursor-pointer">
                             🔄 Refresh Requisitions
                         </button>
                     </div>
@@ -1854,11 +1858,15 @@
                         </div>
                         <p class="text-sm text-slate-500 mt-1">Color-coded stock indicators, fast-moving (frequently used) material tagging, multi-mode sorting, and keyboard navigation.</p>
                     </div>
-                    <div class="flex items-center gap-2">
-                        <button onclick="loadRawMaterials()" class="px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 shadow-sm flex items-center gap-1.5 transition">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <button onclick="loadRawMaterials()" class="px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 shadow-sm flex items-center gap-1.5 transition cursor-pointer">
                             <span>🔄 Refresh Stock</span>
                         </button>
-                        <button onclick="openRawMaterialModal()" class="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-md shadow-teal-600/20 flex items-center gap-1.5 transition">
+                        <button onclick="triggerSelectedRawMaterialAction('BOM_REQUISITION')" title="Shortcut: Press B to request raw materials with Bill of Materials (BOM)" class="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-600/20 flex items-center gap-1.5 transition cursor-pointer">
+                            <span>📋 Request BOM Requisition</span>
+                            <kbd class="px-1.5 py-0.5 rounded text-[10px] font-mono font-black bg-amber-800 text-white">B</kbd>
+                        </button>
+                        <button onclick="openRawMaterialModal()" class="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-md shadow-teal-600/20 flex items-center gap-1.5 transition cursor-pointer">
                             <span>➕ Add Raw Material</span>
                         </button>
                     </div>
@@ -1893,6 +1901,10 @@
                                 <kbd class="px-1.5 py-0.5 rounded text-[10px] font-black" style="background-color: #ea580c; color: #ffffff;">T</kbd>
                                 <span id="rm-shortcut-fast-label">🔥 Tag Fast Moving</span>
                             </button>
+                            <button type="button" id="rm-shortcut-bom-btn" onclick="triggerSelectedRawMaterialAction('BOM_REQUISITION')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition cursor-pointer font-bold" style="background-color: #4c1d95; border: 1px solid #a78bfa; color: #f5f3ff;" title="Shortcut: Press B to open Supply Requisition Form with Bill of Materials (BOM)">
+                                <kbd class="px-1.5 py-0.5 rounded text-[10px] font-black" style="background-color: #7c3aed; color: #ffffff;">B</kbd>
+                                <span>📋 Request BOM</span>
+                            </button>
                             <button type="button" onclick="toggleInventoryShortcutSuggestions()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition cursor-pointer font-bold" style="background-color: #312e81; border: 1px solid #818cf8; color: #e0e7ff;" title="Press ? to view all Inventory Shortcut Key Suggestions">
                                 <kbd class="px-1.5 py-0.5 rounded text-[10px] font-black" style="background-color: #4f46e5; color: #ffffff;">?</kbd>
                                 <span>💡 Shortcut Suggestions</span>
@@ -1906,7 +1918,14 @@
                             <span class="text-[11px] font-black uppercase tracking-wider" style="color: #99f6e4;">⌨️ Recommended Inventory Officer Shortcut Keys (Press Key Anytime in Inventory View)</span>
                             <button type="button" onclick="toggleInventoryShortcutSuggestions()" class="text-[11px] font-bold cursor-pointer" style="color: #94a3b8;">Hide ▲</button>
                         </div>
-                        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 text-[11px]">
+                        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-[11px]">
+                            <div onclick="triggerSelectedRawMaterialAction('BOM_REQUISITION')" class="p-2 rounded-xl cursor-pointer transition flex items-center gap-2" style="background-color: rgba(76, 29, 149, 0.55); border: 1px solid rgba(167, 139, 250, 0.6);">
+                                <span class="px-1.5 py-0.5 rounded font-mono font-black text-[10px]" style="background-color: #7c3aed; color: #fff;">B</span>
+                                <div>
+                                    <div class="font-bold text-white">📋 Request BOM</div>
+                                    <div class="text-[10px]" style="color: #ddd6fe;">Requisition w/ BOM</div>
+                                </div>
+                            </div>
                             <div onclick="triggerSelectedRawMaterialAction('FAST_MOVING')" class="p-2 rounded-xl cursor-pointer transition flex items-center gap-2" style="background-color: rgba(124, 45, 18, 0.45); border: 1px solid rgba(249, 115, 22, 0.5);">
                                 <span class="px-1.5 py-0.5 rounded font-mono font-black text-[10px]" style="background-color: #ea580c; color: #fff;">F / T</span>
                                 <div>
@@ -2155,8 +2174,8 @@
     </div>
 
     <script src="/js/xlsx.full.min.js"></script>
-    <script src="/js/app.js?v=2.3.5"></script>
-    <script src="/js/admin.js?v=2.3.5"></script>
-    <script src="/js/agent-widgets.js?v=2.3.5"></script>
+    <script src="/js/app.js?v=2.3.6"></script>
+    <script src="/js/admin.js?v=2.3.6"></script>
+    <script src="/js/agent-widgets.js?v=2.3.6"></script>
 </body>
 </html>
