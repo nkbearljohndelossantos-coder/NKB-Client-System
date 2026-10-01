@@ -840,11 +840,11 @@
         },
         {
           "material_code": "FR-SWEET-OREN-01",
-          "material_name": "SWEET ORANGE EO (CHEMWORLD)",
+          "material_name": "SWEET ORANGE EO (PROESSENCES)",
           "category": "Cosmetic",
           "required_quantity": 0.06,
           "uom": "kg",
-          "supplier": "CHEMWORLD"
+          "supplier": "PROESSENCES INC."
         },
         {
           "material_code": "RM-TEA-01",
@@ -1068,11 +1068,11 @@
         },
         {
           "material_code": "FR-SWEET-OREN-01",
-          "material_name": "SWEET ORANGE EO (CHEMWORLD)",
+          "material_name": "SWEET ORANGE EO (PROESSENCES)",
           "category": "Cosmetic",
           "required_quantity": 0.05,
           "uom": "kg",
-          "supplier": "CHEMWORLD"
+          "supplier": "PROESSENCES INC."
         },
         {
           "material_code": "RM-HARMONIE-SHEA",
@@ -2776,11 +2776,11 @@
         },
         {
           "material_code": "FR-SWEET-OREN-01",
-          "material_name": "SWEET ORANGE EO (CHEMWORLD)",
+          "material_name": "SWEET ORANGE EO (PROESSENCES)",
           "category": "Cosmetic",
           "required_quantity": 0.04,
           "uom": "kg",
-          "supplier": "CHEMWORLD"
+          "supplier": "PROESSENCES INC."
         },
         {
           "material_code": "RM-ORANGE-COLORANT-SOLN",
@@ -5068,11 +5068,11 @@
         },
         {
           "material_code": "FR-SWEET-OREN-01",
-          "material_name": "SWEET ORANGE EO (CHEMWORLD)",
+          "material_name": "SWEET ORANGE EO (PROESSENCES)",
           "category": "Cosmetic",
           "required_quantity": 0.2,
           "uom": "kg",
-          "supplier": "CHEMWORLD"
+          "supplier": "PROESSENCES INC."
         },
         {
           "material_code": "RM-TEA-01",
@@ -5486,11 +5486,11 @@
         },
         {
           "material_code": "FR-SWEET-OREN-01",
-          "material_name": "SWEET ORANGE EO (CHEMWORLD)",
+          "material_name": "SWEET ORANGE EO (PROESSENCES)",
           "category": "Cosmetic",
           "required_quantity": 0.1,
           "uom": "kg",
-          "supplier": "CHEMWORLD"
+          "supplier": "PROESSENCES INC."
         },
         {
           "material_code": "RM-ISCA-PEG-01",
@@ -5596,11 +5596,11 @@
         },
         {
           "material_code": "FR-SWEET-OREN-01",
-          "material_name": "SWEET ORANGE EO (CHEMWORLD)",
+          "material_name": "SWEET ORANGE EO (PROESSENCES)",
           "category": "Cosmetic",
           "required_quantity": 0.2,
           "uom": "kg",
-          "supplier": "CHEMWORLD"
+          "supplier": "PROESSENCES INC."
         },
         {
           "material_code": "RM-HYALURONAN-01",

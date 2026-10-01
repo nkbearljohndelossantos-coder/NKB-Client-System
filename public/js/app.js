@@ -18,11 +18,19 @@ const NKB = {
                     if (this.sleepTimer && typeof this.sleepTimer.init === 'function') {
                         this.sleepTimer.init();
                     }
+                    if (this.realtimeSync && typeof this.realtimeSync.init === 'function') {
+                        this.realtimeSync.init();
+                    }
                 } else {
                     this.logout();
                 }
             } catch (err) {
                 this.logout();
+            }
+        } else {
+            // Guest mode (e.g. client portal live tracking)
+            if (this.realtimeSync && typeof this.realtimeSync.init === 'function') {
+                this.realtimeSync.init();
             }
         }
     },
@@ -953,6 +961,305 @@ const NKB = {
                     btn.disabled = false;
                     btn.textContent = 'Save Settings';
                 }
+            }
+        }
+    },
+
+    // -------------------------------------------------------------
+    // ENTERPRISE REAL-TIME SYNCHRONIZATION ENGINE (SSE)
+    // -------------------------------------------------------------
+    realtimeSync: {
+        eventSource: null,
+        reconnectTimer: null,
+        reconnectAttempts: 0,
+        maxReconnectDelay: 15000,
+        onlineCount: 1,
+        debounceTimers: {},
+
+        init: function() {
+            // Only connect if in browser environment and EventSource is available
+            if (typeof window === 'undefined' || !window.EventSource) return;
+            this.injectHeaderIndicator();
+            this.connect();
+        },
+
+        connect: function() {
+            if (this.eventSource) {
+                try { this.eventSource.close(); } catch (_) {}
+                this.eventSource = null;
+            }
+
+            const token = NKB.token || localStorage.getItem('nkb_token') || '';
+            const streamUrl = `/api/realtime/stream${token ? '?token=' + encodeURIComponent(token) : ''}`;
+
+            try {
+                this.eventSource = new EventSource(streamUrl);
+
+                this.eventSource.addEventListener('connected', (e) => {
+                    this.reconnectAttempts = 0;
+                    this.updateIndicatorState('online');
+                    try {
+                        const data = JSON.parse(e.data);
+                        if (data.onlineOperators) {
+                            this.setOperatorCount(data.onlineOperators);
+                        }
+                    } catch (_) {}
+                });
+
+                this.eventSource.addEventListener('presence', (e) => {
+                    try {
+                        const data = JSON.parse(e.data);
+                        if (data.count != null) {
+                            this.setOperatorCount(data.count);
+                        }
+                    } catch (_) {}
+                });
+
+                this.eventSource.addEventListener('sync', (e) => {
+                    try {
+                        const event = JSON.parse(e.data);
+                        this.handleSyncEvent(event);
+                    } catch (err) {
+                        console.error('Failed to parse real-time sync event:', err);
+                    }
+                });
+
+                this.eventSource.onerror = () => {
+                    this.updateIndicatorState('reconnecting');
+                    if (this.eventSource) {
+                        try { this.eventSource.close(); } catch (_) {}
+                        this.eventSource = null;
+                    }
+                    this.scheduleReconnect();
+                };
+            } catch (err) {
+                console.error('Real-time connection error:', err);
+                this.scheduleReconnect();
+            }
+        },
+
+        scheduleReconnect: function() {
+            if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+            this.reconnectAttempts++;
+            const delay = Math.min(1000 * Math.pow(1.5, this.reconnectAttempts), this.maxReconnectDelay);
+            this.reconnectTimer = setTimeout(() => {
+                this.connect();
+            }, delay);
+        },
+
+        handleSyncEvent: function(event) {
+            // Pulse the indicator to give live visual feedback
+            this.pulseIndicator();
+
+            const entity = String(event.type || '').toUpperCase();
+            const action = String(event.action || '').toUpperCase();
+
+            // Non-intrusive toast notification (especially informative for other operators)
+            const isSelf = NKB.user && (event.userId === NKB.user.id);
+            if (!isSelf) {
+                this.showSyncToast(event);
+            }
+
+            // Trigger targeted view reloads with debouncing (300ms)
+            this.debounceReload(entity, action, event);
+        },
+
+        debounceReload: function(entity, action, event) {
+            const key = entity;
+            if (this.debounceTimers[key]) clearTimeout(this.debounceTimers[key]);
+
+            this.debounceTimers[key] = setTimeout(() => {
+                this.executeTargetedReload(entity, action, event);
+                delete this.debounceTimers[key];
+            }, 300);
+        },
+
+        executeTargetedReload: function(entity, action, event) {
+            // 1. Orders / Sales Orders / Purchase Orders
+            if (['PURCHASE_ORDERS', 'PURCHASE_ORDER', 'ORDERS', 'ORDER', 'SALES_ORDERS', 'SO', 'PO'].includes(entity)) {
+                this.safeReloadIfActive('orders', typeof loadOrders === 'function' ? loadOrders : null);
+                this.safeReloadIfActive('dashboard', typeof loadDashboard === 'function' ? loadDashboard : null);
+                // Client portal
+                if (typeof loadClientOrders === 'function') this.safeReloadIfActive('my-orders', loadClientOrders, true);
+                if (typeof loadClientDashboard === 'function') this.safeReloadIfActive('dashboard', loadClientDashboard, true);
+                if (typeof loadClientTracking === 'function') this.safeReloadIfActive('tracking', loadClientTracking, true);
+            }
+
+            // 2. Job Orders
+            if (['JOB_ORDERS', 'JOB_ORDER', 'JO'].includes(entity)) {
+                this.safeReloadIfActive('job-orders', typeof loadJobOrders === 'function' ? loadJobOrders : null);
+                this.safeReloadIfActive('dashboard', typeof loadDashboard === 'function' ? loadDashboard : null);
+            }
+
+            // 3. Production Batches & Cleanroom
+            if (['PRODUCTION_BATCHES', 'PRODUCTION_BATCH', 'BATCHES', 'BATCH', 'PRODUCTION'].includes(entity)) {
+                this.safeReloadIfActive('production', typeof loadBatches === 'function' ? loadBatches : null);
+                this.safeReloadIfActive('job-orders', typeof loadJobOrders === 'function' ? loadJobOrders : null);
+                this.safeReloadIfActive('dashboard', typeof loadDashboard === 'function' ? loadDashboard : null);
+            }
+
+            // 4. Deliveries (DR)
+            if (['DELIVERY_RECEIPTS', 'DELIVERY_RECEIPT', 'DELIVERIES', 'DELIVERY', 'DR'].includes(entity)) {
+                this.safeReloadIfActive('deliveries', typeof loadDeliveries === 'function' ? loadDeliveries : null);
+                this.safeReloadIfActive('orders', typeof loadOrders === 'function' ? loadOrders : null);
+                this.safeReloadIfActive('dashboard', typeof loadDashboard === 'function' ? loadDashboard : null);
+                // Client portal
+                if (typeof loadClientDeliveries === 'function') this.safeReloadIfActive('dr-acceptance', loadClientDeliveries, true);
+                if (typeof loadClientOrders === 'function') this.safeReloadIfActive('my-orders', loadClientOrders, true);
+                if (typeof loadClientDashboard === 'function') this.safeReloadIfActive('dashboard', loadClientDashboard, true);
+            }
+
+            // 5. Invoices (SI)
+            if (['SALES_INVOICES', 'SALES_INVOICE', 'INVOICES', 'INVOICE', 'SI'].includes(entity)) {
+                this.safeReloadIfActive('invoices', typeof loadInvoices === 'function' ? loadInvoices : null);
+                this.safeReloadIfActive('dashboard', typeof loadDashboard === 'function' ? loadDashboard : null);
+                // Client portal
+                if (typeof loadClientInvoices === 'function') this.safeReloadIfActive('invoices', loadClientInvoices, true);
+            }
+
+            // 6. Payments
+            if (['PAYMENTS', 'PAYMENT'].includes(entity)) {
+                this.safeReloadIfActive('payments', typeof loadPayments === 'function' ? loadPayments : null);
+                this.safeReloadIfActive('invoices', typeof loadInvoices === 'function' ? loadInvoices : null);
+            }
+
+            // 7. Cheque Payables
+            if (['CHEQUE_PAYABLES', 'CHEQUE_PAYABLE', 'PAYABLES', 'PAYABLE', 'CHEQUE'].includes(entity)) {
+                this.safeReloadIfActive('payables', typeof loadPayables === 'function' ? loadPayables : null);
+            }
+
+            // 8. Raw Materials & Inventory & Buffer Stock
+            if (['RAW_MATERIALS', 'RAW_MATERIAL', 'INVENTORY', 'BUFFER_STOCK', 'BUFFER'].includes(entity)) {
+                this.safeReloadIfActive('raw-materials', typeof loadRawMaterials === 'function' ? loadRawMaterials : null);
+                this.safeReloadIfActive('buffer', typeof loadBufferStock === 'function' ? loadBufferStock : null);
+                this.safeReloadIfActive('purchasing', typeof loadPurchasingRequisitions === 'function' ? loadPurchasingRequisitions : null);
+                if (typeof loadClientBuffer === 'function') this.safeReloadIfActive('buffer', loadClientBuffer, true);
+            }
+
+            // 9. IT Management Universal Table Edits
+            if (entity.startsWith('IT_MANAGEMENT') || entity === 'PURCHASE_ORDER_ITEMS' || entity === 'DELIVERY_ITEMS') {
+                this.safeReloadIfActive('it-management', typeof loadITManagement === 'function' ? loadITManagement : null);
+                this.safeReloadIfActive('orders', typeof loadOrders === 'function' ? loadOrders : null);
+                this.safeReloadIfActive('job-orders', typeof loadJobOrders === 'function' ? loadJobOrders : null);
+                this.safeReloadIfActive('production', typeof loadBatches === 'function' ? loadBatches : null);
+                this.safeReloadIfActive('deliveries', typeof loadDeliveries === 'function' ? loadDeliveries : null);
+                this.safeReloadIfActive('dashboard', typeof loadDashboard === 'function' ? loadDashboard : null);
+            }
+
+            // 10. Audit Logs
+            if (['AUDIT_LOGS', 'AUDIT'].includes(entity)) {
+                this.safeReloadIfActive('audit', typeof loadAuditLogs === 'function' ? loadAuditLogs : null);
+            }
+        },
+
+        safeReloadIfActive: function(tabId, reloadFn, isClient = false) {
+            if (typeof reloadFn !== 'function') return;
+
+            if (isClient) {
+                const sec = document.getElementById(`client-view-${tabId}`);
+                if (sec && !sec.classList.contains('hidden')) {
+                    reloadFn();
+                }
+            } else {
+                const sec = document.getElementById(`view-${tabId}`);
+                if (sec && !sec.classList.contains('hidden')) {
+                    reloadFn();
+                }
+            }
+        },
+
+        showSyncToast: function(event) {
+            const toast = document.createElement('div');
+            toast.className = 'fixed bottom-4 left-4 z-50 flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-slate-900/95 text-white border border-emerald-500/40 shadow-xl shadow-black/40 text-xs backdrop-blur-sm transition-all duration-300 transform translate-y-2 opacity-0 select-none pointer-events-none';
+
+            const actor = event.userName || 'Admin';
+            const action = String(event.action || 'updated').toLowerCase().replace(/_/g, ' ');
+            const type = String(event.type || 'record').toLowerCase().replace(/_/g, ' ');
+            const id = event.entityId ? ` (${event.entityId})` : '';
+
+            toast.innerHTML = `
+                <span class="flex h-2 w-2 relative flex-shrink-0">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <span class="font-medium text-slate-200">
+                    <strong class="text-white font-bold">${actor}</strong> ${action} ${type}${id}
+                </span>
+                <span class="text-[10px] text-emerald-400 font-mono pl-1 border-l border-slate-700">Live Synced</span>
+            `;
+
+            document.body.appendChild(toast);
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            });
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 350);
+            }, 3500);
+        },
+
+        injectHeaderIndicator: function() {
+            if (document.getElementById('live-sync-indicator')) return;
+
+            // In admin.html header or client.html header
+            const targetContainer = document.querySelector('header .flex.items-center.gap-3:last-child')
+                || document.querySelector('header .flex.items-center.gap-2.pl-2')
+                || document.querySelector('header');
+
+            if (!targetContainer) return;
+
+            const pill = document.createElement('div');
+            pill.id = 'live-sync-indicator';
+            pill.className = 'hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-950/70 text-emerald-400 border border-emerald-500/30 shadow-inner select-none transition-all';
+            pill.title = 'Live Real-Time Sync Active: Workstations stay synchronized automatically';
+            pill.innerHTML = `
+                <span class="relative flex h-2 w-2">
+                    <span id="live-sync-ping" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span id="live-sync-dot" class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <span id="live-sync-text">Live Sync</span>
+                <span id="live-sync-count" class="px-1.5 py-0.2 text-[9px] font-mono rounded-full bg-emerald-900 text-emerald-200 border border-emerald-700/50">1 online</span>
+            `;
+
+            targetContainer.insertBefore(pill, targetContainer.firstChild);
+        },
+
+        updateIndicatorState: function(state) {
+            const pill = document.getElementById('live-sync-indicator');
+            const dot = document.getElementById('live-sync-dot');
+            const ping = document.getElementById('live-sync-ping');
+            const text = document.getElementById('live-sync-text');
+            if (!pill || !dot || !text) return;
+
+            if (state === 'online') {
+                pill.className = 'hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-950/70 text-emerald-400 border border-emerald-500/30 shadow-inner select-none transition-all';
+                dot.className = 'relative inline-flex rounded-full h-2 w-2 bg-emerald-500';
+                if (ping) ping.className = 'animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75';
+                text.textContent = 'Live Sync';
+            } else {
+                pill.className = 'hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-950/70 text-amber-400 border border-amber-500/30 shadow-inner select-none transition-all';
+                dot.className = 'relative inline-flex rounded-full h-2 w-2 bg-amber-500';
+                if (ping) ping.className = 'hidden';
+                text.textContent = 'Reconnecting...';
+            }
+        },
+
+        setOperatorCount: function(count) {
+            this.onlineCount = count;
+            const countEl = document.getElementById('live-sync-count');
+            if (countEl) {
+                countEl.textContent = `${count} online`;
+            }
+        },
+
+        pulseIndicator: function() {
+            const pill = document.getElementById('live-sync-indicator');
+            if (pill) {
+                pill.classList.add('ring-2', 'ring-emerald-400', 'bg-emerald-800/80');
+                setTimeout(() => {
+                    pill.classList.remove('ring-2', 'ring-emerald-400', 'bg-emerald-800/80');
+                }, 800);
             }
         }
     }

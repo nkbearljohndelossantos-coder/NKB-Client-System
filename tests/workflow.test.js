@@ -11,6 +11,8 @@ const app = require('../server');
 const db = require('../database/db');
 const seedDatabase = require('../database/seed');
 const { JWT_SECRET } = require('../middleware/auth');
+const realtimeSyncService = require('../services/realtimeSyncService');
+const { logAudit } = require('../services/auditService');
 
 function getAuthToken(role, clientId = null, email = null) {
     let user = null;
@@ -3531,7 +3533,94 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.strictEqual(unauthorizedPayablesRes.body.error, 'INSUFFICIENT_SCOPE');
     });
 
+    test('44. Real-Time Live Synchronization Engine (SSE Stream, Broadcast & Audit Log Pulse)', async () => {
+        // 1. Check live status and online operator count
+        const statusRes = await request(app).get('/api/realtime/status');
+        assert.strictEqual(statusRes.status, 200);
+        assert.strictEqual(statusRes.body.success, true);
+        assert.strictEqual(statusRes.body.status, 'online');
+        assert.strictEqual(typeof statusRes.body.totalConnected, 'number');
+
+        // 2. Establish SSE stream and verify event headers & handshake
+        let receivedData = '';
+        await new Promise((resolve) => {
+            const req = request(app)
+                .get(`/api/realtime/stream?token=${encodeURIComponent(adminToken)}`)
+                .buffer(false)
+                .parse((res, callback) => {
+                    assert.strictEqual(res.statusCode, 200);
+                    assert.match(res.headers['content-type'], /text\/event-stream/i);
+                    assert.strictEqual(res.headers['connection'], 'keep-alive');
+                    assert.strictEqual(res.headers['x-accel-buffering'], 'no');
+
+                    res.on('data', (chunk) => {
+                        receivedData += chunk.toString();
+                        if (receivedData.includes('event: connected')) {
+                            realtimeSyncService.closeAllClients();
+                            resolve();
+                        }
+                    });
+                });
+
+            req.on('error', () => {});
+            req.end();
+        });
+
+        assert.ok(receivedData.includes('event: connected'));
+        assert.ok(receivedData.includes('Live Real-Time Sync Connected'));
+
+        // 3. Test POST /api/realtime/broadcast
+        const broadcastRes = await request(app)
+            .post('/api/realtime/broadcast')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                entityType: 'PURCHASE_ORDERS',
+                action: 'QUEUE_REORDER',
+                entityId: 'PO-2026-000007',
+                details: { rank: 1, active_today: 1 }
+            });
+        assert.strictEqual(broadcastRes.status, 200);
+        assert.strictEqual(broadcastRes.body.success, true);
+
+        // 4. Test logAudit auto-triggering broadcastSync to active operator stream
+        let streamedPayload = '';
+        const mockRes = {
+            writeHead: () => {},
+            flushHeaders: () => {},
+            write: (msg) => { streamedPayload += msg; }
+        };
+        const mockReq = {
+            on: () => {}
+        };
+
+        realtimeSyncService.registerClient(mockReq, mockRes, {
+            id: 'mock-operator-44',
+            name: 'Supervisor Floor',
+            role: 'PRODUCTION'
+        });
+
+        logAudit({
+            userId: 'a0000000-0000-0000-0000-000000000001',
+            userName: 'Executive Admin',
+            userRole: 'SUPER_ADMIN',
+            action: 'UPDATE_PRODUCTION_PRIORITY',
+            entityType: 'PURCHASE_ORDERS',
+            entityId: 'PO-2026-000007',
+            details: { priority: 'RUSH', is_active_today: 1 }
+        });
+
+        assert.ok(streamedPayload.includes('event: sync'));
+        assert.ok(streamedPayload.includes('PO-2026-000007'));
+        assert.ok(streamedPayload.includes('PURCHASE_ORDERS'));
+        assert.ok(streamedPayload.includes('Executive Admin'));
+
+        realtimeSyncService.closeAllClients();
+    });
+
     after(() => {
+        try {
+            realtimeSyncService.closeAllClients();
+        } catch (_) {}
         // Automatically delete all test decoys and temporary test database
         try {
             db.close();

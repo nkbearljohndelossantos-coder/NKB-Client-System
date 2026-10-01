@@ -174,6 +174,7 @@ function mountApiRoutes() {
     app.use('/api/bank-accounts', require('./routes/bankAccounts'));
     app.use('/api/it-management', require('./routes/itManagement'));
     app.use('/api/raw-materials', require('./routes/rawMaterials'));
+    app.use('/api/realtime', require('./routes/realtime'));
     app.use('/api/v1', require('./routes/v1/apiV1'));
 }
 

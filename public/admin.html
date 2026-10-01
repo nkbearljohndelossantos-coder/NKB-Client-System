@@ -32,6 +32,15 @@
                     <span>Quick Search...</span>
                     <kbd class="px-1.5 py-0.5 bg-slate-800 text-slate-300 rounded border border-slate-600 text-[10px] font-mono">Ctrl+K</kbd>
                 </button>
+                <!-- Live Real-Time Synchronization Indicator -->
+                <div id="live-sync-indicator" class="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-950/70 text-emerald-400 border border-emerald-500/30 shadow-inner select-none transition-all" title="Live Real-Time Sync Active: All transactions and admin edits sync across workstations instantly">
+                    <span class="relative flex h-2 w-2">
+                        <span id="live-sync-ping" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span id="live-sync-dot" class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    <span id="live-sync-text">Live Sync</span>
+                    <span id="live-sync-count" class="px-1.5 py-0.2 text-[9px] font-mono rounded-full bg-emerald-900 text-emerald-200 border border-emerald-700/50">1 online</span>
+                </div>
                 <a href="/client.html" class="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 border border-slate-700 transition">
                     <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                     <span>Client View</span>
