@@ -10,6 +10,9 @@ const db = require('../database/db');
 const LIVE_INVENTORY_API_KEY = process.env.INVENTORY_API_KEY || 'nkb_inv_live_6ae6965c1ca61aef54939d6b1ecfac1b';
 
 const AVAILABLE_SCOPES = [
+    { id: 'payables:read', name: 'Read Cheque Payables', description: 'Access cheque payables, bank disbursement records, vouchers & approval statuses' },
+    { id: 'payables:confirm', name: 'COO Approvals & Confirmation', description: 'Authorize, confirm, or reject cheque payables via external COO portal' },
+    { id: 'payables:write', name: 'Create Cheque Payables', description: 'Submit new cheque payable requisitions programmatically via API' },
     { id: 'products:read', name: 'Read Products', description: 'Access cosmetic catalog, pricing, SKUs, and packaging specifications' },
     { id: 'orders:read', name: 'Read Orders', description: 'View purchase orders, status updates, line items, and tracking' },
     { id: 'orders:write', name: 'Create Orders', description: 'Create and submit purchase orders programmatically from external eCommerce or ERP' },
@@ -38,10 +41,10 @@ function generateApiKey({ name, clientId = null, userId, scopes = [], rateLimitR
         throw new Error('User ID is required to create an API key.');
     }
 
-    // Default to read-only scopes if empty
+    // Default to Cheque Payables scopes if empty
     const sanitizedScopes = Array.isArray(scopes) && scopes.length > 0 
         ? scopes 
-        : ['products:read', 'orders:read'];
+        : ['payables:read', 'payables:confirm', 'payables:write'];
 
     const randomBytes = crypto.randomBytes(16).toString('hex'); // 32 hex chars
     const rawKey = `nkb_live_${randomBytes}`;

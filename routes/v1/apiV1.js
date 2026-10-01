@@ -710,7 +710,7 @@ router.get('/inventory', requireScope('inventory:read'), (req, res) => {
  * GET /api/v1/payables
  * List cheque payables for external COO review & ERP synchronization
  */
-router.get('/payables', (req, res) => {
+router.get('/payables', requireScope('payables:read'), (req, res) => {
     try {
         const page = Math.max(1, parseInt(req.query.page, 10) || 1);
         const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
@@ -783,7 +783,7 @@ router.get('/payables', (req, res) => {
  * GET /api/v1/payables/:id
  * Get single cheque payable by ID or request number
  */
-router.get('/payables/:id', (req, res) => {
+router.get('/payables/:id', requireScope('payables:read'), (req, res) => {
     try {
         const item = db.prepare(`
             SELECT cp.*, u.name as requestor_name, u.email as requestor_email
@@ -806,7 +806,7 @@ router.get('/payables/:id', (req, res) => {
  * POST /api/v1/payables/:id/confirm
  * COO confirmation from external website via API
  */
-router.post('/payables/:id/confirm', (req, res) => {
+router.post('/payables/:id/confirm', requireScope('payables:confirm'), (req, res) => {
     try {
         const { decision, action, cheque_number, notes, confirmed_by } = req.body;
         const rawDecision = decision || action || 'CONFIRMED';
@@ -891,7 +891,7 @@ router.post('/payables/:id/confirm', (req, res) => {
  * POST /api/v1/payables/:id/clear
  * Mark cheque payable as CLEARED via REST API and debit depository bank
  */
-router.post('/payables/:id/clear', (req, res) => {
+router.post('/payables/:id/clear', requireScope('payables:confirm'), (req, res) => {
     try {
         const item = db.prepare('SELECT * FROM cheque_payables WHERE id = ? OR request_number = ?').get(req.params.id, req.params.id);
         if (!item) {
@@ -943,7 +943,7 @@ router.post('/payables/:id/clear', (req, res) => {
  * POST /api/v1/payables
  * Create a new cheque payable request programmatically
  */
-router.post('/payables', (req, res) => {
+router.post('/payables', requireScope('payables:write'), (req, res) => {
     try {
         const {
             payee_name,

@@ -11573,7 +11573,8 @@ function renderApiKeysTable(keys) {
                     <div class="flex flex-wrap gap-1 max-w-xs">
                         ${scopes.map(s => {
                             let color = 'bg-slate-100 text-slate-700 border-slate-200';
-                            if (s.includes('write')) color = 'bg-amber-50 text-amber-800 border-amber-200';
+                            if (s.includes('payables')) color = 'bg-emerald-50 text-emerald-800 border-emerald-200 font-bold';
+                            else if (s.includes('write')) color = 'bg-amber-50 text-amber-800 border-amber-200';
                             else if (s.includes('orders')) color = 'bg-blue-50 text-blue-800 border-blue-200';
                             else if (s.includes('inventory')) color = 'bg-purple-50 text-purple-800 border-purple-200';
                             return `<span class="text-[10px] px-1.5 py-0.5 rounded border ${color} font-mono font-medium">${s}</span>`;
@@ -11603,102 +11604,91 @@ function renderApiKeysTable(keys) {
     }).join('');
 }
 
-async function openCreateApiKeyModal() {
+async function openCreateApiKeyModal(defaultName = 'COO External Portal API') {
     const root = document.getElementById('modals-root');
     if (!root) return;
 
-    if (!cachedClients || cachedClients.length === 0) {
-        const cRes = await NKB.api('/api/clients');
-        if (cRes.success) cachedClients = cRes.data;
-    }
-
-    const clientOptions = (cachedClients || []).map(c => `
-        <option value="${c.id}">${escapeApiKeyHtml(c.name || c.company_name)}</option>
-    `).join('');
-
     root.innerHTML = `
         <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
-            <div class="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-5 max-h-[90vh] flex flex-col">
+            <div class="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-5 max-h-[90vh] flex flex-col animate-in fade-in zoom-in-95 duration-150">
                 <div class="flex justify-between items-center border-b border-slate-100 pb-3">
                     <div class="flex items-center gap-2.5">
-                        <div class="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-base">🔑</div>
+                        <div class="w-8 h-8 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center font-bold text-base">🔑</div>
                         <div>
-                            <h3 class="text-lg font-bold text-slate-900">Generate Developer API Key</h3>
-                            <p class="text-[11px] text-slate-500">Create a secure credential for external integrations & eCommerce sync.</p>
+                            <h3 class="text-lg font-bold text-slate-900">Generate Cheque Payables API Key</h3>
+                            <p class="text-[11px] text-slate-500">Create a secure external API credential restricted exclusively to Cheque Payables & COO Approvals.</p>
                         </div>
                     </div>
                     <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
+                </div>
+
+                <div class="p-3 bg-amber-50/80 border border-amber-200 rounded-xl flex items-start gap-2.5">
+                    <span class="text-base mt-0.5">🔒</span>
+                    <div class="text-[11px] text-amber-900 leading-snug">
+                        <span class="font-bold">Cheque Payables Access Only:</span>
+                        This API generator issues credentials restricted strictly to <strong>Cheque Payables & COO Approvals</strong> (<code class="bg-amber-100 px-1 py-0.5 rounded text-[10px] font-mono">/api/v1/payables</code>). External access to client orders, product catalogs, and finished goods inventory is disabled.
+                    </div>
                 </div>
 
                 <form onsubmit="submitCreateApiKey(event)" class="overflow-y-auto flex-1 space-y-4 pr-1">
                     <!-- Key Name -->
                     <div>
                         <label class="block text-xs font-bold text-slate-700 mb-1">Key Name / Identifier <span class="text-rose-500">*</span></label>
-                        <input type="text" id="api-key-name" required placeholder="e.g. Shopify Store Sync, Vyuceutical ERP, Warehouse Barcode App" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <input type="text" id="api-key-name" required value="${escapeApiKeyHtml(defaultName)}" placeholder="e.g. COO External Portal Integration, ERP Cheque Payables Sync" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none">
                     </div>
 
-                    <!-- Client Binding -->
+                    <!-- Integration Scope -->
                     <div>
-                        <label class="block text-xs font-bold text-slate-700 mb-1">Associate Client (Data Isolation Scope)</label>
-                        <select id="api-key-client-id" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-                            <option value="">— Global / Internal System (Full Access to all clients) —</option>
-                            ${clientOptions}
-                        </select>
-                        <p class="text-[10px] text-slate-400 mt-1">If bound to a client, external requests using this key will only be able to view and create orders/products for that client.</p>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Integration Scope</label>
+                        <div class="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-700 font-medium flex items-center justify-between">
+                            <span>🏢 Internal Corporate System (Cheque Payables & All Companies)</span>
+                            <span class="px-2 py-0.5 bg-white border border-slate-300 rounded text-[10px] font-bold text-slate-600">Company-wide</span>
+                        </div>
+                        <input type="hidden" id="api-key-client-id" value="">
                     </div>
 
-                    <!-- Scopes Selection -->
+                    <!-- Cheque Payables Permission Scopes Selection -->
                     <div class="space-y-2">
                         <div class="flex justify-between items-center">
-                            <label class="block text-xs font-bold text-slate-700">Permission Scopes <span class="text-rose-500">*</span></label>
+                            <label class="block text-xs font-bold text-slate-700">Cheque Payables Permission Scopes <span class="text-rose-500">*</span></label>
                             <div class="flex gap-2">
-                                <button type="button" onclick="selectAllApiScopes(true)" class="text-[10px] text-indigo-600 hover:underline font-bold">Select All</button>
+                                <button type="button" onclick="selectAllApiScopes(true)" class="text-[10px] text-amber-700 hover:underline font-bold">Select All</button>
                                 <span class="text-slate-300">•</span>
                                 <button type="button" onclick="selectAllApiScopes(false)" class="text-[10px] text-slate-500 hover:underline">Clear</button>
                             </div>
                         </div>
 
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs">
-                            <label class="flex items-start gap-2 cursor-pointer p-1.5 hover:bg-white rounded-lg transition">
-                                <input type="checkbox" name="api-scope" value="products:read" checked class="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500">
-                                <div>
-                                    <div class="font-bold text-slate-800">products:read</div>
-                                    <div class="text-[10px] text-slate-500 leading-tight">View cosmetic catalog & prices</div>
+                        <div class="space-y-2">
+                            <label class="flex items-start gap-2.5 cursor-pointer p-2.5 bg-slate-50 hover:bg-amber-50/40 border border-slate-200 rounded-xl text-xs transition">
+                                <input type="checkbox" name="api-scope" value="payables:read" checked class="mt-0.5 rounded text-amber-600 focus:ring-amber-500">
+                                <div class="flex-1">
+                                    <div class="font-bold text-slate-800 flex items-center gap-2">
+                                        <span class="font-mono text-xs text-indigo-700">payables:read</span>
+                                        <span class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold border border-emerald-200">Required for Queries</span>
+                                    </div>
+                                    <div class="text-[10px] text-slate-500 leading-tight mt-0.5">Query & monitor cheque payables, requisitions, vouchers, bank accounts, and COO approval statuses.</div>
                                 </div>
                             </label>
-                            <label class="flex items-start gap-2 cursor-pointer p-1.5 hover:bg-white rounded-lg transition">
-                                <input type="checkbox" name="api-scope" value="orders:read" checked class="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500">
-                                <div>
-                                    <div class="font-bold text-slate-800">orders:read</div>
-                                    <div class="text-[10px] text-slate-500 leading-tight">Read purchase orders & status</div>
+
+                            <label class="flex items-start gap-2.5 cursor-pointer p-2.5 bg-slate-50 hover:bg-amber-50/40 border border-slate-200 rounded-xl text-xs transition">
+                                <input type="checkbox" name="api-scope" value="payables:confirm" checked class="mt-0.5 rounded text-amber-600 focus:ring-amber-500">
+                                <div class="flex-1">
+                                    <div class="font-bold text-slate-800 flex items-center gap-2">
+                                        <span class="font-mono text-xs text-indigo-700">payables:confirm</span>
+                                        <span class="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold border border-amber-200">COO Approval</span>
+                                    </div>
+                                    <div class="text-[10px] text-slate-500 leading-tight mt-0.5">Authorize, confirm, assign cheque numbers, reject, or mark payables as cleared via external COO portal.</div>
                                 </div>
                             </label>
-                            <label class="flex items-start gap-2 cursor-pointer p-1.5 hover:bg-white rounded-lg transition">
-                                <input type="checkbox" name="api-scope" value="orders:write" checked class="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500">
-                                <div>
-                                    <div class="font-bold text-slate-800">orders:write</div>
-                                    <div class="text-[10px] text-slate-500 leading-tight">Create & submit orders via API</div>
-                                </div>
-                            </label>
-                            <label class="flex items-start gap-2 cursor-pointer p-1.5 hover:bg-white rounded-lg transition">
-                                <input type="checkbox" name="api-scope" value="deliveries:read" checked class="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500">
-                                <div>
-                                    <div class="font-bold text-slate-800">deliveries:read</div>
-                                    <div class="text-[10px] text-slate-500 leading-tight">Track Delivery Receipts (DR)</div>
-                                </div>
-                            </label>
-                            <label class="flex items-start gap-2 cursor-pointer p-1.5 hover:bg-white rounded-lg transition">
-                                <input type="checkbox" name="api-scope" value="invoices:read" checked class="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500">
-                                <div>
-                                    <div class="font-bold text-slate-800">invoices:read</div>
-                                    <div class="text-[10px] text-slate-500 leading-tight">Read billing invoices & balance</div>
-                                </div>
-                            </label>
-                            <label class="flex items-start gap-2 cursor-pointer p-1.5 hover:bg-white rounded-lg transition">
-                                <input type="checkbox" name="api-scope" value="inventory:read" class="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500">
-                                <div>
-                                    <div class="font-bold text-slate-800">inventory:read</div>
-                                    <div class="text-[10px] text-slate-500 leading-tight">Live inventory & BOM materials</div>
+
+                            <label class="flex items-start gap-2.5 cursor-pointer p-2.5 bg-slate-50 hover:bg-amber-50/40 border border-slate-200 rounded-xl text-xs transition">
+                                <input type="checkbox" name="api-scope" value="payables:write" checked class="mt-0.5 rounded text-amber-600 focus:ring-amber-500">
+                                <div class="flex-1">
+                                    <div class="font-bold text-slate-800 flex items-center gap-2">
+                                        <span class="font-mono text-xs text-indigo-700">payables:write</span>
+                                        <span class="text-[9px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 font-bold border border-blue-200">Requisitions</span>
+                                    </div>
+                                    <div class="text-[10px] text-slate-500 leading-tight mt-0.5">Submit new cheque payable requests and line-item expense vouchers programmatically via REST API.</div>
                                 </div>
                             </label>
                         </div>
@@ -11708,8 +11698,8 @@ async function openCreateApiKeyModal() {
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                             <label class="block text-xs font-bold text-slate-700 mb-1">Key Expiration</label>
-                            <select id="api-key-expires" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-                                <option value="">Never Expires (Recommended)</option>
+                            <select id="api-key-expires" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                                <option value="">Never Expires (Recommended for COO Portal)</option>
                                 <option value="30">Expires in 30 days</option>
                                 <option value="90">Expires in 90 days</option>
                                 <option value="365">Expires in 1 year</option>
@@ -11717,13 +11707,16 @@ async function openCreateApiKeyModal() {
                         </div>
                         <div>
                             <label class="block text-xs font-bold text-slate-700 mb-1">Rate Limit (Requests / Min)</label>
-                            <input type="number" id="api-key-rate-limit" value="120" min="10" max="1000" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                            <input type="number" id="api-key-rate-limit" value="120" min="10" max="1000" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none">
                         </div>
                     </div>
 
                     <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
                         <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition">Cancel</button>
-                        <button type="submit" id="btn-submit-api-key" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 transition">Generate Key</button>
+                        <button type="submit" id="btn-submit-api-key" class="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-600/20 transition flex items-center gap-1.5">
+                            <span>🔑</span>
+                            <span>Generate Cheque Payables API Key</span>
+                        </button>
                     </div>
                 </form>
             </div>
@@ -11753,14 +11746,14 @@ async function submitCreateApiKey(e) {
         return;
     }
     if (scopes.length === 0) {
-        NKB.showToast('Please select at least one permission scope.', 'warning');
+        NKB.showToast('Please select at least one Cheque Payables permission scope.', 'warning');
         return;
     }
 
     const submitBtn = document.getElementById('btn-submit-api-key');
     if (submitBtn) {
         submitBtn.disabled = true;
-        submitBtn.innerHTML = 'Generating...';
+        submitBtn.innerHTML = 'Generating Key...';
     }
 
     try {
@@ -11779,12 +11772,12 @@ async function submitCreateApiKey(e) {
             NKB.showToast(`Failed to generate key: ${res.error || 'Unknown error'}`, 'error');
             if (submitBtn) {
                 submitBtn.disabled = false;
-                submitBtn.innerHTML = 'Generate Key';
+                submitBtn.innerHTML = '🔑 Generate Cheque Payables API Key';
             }
             return;
         }
 
-        NKB.showToast('API Key generated successfully!', 'success');
+        NKB.showToast('Cheque Payables API Key generated successfully!', 'success');
         loadApiKeys();
         openRawKeyRevealModal(res.rawKey, res.apiKey.name, res.apiKey.scopes);
     } catch (err) {
@@ -11792,7 +11785,7 @@ async function submitCreateApiKey(e) {
         NKB.showToast('Error generating API key.', 'error');
         if (submitBtn) {
             submitBtn.disabled = false;
-            submitBtn.innerHTML = 'Generate Key';
+            submitBtn.innerHTML = '🔑 Generate Cheque Payables API Key';
         }
     }
 }
@@ -11807,8 +11800,8 @@ function openRawKeyRevealModal(rawKey, keyName, scopes = []) {
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center text-xl font-bold">✨</div>
                     <div>
-                        <h3 class="text-lg font-bold text-slate-900">API Key Generated!</h3>
-                        <p class="text-xs text-slate-500">Key: <span class="font-bold text-slate-800">${escapeApiKeyHtml(keyName)}</span></p>
+                        <h3 class="text-lg font-bold text-slate-900">Cheque Payables API Key Generated!</h3>
+                        <p class="text-xs text-slate-500">Key: <span class="font-bold text-slate-800">${escapeApiKeyHtml(keyName)}</span> <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">Payables Only</span></p>
                     </div>
                 </div>
 
@@ -11824,19 +11817,26 @@ function openRawKeyRevealModal(rawKey, keyName, scopes = []) {
                 <div class="space-y-1.5">
                     <label class="block text-xs font-bold text-slate-700">Your Live API Key</label>
                     <div class="flex items-center gap-2">
-                        <input type="text" id="reveal-raw-key-input" readonly value="${rawKey}" class="w-full px-3 py-2.5 bg-slate-900 text-indigo-300 font-mono text-xs rounded-xl font-bold border border-slate-700 select-all focus:outline-none">
-                        <button onclick="copyRawApiKey()" id="btn-copy-raw-key" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 whitespace-nowrap transition flex items-center gap-1.5">
+                        <input type="text" id="reveal-raw-key-input" readonly value="${rawKey}" class="w-full px-3 py-2.5 bg-slate-900 text-amber-300 font-mono text-xs rounded-xl font-bold border border-slate-700 select-all focus:outline-none">
+                        <button onclick="copyRawApiKey()" id="btn-copy-raw-key" class="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-600/20 whitespace-nowrap transition flex items-center gap-1.5">
                             <span id="copy-btn-icon">📋</span>
                             <span id="copy-btn-text">Copy Key</span>
                         </button>
                     </div>
                 </div>
 
-                <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1 text-slate-600">
-                    <div class="font-bold text-slate-700">How to use this key in HTTP requests:</div>
-                    <code class="block font-mono text-[11px] bg-white p-2 rounded border border-slate-200 text-indigo-700 select-all">
-                        x-api-key: ${rawKey}
-                    </code>
+                <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1.5 text-slate-600">
+                    <div class="font-bold text-slate-700 flex items-center gap-1.5">
+                        <span>🔌</span>
+                        <span>Sample Integration Requests:</span>
+                    </div>
+                    <div class="space-y-1 font-mono text-[10px]">
+                        <div class="text-slate-500 font-sans font-semibold">1. Query Pending Cheque Payables:</div>
+                        <code class="block bg-white p-2 rounded border border-slate-200 text-slate-800 select-all overflow-x-auto">curl -H "x-api-key: ${rawKey}" "https://my.nkbmanufacturing.com/api/v1/payables?status=PENDING_COO_APPROVAL"</code>
+                        
+                        <div class="text-slate-500 font-sans font-semibold pt-1">2. Confirm / Authorize via External COO Portal:</div>
+                        <code class="block bg-white p-2 rounded border border-slate-200 text-slate-800 select-all overflow-x-auto">curl -X POST "https://my.nkbmanufacturing.com/api/v1/payables/{PAYABLE_ID}/confirm" -H "x-api-key: ${rawKey}" -H "Content-Type: application/json" -d '{"action":"CONFIRMED","cheque_number":"CHQ-123456"}'</code>
+                    </div>
                 </div>
 
                 <div class="flex justify-between items-center pt-2 border-t border-slate-100">

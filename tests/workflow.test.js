@@ -3435,6 +3435,102 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         db.prepare("DELETE FROM purchase_orders WHERE id = ?").run(multiPoId);
     });
 
+    test('43. Generate API for Cheque Payables Only: Scope Isolation, Query, Requisition & COO Confirmation', async () => {
+        // 1. Generate an API Key for Cheque Payables Only
+        const generateRes = await request(app)
+            .post('/api/api-keys')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                name: 'COO Cheque Payables Portal Key',
+                scopes: ['payables:read', 'payables:confirm', 'payables:write']
+            });
+        assert.strictEqual(generateRes.status, 201);
+        assert.strictEqual(generateRes.body.success, true);
+        const payablesApiKey = generateRes.body.rawKey;
+        assert.ok(payablesApiKey.startsWith('nkb_live_'));
+        assert.deepStrictEqual(generateRes.body.apiKey.scopes, ['payables:read', 'payables:confirm', 'payables:write']);
+
+        // 2. Query Cheque Payables via GET /api/v1/payables -> Success
+        const listRes = await request(app)
+            .get('/api/v1/payables')
+            .set('x-api-key', payablesApiKey);
+        assert.strictEqual(listRes.status, 200);
+        assert.strictEqual(listRes.body.success, true);
+        assert.ok(Array.isArray(listRes.body.data));
+
+        // 3. Create a new Cheque Payable Requisition via POST /api/v1/payables -> Success
+        const createPayableRes = await request(app)
+            .post('/api/v1/payables')
+            .set('x-api-key', payablesApiKey)
+            .send({
+                payee_name: 'Apex Chemical Solvents Inc.',
+                amount: 88500.0,
+                cheque_date: '2026-10-15',
+                bank_name: 'Security Bank',
+                bank_account_number: '0000079720871',
+                category: 'Raw Materials',
+                purpose: 'Bulk isopropyl alcohol and solvent containers',
+                invoice_reference: 'APX-2026-9901'
+            });
+        assert.strictEqual(createPayableRes.status, 201);
+        assert.strictEqual(createPayableRes.body.success, true);
+        const createdPayable = createPayableRes.body.data;
+        assert.ok(createdPayable.id);
+        assert.ok(createdPayable.request_number.startsWith('CHQ-'));
+
+        // 4. Confirm Cheque Payable via POST /api/v1/payables/:id/confirm -> Success
+        const confirmRes = await request(app)
+            .post(`/api/v1/payables/${createdPayable.id}/confirm`)
+            .set('x-api-key', payablesApiKey)
+            .send({
+                action: 'CONFIRMED',
+                cheque_number: 'SEC-2026-889900',
+                confirmed_by: 'COO External Portal API'
+            });
+        assert.strictEqual(confirmRes.status, 200);
+        assert.strictEqual(confirmRes.body.success, true);
+        assert.strictEqual(confirmRes.body.data.status, 'CONFIRMED');
+        assert.strictEqual(confirmRes.body.data.cheque_number, 'SEC-2026-889900');
+
+        // 5. Verify Scope Isolation: Key MUST be blocked from non-payables endpoints
+        // A. Blocked from orders
+        const ordersRes = await request(app)
+            .get('/api/v1/orders')
+            .set('x-api-key', payablesApiKey);
+        assert.strictEqual(ordersRes.status, 403);
+        assert.strictEqual(ordersRes.body.error, 'INSUFFICIENT_SCOPE');
+
+        // B. Blocked from products
+        const productsRes = await request(app)
+            .get('/api/v1/products')
+            .set('x-api-key', payablesApiKey);
+        assert.strictEqual(productsRes.status, 403);
+        assert.strictEqual(productsRes.body.error, 'INSUFFICIENT_SCOPE');
+
+        // C. Blocked from invoices
+        const invoicesRes = await request(app)
+            .get('/api/v1/invoices')
+            .set('x-api-key', payablesApiKey);
+        assert.strictEqual(invoicesRes.status, 403);
+        assert.strictEqual(invoicesRes.body.error, 'INSUFFICIENT_SCOPE');
+
+        // 6. Verify non-payables key CANNOT access payables
+        const nonPayablesKeyRes = await request(app)
+            .post('/api/api-keys')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                name: 'Orders Only Key',
+                scopes: ['orders:read']
+            });
+        const ordersOnlyKey = nonPayablesKeyRes.body.rawKey;
+
+        const unauthorizedPayablesRes = await request(app)
+            .get('/api/v1/payables')
+            .set('x-api-key', ordersOnlyKey);
+        assert.strictEqual(unauthorizedPayablesRes.status, 403);
+        assert.strictEqual(unauthorizedPayablesRes.body.error, 'INSUFFICIENT_SCOPE');
+    });
+
     after(() => {
         // Automatically delete all test decoys and temporary test database
         try {

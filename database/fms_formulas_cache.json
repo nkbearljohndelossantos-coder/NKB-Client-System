@@ -1,6 +1,6 @@
 {
   "success": true,
-  "count": 59,
+  "count": 60,
   "batch_scaling": {
     "batch_size": 100,
     "uom": "kg"
@@ -435,6 +435,84 @@
           "required_quantity": 0.9,
           "uom": "kg",
           "supplier": "HACHIMORI"
+        }
+      ]
+    },
+    {
+      "formula_id": 80,
+      "formula_code": "FORM-2026-0090",
+      "formula_name": "BELLASKIN 72H DEO SPRAY 1.2 (60mL)",
+      "product_category": "Cosmetic",
+      "active_version": "V1.0",
+      "version_status": "APPROVED",
+      "compounding_code": "CP-0941",
+      "batch_size": 100,
+      "batch_uom": "kg",
+      "total_raw_materials_count": 8,
+      "raw_materials_needed": [
+        {
+          "material_code": "MAT-WAT-01",
+          "material_name": "DE-IONIZED WATER",
+          "category": "Cosmetic",
+          "required_quantity": 12.11,
+          "uom": "kg",
+          "supplier": "MAYNILAD"
+        },
+        {
+          "material_code": "RM-DEO-AEROSOL",
+          "material_name": "DEO AEROSOL",
+          "category": "Cosmetic",
+          "required_quantity": 1.5,
+          "uom": "kg",
+          "supplier": "KALIOREXI"
+        },
+        {
+          "material_code": "RM-ETHYL-ALC-01",
+          "material_name": "ETHYL ALCOHOL - IND01",
+          "category": "Cosmetic",
+          "required_quantity": 20,
+          "uom": "kg",
+          "supplier": "LOYAL FAMILY"
+        },
+        {
+          "material_code": "FR-VIOLETDREAM-01",
+          "material_name": "VIOLET DREAM SCENT",
+          "category": "Cosmetic",
+          "required_quantity": 0.09,
+          "uom": "kg",
+          "supplier": "CHEMICO"
+        },
+        {
+          "material_code": "RM-PROCOL-01",
+          "material_name": "PROPYLENE GLYCOL (TRANSWORLD)",
+          "category": "Cosmetic",
+          "required_quantity": 5,
+          "uom": "kg",
+          "supplier": "TRANSWORLD"
+        },
+        {
+          "material_code": "RM-ALUM CHLOR-01",
+          "material_name": "SUMMIT ACH303 - ALUMINUM CHLOROHYDRATE 50% SOL'N (AMCHEM)",
+          "category": "Cosmetic",
+          "required_quantity": 60,
+          "uom": "kg",
+          "supplier": "AMCHEM"
+        },
+        {
+          "material_code": "RM-DMDM-01",
+          "material_name": "DMDM HYDANTOIN",
+          "category": "Cosmetic",
+          "required_quantity": 0.3,
+          "uom": "kg",
+          "supplier": "FW SPA"
+        },
+        {
+          "material_code": "RM-GLUCAM-P20",
+          "material_name": "GLUCAM P-20 (PPG-20 METHYL GLUCOSE ETHER)",
+          "category": "Cosmetic",
+          "required_quantity": 1,
+          "uom": "kg",
+          "supplier": "CHEMICO"
         }
       ]
     },
