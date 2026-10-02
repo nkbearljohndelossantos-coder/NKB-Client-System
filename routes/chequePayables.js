@@ -648,6 +648,7 @@ router.put('/:id', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER
             company_name,
             payable_category,
             invoice_number,
+            invoice_reference,
             invoice_date,
             terms,
             due_date,
@@ -656,7 +657,8 @@ router.put('/:id', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER
             comments,
             notes,
             attachment_data,
-            attachment_url
+            attachment_url,
+            attachment_removed
         } = req.body;
 
         const finalPayee = (payee_name || vendor || item.payee_name || '').trim();
@@ -764,6 +766,7 @@ router.put('/:id', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER
 
         return res.json({ success: true, message: 'Cheque payable record updated successfully.', data: updated });
     } catch (err) {
+        console.error('ChequePayables PUT error:', err);
         return res.status(500).json({ success: false, error: err.message });
     }
 });
