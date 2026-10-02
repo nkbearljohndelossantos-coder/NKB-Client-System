@@ -2734,6 +2734,30 @@ document.addEventListener('keydown', function (e) {
             return;
         }
     }
+
+    // 6. ALT+R / CTRL+ALT+R / ALT+SHIFT+R: Request Cheque Payable
+    const isKeyR = e.key && (e.key === 'r' || e.key === 'R');
+    const isRequestPayableShortcut = (e.altKey && isKeyR) || (isCtrlOrCmd && e.altKey && isKeyR) || (e.altKey && e.shiftKey && isKeyR);
+
+    if (isRequestPayableShortcut) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (typeof window.openRequestPayableModal === 'function' || typeof openRequestPayableModal === 'function') {
+            if (typeof switchTab === 'function') {
+                const payablesSec = document.getElementById('view-payables');
+                if (payablesSec && payablesSec.classList.contains('hidden')) {
+                    switchTab('payables');
+                }
+            }
+            const fn = window.openRequestPayableModal || openRequestPayableModal;
+            fn();
+            if (typeof NKB !== 'undefined' && NKB.showToast) {
+                NKB.showToast('Request Payable window opened (Alt+R)', 'info');
+            }
+            return;
+        }
+    }
 });
 
 // -------------------------------------------------------------
@@ -2869,6 +2893,22 @@ function getCommandPaletteData() {
         });
         items.push({
             group: 'Quick Actions',
+            icon: '💸',
+            title: 'Request Cheque Payable',
+            subtitle: 'Accountant payable request form for disbursal (Alt+R)',
+            badge: 'Alt+R',
+            action: () => {
+                if (typeof switchTab === 'function') {
+                    const payablesSec = document.getElementById('view-payables');
+                    if (payablesSec && payablesSec.classList.contains('hidden')) {
+                        switchTab('payables');
+                    }
+                }
+                if (typeof openRequestPayableModal === 'function') openRequestPayableModal();
+            }
+        });
+        items.push({
+            group: 'Quick Actions',
             icon: '📋',
             title: 'Requisition Raw Materials',
             subtitle: 'Submit supply request to Purchasing',
@@ -2896,6 +2936,7 @@ function getCommandPaletteData() {
             { id: 'deliveries', name: 'Deliveries / DR', icon: '🚚', desc: 'Delivery receipts & dispatch' },
             { id: 'invoices', name: 'Sales Invoices', icon: '🧾', desc: 'Billing & AR accounts' },
             { id: 'payments', name: 'Payments & Collections', icon: '💵', desc: 'Recorded payments & reconciliation' },
+            { id: 'payables', name: 'Accounts Payable', icon: '💸', desc: 'Cheque requests, approvals & disbursements' },
             { id: 'buffer', name: 'Buffer Inventory', icon: '📦', desc: 'Client reserved stock buffer' },
             { id: 'formulations', name: 'Lab & Formulations', icon: '🧪', desc: 'Chemical formulations & recipes' },
             { id: 'clients', name: 'B2B Clients Directory', icon: '🏢', desc: 'Customer accounts & special pricing' },

@@ -139,12 +139,15 @@
                             <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
                             <span>Payments & AR</span>
                         </button>
-                        <button onclick="switchTab('payables')" id="tab-btn-payables" class="sidebar-btn w-full flex items-center justify-between px-3 py-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 transition" title="Cheque Payables & COO Approvals">
+                        <button onclick="switchTab('payables')" id="tab-btn-payables" class="sidebar-btn w-full flex items-center justify-between px-3 py-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 transition" title="Cheque Payables & COO Approvals (Alt+R to Request)">
                             <div class="flex items-center gap-3">
                                 <svg class="w-4 h-4 flex-shrink-0 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
                                 <span>Cheque Payables</span>
                             </div>
-                            <span class="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-extrabold border border-amber-500/30">COO</span>
+                            <div class="flex items-center gap-1.5">
+                                <kbd class="hidden md:inline-block text-[9px] bg-slate-800 text-slate-400 px-1 py-0.2 rounded border border-slate-700 font-mono">Alt+R</kbd>
+                                <span class="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-extrabold border border-amber-500/30">COO</span>
+                            </div>
                         </button>
                         <button onclick="switchTab('buffer')" id="tab-btn-buffer" class="sidebar-btn w-full flex items-center gap-3 px-3 py-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 transition">
                             <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
@@ -839,9 +842,10 @@
                             <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                             <span>Refresh</span>
                         </button>
-                        <button onclick="openRequestPayableModal()" class="px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-600/20 transition inline-flex items-center gap-1.5" title="Accountant Cheque Request Form for Disbursal to COO">
+                        <button onclick="openRequestPayableModal()" class="px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-600/20 transition inline-flex items-center gap-1.5 cursor-pointer" title="Accountant Cheque Request Form for Disbursal to COO (Alt+R)">
                             <span>📝</span>
                             <span>Request Payables</span>
+                            <kbd class="hidden sm:inline-block px-1.5 py-0.5 text-[10px] bg-amber-700/80 text-amber-100 rounded border border-amber-400/40 font-mono">Alt+R</kbd>
                         </button>
                         <button onclick="printPaymentsReport()" class="px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 shadow-sm transition inline-flex items-center gap-1.5">
                             <svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
@@ -978,9 +982,10 @@
                             <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                             <span>Refresh</span>
                         </button>
-                        <button onclick="openRequestPayableModal()" class="px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-600/30 transition inline-flex items-center gap-1.5 cursor-pointer">
+                        <button onclick="openRequestPayableModal()" class="px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-600/30 transition inline-flex items-center gap-1.5 cursor-pointer" title="Accountant Cheque Request Form for Disbursal to COO (Alt+R)">
                             <span>📝</span>
                             <span>Request Payables</span>
+                            <kbd class="hidden sm:inline-block px-1.5 py-0.5 text-[10px] bg-amber-700/80 text-amber-100 rounded border border-amber-400/40 font-mono">Alt+R</kbd>
                         </button>
                         <button onclick="openCreateApiKeyModal('COO Cheque Payables API')" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 transition inline-flex items-center gap-1.5 cursor-pointer" title="Generate API Key for Cheque Payables & COO Approvals">
                             <span>🔑</span>
