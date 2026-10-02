@@ -4162,10 +4162,10 @@ async function openRequestPayableModal(payableId = null) {
                             </select>
                         </div>
 
-                        <!-- Row 1: Invoice Number -->
+                        <!-- Row 1: Cheque Number -->
                         <div>
-                            <label class="block text-[11px] sm:text-xs font-semibold text-slate-600 mb-1">Invoice Number</label>
-                            <input type="text" id="req-payable-invoice-no" value="${cp?.invoice_number || cp?.invoice_reference || ''}" placeholder="e.g. 239683" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-300 rounded-md sm:rounded-lg bg-white text-xs sm:text-sm font-mono text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                            <label class="block text-[11px] sm:text-xs font-semibold text-slate-600 mb-1">Cheque Number</label>
+                            <input type="text" id="req-payable-check-no" value="${cp?.cheque_number || ''}" placeholder="e.g. 0004928172" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-300 rounded-md sm:rounded-lg bg-white text-xs sm:text-sm font-mono text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                         </div>
 
                         <!-- Row 1: Date Created -->
@@ -4180,8 +4180,8 @@ async function openRequestPayableModal(payableId = null) {
                             <input type="text" id="req-payable-number" readonly value="${payableNumberDisplay}" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-blue-200 rounded-md sm:rounded-lg bg-blue-50/60 text-xs sm:text-sm text-blue-700 font-bold font-mono cursor-not-allowed">
                         </div>
 
-                        <!-- Row 2: Payable Category -->
-                        <div>
+                        <!-- Row 2: Payable Category (spans 2 columns on desktop) -->
+                        <div class="sm:col-span-1 lg:col-span-2">
                             <label class="block text-[11px] sm:text-xs font-semibold text-slate-600 mb-1">Payable Category</label>
                             <input type="text" id="req-payable-category-type" value="${cp?.payable_category || 'Trade payable'}" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-300 rounded-md sm:rounded-lg bg-white text-xs sm:text-sm font-medium text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                         </div>
@@ -4196,12 +4196,6 @@ async function openRequestPayableModal(payableId = null) {
                         <div>
                             <label class="block text-[11px] sm:text-xs font-semibold text-slate-600 mb-1">Created By</label>
                             <input type="text" id="req-payable-created-by" readonly value="${createdByDisplay}" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-200 rounded-md sm:rounded-lg bg-slate-50 text-xs sm:text-sm text-slate-700 font-medium cursor-not-allowed">
-                        </div>
-
-                        <!-- Row 2: Control Number -->
-                        <div>
-                            <label class="block text-[11px] sm:text-xs font-semibold text-slate-600 mb-1">Control Number</label>
-                            <input type="text" id="req-payable-control-no" value="${cp?.control_number || ''}" placeholder="e.g. 1993" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-300 rounded-md sm:rounded-lg bg-white text-xs sm:text-sm font-mono text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                         </div>
 
                         <!-- Row 3: Vendor -->
@@ -4253,7 +4247,6 @@ async function openRequestPayableModal(payableId = null) {
                                 }).join('')}
                             </select>
                             <input type="hidden" id="req-payable-bank-acct" value="${cp?.bank_account_number || ''}">
-                            <input type="hidden" id="req-payable-check-no" value="${cp?.cheque_number || ''}">
                         </div>
                     </div>
 
@@ -4382,17 +4375,15 @@ async function submitRequestPayable(e) {
     e.preventDefault();
 
     const companyName = document.getElementById('req-payable-company')?.value;
-    const invoiceNumber = document.getElementById('req-payable-invoice-no')?.value?.trim() || null;
+    const chequeNumber = document.getElementById('req-payable-check-no')?.value?.trim() || null;
     const invoiceDate = document.getElementById('req-payable-invoice-date')?.value || null;
     const payableCategory = document.getElementById('req-payable-category-type')?.value?.trim() || 'Trade payable';
-    const controlNumber = document.getElementById('req-payable-control-no')?.value?.trim() || null;
     const payee = document.getElementById('req-payable-payee')?.value?.trim();
     const terms = document.getElementById('req-payable-terms')?.value || 'Net 30';
     const dueDate = document.getElementById('req-payable-due-date')?.value || null;
     const description = document.getElementById('req-payable-description')?.value?.trim() || 'Payable Requisition';
     const bankName = document.getElementById('req-payable-bank')?.value;
     const bankAccount = document.getElementById('req-payable-bank-acct')?.value?.trim() || null;
-    const chequeNumber = document.getElementById('req-payable-check-no')?.value?.trim() || null;
     const comments = document.getElementById('req-payable-comments')?.value?.trim() || null;
 
     if (!payee || !bankName) {
@@ -4430,10 +4421,9 @@ async function submitRequestPayable(e) {
     try {
         const payload = {
             company_name: companyName,
-            invoice_number: invoiceNumber,
+            cheque_number: chequeNumber,
             invoice_date: invoiceDate,
             payable_category: payableCategory,
-            control_number: controlNumber,
             payee_name: payee,
             vendor: payee,
             terms: terms,
@@ -4443,7 +4433,6 @@ async function submitRequestPayable(e) {
             purpose: description,
             bank_name: bankName,
             bank_account_number: bankAccount,
-            cheque_number: chequeNumber,
             comments: comments,
             line_items: lineItems,
             amount: calculatedTotal,
@@ -4565,16 +4554,12 @@ async function openViewPayableDetailsModal(payableId) {
                         <span class="font-bold text-indigo-700">${cp.payee_name}</span>
                     </div>
                     <div>
-                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Invoice Number</span>
-                        <span class="font-mono font-bold text-slate-800">${cp.invoice_number || cp.invoice_reference || '—'}</span>
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Cheque Number</span>
+                        <span class="font-mono font-bold text-indigo-700">${cp.cheque_number || 'Pending Issuance'}</span>
                     </div>
                     <div>
-                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Invoice Date</span>
-                        <span class="font-medium text-slate-800">${cp.invoice_date ? NKB.formatDate(cp.invoice_date) : '—'}</span>
-                    </div>
-                    <div>
-                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Control Number</span>
-                        <span class="font-mono font-bold text-slate-800">${cp.control_number || '—'}</span>
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Date</span>
+                        <span class="font-medium text-slate-800">${cp.cheque_date ? NKB.formatDate(cp.cheque_date) : (cp.invoice_date ? NKB.formatDate(cp.invoice_date) : '—')}</span>
                     </div>
                     <div>
                         <span class="text-[10px] text-slate-400 font-bold uppercase block">Terms & Due Date</span>
@@ -4585,20 +4570,12 @@ async function openViewPayableDetailsModal(payableId) {
                         <span class="font-bold text-slate-800">${cp.payable_category || 'Trade payable'}</span>
                     </div>
                     <div>
-                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Expense Category</span>
-                        <span class="font-bold text-indigo-600">${cp.category || 'Raw Materials'}</span>
-                    </div>
-                    <div class="sm:col-span-2">
                         <span class="text-[10px] text-slate-400 font-bold uppercase block">Designated Bank</span>
                         <span class="font-bold text-slate-800">${cp.bank_name || '—'}</span>
                     </div>
                     <div>
                         <span class="text-[10px] text-slate-400 font-bold uppercase block">Account Number</span>
                         <span class="font-mono text-slate-700">${cp.bank_account_number || '—'}</span>
-                    </div>
-                    <div>
-                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Cheque Number</span>
-                        <span class="font-mono font-bold text-indigo-600">${cp.cheque_number || 'Pending Issuance'}</span>
                     </div>
                 </div>
 
@@ -5147,8 +5124,6 @@ async function printSingleChequeVoucher(payableId) {
                     <div class="meta-item"><span class="meta-label">Drawee Bank:</span><span class="meta-val">${cp.bank_name}</span></div>
                     <div class="meta-item"><span class="meta-label">Cheque Number:</span><span class="meta-val font-mono">${cp.cheque_number || 'Pending Check Release'}</span></div>
                     <div class="meta-item"><span class="meta-label">Account No:</span><span class="meta-val font-mono">${cp.bank_account_number || '—'}</span></div>
-                    <div class="meta-item"><span class="meta-label">Invoice Ref:</span><span class="meta-val font-mono">${cp.invoice_number || cp.invoice_reference || '—'}</span></div>
-                    ${cp.control_number ? `<div class="meta-item"><span class="meta-label">Control No:</span><span class="meta-val font-mono">${cp.control_number}</span></div>` : ''}
                     ${cp.terms ? `<div class="meta-item"><span class="meta-label">Terms:</span><span class="meta-val">${cp.terms}</span></div>` : ''}
                     ${cp.due_date ? `<div class="meta-item"><span class="meta-label">Due Date:</span><span class="meta-val">${NKB.formatDate(cp.due_date)}</span></div>` : ''}
                     ${cp.payable_category ? `<div class="meta-item"><span class="meta-label">Payable Type:</span><span class="meta-val">${cp.payable_category}</span></div>` : ''}

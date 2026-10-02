@@ -701,6 +701,9 @@ router.put('/:id', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER
         const finalPurpose = (purpose || description || item.purpose || '').trim();
         const finalCategory = (category || (processedLineItems && processedLineItems[0]?.category) || item.category || 'Raw Materials').trim();
         const finalInvoiceRef = (invoice_number || invoice_reference || item.invoice_reference || item.invoice_number || '').trim();
+        const finalChequeNum = cheque_number !== undefined
+            ? (cheque_number ? String(cheque_number).trim() : null)
+            : item.cheque_number;
 
         db.prepare(`
             UPDATE cheque_payables
@@ -709,7 +712,7 @@ router.put('/:id', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER
                 cheque_date = COALESCE(?, cheque_date),
                 bank_name = COALESCE(?, bank_name),
                 bank_account_number = COALESCE(?, bank_account_number),
-                cheque_number = COALESCE(?, cheque_number),
+                cheque_number = ?,
                 category = COALESCE(?, category),
                 purpose = COALESCE(?, purpose),
                 company_name = COALESCE(?, company_name),
@@ -731,7 +734,7 @@ router.put('/:id', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER
             cheque_date || due_date || null,
             bank_name ? String(bank_name).trim() : null,
             bank_account_number ? String(bank_account_number).trim() : null,
-            cheque_number ? String(cheque_number).trim() : null,
+            finalChequeNum,
             finalCategory || null,
             finalPurpose || null,
             company_name ? String(company_name).trim() : null,

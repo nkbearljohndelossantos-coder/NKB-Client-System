@@ -128,10 +128,7 @@
                 <span class="text-[10px] font-bold text-slate-500 uppercase block">Invoice Reference:</span>
                 <span id="v-invoice-ref" class="font-mono font-bold text-slate-800 block">—</span>
             </div>
-            <div>
-                <span class="text-[10px] font-bold text-slate-500 uppercase block">Control Number:</span>
-                <span id="v-control-no" class="font-mono font-bold text-slate-800 block">—</span>
-            </div>
+
             <div>
                 <span class="text-[10px] font-bold text-slate-500 uppercase block">Payment Term:</span>
                 <span id="v-terms" class="font-bold text-slate-800 block">—</span>
@@ -285,7 +282,6 @@
                 document.getElementById('v-bank-acc').textContent = cp.bank_account_number || '—';
                 document.getElementById('v-cheque-no').textContent = cp.cheque_number || 'Pending Check Release';
                 document.getElementById('v-invoice-ref').textContent = cp.invoice_number || cp.invoice_reference || '—';
-                document.getElementById('v-control-no').textContent = cp.control_number || '—';
                 document.getElementById('v-terms').textContent = cp.terms || '—';
                 document.getElementById('v-due-date').textContent = formatDate(cp.due_date);
 
