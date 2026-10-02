@@ -3796,48 +3796,94 @@ const DEFAULT_PAYABLE_COMPANIES_LIST = [
 
 const DEFAULT_PAYABLE_VENDORS_LIST = [
     '3F ENTERPRISES INC.',
+    'ABIGAIL TOLENTINO',
+    'ADALLA ROSETE',
+    'ALYSONS CHEMICAL ENTERPRISES INC',
     'ASTERIA APOTHECARY',
+    'BDO - GOLD',
+    'BDO - INSTALLMENT',
+    'BDO - SHOPMORE',
+    'BDO LIFE INC',
     'BENMARK TECHNOLOGY CO. LTD',
     'BESTPAK PACKAGING SOLUTIONS, INC.',
     'BH PACKAGING INC',
+    'BPI',
     'BRAND GALLERY PACKAGING WORLD',
     'BRENNTAG INGREDIENTS INC',
+    'BUNGA PHILS',
+    'BUREAU OF INTERNAL REVENUE',
+    'CCT CHEMICALS, INC.',
     'CENTROPAQ CORPORATION',
+    'CESAR SANTIA',
     'CHEMICO PHILIPPINES INC',
     'CHEMREZ TECHNOLOGIES, INC.',
     'CHEMWORLD MARKETING CORPORATION',
+    'CHINABANK',
     'COSPAK COSMETIC PACKAGING SUPPLIES, OPC',
     'CRT AROMA PHILIPPINES INC',
+    'DANIEL NICO P. LAUDIT',
+    'DARWIN VELASCO',
     'DJ & 3K CONSTRUCTION SUPPLY',
+    'DOC CARLO DONES',
+    'EAST WEST BANK',
     'ENVIRONATURAL CORPORATION',
     'ES PRINT MEDIA INC',
     'ESSENTIAL PRODUCTS & EXPERTISE FOR INTEGRATED MARKETS INC',
     'FORMULAB TECHNOLOGIES INC',
     'FW SPAVENUE INC',
+    'GIESARIL T. JUMILLA',
     'GIGATT PRINTING SERVICES AND TRADING CO.',
     'GOLDEN PEE-WEE OPC',
     'HACHIMORI INTERNATIONAL, INC',
+    'HIRAYA TRADING',
+    'JANET YASIS',
+    'JANICE SANDOVAL I',
+    'JENALYN AMADURE PINEDA',
     'JJJ SHOP',
     'KALIOREXI CORP',
+    'KELIN GRAPHICS SYSTEM CORP',
+    'LADYLYN MISAL',
     'LOGERCE MARKETING OPC',
     'LOYAL FAMILY',
     'LS PACKAGING',
+    'MARRON OSABEL',
     'MAYNILAD WATER SERVICES INC',
     'MEDINOVA PHARMACEUTICAL, INC.',
     'MEGASAMSOTITE INC',
+    'MERALCO',
+    'METROBANK',
+    'MICHAEL JAMES PEREZ',
     'NECO PHILIPPINES INCORPORATED',
+    'NINGBO UNIMED PHILIPPINES',
+    'NKB COSMETIC PRODUCTS TRADING',
+    'NKB COSMETICS MANUFACTURING - COOP',
+    'NKB MANUFACTURING - COOP',
+    'NKB MANUFACTURING - OFFICE ENCASHMENT',
+    'NORVIN BELLA',
     'OFFICE EXPENSES',
+    'OPTIMIZED CUSTOMER SOLUTIONS INC',
+    "PEP'D",
+    'PRECIOUS CLAUDINE B. YIM',
+    'PRINCESS ALBERT URAYENZA',
+    'PRINCESS LABERT URAYENZA',
     'PRINTWORK SALES, INCORPORATED',
     'PROESSENCES INC',
     'QUAD TRADERS INC',
+    'RCBC',
+    'REBECCA FILIPINAS',
     'REDOLENCE SALES AND MARKETING INC',
     'SAIPHER CG NON-SPECIALIZED WHOLESALE TRADING',
     'SBS PHILIPPINES CORPORATION',
     'SOGOMI CORP',
+    'SUNMETAL SOUTHERN LUZON STEEL CORP',
     'SUNTRA INTERNATIONAL TRADING CORPORATION',
     'THE GRASSE FRAGRANCE COMPANY INC.',
+    'TIME N TREASURES (LAZADA / SHOPEE)',
     'TRANS WORLD TRADING COMPANY, INCORPORATED',
+    'TURNBERRY INGREDIENTS CORP',
+    'UNION BANK',
     'UNION INKS AND GRAPHICS PHILIPPINES, INC.',
+    'VALUEPACK INDUSTRIAL AND PACKAGING SOLUTIONS INC',
     'VIECHEM MARKETING AND FOOD CO',
     'WELL-PACK CONTAINER CORPORATION'
 ];
@@ -3961,6 +4007,110 @@ async function openAddPayableCompanyModal() {
             NKB.showToast('Server error adding company.', 'error');
             saveBtn.disabled = false;
             saveBtn.textContent = 'Save Company';
+        }
+    }
+
+    if (saveBtn) saveBtn.onclick = handleSave;
+    if (input) {
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                handleSave();
+            } else if (e.key === 'Escape') {
+                overlay.remove();
+            }
+        });
+    }
+}
+
+async function openAddPayableVendorModal() {
+    const existing = document.getElementById('add-vendor-mini-modal');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'add-vendor-mini-modal';
+    overlay.className = 'fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[9999]';
+    overlay.innerHTML = `
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full p-5 space-y-4 border border-slate-200">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                <h4 class="text-sm font-bold text-slate-800">Add & Save New Vendor</h4>
+                <button type="button" onclick="document.getElementById('add-vendor-mini-modal').remove()" class="text-slate-400 hover:text-slate-600 text-lg font-bold leading-none cursor-pointer">&times;</button>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Vendor / Payee Name</label>
+                <input type="text" id="add-vendor-input" placeholder="e.g. SUNTRA INTERNATIONAL TRADING CORPORATION" class="w-full h-9 px-3 border border-slate-300 rounded-lg text-sm text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 uppercase">
+                <p class="text-[11px] text-slate-400 mt-1">This vendor will be saved into the database and available for future encoding suggestions.</p>
+            </div>
+            <div class="flex items-center justify-end gap-2 pt-2">
+                <button type="button" onclick="document.getElementById('add-vendor-mini-modal').remove()" class="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition cursor-pointer">Cancel</button>
+                <button type="button" id="btn-save-new-vendor" class="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg shadow-xs transition cursor-pointer">Save Vendor</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const input = document.getElementById('add-vendor-input');
+    const saveBtn = document.getElementById('btn-save-new-vendor');
+    if (input) input.focus();
+
+    async function handleSave() {
+        const vdrName = input?.value?.trim();
+        if (!vdrName) {
+            NKB.showToast('Please enter a vendor name.', 'warning');
+            return;
+        }
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+        try {
+            const res = await NKB.api('/api/cheque-payables/vendors', {
+                method: 'POST',
+                body: JSON.stringify({ name: vdrName })
+            });
+            if (res.success) {
+                NKB.showToast(`Vendor "${res.data.name}" added and saved for future encoding!`, 'success');
+                // Cache into memory
+                if (typeof cachedPayablesMeta !== 'undefined' && Array.isArray(cachedPayablesMeta?.vendors)) {
+                    if (!cachedPayablesMeta.vendors.includes(res.data.name)) {
+                        cachedPayablesMeta.vendors.push(res.data.name);
+                        cachedPayablesMeta.vendors.sort((a, b) => a.localeCompare(b));
+                    }
+                }
+                if (window.cachedPayablesMeta && Array.isArray(window.cachedPayablesMeta.vendors)) {
+                    if (!window.cachedPayablesMeta.vendors.includes(res.data.name)) {
+                        window.cachedPayablesMeta.vendors.push(res.data.name);
+                        window.cachedPayablesMeta.vendors.sort((a, b) => a.localeCompare(b));
+                    }
+                }
+                if (Array.isArray(DEFAULT_PAYABLE_VENDORS_LIST) && !DEFAULT_PAYABLE_VENDORS_LIST.includes(res.data.name)) {
+                    DEFAULT_PAYABLE_VENDORS_LIST.push(res.data.name);
+                    DEFAULT_PAYABLE_VENDORS_LIST.sort((a, b) => a.localeCompare(b));
+                }
+
+                // If payable form is open, set value
+                const payeeInput = document.getElementById('req-payable-payee');
+                if (payeeInput) {
+                    payeeInput.value = res.data.name;
+                    // Update datalist
+                    const datalist = document.getElementById('payable-vendors-datalist');
+                    if (datalist) {
+                        const opt = document.createElement('option');
+                        opt.value = res.data.name;
+                        datalist.appendChild(opt);
+                    }
+                    payeeInput.focus();
+                }
+
+                overlay.remove();
+            } else {
+                NKB.showToast(res.error || 'Failed to add vendor.', 'error');
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Save Vendor';
+            }
+        } catch (err) {
+            console.error('Add vendor error:', err);
+            NKB.showToast('Server error adding vendor.', 'error');
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Save Vendor';
         }
     }
 
@@ -4354,10 +4504,16 @@ async function openRequestPayableModal(payableId = null) {
                         <div class="relative">
                             <div class="flex items-center justify-between mb-1">
                                 <label class="text-[11px] sm:text-xs font-semibold text-slate-600">Vendor *</label>
-                                <button type="button" onclick="togglePayableVendorDropdown()" class="text-[10px] sm:text-[11px] text-blue-600 hover:text-blue-800 font-bold hover:underline inline-flex items-center gap-0.5 cursor-pointer" title="Click to view all suggested vendors">
-                                    <span>Suggestions</span>
-                                    <span>▾</span>
-                                </button>
+                                <div class="flex items-center gap-1.5">
+                                    <button type="button" onclick="openAddPayableVendorModal()" class="text-[10px] sm:text-[11px] text-emerald-600 hover:text-emerald-800 font-bold hover:underline inline-flex items-center gap-0.5 cursor-pointer" title="Add & Save New Vendor">
+                                        + Add
+                                    </button>
+                                    <span class="text-slate-300 select-none">|</span>
+                                    <button type="button" onclick="togglePayableVendorDropdown()" class="text-[10px] sm:text-[11px] text-blue-600 hover:text-blue-800 font-bold hover:underline inline-flex items-center gap-0.5 cursor-pointer" title="Click to view all suggested vendors">
+                                        <span>Suggestions</span>
+                                        <span>▾</span>
+                                    </button>
+                                </div>
                             </div>
                             <div class="relative">
                                 <input type="text" 
@@ -4645,9 +4801,19 @@ async function submitRequestPayable(e) {
                     : DEFAULT_PAYABLE_VENDORS_LIST);
                 const exists = knownVendors.some(v => v.toLowerCase().trim() === payee.toLowerCase().trim());
                 if (!exists) {
-                    if (typeof cachedPayablesMeta !== 'undefined' && Array.isArray(cachedPayablesMeta.vendors)) {
+                    if (typeof cachedPayablesMeta !== 'undefined' && Array.isArray(cachedPayablesMeta?.vendors)) {
                         cachedPayablesMeta.vendors.push(payee);
                         cachedPayablesMeta.vendors.sort((a, b) => a.localeCompare(b));
+                    }
+                    if (window.cachedPayablesMeta && Array.isArray(window.cachedPayablesMeta.vendors)) {
+                        if (!window.cachedPayablesMeta.vendors.includes(payee)) {
+                            window.cachedPayablesMeta.vendors.push(payee);
+                            window.cachedPayablesMeta.vendors.sort((a, b) => a.localeCompare(b));
+                        }
+                    }
+                    if (Array.isArray(DEFAULT_PAYABLE_VENDORS_LIST) && !DEFAULT_PAYABLE_VENDORS_LIST.includes(payee)) {
+                        DEFAULT_PAYABLE_VENDORS_LIST.push(payee);
+                        DEFAULT_PAYABLE_VENDORS_LIST.sort((a, b) => a.localeCompare(b));
                     }
                     NKB.api('/api/cheque-payables/vendors', {
                         method: 'POST',
@@ -12288,6 +12454,12 @@ window.openAttachCheckModal = openAttachCheckModal;
 window.submitAttachCheck = submitAttachCheck;
 window.handlePaymentAttachmentSelect = handlePaymentAttachmentSelect;
 window.clearPaymentAttachment = clearPaymentAttachment;
+window.openAddPayableVendorModal = openAddPayableVendorModal;
+window.openAddPayableCompanyModal = openAddPayableCompanyModal;
+window.togglePayableVendorDropdown = togglePayableVendorDropdown;
+window.selectPayableVendor = selectPayableVendor;
+window.onPayableVendorInput = onPayableVendorInput;
+window.onPayableVendorFocus = onPayableVendorFocus;
 
 // =============================================================
 // IT MANAGEMENT & MASTER RECORDS EDITOR
