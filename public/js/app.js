@@ -1906,48 +1906,48 @@ async function openEditPOModal(poId) {
                     <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
                 </div>
                 
-                <form id="form-edit-po" onsubmit="submitEditPO(event)" class="space-y-4 text-xs font-semibold flex-1 overflow-y-auto pr-1">
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <form id="form-edit-po" onsubmit="submitEditPO(event)" class="space-y-4 text-xs font-normal flex-1 overflow-y-auto pr-1">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                         <div>
-                            <label class="block text-slate-600 mb-1">Client / Buyer</label>
-                            <div class="px-3 py-2 border rounded-xl bg-slate-100 text-slate-800 font-bold">
+                            <label class="block text-slate-500 font-medium text-xs mb-1.5 uppercase tracking-wider">Client / Buyer</label>
+                            <div class="px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 text-slate-700 font-medium text-xs">
                                 ${(po.is_vyuceutical_ops === 1 || (po.company_name && po.company_name.toLowerCase().includes('vyuceutical'))) ? `Vyuceutical OPC - ${po.contact_person || po.company_name}` : po.company_name}
                             </div>
                         </div>
                         <div>
-                            <label class="block text-slate-600 mb-1">Order Date</label>
-                            <input type="date" id="edit-po-date" value="${poDateFormatted}" class="w-full px-3 py-2 border rounded-xl bg-white font-medium text-slate-900">
+                            <label class="block text-slate-500 font-medium text-xs mb-1.5 uppercase tracking-wider">Order Date</label>
+                            <input type="date" id="edit-po-date" value="${poDateFormatted}" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white font-normal text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
                         </div>
                         <div>
-                            <label class="block text-slate-600 mb-1">Target Delivery Date</label>
-                            <input type="date" id="edit-po-delivery-date" value="${deliveryDateFormatted}" class="w-full px-3 py-2 border rounded-xl bg-white font-medium text-slate-900">
+                            <label class="block text-slate-500 font-medium text-xs mb-1.5 uppercase tracking-wider">Target Delivery Date</label>
+                            <input type="date" id="edit-po-delivery-date" value="${deliveryDateFormatted}" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white font-normal text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
                         </div>
                     </div>
 
                     <input type="hidden" id="edit-po-billing-policy" value="${po.billing_policy || 'ACTUAL_DELIVERY'}">
                     <div>
-                        <label class="block text-slate-600 mb-1 font-bold">Term of Payment *</label>
-                        <select id="edit-po-form-of-payment" onchange="toggleCustomPOTerm('edit')" class="w-full px-3 py-2 border rounded-xl bg-white font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500">
+                        <label class="block text-slate-500 font-medium text-xs mb-1.5 uppercase tracking-wider">Term of Payment *</label>
+                        <select id="edit-po-form-of-payment" onchange="toggleCustomPOTerm('edit')" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white font-normal text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
                             <option value="COD" ${selectedTerm === 'COD' ? 'selected' : ''}>COD (Cash on Delivery)</option>
                             <option value="7d" ${selectedTerm === '7d' ? 'selected' : ''}>7d (7 Days)</option>
                             <option value="15d" ${selectedTerm === '15d' ? 'selected' : ''}>15d (15 Days)</option>
                             <option value="30d" ${selectedTerm === '30d' ? 'selected' : ''}>30d (30 Days)</option>
                             <option value="CUSTOM" ${isCustom ? 'selected' : ''}>Custom Term...</option>
                         </select>
-                        <input type="text" id="edit-po-form-of-payment-custom" value="${isCustom ? rawTerm.replace(/"/g, '&quot;') : ''}" placeholder="e.g. 50% DP, 50% upon delivery..." class="${isCustom ? '' : 'hidden'} mt-1.5 w-full px-3 py-1.5 border rounded-lg bg-white text-xs font-medium text-slate-900">
+                        <input type="text" id="edit-po-form-of-payment-custom" value="${isCustom ? rawTerm.replace(/"/g, '&quot;') : ''}" placeholder="e.g. 50% DP, 50% upon delivery..." class="${isCustom ? '' : 'hidden'} mt-1.5 w-full px-3 py-2 border border-slate-200 rounded-xl bg-white text-xs font-normal text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
                     </div>
 
                     <!-- Multi-Brand Search with Suggestions (Edit Mode) -->
-                    <div class="p-3 bg-slate-50 border border-slate-300 rounded-2xl space-y-2 relative shadow-sm" id="edit-po-search-wrapper">
+                    <div class="p-3.5 bg-slate-50/70 border border-slate-200/90 rounded-2xl space-y-2.5 relative shadow-sm" id="edit-po-search-wrapper">
                         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                            <div class="flex items-center gap-1.5">
+                            <div class="flex items-center gap-2">
                                 <span class="text-sm">🔍</span>
-                                <span class="text-xs font-bold text-slate-900">Search & Add Products</span>
-                                <span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-extrabold uppercase">Multi-Brand</span>
+                                <span class="text-xs font-semibold text-slate-800 tracking-wide">Search & Add Products</span>
+                                <span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-medium uppercase border border-indigo-200/60">Multi-Brand</span>
                             </div>
                             <div class="flex items-center gap-2 w-full sm:w-auto" id="edit-po-brand-filter-container">
-                                <label for="edit-po-brand-select" class="text-[11px] font-semibold text-slate-500 whitespace-nowrap">Filter Brand:</label>
-                                <select id="edit-po-brand-select" onchange="onEditPOBrandFilterChanged()" class="px-2.5 py-1 text-xs border border-slate-300 rounded-lg bg-white font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500">
+                                <label for="edit-po-brand-select" class="text-[11px] font-normal text-slate-500 whitespace-nowrap">Filter Brand:</label>
+                                <select id="edit-po-brand-select" onchange="onEditPOBrandFilterChanged()" class="px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white font-normal text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition">
                                     <option value="ALL">-- All Brands --</option>
                                 </select>
                             </div>
@@ -1964,7 +1964,7 @@ async function openEditPOModal(poId) {
                                            onfocus="showEditPOSuggestions()"
                                            placeholder="Type product name, SKU, or brand (e.g. Amber Romance, Toner, Sunscreen)..." 
                                            autocomplete="off"
-                                           class="w-full pl-9 pr-8 py-2 text-xs border border-slate-300 rounded-xl bg-white font-medium text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm">
+                                           class="w-full pl-9 pr-8 py-2 text-xs border border-slate-200 rounded-xl bg-white font-normal text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-sm transition">
                                     <span class="absolute left-3 top-2.5 text-slate-400 text-xs">🔍</span>
                                     <button type="button" 
                                             id="edit-po-search-clear-btn" 
@@ -1974,7 +1974,7 @@ async function openEditPOModal(poId) {
                                 <button type="button" 
                                         id="edit-po-search-btn" 
                                         onclick="triggerEditPOSearchBtn()" 
-                                        class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm shadow-indigo-600/20 active:scale-95">
+                                        class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-medium transition flex items-center gap-1.5 shadow-sm shadow-indigo-600/20 active:scale-95">
                                     <span>🔍</span>
                                     <span>Search Product</span>
                                 </button>
@@ -1989,10 +1989,13 @@ async function openEditPOModal(poId) {
                     </div>
 
                     <!-- Line Items Section -->
-                    <div class="space-y-2 pt-2 border-t border-slate-100">
+                    <div class="space-y-2.5 pt-2 border-t border-slate-100">
                         <div class="flex justify-between items-center">
-                            <span class="text-xs font-bold uppercase tracking-wider text-slate-700">Order Products (Line Items)</span>
-                            <button type="button" onclick="addEditPOLineItem()" class="px-3 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition flex items-center gap-1">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-semibold uppercase tracking-wider text-slate-700">Order Products (Line Items)</span>
+                                <span class="text-[11px] text-slate-400 font-normal">· Clean selection & quantities</span>
+                            </div>
+                            <button type="button" onclick="addEditPOLineItem()" class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 rounded-lg text-xs font-medium transition flex items-center gap-1.5 shadow-sm">
                                 <span>➕</span><span>Add Product Line</span>
                             </button>
                         </div>
@@ -2000,16 +2003,16 @@ async function openEditPOModal(poId) {
                         <div class="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
                             <div class="max-h-72 sm:max-h-80 overflow-y-auto overflow-x-auto">
                                 <table class="w-full text-left text-xs">
-                                    <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase sticky top-0 z-10 shadow-sm">
+                                    <thead class="bg-slate-50/90 backdrop-blur-sm border-b border-slate-200 text-slate-500 font-medium text-[11px] uppercase tracking-wider sticky top-0 z-10 shadow-sm">
                                         <tr>
-                                            <th class="py-2.5 px-3">Product</th>
-                                            <th class="py-2.5 px-3 w-32">Target Qty (pcs)</th>
-                                            <th class="py-2.5 px-3 w-36">Fixed Unit Price (₱)</th>
-                                            <th class="py-2.5 px-3 w-32">Subtotal (₱)</th>
-                                            <th class="py-2.5 px-2 w-12 text-center">Action</th>
+                                            <th class="py-3 px-3.5">Product</th>
+                                            <th class="py-3 px-3.5 w-32">Target Qty (pcs)</th>
+                                            <th class="py-3 px-3.5 w-36">Fixed Unit Price (₱)</th>
+                                            <th class="py-3 px-3.5 w-32">Subtotal (₱)</th>
+                                            <th class="py-3 px-2 w-12 text-center">Action</th>
                                         </tr>
                                     </thead>
-                                    <tbody id="edit-po-lines-body" class="divide-y divide-slate-100 font-medium">
+                                    <tbody id="edit-po-lines-body" class="divide-y divide-slate-100 font-normal">
                                         <!-- Dynamic Rows -->
                                     </tbody>
                                 </table>
@@ -2018,21 +2021,30 @@ async function openEditPOModal(poId) {
                     </div>
 
                     <!-- Summary & Totals -->
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-slate-50/70 rounded-2xl border border-slate-200/80 mt-3">
                         <div>
-                            <label class="block text-slate-600 mb-1">Special Notes / Description (Appears on Printed Order above payment)</label>
-                            <textarea id="edit-po-notes" rows="2" placeholder="Special formulation notes, packaging variants, delivery instructions..." class="w-full px-3 py-2 border rounded-xl bg-white">${po.notes || ''}</textarea>
+                            <label class="block text-xs font-medium text-slate-500 mb-1.5 uppercase tracking-wider">Special Notes / Description (Appears on Printed Order)</label>
+                            <textarea id="edit-po-notes" rows="2" placeholder="Special formulation notes, packaging variants, delivery instructions..." class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white text-xs text-slate-700 font-normal focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">${po.notes || ''}</textarea>
                         </div>
-                        <div class="space-y-1.5 text-right flex flex-col justify-center">
-                            <div class="text-slate-500">Total Items: <strong id="edit-po-total-items" class="text-slate-900">0</strong></div>
-                            <div class="text-slate-500">Total Target Quantity: <strong id="edit-po-total-qty" class="text-slate-900">0 pcs</strong></div>
-                            <div class="text-base font-extrabold text-indigo-900 pt-1 border-t border-slate-200">Grand Total: <span id="edit-po-grand-total">₱0.00</span></div>
+                        <div class="space-y-2 text-right flex flex-col justify-center">
+                            <div class="text-xs text-slate-500 font-normal flex justify-between sm:justify-end gap-3">
+                                <span>Total Items:</span>
+                                <strong id="edit-po-total-items" class="text-slate-700 font-medium font-mono">0</strong>
+                            </div>
+                            <div class="text-xs text-slate-500 font-normal flex justify-between sm:justify-end gap-3">
+                                <span>Total Target Quantity:</span>
+                                <strong id="edit-po-total-qty" class="text-slate-700 font-medium font-mono">0 pcs</strong>
+                            </div>
+                            <div class="pt-2 border-t border-slate-200 flex justify-between sm:justify-end items-baseline gap-3">
+                                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Grand Total:</span>
+                                <span id="edit-po-grand-total" class="text-xl font-bold text-indigo-600 font-mono tracking-tight">₱0.00</span>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="flex justify-end gap-2 pt-2 border-t border-slate-100 flex-shrink-0">
-                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold">Cancel</button>
-                        <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-md shadow-indigo-600/30">Update Order</button>
+                    <div class="flex justify-end gap-2.5 pt-3 border-t border-slate-100 flex-shrink-0">
+                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-medium text-xs transition">Cancel</button>
+                        <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-medium text-xs shadow-md shadow-indigo-600/30 transition">Update Order</button>
                     </div>
                 </form>
             </div>
@@ -2273,9 +2285,9 @@ function renderEditPOLineItems() {
         grandTotal += lineSubtotal;
 
         return `
-            <tr class="hover:bg-slate-50 transition" id="edit-po-row-${idx}">
-                <td class="py-2.5 px-3">
-                    <select onchange="updateEditPOLineItem(${idx}, 'product_id', this.value)" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500">
+            <tr class="hover:bg-slate-50/70 transition" id="edit-po-row-${idx}">
+                <td class="py-3 px-3.5">
+                    <select onchange="updateEditPOLineItem(${idx}, 'product_id', this.value)" class="w-full px-3 py-2 border border-slate-200 hover:border-slate-300 rounded-xl text-xs bg-white font-normal text-slate-800 tracking-normal focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
                         ${window.renderProductOptionsGroupedByBrand ? window.renderProductOptionsGroupedByBrand(editPOCatalog, item.product_id) : editPOCatalog.map(p => `
                             <option value="${p.id}" ${p.id === item.product_id ? 'selected' : ''}>
                                 ${p.display_name || p.clean_name || p.name} - ₱${Number(p.default_price).toFixed(2)}${p.has_custom_price ? ' [Contract Rate]' : ''}
@@ -2283,23 +2295,23 @@ function renderEditPOLineItems() {
                         `).join('')}
                     </select>
                 </td>
-                <td class="py-2.5 px-3">
+                <td class="py-3 px-3.5">
                     <input type="number" min="1" step="1" 
                            value="${item.target_quantity}" 
                            oninput="updateEditPOLineItem(${idx}, 'target_quantity', this.value)" 
-                           class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500">
+                           class="w-full px-3 py-2 border border-slate-200 hover:border-slate-300 rounded-xl text-xs font-normal text-slate-800 text-center tracking-normal focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
                 </td>
-                <td class="py-2.5 px-3">
-                    <div class="px-2.5 py-1.5 bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold text-slate-900 font-mono flex items-center justify-between">
+                <td class="py-3 px-3.5">
+                    <div class="px-3 py-2 bg-slate-50 border border-slate-200/80 rounded-xl text-xs font-normal text-slate-600 font-mono flex items-center justify-between shadow-sm">
                         <span>₱${Number(item.unit_price || 0).toFixed(2)}</span>
-                        <span class="text-[9px] uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">Fixed</span>
+                        <span class="text-[9px] uppercase px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-medium border border-emerald-200/60">Fixed</span>
                     </div>
                 </td>
-                <td id="edit-po-line-total-${idx}" class="py-2.5 px-3 font-extrabold text-slate-900 font-mono">
+                <td id="edit-po-line-total-${idx}" class="py-3 px-3.5 font-semibold text-slate-900 font-mono text-xs tracking-tight">
                     ${NKB.formatCurrency(lineSubtotal)}
                 </td>
-                <td class="py-2.5 px-2 text-center">
-                    <button type="button" onclick="removeEditPOLineItem(${idx})" class="p-1.5 hover:bg-rose-50 text-rose-600 rounded-lg transition" title="Remove line">
+                <td class="py-3 px-2 text-center">
+                    <button type="button" onclick="removeEditPOLineItem(${idx})" class="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition" title="Remove line">
                         ✖
                     </button>
                 </td>
