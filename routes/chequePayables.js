@@ -687,15 +687,18 @@ router.put('/:id', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER
         const numAmount = parseFloat(rawAmount);
 
         let savedAttachment = item.attachment_url;
-        if (attachment_data) {
+        if (req.body.attachment_removed === true || req.body.attachment_removed === 'true') {
+            savedAttachment = null;
+        } else if (attachment_data) {
             savedAttachment = saveAttachment(attachment_data, 'payables');
-        } else if (attachment_url) {
+        } else if (attachment_url !== undefined && attachment_url !== null) {
             savedAttachment = attachment_url;
         }
 
         const finalSerializedItems = processedLineItems ? JSON.stringify(processedLineItems) : (line_items ? (typeof line_items === 'string' ? line_items : JSON.stringify(line_items)) : item.line_items);
         const finalPurpose = (purpose || description || item.purpose || '').trim();
         const finalCategory = (category || (processedLineItems && processedLineItems[0]?.category) || item.category || 'Raw Materials').trim();
+        const finalInvoiceRef = (invoice_number || invoice_reference || item.invoice_reference || item.invoice_number || '').trim();
 
         db.prepare(`
             UPDATE cheque_payables
@@ -716,7 +719,8 @@ router.put('/:id', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER
                 control_number = COALESCE(?, control_number),
                 line_items = COALESCE(?, line_items),
                 comments = COALESCE(?, comments),
-                attachment_url = COALESCE(?, attachment_url),
+                attachment_url = ?,
+                invoice_reference = COALESCE(?, invoice_reference),
                 updated_at = datetime('now', 'localtime')
             WHERE id = ?
         `).run(
@@ -738,6 +742,7 @@ router.put('/:id', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER
             finalSerializedItems,
             comments ? String(comments).trim() : null,
             savedAttachment,
+            finalInvoiceRef || null,
             item.id
         );
 

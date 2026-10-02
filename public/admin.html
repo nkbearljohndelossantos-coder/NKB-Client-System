@@ -997,66 +997,6 @@
                     </div>
                 </div>
 
-                <!-- KPI Cards for Cheque Payables -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div class="kpi-card border-t-4 border-indigo-500 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                        <div class="flex items-center justify-between">
-                            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Requisitioned</span>
-                            <span class="p-1.5 rounded-lg bg-indigo-50 text-indigo-600 text-xs font-bold">ALL CHEQUES</span>
-                        </div>
-                        <div id="payables-kpi-total-amount" class="text-3xl font-black text-slate-900 mt-2">₱0.00</div>
-                        <div id="payables-kpi-total-count" class="text-xs text-indigo-600 font-semibold mt-1">0 total requests</div>
-                    </div>
-                    <div class="kpi-card border-t-4 border-amber-500 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:bg-amber-50/30 transition" onclick="quickFilterPayablesStatus('PENDING_COO_APPROVAL')" title="Filter Pending COO Approval">
-                        <div class="flex items-center justify-between">
-                            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Pending COO Approval</span>
-                            <span class="p-1.5 rounded-lg bg-amber-50 text-amber-600 text-xs font-bold">PENDING COO</span>
-                        </div>
-                        <div id="payables-kpi-pending-amount" class="text-3xl font-black text-amber-600 mt-2">₱0.00</div>
-                        <div id="payables-kpi-pending-count" class="text-xs text-amber-700 font-semibold mt-1">0 awaiting authorization</div>
-                    </div>
-                    <div class="kpi-card border-t-4 border-emerald-500 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:bg-emerald-50/30 transition" onclick="quickFilterPayablesStatus('CONFIRMED')" title="Filter Confirmed Cheques">
-                        <div class="flex items-center justify-between">
-                            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Confirmed by COO</span>
-                            <span class="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 text-xs font-bold">COO APPROVED</span>
-                        </div>
-                        <div id="payables-kpi-confirmed-amount" class="text-3xl font-black text-emerald-600 mt-2">₱0.00</div>
-                        <div id="payables-kpi-confirmed-count" class="text-xs text-emerald-700 font-semibold mt-1">0 confirmed for release</div>
-                    </div>
-                    <div class="kpi-card border-t-4 border-blue-500 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:bg-blue-50/30 transition" onclick="quickFilterPayablesStatus('ISSUED')" title="Filter Issued Cheques">
-                        <div class="flex items-center justify-between">
-                            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Issued & Disbursed</span>
-                            <span class="p-1.5 rounded-lg bg-blue-50 text-blue-600 text-xs font-bold">DISBURSED</span>
-                        </div>
-                        <div id="payables-kpi-disbursed-amount" class="text-3xl font-black text-blue-600 mt-2">₱0.00</div>
-                        <div id="payables-kpi-disbursed-count" class="text-xs text-blue-700 font-semibold mt-1">0 cheques released</div>
-                    </div>
-                </div>
-
-                <!-- Live Depository Bank Balances & Liquid Funds Overview -->
-                <div class="bg-slate-950 rounded-2xl border border-slate-800 p-5 text-white shadow-xl space-y-3">
-                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
-                        <div>
-                            <div class="text-xs font-black uppercase tracking-wider text-amber-400 flex items-center gap-2">
-                                <span>🏦</span><span>Company Depository Bank Accounts & Liquid Balances</span>
-                            </div>
-                            <p class="text-[11px] text-slate-400 mt-0.5">Real-time funds available for check disbursements across accredited Philippine depository banks.</p>
-                        </div>
-                        <div class="flex items-center gap-3">
-                            <div class="text-right">
-                                <div class="text-[10px] text-slate-400 uppercase font-semibold">Total Liquid Reserves</div>
-                                <div id="bank-balances-total" class="text-base font-black text-emerald-400">₱0.00</div>
-                            </div>
-                            <button type="button" onclick="loadBankBalances()" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer" title="Refresh Bank Balances">
-                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                            </button>
-                        </div>
-                    </div>
-                    <div id="bank-balances-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 pt-1">
-                        <div class="text-center py-4 text-xs text-slate-500 col-span-full">Loading bank account balances...</div>
-                    </div>
-                </div>
-
                 <!-- Post-Dated Cheque (PDC) Maturity Alert Banner -->
                 <div id="payables-pdc-alert-banner" class="hidden p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
                     <div class="flex items-center gap-3">

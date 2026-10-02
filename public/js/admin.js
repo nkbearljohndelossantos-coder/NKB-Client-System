@@ -3200,6 +3200,8 @@ let cachedPayablesSummary = {};
 let cachedPayablesMeta = { banks: [], categories: [] };
 let cachedBankAccounts = [];
 let currentPayableAttachmentBase64 = null;
+let currentPayableExistingAttachmentUrl = null;
+let currentPayableAttachmentRemoved = false;
 const LIVE_COO_API_KEY = 'nkb_inv_live_6ae6965c1ca61aef54939d6b1ecfac1b';
 
 async function loadBankBalances() {
@@ -3208,6 +3210,7 @@ async function loadBankBalances() {
         if (!res.success) return;
 
         cachedBankAccounts = Array.isArray(res.data) ? res.data : [];
+        window.cachedBankAccounts = cachedBankAccounts;
         const summary = res.summary || {};
 
         const totalEl = document.getElementById('bank-balances-total');
@@ -3275,11 +3278,13 @@ async function loadPayables() {
         }
 
         cachedPayables = Array.isArray(res.data) ? res.data : [];
+        window.cachedPayables = cachedPayables;
         cachedPayablesSummary = res.summary || {};
         cachedPayablesMeta = {
             banks: Array.isArray(res.banks) ? res.banks : [],
             categories: Array.isArray(res.categories) ? res.categories : []
         };
+        window.cachedPayablesMeta = cachedPayablesMeta;
 
         // Also fetch live bank balances
         loadBankBalances();
@@ -3651,12 +3656,15 @@ async function handlePayableAttachmentSelect(input) {
     const previewContainer = document.getElementById('req-payable-preview-container');
     const previewImg = document.getElementById('req-payable-preview-img');
     const previewName = document.getElementById('req-payable-preview-name');
+    const previewLink = document.getElementById('req-payable-preview-link');
     const dropText = document.getElementById('req-payable-droptext');
 
     if (!input.files || !input.files[0]) {
         currentPayableAttachmentBase64 = null;
-        if (previewContainer) previewContainer.classList.add('hidden');
-        if (dropText) dropText.classList.remove('hidden');
+        if (!currentPayableExistingAttachmentUrl) {
+            if (previewContainer) previewContainer.classList.add('hidden');
+            if (dropText) dropText.classList.remove('hidden');
+        }
         return;
     }
 
@@ -3668,12 +3676,20 @@ async function handlePayableAttachmentSelect(input) {
     }
 
     try {
+        currentPayableAttachmentRemoved = false;
+        currentPayableExistingAttachmentUrl = null;
         if (file.type && file.type.startsWith('image/')) {
             const compressed = await NKB.compressImage(file, { maxWidth: 1600, quality: 0.82 });
             currentPayableAttachmentBase64 = compressed;
             if (previewContainer) previewContainer.classList.remove('hidden');
             if (dropText) dropText.classList.add('hidden');
-            if (previewName) previewName.textContent = `${file.name} (Optimized)`;
+            if (previewLink) {
+                previewLink.textContent = `🖼️ ${file.name} (Optimized)`;
+                previewLink.href = currentPayableAttachmentBase64;
+                previewLink.classList.remove('hidden');
+            } else if (previewName) {
+                previewName.textContent = `${file.name} (Optimized)`;
+            }
             if (previewImg) {
                 previewImg.src = currentPayableAttachmentBase64;
                 previewImg.classList.remove('hidden');
@@ -3684,7 +3700,13 @@ async function handlePayableAttachmentSelect(input) {
                 currentPayableAttachmentBase64 = e.target.result;
                 if (previewContainer) previewContainer.classList.remove('hidden');
                 if (dropText) dropText.classList.add('hidden');
-                if (previewName) previewName.textContent = file.name;
+                if (previewLink) {
+                    previewLink.textContent = `📄 ${file.name}`;
+                    previewLink.href = currentPayableAttachmentBase64;
+                    previewLink.classList.remove('hidden');
+                } else if (previewName) {
+                    previewName.textContent = file.name;
+                }
                 if (previewImg) previewImg.classList.add('hidden');
             };
             reader.readAsDataURL(file);
@@ -3697,12 +3719,22 @@ async function handlePayableAttachmentSelect(input) {
 
 function clearPayableAttachment() {
     currentPayableAttachmentBase64 = null;
+    currentPayableExistingAttachmentUrl = null;
+    currentPayableAttachmentRemoved = true;
     const input = document.getElementById('req-payable-file');
     if (input) input.value = '';
     const previewContainer = document.getElementById('req-payable-preview-container');
     if (previewContainer) previewContainer.classList.add('hidden');
+    const previewImg = document.getElementById('req-payable-preview-img');
+    if (previewImg) {
+        previewImg.src = '';
+        previewImg.classList.add('hidden');
+    }
     const dropText = document.getElementById('req-payable-droptext');
-    if (dropText) dropText.classList.remove('hidden');
+    if (dropText) {
+        dropText.textContent = 'No file chosen';
+        dropText.classList.remove('hidden');
+    }
 }
 
 let currentEditingPayableId = null;
@@ -4027,28 +4059,45 @@ function printCurrentPayableForm() {
     }
 }
 
-function openRequestPayableModal(payableId = null) {
+async function openRequestPayableModal(payableId = null) {
     currentPayableAttachmentBase64 = null;
+    currentPayableAttachmentRemoved = false;
     currentEditingPayableId = payableId;
     const root = document.getElementById('modals-root');
     const today = NKB.getManilaDate();
 
     // Check if editing
     let cp = null;
-    if (payableId && window.cachedPayables) {
-        cp = window.cachedPayables.find(item => item.id === payableId || item.request_number === payableId);
+    if (payableId) {
+        cp = (typeof cachedPayables !== 'undefined' ? cachedPayables : (window.cachedPayables || [])).find(item => item.id === payableId || item.request_number === payableId);
+        try {
+            const res = await NKB.api(`/api/cheque-payables/${encodeURIComponent(payableId)}`);
+            if (res?.success && res.data) {
+                cp = res.data;
+            }
+        } catch (_) {}
     }
+
+    currentPayableExistingAttachmentUrl = cp?.attachment_url || null;
 
     const isEdit = !!cp;
     const modalTitle = isEdit ? 'Editing Payable' : 'Payable Request Form';
 
-    const companies = (window.cachedPayablesMeta?.companies?.length > 0)
-        ? window.cachedPayablesMeta.companies
-        : DEFAULT_PAYABLE_COMPANIES_LIST;
+    const companies = ((typeof cachedPayablesMeta !== 'undefined' && cachedPayablesMeta?.companies?.length > 0)
+        ? cachedPayablesMeta.companies
+        : ((window.cachedPayablesMeta?.companies?.length > 0)
+            ? window.cachedPayablesMeta.companies
+            : DEFAULT_PAYABLE_COMPANIES_LIST));
 
-    const banksList = (window.cachedBankAccounts && window.cachedBankAccounts.length > 0)
-        ? window.cachedBankAccounts
-        : ((window.cachedPayablesMeta?.banks?.length > 0) ? window.cachedPayablesMeta.banks : DEFAULT_PAYABLE_BANKS_LIST);
+    const banksList = ((typeof cachedBankAccounts !== 'undefined' && cachedBankAccounts.length > 0)
+        ? cachedBankAccounts
+        : ((window.cachedBankAccounts && window.cachedBankAccounts.length > 0)
+            ? window.cachedBankAccounts
+            : ((typeof cachedPayablesMeta !== 'undefined' && cachedPayablesMeta?.banks?.length > 0)
+                ? cachedPayablesMeta.banks
+                : ((window.cachedPayablesMeta?.banks?.length > 0)
+                    ? window.cachedPayablesMeta.banks
+                    : DEFAULT_PAYABLE_BANKS_LIST))));
 
     const selectedCompany = cp?.company_name || companies[0];
     const defaultBankName = PAYABLE_COMPANY_BANK_MAP[selectedCompany] || banksList[0]?.bank_name || banksList[0]?.name;
@@ -4072,7 +4121,7 @@ function openRequestPayableModal(payableId = null) {
 
     const payableNumberDisplay = cp?.request_number || 'PB-Auto';
     const currentUser = (typeof NKB !== 'undefined' && NKB.getUser) ? NKB.getUser() : null;
-    const createdByDisplay = cp?.requested_by_name || currentUser?.name || 'Accountant';
+    const createdByDisplay = cp?.requested_by_name || cp?.requestor_name || currentUser?.name || 'Accountant';
     const statusDisplay = cp ? (cp.status || '').replace(/_/g, ' ') : 'Submitted For Approval';
 
     // Due date default: 30 days from today
@@ -4082,6 +4131,8 @@ function openRequestPayableModal(payableId = null) {
         d.setDate(d.getDate() + 30);
         dueDateVal = d.toISOString().split('T')[0];
     }
+
+    const existingFileName = cp?.attachment_url ? (cp.attachment_url.split('/').pop() || 'Existing Attachment') : '';
 
     root.innerHTML = `
         <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-2 sm:p-4 md:p-6 z-50 overflow-y-auto">
@@ -4114,7 +4165,7 @@ function openRequestPayableModal(payableId = null) {
                         <!-- Row 1: Invoice Number -->
                         <div>
                             <label class="block text-[11px] sm:text-xs font-semibold text-slate-600 mb-1">Invoice Number</label>
-                            <input type="text" id="req-payable-invoice-no" value="${cp?.invoice_number || ''}" placeholder="e.g. 239683" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-300 rounded-md sm:rounded-lg bg-white text-xs sm:text-sm font-mono text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                            <input type="text" id="req-payable-invoice-no" value="${cp?.invoice_number || cp?.invoice_reference || ''}" placeholder="e.g. 239683" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-300 rounded-md sm:rounded-lg bg-white text-xs sm:text-sm font-mono text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                         </div>
 
                         <!-- Row 1: Date Created -->
@@ -4156,7 +4207,7 @@ function openRequestPayableModal(payableId = null) {
                         <!-- Row 3: Vendor -->
                         <div>
                             <label class="block text-[11px] sm:text-xs font-semibold text-slate-600 mb-1">Vendor *</label>
-                            <input type="text" id="req-payable-payee" required value="${cp?.payee_name || ''}" placeholder="e.g. MARK JOSEPH Q. REALUYO" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-300 rounded-md sm:rounded-lg bg-white text-xs sm:text-sm font-bold text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                            <input type="text" id="req-payable-payee" required value="${cp?.payee_name || cp?.vendor || ''}" placeholder="e.g. MARK JOSEPH Q. REALUYO" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-300 rounded-md sm:rounded-lg bg-white text-xs sm:text-sm font-bold text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                         </div>
 
                         <!-- Row 3: Term -->
@@ -4186,7 +4237,7 @@ function openRequestPayableModal(payableId = null) {
                         <!-- Row 4: Description (2 columns on tablet & desktop) -->
                         <div class="sm:col-span-2">
                             <label class="block text-[11px] sm:text-xs font-semibold text-slate-600 mb-1">Description</label>
-                            <input type="text" id="req-payable-description" value="${cp?.purpose || ''}" placeholder="e.g. RAW MATERIALS" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-300 rounded-md sm:rounded-lg bg-white text-xs sm:text-sm font-medium text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                            <input type="text" id="req-payable-description" value="${cp?.purpose || cp?.description || ''}" placeholder="e.g. RAW MATERIALS" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-300 rounded-md sm:rounded-lg bg-white text-xs sm:text-sm font-medium text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                         </div>
 
                         <!-- Row 4: Bank to use for check (2 columns on tablet & desktop) -->
@@ -4212,7 +4263,7 @@ function openRequestPayableModal(payableId = null) {
                         <span id="req-payable-overdraft-text"></span>
                     </div>
 
-                    <!-- Line Items Table (NO VAT Computations, Streamlined) -->
+                    <!-- Line Items Table (Streamlined) -->
                     <div class="space-y-1.5 pt-1">
                         <div class="border border-slate-300 rounded-md sm:rounded-lg overflow-x-auto bg-white shadow-xs">
                             <table class="w-full text-left border-collapse min-w-[560px] sm:min-w-[660px]">
@@ -4237,7 +4288,7 @@ function openRequestPayableModal(payableId = null) {
 
                     <!-- Comments, Files & Totals Section -->
                     <div class="grid grid-cols-1 md:grid-cols-12 gap-3 sm:gap-4 pt-1">
-                        <!-- Left Side: Comments & Files (7 cols on md, 8 cols on lg) -->
+                        <!-- Left Side: Comments & Files -->
                         <div class="md:col-span-7 lg:col-span-8 space-y-3">
                             <div>
                                 <label class="block text-[11px] sm:text-xs font-semibold text-slate-600 mb-1">Comments</label>
@@ -4245,21 +4296,22 @@ function openRequestPayableModal(payableId = null) {
                             </div>
 
                             <div>
-                                <label class="block text-[11px] sm:text-xs font-semibold text-slate-600 mb-1">Files</label>
+                                <label class="block text-[11px] sm:text-xs font-semibold text-slate-600 mb-1">Attachment / Encoded File</label>
                                 <div class="border border-slate-300 rounded-md sm:rounded-lg p-2 bg-white flex items-center justify-between text-xs sm:text-sm relative overflow-hidden">
                                     <div class="flex items-center gap-2 min-w-0 flex-1">
                                         <label for="req-payable-file" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded text-xs font-semibold text-slate-700 cursor-pointer whitespace-nowrap transition">
                                             Choose File
                                         </label>
                                         <input type="file" id="req-payable-file" accept="image/*,.pdf" onchange="handlePayableAttachmentSelect(this)" class="sr-only">
-                                        <span id="req-payable-droptext" class="text-xs text-slate-400 truncate">
-                                            ${cp?.attachment_url ? 'Attached Document' : 'No file chosen'}
+                                        <span id="req-payable-droptext" class="text-xs text-slate-400 truncate ${cp?.attachment_url ? 'hidden' : ''}">
+                                            No file chosen
                                         </span>
                                     </div>
                                     <div id="req-payable-preview-container" class="${cp?.attachment_url ? '' : 'hidden'} flex items-center gap-2 pl-2">
-                                        <span id="req-payable-preview-name" class="text-xs font-medium text-slate-600 truncate max-w-[120px] sm:max-w-[180px]">
-                                            ${cp?.attachment_url ? 'Attached Document' : ''}
-                                        </span>
+                                        <a id="req-payable-preview-link" href="${cp?.attachment_url || '#'}" target="_blank" class="${cp?.attachment_url ? '' : 'hidden'} text-xs font-bold text-blue-600 hover:underline truncate max-w-[150px] sm:max-w-[220px]" title="Click to view existing attachment">
+                                            📎 ${existingFileName}
+                                        </a>
+                                        <span id="req-payable-preview-name" class="${cp?.attachment_url ? 'hidden' : ''} text-xs font-medium text-slate-600 truncate max-w-[120px] sm:max-w-[180px]"></span>
                                         <button type="button" onclick="clearPayableAttachment()" class="text-xs text-red-600 hover:text-red-800 font-semibold cursor-pointer">Remove</button>
                                     </div>
                                     <img id="req-payable-preview-img" class="hidden" alt="preview">
@@ -4267,7 +4319,7 @@ function openRequestPayableModal(payableId = null) {
                             </div>
                         </div>
 
-                        <!-- Right Side: Clean Summary Card (5 cols on md, 4 cols on lg) (NO VAT) -->
+                        <!-- Right Side: Clean Summary Card -->
                         <div class="md:col-span-5 lg:col-span-4 bg-white rounded-md sm:rounded-lg border border-slate-300 p-3.5 sm:p-4 space-y-2.5 shadow-xs flex flex-col justify-center">
                             <div class="flex justify-between items-center text-xs sm:text-sm">
                                 <span class="text-slate-600 font-medium">Subtotal:</span>
@@ -4396,7 +4448,9 @@ async function submitRequestPayable(e) {
             line_items: lineItems,
             amount: calculatedTotal,
             category: lineItems[0]?.category || 'Raw Materials',
-            attachment_data: currentPayableAttachmentBase64
+            attachment_data: currentPayableAttachmentBase64,
+            attachment_url: currentPayableExistingAttachmentUrl,
+            attachment_removed: currentPayableAttachmentRemoved
         };
 
         let res;
@@ -4428,8 +4482,15 @@ async function submitRequestPayable(e) {
 }
 
 // View Details Modal with Timeline & Audit
-function openViewPayableDetailsModal(payableId) {
-    const cp = cachedPayables.find(item => item.id === payableId || item.request_number === payableId);
+async function openViewPayableDetailsModal(payableId) {
+    let cp = (typeof cachedPayables !== 'undefined' ? cachedPayables : (window.cachedPayables || [])).find(item => item.id === payableId || item.request_number === payableId);
+    try {
+        const res = await NKB.api(`/api/cheque-payables/${encodeURIComponent(payableId)}`);
+        if (res?.success && res.data) {
+            cp = res.data;
+        }
+    } catch (_) {}
+
     if (!cp) {
         NKB.showToast('Cheque payable record not found.', 'error');
         return;
@@ -4438,32 +4499,50 @@ function openViewPayableDetailsModal(payableId) {
     const root = document.getElementById('modals-root');
     const hasAttachment = !!cp.attachment_url;
     const isPdf = hasAttachment && cp.attachment_url.toLowerCase().endsWith('.pdf');
+    const isImg = hasAttachment && (cp.attachment_url.match(/\.(jpeg|jpg|png|webp|gif|svg)$/i) || cp.attachment_url.startsWith('data:image/'));
+
+    // Parse line items
+    let lineItems = [];
+    if (cp.line_items) {
+        try {
+            lineItems = typeof cp.line_items === 'string' ? JSON.parse(cp.line_items) : cp.line_items;
+        } catch (_) {}
+    }
+    if (!lineItems || lineItems.length === 0) {
+        lineItems = [{
+            description: cp.purpose || cp.payee_name || 'Payable Requisition',
+            category: cp.category || 'Raw Materials',
+            quantity: 1,
+            cost: parseFloat(cp.amount) || 0,
+            subtotal: parseFloat(cp.amount) || 0
+        }];
+    }
 
     root.innerHTML = `
-        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50 overflow-y-auto">
-            <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 my-8">
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-3 sm:p-5 z-50 overflow-y-auto">
+            <div class="bg-white rounded-2xl max-w-4xl w-full p-5 sm:p-7 shadow-2xl space-y-4 my-6 max-h-[92vh] overflow-y-auto border border-slate-200">
                 <!-- Top Header -->
-                <div class="flex justify-between items-start border-b border-slate-100 pb-3">
+                <div class="flex justify-between items-start border-b border-slate-200 pb-3">
                     <div>
                         <div class="flex items-center gap-2">
                             <span class="text-xl">📑</span>
-                            <h3 class="text-base font-bold text-slate-900">Cheque Payable Details</h3>
-                            <span class="font-mono text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">${cp.request_number}</span>
+                            <h3 class="text-base sm:text-lg font-bold text-slate-900">Cheque Payable Details</h3>
+                            <span class="font-mono text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-200">${cp.request_number}</span>
                         </div>
-                        <div class="text-[11px] text-slate-400 mt-0.5">Created ${NKB.formatDate(cp.created_at)} by ${cp.requestor_name || 'Accountant'}</div>
+                        <div class="text-[11px] text-slate-400 mt-1">Created ${NKB.formatDate(cp.created_at)} by <strong class="text-slate-600">${cp.requested_by_name || cp.requestor_name || 'Accountant'}</strong></div>
                     </div>
-                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg cursor-pointer">&times;</button>
+                    <button type="button" onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-2xl leading-none px-1 cursor-pointer">&times;</button>
                 </div>
 
                 <!-- Status Banner -->
-                <div class="p-3 rounded-xl border flex items-center justify-between text-xs ${
+                <div class="p-3.5 rounded-xl border flex items-center justify-between text-xs ${
                     cp.status === 'CONFIRMED' ? 'bg-emerald-50 border-emerald-200 text-emerald-900' :
                     cp.status === 'PENDING_COO_APPROVAL' ? 'bg-amber-50 border-amber-200 text-amber-900' :
                     cp.status === 'REJECTED' ? 'bg-rose-50 border-rose-200 text-rose-900' :
                     'bg-slate-50 border-slate-200 text-slate-900'
                 }">
-                    <div class="flex items-center gap-2">
-                        <span class="text-lg">${cp.status === 'CONFIRMED' ? '✅' : cp.status === 'PENDING_COO_APPROVAL' ? '⏳' : '📋'}</span>
+                    <div class="flex items-center gap-2.5">
+                        <span class="text-xl">${cp.status === 'CONFIRMED' ? '✅' : cp.status === 'PENDING_COO_APPROVAL' ? '⏳' : '📋'}</span>
                         <div>
                             <div class="font-bold uppercase tracking-wider text-[11px]">Status: ${(cp.status || '').replace(/_/g, ' ')}</div>
                             ${cp.coo_confirmed_at ? `<div class="text-[10px] opacity-80">Confirmed by ${cp.coo_confirmed_by || 'COO'} on ${NKB.formatDate(cp.coo_confirmed_at)}</div>` : ''}
@@ -4471,27 +4550,47 @@ function openViewPayableDetailsModal(payableId) {
                     </div>
                     <div class="text-right">
                         <div class="text-[10px] uppercase font-bold text-slate-500">Payable Amount</div>
-                        <div class="text-lg font-black text-slate-900">${NKB.formatCurrency(cp.amount)}</div>
+                        <div class="text-xl font-black text-slate-900">${NKB.formatCurrency(cp.amount)}</div>
                     </div>
                 </div>
 
                 <!-- Info Grid -->
-                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs p-3.5 bg-slate-50 rounded-xl border border-slate-200/80">
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs p-4 bg-slate-50 rounded-xl border border-slate-200">
                     <div>
-                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Payee / Beneficiary</span>
-                        <span class="font-bold text-slate-900 text-sm">${cp.payee_name}</span>
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Company</span>
+                        <span class="font-bold text-slate-900">${cp.company_name || 'NKB Manufacturing Corporation'}</span>
                     </div>
                     <div>
-                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Cheque Date</span>
-                        <span class="font-semibold text-slate-800">${NKB.formatDate(cp.cheque_date)}</span>
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Vendor / Payee</span>
+                        <span class="font-bold text-indigo-700">${cp.payee_name}</span>
                     </div>
                     <div>
-                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Expenditure Category</span>
-                        <span class="font-bold text-indigo-700">${cp.category}</span>
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Invoice Number</span>
+                        <span class="font-mono font-bold text-slate-800">${cp.invoice_number || cp.invoice_reference || '—'}</span>
                     </div>
                     <div>
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Invoice Date</span>
+                        <span class="font-medium text-slate-800">${cp.invoice_date ? NKB.formatDate(cp.invoice_date) : '—'}</span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Control Number</span>
+                        <span class="font-mono font-bold text-slate-800">${cp.control_number || '—'}</span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Terms & Due Date</span>
+                        <span class="font-semibold text-slate-800">${cp.terms || 'Net 30'} (${cp.due_date ? NKB.formatDate(cp.due_date) : NKB.formatDate(cp.cheque_date)})</span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Payable Category</span>
+                        <span class="font-bold text-slate-800">${cp.payable_category || 'Trade payable'}</span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Expense Category</span>
+                        <span class="font-bold text-indigo-600">${cp.category || 'Raw Materials'}</span>
+                    </div>
+                    <div class="sm:col-span-2">
                         <span class="text-[10px] text-slate-400 font-bold uppercase block">Designated Bank</span>
-                        <span class="font-bold text-slate-800">${cp.bank_name}</span>
+                        <span class="font-bold text-slate-800">${cp.bank_name || '—'}</span>
                     </div>
                     <div>
                         <span class="text-[10px] text-slate-400 font-bold uppercase block">Account Number</span>
@@ -4503,10 +4602,51 @@ function openViewPayableDetailsModal(payableId) {
                     </div>
                 </div>
 
-                <!-- Purpose / Where money is used -->
-                <div class="p-3.5 bg-white rounded-xl border border-slate-200 space-y-1">
-                    <span class="text-[10px] text-slate-400 font-bold uppercase block">Purpose & Fund Utilization</span>
-                    <p class="text-xs text-slate-800 leading-relaxed whitespace-pre-line font-medium">${cp.purpose || 'No purpose stated.'}</p>
+                <!-- Line Items Table -->
+                <div class="space-y-1.5">
+                    <span class="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">Particulars & Line Items</span>
+                    <div class="border border-slate-200 rounded-xl overflow-x-auto bg-white shadow-2xs">
+                        <table class="w-full text-left border-collapse text-xs">
+                            <thead>
+                                <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
+                                    <th class="py-2.5 px-3">Description</th>
+                                    <th class="py-2.5 px-3">Expense Category</th>
+                                    <th class="py-2.5 px-3 text-center w-20">Quantity</th>
+                                    <th class="py-2.5 px-3 text-right w-28">Cost</th>
+                                    <th class="py-2.5 px-3 text-right w-32">Subtotal</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${lineItems.map(item => `
+                                    <tr class="border-b border-slate-100 hover:bg-slate-50/50">
+                                        <td class="py-2.5 px-3 font-medium text-slate-800">${item.description || '—'}</td>
+                                        <td class="py-2.5 px-3 text-slate-600 font-semibold">${item.category || 'Raw Materials'}</td>
+                                        <td class="py-2.5 px-3 text-center font-mono">${item.quantity || 1}</td>
+                                        <td class="py-2.5 px-3 text-right font-mono">${NKB.formatCurrency(item.cost || 0)}</td>
+                                        <td class="py-2.5 px-3 text-right font-mono font-bold text-slate-900">${NKB.formatCurrency(item.subtotal || 0)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                            <tfoot>
+                                <tr class="bg-slate-50 font-bold">
+                                    <td colspan="4" class="py-2.5 px-3 text-right text-slate-600 uppercase text-[11px]">Total Amount:</td>
+                                    <td class="py-2.5 px-3 text-right font-mono text-sm font-black text-indigo-700">${NKB.formatCurrency(cp.amount)}</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Purpose / Utilization & Comments -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div class="p-3.5 bg-white rounded-xl border border-slate-200 space-y-1">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Purpose & Fund Utilization</span>
+                        <p class="text-xs text-slate-800 leading-relaxed whitespace-pre-line font-medium">${cp.purpose || 'No purpose stated.'}</p>
+                    </div>
+                    <div class="p-3.5 bg-white rounded-xl border border-slate-200 space-y-1">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Comments / Check Particulars</span>
+                        <p class="text-xs text-slate-800 leading-relaxed whitespace-pre-line font-medium">${cp.comments || 'No comments provided.'}</p>
+                    </div>
                 </div>
 
                 ${cp.coo_notes ? `
@@ -4516,38 +4656,49 @@ function openViewPayableDetailsModal(payableId) {
                     </div>
                 ` : ''}
 
-                <!-- Attachment Area -->
-                ${hasAttachment ? `
-                    <div class="space-y-1.5">
-                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Attached Voucher / Bill</span>
-                        <div class="rounded-xl border border-slate-200 bg-slate-900 p-2 overflow-hidden flex items-center justify-center max-h-[300px]">
-                            ${isPdf ? `
-                                <div class="text-center p-4">
-                                    <span class="text-3xl block mb-2">📄</span>
-                                    <a href="${cp.attachment_url}" target="_blank" class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold inline-block">
-                                        Open PDF Document ↗
-                                    </a>
+                <!-- Attachment / Encoded File Section -->
+                <div class="space-y-1.5">
+                    <span class="text-[10px] text-slate-400 font-bold uppercase block">Attachment / Encoded File</span>
+                    ${hasAttachment ? `
+                        <div class="rounded-xl border border-slate-200 bg-slate-900 p-3 overflow-hidden flex flex-col sm:flex-row items-center justify-between gap-3">
+                            <div class="flex items-center gap-3 text-white">
+                                <span class="text-2xl">${isPdf ? '📄' : isImg ? '🖼️' : '📎'}</span>
+                                <div class="min-w-0">
+                                    <div class="text-xs font-bold text-slate-100 truncate max-w-xs sm:max-w-md">${cp.attachment_url.split('/').pop() || 'Attachment Document'}</div>
+                                    <div class="text-[10px] text-slate-400">${isPdf ? 'Portable Document Format (PDF)' : isImg ? 'Image Document' : 'Attached File'}</div>
                                 </div>
-                            ` : `
-                                <img src="${cp.attachment_url}" alt="Attachment" class="max-w-full max-h-[280px] object-contain rounded cursor-zoom-in" onclick="window.open('${cp.attachment_url}', '_blank')">
-                            `}
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <a href="${cp.attachment_url}" target="_blank" class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition inline-flex items-center gap-1 shadow-sm cursor-pointer">
+                                    <span>${isPdf ? 'Open PDF ↗' : 'View Full File ↗'}</span>
+                                </a>
+                            </div>
                         </div>
-                    </div>
-                ` : ''}
+                        ${isImg ? `
+                            <div class="mt-2 text-center p-2 bg-slate-50 rounded-xl border border-slate-200">
+                                <img src="${cp.attachment_url}" alt="Attachment Preview" class="max-w-full max-h-[300px] object-contain rounded mx-auto cursor-zoom-in shadow-2xs" onclick="window.open('${cp.attachment_url}', '_blank')">
+                            </div>
+                        ` : ''}
+                    ` : `
+                        <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 text-center text-xs text-slate-400 italic">
+                            No file attached to this payable request.
+                        </div>
+                    `}
+                </div>
 
                 <!-- Footer Actions -->
                 <div class="flex items-center justify-between pt-3 border-t border-slate-100">
                     <div class="flex items-center gap-2">
-                        <button type="button" onclick="closeModal(); openRequestPayableModal('${cp.id}')" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition inline-flex items-center gap-1.5 cursor-pointer" title="Edit Payable Request">
+                        <button type="button" onclick="closeModal(); openRequestPayableModal('${cp.id}')" class="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition inline-flex items-center gap-1.5 cursor-pointer shadow-xs" title="Edit Payable Request">
                             <span>✏️</span>
                             <span>Edit Request</span>
                         </button>
-                        <button type="button" onclick="printSingleChequeVoucher('${cp.id}')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition inline-flex items-center gap-1.5 cursor-pointer">
+                        <button type="button" onclick="printSingleChequeVoucher('${cp.id}')" class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition inline-flex items-center gap-1.5 cursor-pointer shadow-xs">
                             <span>🖨️</span>
                             <span>Print Cheque Voucher</span>
                         </button>
                         ${cp.status === 'PENDING_COO_APPROVAL' ? `
-                            <button type="button" onclick="openCooConfirmPayableModal('${cp.id}')" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition inline-flex items-center gap-1 cursor-pointer">
+                            <button type="button" onclick="openCooConfirmPayableModal('${cp.id}')" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition inline-flex items-center gap-1 cursor-pointer shadow-xs">
                                 <span>⚡</span>
                                 <span>COO Confirm</span>
                             </button>
