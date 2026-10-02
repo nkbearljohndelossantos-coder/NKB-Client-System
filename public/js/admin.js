@@ -6684,20 +6684,13 @@ function renderAdminPOLineItems() {
         totalQty += item.target_quantity || 0;
         grandTotal += lineSubtotal;
 
-        const currentProd = adminPOCatalog.find(p => p.id === item.product_id);
-        const brandBadge = currentProd ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${window.getBrandBadgeClass ? window.getBrandBadgeClass(currentProd.brand) : 'bg-slate-100 text-slate-700'} mr-1">${currentProd.brand || 'OTHER'}</span>` : '';
-
         return `
             <tr class="hover:bg-slate-50 transition" id="admin-po-row-${idx}">
                 <td class="py-2.5 px-3">
-                    <div class="flex items-center gap-1 mb-1">
-                        ${brandBadge}
-                        <span class="text-[10px] font-mono text-indigo-900 font-bold bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded">${currentProd ? (currentProd.effective_sku || currentProd.sku) : ''}</span>
-                    </div>
                     <select onchange="updateAdminPOLineItem(${idx}, 'product_id', this.value)" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500">
                         ${window.renderProductOptionsGroupedByBrand ? window.renderProductOptionsGroupedByBrand(adminPOCatalog, item.product_id) : adminPOCatalog.map(p => `
                             <option value="${p.id}" ${p.id === item.product_id ? 'selected' : ''}>
-                                ${p.display_name || p.clean_name || p.name} (${p.effective_sku || p.sku}) - ₱${Number(p.default_price).toFixed(2)}${p.has_custom_price ? ' [Contract Rate]' : ''}
+                                ${p.display_name || p.clean_name || p.name} - ₱${Number(p.default_price).toFixed(2)}${p.has_custom_price ? ' [Contract Rate]' : ''}
                             </option>
                         `).join('')}
                     </select>
