@@ -507,11 +507,23 @@ main table tbody td {
     transform: translateY(-1px) !important;
 }
 
-/* Modals */
+/* Modals: Ensure headers and top controls are NEVER clipped or pushed off-screen */
 .modal-backdrop {
     background-color: rgba(15, 23, 42, 0.75) !important;
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    overflow-y: auto !important;
+    display: flex !important;
+    align-items: flex-start !important;
+    justify-content: center !important;
+    padding: 1.25rem 0.75rem !important;
+    box-sizing: border-box !important;
+}
+
+.modal-backdrop > div {
+    margin-top: auto !important;
+    margin-bottom: auto !important;
+    max-height: calc(100vh - 2.5rem) !important;
 }
 
 /* Forms & Inputs */
@@ -527,7 +539,7 @@ textarea {
     border: 1px solid #cbd5e1 !important;
     border-radius: 0.65rem !important;
     padding: 0.5rem 0.75rem !important;
-    font-weight: 600 !important;
+    font-weight: 400 !important;
     transition: all 0.2s ease !important;
 }
 

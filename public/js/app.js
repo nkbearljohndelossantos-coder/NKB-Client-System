@@ -1455,8 +1455,8 @@ async function openViewPOModal(poId) {
     const allDispatched = items.length > 0 && items.every(it => it.dr_number);
 
     root.innerHTML = `
-        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50 overflow-y-auto">
-            <div class="bg-white rounded-3xl max-w-4xl w-full p-6 sm:p-8 shadow-2xl space-y-6 my-8 max-h-[92vh] flex flex-col">
+        <div class="fixed inset-0 modal-backdrop flex items-start justify-center p-3 sm:p-6 z-50 overflow-y-auto">
+            <div class="bg-white rounded-3xl max-w-4xl w-full p-5 sm:p-7 shadow-2xl space-y-5 my-auto max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-3.5rem)] flex flex-col">
                 <!-- Header -->
                 <div class="flex justify-between items-center border-b border-slate-100 pb-4 flex-shrink-0">
                     <div class="flex items-center gap-3">
