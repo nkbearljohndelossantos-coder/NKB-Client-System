@@ -1045,6 +1045,14 @@ async function confirmAccountingPO(id, poNumber) {
         selectedTerm = '15d';
     } else if (lowerRaw === '30d' || lowerRaw === '30 days' || lowerRaw === 'net 30' || lowerRaw === '30day') {
         selectedTerm = '30d';
+    } else if (lowerRaw === '45d' || lowerRaw === '45 days' || lowerRaw === 'net 45' || lowerRaw === '45day') {
+        selectedTerm = '45d';
+    } else if (lowerRaw === '60d' || lowerRaw === '60 days' || lowerRaw === 'net 60' || lowerRaw === '60day') {
+        selectedTerm = '60d';
+    } else if (lowerRaw === '90d' || lowerRaw === '90 days' || lowerRaw === 'net 90' || lowerRaw === '90day') {
+        selectedTerm = '90d';
+    } else if (lowerRaw === '105d' || lowerRaw === '105 days' || lowerRaw === 'net 105' || lowerRaw === '105day') {
+        selectedTerm = '105d';
     } else {
         selectedTerm = 'CUSTOM';
         isCustom = true;
@@ -1090,6 +1098,10 @@ async function confirmAccountingPO(id, poNumber) {
                             <option value="7d" ${selectedTerm === '7d' ? 'selected' : ''}>7d (7 Days)</option>
                             <option value="15d" ${selectedTerm === '15d' ? 'selected' : ''}>15d (15 Days)</option>
                             <option value="30d" ${selectedTerm === '30d' ? 'selected' : ''}>30d (30 Days)</option>
+                            <option value="45d" ${selectedTerm === '45d' ? 'selected' : ''}>45d (45 Days)</option>
+                            <option value="60d" ${selectedTerm === '60d' ? 'selected' : ''}>60d (60 Days)</option>
+                            <option value="90d" ${selectedTerm === '90d' ? 'selected' : ''}>90d (90 Days)</option>
+                            <option value="105d" ${selectedTerm === '105d' ? 'selected' : ''}>105d (105 Days)</option>
                             <option value="CUSTOM" ${isCustom ? 'selected' : ''}>Custom Term...</option>
                         </select>
                         <input type="text" id="acct-confirm-po-form-of-payment-custom" value="${isCustom ? rawTerm.replace(/"/g, '&quot;') : ''}" placeholder="e.g. 50% DP, 50% upon delivery..." class="${isCustom ? '' : 'hidden'} mt-1.5 w-full px-3 py-1.5 border rounded-lg bg-white text-xs font-medium text-slate-900">
@@ -3927,9 +3939,13 @@ function onPayableTermChange(selectEl) {
     if (isNaN(baseDate.getTime())) return;
 
     let daysToAdd = 30;
-    if (term === 'Net 15') daysToAdd = 15;
+    if (term === 'Net 7') daysToAdd = 7;
+    else if (term === 'Net 15') daysToAdd = 15;
     else if (term === 'Net 30') daysToAdd = 30;
+    else if (term === 'Net 45') daysToAdd = 45;
     else if (term === 'Net 60') daysToAdd = 60;
+    else if (term === 'Net 90') daysToAdd = 90;
+    else if (term === 'Net 105') daysToAdd = 105;
     else if (term === 'COD' || term === 'Due upon receipt') daysToAdd = 0;
 
     baseDate.setDate(baseDate.getDate() + daysToAdd);
@@ -4208,9 +4224,13 @@ async function openRequestPayableModal(payableId = null) {
                         <div>
                             <label class="block text-[11px] sm:text-xs font-semibold text-slate-600 mb-1">Term</label>
                             <select id="req-payable-terms" onchange="onPayableTermChange(this)" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-300 rounded-md sm:rounded-lg bg-white text-xs sm:text-sm font-medium text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
-                                <option value="Net 30" ${(cp?.terms === 'Net 30' || !cp) ? 'selected' : ''}>Net 30</option>
+                                <option value="Net 7" ${cp?.terms === 'Net 7' ? 'selected' : ''}>Net 7</option>
                                 <option value="Net 15" ${cp?.terms === 'Net 15' ? 'selected' : ''}>Net 15</option>
+                                <option value="Net 30" ${(cp?.terms === 'Net 30' || !cp) ? 'selected' : ''}>Net 30</option>
+                                <option value="Net 45" ${cp?.terms === 'Net 45' ? 'selected' : ''}>Net 45</option>
                                 <option value="Net 60" ${cp?.terms === 'Net 60' ? 'selected' : ''}>Net 60</option>
+                                <option value="Net 90" ${cp?.terms === 'Net 90' ? 'selected' : ''}>Net 90</option>
+                                <option value="Net 105" ${cp?.terms === 'Net 105' ? 'selected' : ''}>Net 105</option>
                                 <option value="COD" ${cp?.terms === 'COD' ? 'selected' : ''}>COD</option>
                                 <option value="Due upon receipt" ${cp?.terms === 'Due upon receipt' ? 'selected' : ''}>Due upon receipt</option>
                             </select>
@@ -4241,9 +4261,8 @@ async function openRequestPayableModal(payableId = null) {
                                 <option value="">Select Bank Account...</option>
                                 ${banksList.map(b => {
                                     const bName = b.bank_name || b.name;
-                                    const balStr = b.current_balance != null ? ` (Avail: ${NKB.formatCurrency(b.current_balance)})` : (b.balance != null ? ` (Avail: ${NKB.formatCurrency(b.balance)})` : '');
                                     const isSel = (cp && (cp.bank_name === bName || cp.bank_name === b.name)) || (!cp && bName === defaultBankName);
-                                    return `<option value="${bName}" data-balance="${b.current_balance || b.balance || 0}" ${isSel ? 'selected' : ''}>${bName}${balStr}</option>`;
+                                    return `<option value="${bName}" data-balance="${b.current_balance || b.balance || 0}" ${isSel ? 'selected' : ''}>${bName}</option>`;
                                 }).join('')}
                             </select>
                             <input type="hidden" id="req-payable-bank-acct" value="${cp?.bank_account_number || ''}">
@@ -6353,6 +6372,10 @@ async function openCreatePOModal() {
                                 <option value="7d">7d (7 Days)</option>
                                 <option value="15d">15d (15 Days)</option>
                                 <option value="30d">30d (30 Days)</option>
+                                <option value="45d">45d (45 Days)</option>
+                                <option value="60d">60d (60 Days)</option>
+                                <option value="90d">90d (90 Days)</option>
+                                <option value="105d">105d (105 Days)</option>
                                 <option value="CUSTOM">Custom Term...</option>
                             </select>
                             <input type="text" id="create-po-form-of-payment-custom" placeholder="e.g. 50% DP, 50% upon delivery..." class="hidden mt-1.5 w-full px-3 py-2 border border-slate-200 rounded-xl bg-white text-xs font-normal text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">

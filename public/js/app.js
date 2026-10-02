@@ -1886,6 +1886,14 @@ async function openEditPOModal(poId) {
         selectedTerm = '15d';
     } else if (lowerRaw === '30d' || lowerRaw === '30 days' || lowerRaw === 'net 30' || lowerRaw === '30day') {
         selectedTerm = '30d';
+    } else if (lowerRaw === '45d' || lowerRaw === '45 days' || lowerRaw === 'net 45' || lowerRaw === '45day') {
+        selectedTerm = '45d';
+    } else if (lowerRaw === '60d' || lowerRaw === '60 days' || lowerRaw === 'net 60' || lowerRaw === '60day') {
+        selectedTerm = '60d';
+    } else if (lowerRaw === '90d' || lowerRaw === '90 days' || lowerRaw === 'net 90' || lowerRaw === '90day') {
+        selectedTerm = '90d';
+    } else if (lowerRaw === '105d' || lowerRaw === '105 days' || lowerRaw === 'net 105' || lowerRaw === '105day') {
+        selectedTerm = '105d';
     } else {
         selectedTerm = 'CUSTOM';
         isCustom = true;
@@ -1932,6 +1940,10 @@ async function openEditPOModal(poId) {
                             <option value="7d" ${selectedTerm === '7d' ? 'selected' : ''}>7d (7 Days)</option>
                             <option value="15d" ${selectedTerm === '15d' ? 'selected' : ''}>15d (15 Days)</option>
                             <option value="30d" ${selectedTerm === '30d' ? 'selected' : ''}>30d (30 Days)</option>
+                            <option value="45d" ${selectedTerm === '45d' ? 'selected' : ''}>45d (45 Days)</option>
+                            <option value="60d" ${selectedTerm === '60d' ? 'selected' : ''}>60d (60 Days)</option>
+                            <option value="90d" ${selectedTerm === '90d' ? 'selected' : ''}>90d (90 Days)</option>
+                            <option value="105d" ${selectedTerm === '105d' ? 'selected' : ''}>105d (105 Days)</option>
                             <option value="CUSTOM" ${isCustom ? 'selected' : ''}>Custom Term...</option>
                         </select>
                         <input type="text" id="edit-po-form-of-payment-custom" value="${isCustom ? rawTerm.replace(/"/g, '&quot;') : ''}" placeholder="e.g. 50% DP, 50% upon delivery..." class="${isCustom ? '' : 'hidden'} mt-1.5 w-full px-3 py-2 border border-slate-200 rounded-xl bg-white text-xs font-normal text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
