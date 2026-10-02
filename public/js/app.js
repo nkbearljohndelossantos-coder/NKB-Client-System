@@ -2543,6 +2543,13 @@ document.addEventListener('click', function(e) {
     if (!e.target.closest('.table-action-menu') && !e.target.closest('button[onclick*="toggleTableActionMenu"]') && !e.target.closest('button[onclick*="togglePOActionMenu"]')) {
         document.querySelectorAll('.table-action-menu, [id^="po-menu-"]').forEach(m => m.classList.add('hidden'));
     }
+    const vendorSuggestions = document.getElementById('payable-vendor-suggestions');
+    if (vendorSuggestions && !vendorSuggestions.classList.contains('hidden')) {
+        const vendorInput = document.getElementById('req-payable-payee');
+        if (!vendorSuggestions.contains(e.target) && e.target !== vendorInput && !e.target.closest('[onclick*="togglePayableVendorDropdown"]')) {
+            vendorSuggestions.classList.add('hidden');
+        }
+    }
 });
 
 document.addEventListener('keydown', function (e) {
@@ -2575,6 +2582,11 @@ document.addEventListener('keydown', function (e) {
         const poSuggestions = document.getElementById('po-suggestions-container');
         if (!handled && poSuggestions && !poSuggestions.classList.contains('hidden')) {
             poSuggestions.classList.add('hidden');
+            handled = true;
+        }
+        const vendorSuggestions = document.getElementById('payable-vendor-suggestions');
+        if (!handled && vendorSuggestions && !vendorSuggestions.classList.contains('hidden')) {
+            vendorSuggestions.classList.add('hidden');
             handled = true;
         }
 

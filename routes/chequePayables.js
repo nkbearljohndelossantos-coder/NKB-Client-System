@@ -59,6 +59,54 @@ const DEFAULT_CATEGORIES = [
     'Insurance (Personal)'
 ];
 
+const DEFAULT_VENDORS = [
+    '3F ENTERPRISES INC.',
+    'ASTERIA APOTHECARY',
+    'BENMARK TECHNOLOGY CO. LTD',
+    'BESTPAK PACKAGING SOLUTIONS, INC.',
+    'BH PACKAGING INC',
+    'BRAND GALLERY PACKAGING WORLD',
+    'BRENNTAG INGREDIENTS INC',
+    'CENTROPAQ CORPORATION',
+    'CHEMICO PHILIPPINES INC',
+    'CHEMREZ TECHNOLOGIES, INC.',
+    'CHEMWORLD MARKETING CORPORATION',
+    'COSPAK COSMETIC PACKAGING SUPPLIES, OPC',
+    'CRT AROMA PHILIPPINES INC',
+    'DJ & 3K CONSTRUCTION SUPPLY',
+    'ENVIRONATURAL CORPORATION',
+    'ES PRINT MEDIA INC',
+    'ESSENTIAL PRODUCTS & EXPERTISE FOR INTEGRATED MARKETS INC',
+    'FORMULAB TECHNOLOGIES INC',
+    'FW SPAVENUE INC',
+    'GIGATT PRINTING SERVICES AND TRADING CO.',
+    'GOLDEN PEE-WEE OPC',
+    'HACHIMORI INTERNATIONAL, INC',
+    'JJJ SHOP',
+    'KALIOREXI CORP',
+    'LOGERCE MARKETING OPC',
+    'LOYAL FAMILY',
+    'LS PACKAGING',
+    'MAYNILAD WATER SERVICES INC',
+    'MEDINOVA PHARMACEUTICAL, INC.',
+    'MEGASAMSOTITE INC',
+    'NECO PHILIPPINES INCORPORATED',
+    'OFFICE EXPENSES',
+    'PRINTWORK SALES, INCORPORATED',
+    'PROESSENCES INC',
+    'QUAD TRADERS INC',
+    'REDOLENCE SALES AND MARKETING INC',
+    'SAIPHER CG NON-SPECIALIZED WHOLESALE TRADING',
+    'SBS PHILIPPINES CORPORATION',
+    'SOGOMI CORP',
+    'SUNTRA INTERNATIONAL TRADING CORPORATION',
+    'THE GRASSE FRAGRANCE COMPANY INC.',
+    'TRANS WORLD TRADING COMPANY, INCORPORATED',
+    'UNION INKS AND GRAPHICS PHILIPPINES, INC.',
+    'VIECHEM MARKETING AND FOOD CO',
+    'WELL-PACK CONTAINER CORPORATION'
+];
+
 /**
  * Dispatch async webhook notification to external COO API if configured
  */
@@ -226,6 +274,31 @@ router.get('/', authenticateToken, (req, res) => {
             bankCounts[b] = (bankCounts[b] || 0) + (parseFloat(r.amount) || 0);
         });
 
+        let vendors = DEFAULT_VENDORS;
+        try {
+            let dbVendors = [];
+            try {
+                const rows = db.prepare('SELECT name FROM payable_vendors ORDER BY name ASC').all();
+                dbVendors = rows.map(r => r.name);
+            } catch (_) {}
+
+            let payeesFromPayables = [];
+            try {
+                const rows = db.prepare('SELECT DISTINCT payee_name FROM cheque_payables WHERE payee_name IS NOT NULL AND TRIM(payee_name) != ""').all();
+                payeesFromPayables = rows.map(r => r.payee_name.trim());
+            } catch (_) {}
+
+            const map = new Map();
+            [...DEFAULT_VENDORS, ...dbVendors, ...payeesFromPayables].forEach(v => {
+                if (!v || !v.trim()) return;
+                const norm = v.trim().toUpperCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, '').replace(/\s+/g, ' ');
+                if (!map.has(norm)) {
+                    map.set(norm, v.trim());
+                }
+            });
+            vendors = Array.from(map.values()).sort((a, b) => a.localeCompare(b));
+        } catch (_) {}
+
         return res.json({
             success: true,
             data: enrichedRows,
@@ -249,6 +322,7 @@ router.get('/', authenticateToken, (req, res) => {
             },
             banks: DEFAULT_BANKS,
             categories: DEFAULT_CATEGORIES,
+            vendors: vendors,
             apiKeyPrefix: `${LIVE_API_KEY.slice(0, 15)}...`
         });
     } catch (err) {
@@ -296,8 +370,63 @@ router.post('/companies', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN',
 });
 
 /**
+ * GET /api/cheque-payables/vendors
+ * List all vendors for suggestions (strictly deduplicated, no redundancy)
+ */
+router.get('/vendors', authenticateToken, (req, res) => {
+    try {
+        let dbVendors = [];
+        try {
+            const rows = db.prepare('SELECT name FROM payable_vendors ORDER BY name ASC').all();
+            dbVendors = rows.map(r => r.name);
+        } catch (_) {}
+
+        let payeesFromPayables = [];
+        try {
+            const rows = db.prepare('SELECT DISTINCT payee_name FROM cheque_payables WHERE payee_name IS NOT NULL AND TRIM(payee_name) != ""').all();
+            payeesFromPayables = rows.map(r => r.payee_name.trim());
+        } catch (_) {}
+
+        const map = new Map();
+        [...DEFAULT_VENDORS, ...dbVendors, ...payeesFromPayables].forEach(v => {
+            if (!v || !v.trim()) return;
+            const norm = v.trim().toUpperCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, '').replace(/\s+/g, ' ');
+            if (!map.has(norm)) {
+                map.set(norm, v.trim());
+            }
+        });
+
+        const sorted = Array.from(map.values()).sort((a, b) => a.localeCompare(b));
+        return res.json({ success: true, data: sorted });
+    } catch (err) {
+        return res.json({ success: true, data: DEFAULT_VENDORS });
+    }
+});
+
+/**
+ * POST /api/cheque-payables/vendors
+ * Add a new vendor for suggestions dynamically
+ */
+router.post('/vendors', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'CEO'), (req, res) => {
+    try {
+        const { name } = req.body;
+        if (!name || !String(name).trim()) {
+            return res.status(400).json({ success: false, error: 'Vendor name is required.' });
+        }
+        const trimmed = String(name).trim();
+        const id = 'vdr-' + uuidv4().slice(0, 8);
+        try {
+            db.prepare('INSERT OR IGNORE INTO payable_vendors (id, name) VALUES (?, ?)').run(id, trimmed);
+        } catch (_) {}
+        return res.status(201).json({ success: true, data: { id, name: trimmed } });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
  * GET /api/cheque-payables/meta
- * Return standard banks, expense categories, and companies
+ * Return standard banks, expense categories, companies, and vendor suggestions
  */
 router.get('/meta', authenticateToken, (req, res) => {
     let companies = DEFAULT_COMPANIES;
@@ -308,11 +437,37 @@ router.get('/meta', authenticateToken, (req, res) => {
         }
     } catch (_) {}
 
+    let vendors = DEFAULT_VENDORS;
+    try {
+        let dbVendors = [];
+        try {
+            const rows = db.prepare('SELECT name FROM payable_vendors ORDER BY name ASC').all();
+            dbVendors = rows.map(r => r.name);
+        } catch (_) {}
+
+        let payeesFromPayables = [];
+        try {
+            const rows = db.prepare('SELECT DISTINCT payee_name FROM cheque_payables WHERE payee_name IS NOT NULL AND TRIM(payee_name) != ""').all();
+            payeesFromPayables = rows.map(r => r.payee_name.trim());
+        } catch (_) {}
+
+        const map = new Map();
+        [...DEFAULT_VENDORS, ...dbVendors, ...payeesFromPayables].forEach(v => {
+            if (!v || !v.trim()) return;
+            const norm = v.trim().toUpperCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, '').replace(/\s+/g, ' ');
+            if (!map.has(norm)) {
+                map.set(norm, v.trim());
+            }
+        });
+        vendors = Array.from(map.values()).sort((a, b) => a.localeCompare(b));
+    } catch (_) {}
+
     return res.json({
         success: true,
         banks: DEFAULT_BANKS,
         categories: DEFAULT_CATEGORIES,
         companies: companies,
+        vendors: vendors,
         apiKey: LIVE_API_KEY
     });
 });

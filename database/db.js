@@ -289,6 +289,88 @@ function runMigrations(dbInstance, isMysql) {
             }
         } catch (_) {}
 
+        // Payable Vendors Table (Cheque Payables Vendor Suggestions)
+        if (isMysql) {
+            try {
+                dbInstance.exec(`
+                    CREATE TABLE IF NOT EXISTS payable_vendors (
+                        id VARCHAR(36) PRIMARY KEY,
+                        name VARCHAR(255) UNIQUE NOT NULL,
+                        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    );
+                `);
+            } catch (_) {}
+        } else {
+            try {
+                dbInstance.exec(`
+                    CREATE TABLE IF NOT EXISTS payable_vendors (
+                        id TEXT PRIMARY KEY,
+                        name TEXT UNIQUE NOT NULL,
+                        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+                    );
+                `);
+            } catch (_) {}
+        }
+
+        // Seed Default Payable Vendors (strictly deduplicated, no redundancy)
+        try {
+            const defaultVendors = [
+                '3F ENTERPRISES INC.',
+                'ASTERIA APOTHECARY',
+                'BENMARK TECHNOLOGY CO. LTD',
+                'BESTPAK PACKAGING SOLUTIONS, INC.',
+                'BH PACKAGING INC',
+                'BRAND GALLERY PACKAGING WORLD',
+                'BRENNTAG INGREDIENTS INC',
+                'CENTROPAQ CORPORATION',
+                'CHEMICO PHILIPPINES INC',
+                'CHEMREZ TECHNOLOGIES, INC.',
+                'CHEMWORLD MARKETING CORPORATION',
+                'COSPAK COSMETIC PACKAGING SUPPLIES, OPC',
+                'CRT AROMA PHILIPPINES INC',
+                'DJ & 3K CONSTRUCTION SUPPLY',
+                'ENVIRONATURAL CORPORATION',
+                'ES PRINT MEDIA INC',
+                'ESSENTIAL PRODUCTS & EXPERTISE FOR INTEGRATED MARKETS INC',
+                'FORMULAB TECHNOLOGIES INC',
+                'FW SPAVENUE INC',
+                'GIGATT PRINTING SERVICES AND TRADING CO.',
+                'GOLDEN PEE-WEE OPC',
+                'HACHIMORI INTERNATIONAL, INC',
+                'JJJ SHOP',
+                'KALIOREXI CORP',
+                'LOGERCE MARKETING OPC',
+                'LOYAL FAMILY',
+                'LS PACKAGING',
+                'MAYNILAD WATER SERVICES INC',
+                'MEDINOVA PHARMACEUTICAL, INC.',
+                'MEGASAMSOTITE INC',
+                'NECO PHILIPPINES INCORPORATED',
+                'OFFICE EXPENSES',
+                'PRINTWORK SALES, INCORPORATED',
+                'PROESSENCES INC',
+                'QUAD TRADERS INC',
+                'REDOLENCE SALES AND MARKETING INC',
+                'SAIPHER CG NON-SPECIALIZED WHOLESALE TRADING',
+                'SBS PHILIPPINES CORPORATION',
+                'SOGOMI CORP',
+                'SUNTRA INTERNATIONAL TRADING CORPORATION',
+                'THE GRASSE FRAGRANCE COMPANY INC.',
+                'TRANS WORLD TRADING COMPANY, INCORPORATED',
+                'UNION INKS AND GRAPHICS PHILIPPINES, INC.',
+                'VIECHEM MARKETING AND FOOD CO',
+                'WELL-PACK CONTAINER CORPORATION'
+            ];
+            for (const vendor of defaultVendors) {
+                const id = 'vdr-' + uuidv4().slice(0, 8);
+                if (isMysql) {
+                    dbInstance.exec(`INSERT IGNORE INTO payable_vendors (id, name) VALUES ('${id}', '${vendor.replace(/'/g, "\\'")}');`);
+                } else {
+                    dbInstance.prepare(`INSERT OR IGNORE INTO payable_vendors (id, name) VALUES (?, ?)`).run(id, vendor);
+                }
+            }
+        } catch (_) {}
+
         // Client Payment Submissions (Payment Proofs uploaded by Clients)
         if (isMysql) {
             try {

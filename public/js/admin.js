@@ -3294,7 +3294,8 @@ async function loadPayables() {
         cachedPayablesSummary = res.summary || {};
         cachedPayablesMeta = {
             banks: Array.isArray(res.banks) ? res.banks : [],
-            categories: Array.isArray(res.categories) ? res.categories : []
+            categories: Array.isArray(res.categories) ? res.categories : [],
+            vendors: Array.isArray(res.vendors) ? res.vendors : []
         };
         window.cachedPayablesMeta = cachedPayablesMeta;
 
@@ -3793,6 +3794,54 @@ const DEFAULT_PAYABLE_COMPANIES_LIST = [
     'NKB Cosmetic Products Trading'
 ];
 
+const DEFAULT_PAYABLE_VENDORS_LIST = [
+    '3F ENTERPRISES INC.',
+    'ASTERIA APOTHECARY',
+    'BENMARK TECHNOLOGY CO. LTD',
+    'BESTPAK PACKAGING SOLUTIONS, INC.',
+    'BH PACKAGING INC',
+    'BRAND GALLERY PACKAGING WORLD',
+    'BRENNTAG INGREDIENTS INC',
+    'CENTROPAQ CORPORATION',
+    'CHEMICO PHILIPPINES INC',
+    'CHEMREZ TECHNOLOGIES, INC.',
+    'CHEMWORLD MARKETING CORPORATION',
+    'COSPAK COSMETIC PACKAGING SUPPLIES, OPC',
+    'CRT AROMA PHILIPPINES INC',
+    'DJ & 3K CONSTRUCTION SUPPLY',
+    'ENVIRONATURAL CORPORATION',
+    'ES PRINT MEDIA INC',
+    'ESSENTIAL PRODUCTS & EXPERTISE FOR INTEGRATED MARKETS INC',
+    'FORMULAB TECHNOLOGIES INC',
+    'FW SPAVENUE INC',
+    'GIGATT PRINTING SERVICES AND TRADING CO.',
+    'GOLDEN PEE-WEE OPC',
+    'HACHIMORI INTERNATIONAL, INC',
+    'JJJ SHOP',
+    'KALIOREXI CORP',
+    'LOGERCE MARKETING OPC',
+    'LOYAL FAMILY',
+    'LS PACKAGING',
+    'MAYNILAD WATER SERVICES INC',
+    'MEDINOVA PHARMACEUTICAL, INC.',
+    'MEGASAMSOTITE INC',
+    'NECO PHILIPPINES INCORPORATED',
+    'OFFICE EXPENSES',
+    'PRINTWORK SALES, INCORPORATED',
+    'PROESSENCES INC',
+    'QUAD TRADERS INC',
+    'REDOLENCE SALES AND MARKETING INC',
+    'SAIPHER CG NON-SPECIALIZED WHOLESALE TRADING',
+    'SBS PHILIPPINES CORPORATION',
+    'SOGOMI CORP',
+    'SUNTRA INTERNATIONAL TRADING CORPORATION',
+    'THE GRASSE FRAGRANCE COMPANY INC.',
+    'TRANS WORLD TRADING COMPANY, INCORPORATED',
+    'UNION INKS AND GRAPHICS PHILIPPINES, INC.',
+    'VIECHEM MARKETING AND FOOD CO',
+    'WELL-PACK CONTAINER CORPORATION'
+];
+
 const DEFAULT_PAYABLE_BANKS_LIST = [
     { id: 'ba-bdo-coop', name: 'BDO: Norvin Bella (COOP) - 0080-5801-0563', bank_name: 'BDO: Norvin Bella (COOP) - 0080-5801-0563', account_name: 'Norvin Bella (COOP)', account_number: '0080-5801-0563', balance: 650000 },
     { id: 'ba-bdo-nkb-mfg', name: 'BDO: NKB Manufacturing Corporation - 0080-5801-0547', bank_name: 'BDO: NKB Manufacturing Corporation - 0080-5801-0547', account_name: 'NKB Manufacturing Corporation', account_number: '0080-5801-0547', balance: 950000 },
@@ -3926,6 +3975,87 @@ async function openAddPayableCompanyModal() {
             }
         });
     }
+}
+
+function togglePayableVendorDropdown() {
+    const container = document.getElementById('payable-vendor-suggestions');
+    if (!container) return;
+    if (container.classList.contains('hidden')) {
+        const input = document.getElementById('req-payable-payee');
+        renderPayableVendorSuggestions(input ? input.value.trim().toLowerCase() : '');
+    } else {
+        container.classList.add('hidden');
+    }
+}
+
+function onPayableVendorInput(inputEl) {
+    if (!inputEl) return;
+    renderPayableVendorSuggestions(inputEl.value.trim().toLowerCase());
+}
+
+function onPayableVendorFocus(inputEl) {
+    if (!inputEl) return;
+    renderPayableVendorSuggestions(inputEl.value.trim().toLowerCase());
+}
+
+function selectPayableVendor(vendorName) {
+    const input = document.getElementById('req-payable-payee');
+    if (input) {
+        input.value = vendorName;
+        input.focus();
+    }
+    const container = document.getElementById('payable-vendor-suggestions');
+    if (container) {
+        container.classList.add('hidden');
+    }
+}
+
+function renderPayableVendorSuggestions(query = '') {
+    const container = document.getElementById('payable-vendor-suggestions');
+    if (!container) return;
+
+    const vendors = ((typeof cachedPayablesMeta !== 'undefined' && cachedPayablesMeta?.vendors?.length > 0)
+        ? cachedPayablesMeta.vendors
+        : ((window.cachedPayablesMeta?.vendors?.length > 0)
+            ? window.cachedPayablesMeta.vendors
+            : DEFAULT_PAYABLE_VENDORS_LIST));
+
+    const matches = query
+        ? vendors.filter(v => v.toLowerCase().includes(query))
+        : vendors;
+
+    if (matches.length === 0) {
+        container.innerHTML = `
+            <div class="px-3 py-2.5 text-slate-400 italic text-[11px]">
+                No matching suggested vendor. You can type any new vendor name.
+            </div>
+        `;
+        container.classList.remove('hidden');
+        return;
+    }
+
+    container.innerHTML = `
+        <div class="px-3 py-1.5 bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider sticky top-0 border-b border-slate-100 flex items-center justify-between select-none">
+            <span>Suggested Vendors (${matches.length})</span>
+            <span class="text-[9px] text-slate-400 font-normal">Click to select</span>
+        </div>
+        ${matches.map(v => {
+            let highlighted = v;
+            if (query) {
+                const safeQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const regex = new RegExp(`(${safeQuery})`, 'gi');
+                highlighted = v.replace(regex, '<span class="bg-amber-100 text-amber-900 font-bold px-0.5 rounded">$1</span>');
+            }
+            return `
+                <div class="px-3 py-2 hover:bg-blue-50 cursor-pointer flex items-center justify-between transition text-slate-800 font-medium"
+                     onclick="selectPayableVendor('${v.replace(/'/g, "\\'")}')">
+                    <span class="truncate">${highlighted}</span>
+                    <span class="text-[10px] text-blue-600 opacity-60 ml-2 font-mono shrink-0">↵ Select</span>
+                </div>
+            `;
+        }).join('')}
+    `;
+    container.classList.remove('hidden');
 }
 
 function onPayableTermChange(selectEl) {
@@ -4105,6 +4235,12 @@ async function openRequestPayableModal(payableId = null) {
             ? window.cachedPayablesMeta.companies
             : DEFAULT_PAYABLE_COMPANIES_LIST));
 
+    const vendors = ((typeof cachedPayablesMeta !== 'undefined' && cachedPayablesMeta?.vendors?.length > 0)
+        ? cachedPayablesMeta.vendors
+        : ((window.cachedPayablesMeta?.vendors?.length > 0)
+            ? window.cachedPayablesMeta.vendors
+            : DEFAULT_PAYABLE_VENDORS_LIST));
+
     const banksList = ((typeof cachedBankAccounts !== 'undefined' && cachedBankAccounts.length > 0)
         ? cachedBankAccounts
         : ((window.cachedBankAccounts && window.cachedBankAccounts.length > 0)
@@ -4214,10 +4350,34 @@ async function openRequestPayableModal(payableId = null) {
                             <input type="text" id="req-payable-created-by" readonly value="${createdByDisplay}" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-200 rounded-md sm:rounded-lg bg-slate-50 text-xs sm:text-sm text-slate-700 font-medium cursor-not-allowed">
                         </div>
 
-                        <!-- Row 3: Vendor -->
-                        <div>
-                            <label class="block text-[11px] sm:text-xs font-semibold text-slate-600 mb-1">Vendor *</label>
-                            <input type="text" id="req-payable-payee" required value="${cp?.payee_name || cp?.vendor || ''}" placeholder="e.g. MARK JOSEPH Q. REALUYO" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-300 rounded-md sm:rounded-lg bg-white text-xs sm:text-sm font-bold text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                        <!-- Row 3: Vendor (with Suggestions) -->
+                        <div class="relative">
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="text-[11px] sm:text-xs font-semibold text-slate-600">Vendor *</label>
+                                <button type="button" onclick="togglePayableVendorDropdown()" class="text-[10px] sm:text-[11px] text-blue-600 hover:text-blue-800 font-bold hover:underline inline-flex items-center gap-0.5 cursor-pointer" title="Click to view all suggested vendors">
+                                    <span>Suggestions</span>
+                                    <span>▾</span>
+                                </button>
+                            </div>
+                            <div class="relative">
+                                <input type="text" 
+                                       id="req-payable-payee" 
+                                       list="payable-vendors-datalist" 
+                                       required 
+                                       autocomplete="off"
+                                       value="${cp?.payee_name || cp?.vendor || ''}" 
+                                       placeholder="e.g. CHEMWORLD MARKETING CORPORATION" 
+                                       oninput="onPayableVendorInput(this)" 
+                                       onfocus="onPayableVendorFocus(this)" 
+                                       class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-300 rounded-md sm:rounded-lg bg-white text-xs sm:text-sm font-bold text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                                <datalist id="payable-vendors-datalist">
+                                    ${vendors.map(v => `<option value="${v}">`).join('')}
+                                </datalist>
+                                <!-- Floating Interactive Suggestions Panel -->
+                                <div id="payable-vendor-suggestions" 
+                                     class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-2xl z-50 max-h-56 overflow-y-auto divide-y divide-slate-100 text-xs">
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Row 3: Term -->
@@ -4477,6 +4637,25 @@ async function submitRequestPayable(e) {
         if (res.success) {
             const reqNum = res.data?.request_number || '';
             NKB.showToast(`Cheque payable ${reqNum} ${currentEditingPayableId ? 'updated' : 'submitted'} successfully!`, 'success');
+
+            // Persist new vendor to suggestions if not already known
+            if (payee) {
+                const knownVendors = ((typeof cachedPayablesMeta !== 'undefined' && cachedPayablesMeta?.vendors?.length > 0)
+                    ? cachedPayablesMeta.vendors
+                    : DEFAULT_PAYABLE_VENDORS_LIST);
+                const exists = knownVendors.some(v => v.toLowerCase().trim() === payee.toLowerCase().trim());
+                if (!exists) {
+                    if (typeof cachedPayablesMeta !== 'undefined' && Array.isArray(cachedPayablesMeta.vendors)) {
+                        cachedPayablesMeta.vendors.push(payee);
+                        cachedPayablesMeta.vendors.sort((a, b) => a.localeCompare(b));
+                    }
+                    NKB.api('/api/cheque-payables/vendors', {
+                        method: 'POST',
+                        body: JSON.stringify({ name: payee })
+                    }).catch(() => {});
+                }
+            }
+
             closeModal();
             loadPayables();
             loadBankBalances();
