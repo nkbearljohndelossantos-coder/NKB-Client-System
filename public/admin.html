@@ -990,7 +990,11 @@
                         <p class="text-sm text-slate-500">Accountant cheque requisitions, designated bank accounts, expense classification, and COO approval audit trail.</p>
                         <div class="mt-1 flex items-center gap-2 text-[11px] text-slate-500 font-mono">
                             <span>Integration Key:</span>
-                            <span class="px-2 py-0.5 rounded bg-slate-100 text-indigo-700 font-bold border border-slate-200">nkb_inv_live_6ae6965c1ca61aef54939d6b1ecfac1b</span>
+                            <span class="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-bold border border-slate-200 tracking-wider inline-flex items-center gap-1 select-none">
+                                <span>🔒</span>
+                                <span id="payables-header-api-key">••••••••••••••••••••••••</span>
+                            </span>
+                            <button type="button" onclick="toggleHeaderApiKey('payables-header-api-key', 'nkb_inv_live_6ae6965c1ca61aef54939d6b1ecfac1b')" class="text-xs text-slate-400 hover:text-slate-700 cursor-pointer" title="Toggle visibility">👁️</button>
                         </div>
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
@@ -1307,8 +1311,12 @@
                                 <span>Endpoint:</span>
                                 <code class="bg-white/80 px-2 py-0.5 rounded border border-emerald-200 text-emerald-900 font-bold">fms.nkbmanufacturing.com</code>
                                 <span>API Key:</span>
-                                <code class="bg-white/80 px-2 py-0.5 rounded border border-emerald-200 text-emerald-900 font-bold" id="formulation-api-key-box">nkb_inv_live_6ae6965c1ca61aef54939d6b1ecfac1b</code>
-                                <button type="button" onclick="navigator.clipboard.writeText('nkb_inv_live_6ae6965c1ca61aef54939d6b1ecfac1b'); NKB.showToast('API Key copied to clipboard!', 'success');" class="text-[10px] text-emerald-700 underline hover:text-emerald-900 font-sans font-bold">Copy Key</button>
+                                <code class="bg-white/80 px-2 py-0.5 rounded border border-emerald-200 text-emerald-900 font-bold tracking-wider inline-flex items-center gap-1 select-none" id="formulation-api-key-box">
+                                    <span>🔒</span>
+                                    <span id="fms-key-text">••••••••••••••••••••••••</span>
+                                </code>
+                                <button type="button" onclick="toggleHeaderApiKey('fms-key-text', 'nkb_inv_live_6ae6965c1ca61aef54939d6b1ecfac1b')" class="text-xs text-emerald-700 hover:text-emerald-900 cursor-pointer" title="Toggle visibility">👁️</button>
+                                <button type="button" onclick="navigator.clipboard.writeText('nkb_inv_live_6ae6965c1ca61aef54939d6b1ecfac1b'); NKB.showToast('API Key copied to clipboard!', 'success');" class="text-[10px] text-emerald-700 underline hover:text-emerald-900 font-sans font-bold cursor-pointer">Copy Key</button>
                             </div>
                         </div>
                     </div>
@@ -1638,8 +1646,11 @@
                     </div>
                     <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
                         <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Pre-Configured System Key</div>
-                        <div class="text-xs font-mono font-bold text-indigo-600 mt-1.5 truncate">nkb_inv_live_6ae...</div>
-                        <div class="text-[11px] text-emerald-600 mt-0.5">Connected (Full BOM Scopes)</div>
+                        <div class="text-xs font-mono font-bold text-slate-600 mt-1.5 tracking-wider flex items-center gap-1 select-none">
+                            <span>🔒</span>
+                            <span>••••••••••••••••</span>
+                        </div>
+                        <div class="text-[11px] text-emerald-600 mt-0.5">Connected (Encrypted & Hidden)</div>
                     </div>
                     <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
                         <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">OpenAPI Specification</div>

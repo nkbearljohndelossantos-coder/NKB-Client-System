@@ -217,8 +217,36 @@ const TABLE_DEFINITIONS = {
             LEFT JOIN clients c ON users.client_id = c.id
         `,
         selectFields: 'users.id, users.name, users.email, users.role, users.client_id, users.phone, users.is_active, users.plain_password, users.security_pin, users.auto_lock_minutes, users.created_at, users.updated_at, c.company_name as client_company_name'
+    },
+    api_keys: {
+        label: 'Developer API Keys',
+        icon: '🔑',
+        tableName: 'api_keys',
+        primaryKey: 'id',
+        displayField: 'name',
+        searchFields: ['name', 'status'],
+        editableColumns: [
+            'name', 'client_id', 'rate_limit_rpm', 'status', 'expires_at'
+        ],
+        joins: `
+            LEFT JOIN clients c ON api_keys.client_id = c.id
+            LEFT JOIN users u ON api_keys.user_id = u.id
+        `,
+        selectFields: `api_keys.id, api_keys.name, '••••••••••••••••' AS key_token, '••••••••••••••••' AS key_prefix, '••••••••••••••••' AS key_hash, api_keys.client_id, api_keys.user_id, api_keys.scopes, api_keys.rate_limit_rpm, api_keys.status, api_keys.expires_at, api_keys.created_at, api_keys.updated_at, c.company_name as client_company_name, u.name as created_by_name`
     }
 };
+
+// Mask sensitive security columns (API keys, hashes, secrets)
+function maskSensitiveFields(obj) {
+    if (!obj || typeof obj !== 'object') return obj;
+    const masked = { ...obj };
+    for (const key of Object.keys(masked)) {
+        if (/^(key_hash|key_prefix|api_key|api_key_used|secret)$/i.test(key)) {
+            masked[key] = '••••••••••••••••';
+        }
+    }
+    return masked;
+}
 
 // Access Control: Super Admin and IT Admin (and Admin) only
 const authorizeITAdmin = [authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN)];
@@ -270,7 +298,8 @@ router.get('/lookups', ...authorizeITAdmin, (req, res) => {
                     sales_invoices: ['DRAFT', 'ISSUED', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'CANCELLED'],
                     payments: ['PENDING', 'VERIFIED', 'REJECTED', 'CANCELLED'],
                     cheque_payables: ['PENDING_COO', 'CONFIRMED_COO', 'RELEASED', 'CLEARED', 'CANCELLED', 'REJECTED'],
-                    users: ['SUPER_ADMIN', 'IT_ADMIN', 'ADMIN', 'CEO', 'QC', 'PURCHASING', 'PRODUCTION', 'WAREHOUSE', 'ACCOUNTING', 'INVENTORY', 'CLIENT']
+                    users: ['SUPER_ADMIN', 'IT_ADMIN', 'ADMIN', 'CEO', 'QC', 'PURCHASING', 'PRODUCTION', 'WAREHOUSE', 'ACCOUNTING', 'INVENTORY', 'CLIENT'],
+                    api_keys: ['ACTIVE', 'REVOKED', 'EXPIRED']
                 }
             }
         });
@@ -336,10 +365,12 @@ router.get('/records/:table', ...authorizeITAdmin, (req, res) => {
             LIMIT ? OFFSET ?
         `).all(...params, limitNum, offset);
 
+        const sanitizedRows = rows.map(maskSensitiveFields);
+
         return res.json({
             success: true,
             table,
-            data: rows,
+            data: sanitizedRows,
             pagination: {
                 total: totalRecords,
                 page: pageNum,
@@ -384,7 +415,7 @@ router.get('/records/:table/:id', ...authorizeITAdmin, (req, res) => {
 
         return res.json({
             success: true,
-            data: row,
+            data: maskSensitiveFields(row),
             definition: def
         });
     } catch (err) {
@@ -407,9 +438,9 @@ router.put('/records/:table/:id', ...authorizeITAdmin, (req, res) => {
     const updates = {};
     const previousValues = {};
 
-    // Validate and whitelist fields
+    // Validate and whitelist fields, strictly rejecting any sensitive keys
     for (const key of Object.keys(payload)) {
-        if (def.editableColumns.includes(key)) {
+        if (def.editableColumns.includes(key) && !/^(key_hash|key_prefix|api_key|api_key_used|secret)$/i.test(key)) {
             updates[key] = payload[key];
         }
     }
@@ -485,7 +516,7 @@ router.put('/records/:table/:id', ...authorizeITAdmin, (req, res) => {
         return res.json({
             success: true,
             message: `Record ${id} in ${def.label} updated successfully.`,
-            data: updated
+            data: maskSensitiveFields(updated)
         });
     } catch (err) {
         return res.status(500).json({ success: false, error: err.message });

@@ -198,7 +198,10 @@
             </div>
             <div class="space-y-3 text-xs">
                 <p class="text-slate-400">Authenticated with the live corporate key for instant COO approval synchronization:</p>
-                <input type="text" id="coo-api-key-input" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-amber-400 font-mono text-xs focus:outline-none focus:border-amber-500">
+                <div class="relative">
+                    <input type="password" id="coo-api-key-input" class="w-full bg-slate-950 border border-slate-700 rounded-xl pl-3 pr-10 py-2.5 text-amber-400 font-mono text-xs focus:outline-none focus:border-amber-500 tracking-wider">
+                    <button type="button" onclick="const i = document.getElementById('coo-api-key-input'); i.type = i.type === 'password' ? 'text' : 'password';" class="absolute right-3 top-2.5 text-slate-400 hover:text-white text-xs cursor-pointer" title="Toggle visibility">👁️</button>
+                </div>
             </div>
             <div class="flex items-center gap-2 pt-2 border-t border-slate-800">
                 <button onclick="saveApiKey()" class="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition">

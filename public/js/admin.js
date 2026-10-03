@@ -12080,9 +12080,15 @@ function renderApiKeysTable(keys) {
                     </div>
                 </td>
                 <td class="py-3 px-4">
-                    <span class="font-mono text-xs text-indigo-700 bg-indigo-50/70 border border-indigo-200/70 px-2 py-1 rounded select-all font-semibold">
-                        ${escapeApiKeyHtml(k.key_prefix)}
-                    </span>
+                    <div class="inline-flex items-center gap-1.5">
+                        <span class="font-mono text-xs text-slate-600 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded tracking-wider select-none font-bold inline-flex items-center gap-1.5" id="api-key-mask-${k.id}">
+                            <span>🔒</span>
+                            <span id="api-key-text-${k.id}">••••••••••••••••</span>
+                        </span>
+                        <button type="button" onclick="toggleApiKeyVisibility('${k.id}', '${escapeApiKeyHtml(k.key_prefix || '')}')" class="p-1 text-slate-400 hover:text-slate-700 rounded transition cursor-pointer" title="Toggle Masked Prefix">
+                            👁️
+                        </button>
+                    </div>
                 </td>
                 <td class="py-3 px-4">
                     ${clientLabel}
@@ -12335,7 +12341,10 @@ function openRawKeyRevealModal(rawKey, keyName, scopes = []) {
                 <div class="space-y-1.5">
                     <label class="block text-xs font-bold text-slate-700">Your Live API Key</label>
                     <div class="flex items-center gap-2">
-                        <input type="text" id="reveal-raw-key-input" readonly value="${rawKey}" class="w-full px-3 py-2.5 bg-slate-900 text-amber-300 font-mono text-xs rounded-xl font-bold border border-slate-700 select-all focus:outline-none">
+                        <div class="relative w-full">
+                            <input type="password" id="reveal-raw-key-input" readonly value="${rawKey}" class="w-full pl-3 pr-10 py-2.5 bg-slate-900 text-amber-300 font-mono text-xs rounded-xl font-bold border border-slate-700 select-all focus:outline-none tracking-widest">
+                            <button type="button" onclick="toggleRevealInputPassword('reveal-raw-key-input')" class="absolute right-2.5 top-2.5 text-xs text-slate-400 hover:text-white cursor-pointer" title="Toggle visibility">👁️</button>
+                        </div>
                         <button onclick="copyRawApiKey()" id="btn-copy-raw-key" class="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-600/20 whitespace-nowrap transition flex items-center gap-1.5">
                             <span id="copy-btn-icon">📋</span>
                             <span id="copy-btn-text">Copy Key</span>
@@ -12689,6 +12698,8 @@ function getITTableHeaderHTML(table) {
             return baseHeader(['Code', 'Material Name', 'Category', 'Current Stock', 'Unit', 'Min Level', 'Cost']);
         case 'users':
             return baseHeader(['Name', 'Email', 'Role', 'Linked Client', 'Phone', 'Plain Pwd', 'Status']);
+        case 'api_keys':
+            return baseHeader(['Key Name', 'API Secret Key', 'Assigned Client', 'Scopes', 'Rate Limit', 'Status', 'Created']);
         default:
             return baseHeader(['ID', 'Details', 'Created At']);
     }
@@ -12874,6 +12885,28 @@ function getITTableRowHTML(table, r) {
                     ${actionButtons}
                 </tr>
             `;
+        case 'api_keys': {
+            const scopes = Array.isArray(r.scopes) ? r.scopes : (typeof r.scopes === 'string' ? JSON.parse(r.scopes || '[]') : []);
+            return `
+                <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+                    <td class="py-2.5 px-3 font-bold text-slate-900">${escapeApiKeyHtml(r.name)}</td>
+                    <td class="py-2.5 px-3">
+                        <span class="font-mono text-xs px-2.5 py-1 rounded bg-slate-100 text-slate-500 border border-slate-200 tracking-widest font-black select-none inline-flex items-center gap-1.5" title="API Key is securely protected and hidden in IT Management">
+                            <span>🔒</span>
+                            <span>••••••••••••••••</span>
+                        </span>
+                    </td>
+                    <td class="py-2.5 px-3 text-slate-700 font-medium">${escapeApiKeyHtml(r.client_company_name || 'All Clients (Global)')}</td>
+                    <td class="py-2.5 px-3">
+                        <span class="text-[10px] text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded font-mono">${scopes.length} Scopes</span>
+                    </td>
+                    <td class="py-2.5 px-3 font-mono text-xs text-slate-700">${r.rate_limit_rpm || 120} rpm</td>
+                    <td class="py-2.5 px-3 whitespace-nowrap">${statusBadge(r.status)}</td>
+                    <td class="py-2.5 px-3 whitespace-nowrap text-slate-500 text-[11px]">${(r.created_at || '').substring(0, 10)}</td>
+                    ${actionButtons}
+                </tr>
+            `;
+        }
         default:
             return `
                 <tr class="hover:bg-slate-50 transition border-b border-slate-100">
@@ -12944,6 +12977,19 @@ async function openITEditModal(table, id) {
 function generateITFieldInputHTML(col, val, table) {
     const safeVal = (val === null || val === undefined) ? '' : val;
     const label = col.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+    // 0. Protected API Keys / Secrets / Hashes
+    if (['key_hash', 'key_prefix', 'key_token', 'api_key', 'api_key_used', 'secret'].includes(col)) {
+        return `
+            <div>
+                <label class="block text-[11px] font-bold text-slate-700 mb-1">${label} (Protected)</label>
+                <div class="flex items-center gap-1.5">
+                    <input type="password" readonly disabled value="••••••••••••••••" class="w-full text-xs p-2 border border-slate-200 rounded-xl bg-slate-100 text-slate-400 font-mono tracking-widest cursor-not-allowed select-none">
+                    <span class="text-xs text-slate-400" title="API Key is securely protected and hidden in IT Management">🔒</span>
+                </div>
+            </div>
+        `;
+    }
 
     // 1. Client dropdown
     if (col === 'client_id' && itLookups && itLookups.clients) {
@@ -14594,3 +14640,44 @@ window.openRawMaterialModal = openRawMaterialModal;
 window.submitRawMaterialForm = submitRawMaterialForm;
 window.openAdjustRawMaterialModal = openAdjustRawMaterialModal;
 window.submitAdjustRawMaterialForm = submitAdjustRawMaterialForm;
+
+// API Key Visibility & Masking Helpers
+function toggleApiKeyVisibility(id, realPrefix) {
+    const textEl = document.getElementById(`api-key-text-${id}`);
+    if (!textEl) return;
+    if (textEl.textContent.trim() === '••••••••••••••••') {
+        textEl.textContent = realPrefix || '••••••••••••••••';
+        textEl.classList.remove('tracking-wider');
+    } else {
+        textEl.textContent = '••••••••••••••••';
+        textEl.classList.add('tracking-wider');
+    }
+}
+window.toggleApiKeyVisibility = toggleApiKeyVisibility;
+
+function toggleHeaderApiKey(elementId, realValue) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    if (el.textContent.includes('••••')) {
+        el.textContent = realValue;
+        el.classList.remove('tracking-wider');
+    } else {
+        el.textContent = '••••••••••••••••••••••••';
+        el.classList.add('tracking-wider');
+    }
+}
+window.toggleHeaderApiKey = toggleHeaderApiKey;
+
+function toggleRevealInputPassword(inputId) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    if (input.type === 'password') {
+        input.type = 'text';
+        input.classList.remove('tracking-widest');
+    } else {
+        input.type = 'password';
+        input.classList.add('tracking-widest');
+    }
+}
+window.toggleRevealInputPassword = toggleRevealInputPassword;
+

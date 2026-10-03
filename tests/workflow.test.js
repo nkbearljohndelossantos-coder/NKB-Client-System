@@ -3084,6 +3084,39 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.ok(adminJs.includes('loadITManagement'), 'admin.js must implement loadITManagement');
         assert.ok(adminJs.includes('openITEditModal'), 'admin.js must implement openITEditModal');
         assert.ok(adminJs.includes('executeQuickPOReassignment'), 'admin.js must implement executeQuickPOReassignment');
+
+        // 10. IT Management API Key Security & Masking
+        assert.ok(tableKeys.includes('api_keys'), 'IT Management tables must include api_keys');
+        const apiKeysRes = await request(app)
+            .get('/api/it-management/records/api_keys')
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(apiKeysRes.status, 200);
+        assert.strictEqual(apiKeysRes.body.success, true);
+        if (apiKeysRes.body.data && apiKeysRes.body.data.length > 0) {
+            for (const keyRow of apiKeysRes.body.data) {
+                assert.ok(!keyRow.key_token || keyRow.key_token.includes('••••'), 'Key token must be masked');
+                assert.ok(!keyRow.key_prefix || keyRow.key_prefix.includes('••••'), 'Key prefix must be masked');
+                assert.ok(!keyRow.key_hash || keyRow.key_hash.includes('••••'), 'Key hash must be masked');
+            }
+        }
+
+        // Verify cheque_payables masks api_key_used
+        const payablesRecordsRes = await request(app)
+            .get('/api/it-management/records/cheque_payables')
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(payablesRecordsRes.status, 200);
+        if (payablesRecordsRes.body.data && payablesRecordsRes.body.data.length > 0) {
+            for (const pRow of payablesRecordsRes.body.data) {
+                if (pRow.api_key_used) {
+                    assert.ok(pRow.api_key_used.includes('••••'), 'Payables api_key_used must be masked in IT management');
+                }
+            }
+        }
+
+        // Verify UI files mask API keys
+        assert.ok(adminHtml.includes('••••••••••••••••'), 'admin.html must contain masked API keys');
+        assert.ok(adminJs.includes('toggleApiKeyVisibility'), 'admin.js must implement toggleApiKeyVisibility');
+        assert.ok(adminJs.includes('toggleHeaderApiKey'), 'admin.js must implement toggleHeaderApiKey');
     });
 
     test('41. Role-Based Navigation Restrictions, Production Supervisor Interactive Dashboard & Warehouse Raw Materials Inventory', async () => {
