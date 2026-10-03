@@ -247,6 +247,15 @@
                                 <span>➔</span>
                             </button>
                         </div>
+
+                        <!-- Admin CC: every notification is also sent to Admin -->
+                        <div class="flex items-center gap-1.5 flex-wrap text-[10px]">
+                            <span class="text-slate-500 font-semibold">👑 CC Admin${item.admin_name ? `: <span class="text-slate-700">${item.admin_name}</span>` : ''}${item.admin_phone ? ` <span class="font-mono text-[9px] bg-amber-100 text-amber-800 px-1.5 rounded font-bold">${item.admin_phone}</span>` : ' <span class="text-rose-500">(no number set)</span>'}</span>
+                            <button type="button" onclick="window.NKB_Agents.sendAdminWhatsApp('${item.id}')" title="Send a copy of this notice to Admin via WhatsApp"
+                                    class="px-2 py-0.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border border-emerald-200 rounded-lg font-bold transition cursor-pointer">💬 WA</button>
+                            <button type="button" onclick="window.NKB_Agents.sendAdminSMS('${item.id}')" title="Send a copy of this notice to Admin via SMS"
+                                    class="px-2 py-0.5 bg-sky-100 hover:bg-sky-200 text-sky-800 border border-sky-200 rounded-lg font-bold transition cursor-pointer">📱 SMS</button>
+                        </div>
                     </div>
                 `;
             }).join('');
@@ -307,6 +316,41 @@
         }
     }
 
+    function logAdminCopy(item, channel) {
+        try {
+            fetchApi('/api/notifications/log-action-alert', {
+                method: 'POST',
+                body: JSON.stringify({
+                    notification_id: item.id,
+                    channel: `ADMIN_${channel}`,
+                    recipient_phone: item.admin_phone,
+                    title: item.title
+                })
+            });
+        } catch (_) {}
+    }
+
+    function sendAdminWhatsApp(itemId) {
+        const item = (pendingData.items || []).find(i => i.id === itemId);
+        if (!item) return;
+        logAdminCopy(item, 'WHATSAPP');
+        const url = item.admin_whatsapp_url || `https://api.whatsapp.com/send?text=${encodeURIComponent(item.admin_whatsapp_message || item.whatsapp_message || item.title)}`;
+        window.open(url, '_blank');
+        if (window.NKB && window.NKB.showToast) {
+            window.NKB.showToast(item.admin_phone ? '👑 Admin copy opened in WhatsApp!' : '👑 No Admin number set — choose a contact in WhatsApp.', 'info');
+        }
+    }
+
+    function sendAdminSMS(itemId) {
+        const item = (pendingData.items || []).find(i => i.id === itemId);
+        if (!item) return;
+        logAdminCopy(item, 'SMS');
+        window.location.href = item.admin_sms_url || `sms:?body=${encodeURIComponent(item.admin_sms_message || item.sms_message || item.title)}`;
+        if (window.NKB && window.NKB.showToast) {
+            window.NKB.showToast('👑 Admin SMS copy launched!', 'info');
+        }
+    }
+
     function copyActionAlert(itemId) {
         const item = (pendingData.items || []).find(i => i.id === itemId);
         if (!item) return;
@@ -362,7 +406,13 @@
 
         text += `👉 *Portal Link:*\nhttp://my.nkbmanufacturing.com/admin.html\n\nPlease complete assigned actions promptly.`;
 
-        window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+        const adminPhoneRaw = (pendingData.admin_contact && pendingData.admin_contact.phone) || '';
+        let adminDigits = String(adminPhoneRaw).replace(/\D/g, '');
+        if (adminDigits.startsWith('0')) adminDigits = '63' + adminDigits.slice(1);
+        const briefingUrl = adminDigits
+            ? `https://wa.me/${adminDigits}?text=${encodeURIComponent(text)}`
+            : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+        window.open(briefingUrl, '_blank');
         if (window.NKB && window.NKB.showToast) {
             window.NKB.showToast('💬 Opened WhatsApp briefing with all tasks!', 'success');
         }
@@ -1100,6 +1150,8 @@
         toggleChatFlyout,
         executePendingAction,
         sendActionWhatsApp,
+        sendAdminWhatsApp,
+        sendAdminSMS,
         sendActionSMS,
         copyActionAlert,
         shareAllPendingActionsWhatsApp,

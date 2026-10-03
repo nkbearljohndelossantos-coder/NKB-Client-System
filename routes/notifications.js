@@ -97,6 +97,56 @@ function createActionItem({
     };
 }
 
+const ADMIN_ROLES = [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.IT_ADMIN];
+
+/**
+ * Resolve the primary Admin contact who receives a copy of every notification.
+ * Preference: SUPER_ADMIN -> ADMIN -> IT_ADMIN, favouring accounts with a registered WhatsApp/phone.
+ */
+function resolveAdminContact() {
+    try {
+        const rows = db.prepare(`
+            SELECT id, role, name, phone, whatsapp_number, email
+            FROM users
+            WHERE is_active = 1 AND role IN ('SUPER_ADMIN', 'ADMIN', 'IT_ADMIN')
+            ORDER BY created_at ASC
+        `).all();
+        const rank = (r) => ADMIN_ROLES.indexOf(r.role);
+        rows.sort((a, b) => {
+            const aHas = (a.whatsapp_number || a.phone) ? 0 : 1;
+            const bHas = (b.whatsapp_number || b.phone) ? 0 : 1;
+            return aHas - bHas || rank(a) - rank(b);
+        });
+        const a = rows[0];
+        if (!a) return null;
+        return {
+            id: a.id,
+            name: a.name || 'System Admin',
+            role: a.role,
+            phone: a.whatsapp_number || a.phone || null
+        };
+    } catch (_) {
+        return null;
+    }
+}
+
+/**
+ * Attach an Admin copy (CC) of the WhatsApp / SMS alert to an action item.
+ */
+function attachAdminCopy(item, admin) {
+    const adminPhone = admin?.phone || '';
+    const cleaned = cleanPhoneNumber(adminPhone);
+    const adminWhatsapp = `👑 *ADMIN COPY*\n\n${item.whatsapp_message}`;
+    const adminSms = `[ADMIN COPY] ${item.sms_message}`;
+    item.admin_name = admin?.name || 'System Admin';
+    item.admin_phone = adminPhone || null;
+    item.admin_whatsapp_message = adminWhatsapp;
+    item.admin_sms_message = adminSms;
+    item.admin_whatsapp_url = getWhatsAppUrl(cleaned, adminWhatsapp);
+    item.admin_sms_url = getSmsUrl(cleaned, adminSms);
+    return item;
+}
+
 /**
  * GET /api/notifications/pending
  * Dynamic calculation of pending confirmations, tasks, and actionable work tailored to the authenticated role
@@ -518,7 +568,7 @@ router.get('/pending', authenticateToken, (req, res) => {
         }
 
         // 5c. CEO Executive Oversight Queue: Unbilled Completed Deliveries & Global Alerts
-        if (role === ROLES.CEO) {
+        if (role === ROLES.CEO || ADMIN_ROLES.includes(role)) {
             const unbilledCount = db.prepare(`
                 SELECT COUNT(*) as count
                 FROM delivery_receipts dr
@@ -643,10 +693,69 @@ router.get('/pending', authenticateToken, (req, res) => {
             }
         }
 
+        // 8. Admin Oversight: Client-side pending items across ALL clients (follow-up alerts)
+        if (ADMIN_ROLES.includes(role)) {
+            try {
+                const allPendingDRs = db.prepare(`
+                    SELECT dr.id, dr.dr_number, c.phone as client_phone, c.contact_person, c.company_name
+                    FROM delivery_receipts dr
+                    JOIN clients c ON dr.client_id = c.id
+                    WHERE dr.status IN ('DISPATCHED', 'PENDING_CLIENT_ACCEPTANCE')
+                    ORDER BY dr.created_at DESC
+                    LIMIT 10
+                `).all();
+                for (const dr of allPendingDRs) {
+                    items.push(createActionItem({
+                        id: `adm-cli-dr-${dr.id}`,
+                        category: 'DELIVERY',
+                        title: `Client Acceptance Pending: ${dr.dr_number}`,
+                        description: `${dr.company_name} has not yet signed the digital acceptance for this delivery. Follow up with the client.`,
+                        urgency: 'HIGH',
+                        icon: '✍️',
+                        recipient_name: dr.contact_person || dr.company_name,
+                        recipient_phone: dr.client_phone,
+                        recipient_role: 'Client Signatory',
+                        target: { tab: 'deliveries', drId: dr.id, drNumber: dr.dr_number, action: 'VIEW_DR' }
+                    }));
+                }
+
+                const allUnpaid = db.prepare(`
+                    SELECT inv.id, inv.invoice_number, inv.balance_due, inv.due_date,
+                           c.phone as client_phone, c.contact_person, c.company_name
+                    FROM sales_invoices inv
+                    JOIN clients c ON inv.client_id = c.id
+                    WHERE inv.status IN ('UNPAID', 'PARTIALLY_PAID')
+                    ORDER BY inv.due_date ASC
+                    LIMIT 10
+                `).all();
+                for (const inv of allUnpaid) {
+                    items.push(createActionItem({
+                        id: `adm-cli-inv-${inv.id}`,
+                        category: 'INVOICE',
+                        title: `Unpaid Invoice ${inv.invoice_number} (${inv.company_name})`,
+                        description: `Outstanding balance: ₱${Number(inv.balance_due || 0).toLocaleString()}. Due: ${inv.due_date || 'Prompt'}.`,
+                        urgency: 'MEDIUM',
+                        icon: '💳',
+                        recipient_name: inv.contact_person || inv.company_name,
+                        recipient_phone: inv.client_phone,
+                        recipient_role: 'Client Accounts Payable',
+                        target: { tab: 'invoices', invoiceId: inv.id, invoiceNumber: inv.invoice_number, action: 'VIEW_INVOICE' }
+                    }));
+                }
+            } catch (admErr) {
+                console.warn('Admin client follow-up notification note:', admErr.message);
+            }
+        }
+
+        // Every notification is also copied to the Admin (WhatsApp / SMS CC)
+        const adminContact = resolveAdminContact();
+        for (const it of items) attachAdminCopy(it, adminContact);
+
         return res.json({
             success: true,
             totalPending: items.length,
             role,
+            admin_contact: adminContact ? { name: adminContact.name, role: adminContact.role, phone: adminContact.phone } : null,
             items
         });
     } catch (err) {

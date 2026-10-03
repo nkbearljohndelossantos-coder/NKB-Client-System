@@ -3902,7 +3902,16 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
             assert.ok(it.sms_url, `Item ${it.id} must have sms_url`);
             assert.ok(it.whatsapp_message, `Item ${it.id} must have whatsapp_message`);
             assert.ok(it.sms_message, `Item ${it.id} must have sms_message`);
+            // Every notification must also be copied to Admin
+            assert.ok(it.admin_whatsapp_url, `Item ${it.id} must have admin_whatsapp_url`);
+            assert.ok(it.admin_sms_url && it.admin_sms_url.startsWith('sms:'), `Item ${it.id} must have admin_sms_url`);
+            assert.ok(it.admin_whatsapp_message.includes('ADMIN COPY'));
+            assert.ok(it.admin_sms_message.startsWith('[ADMIN COPY]'));
         });
+        res.body.items.forEach(it => {
+            assert.ok(it.admin_whatsapp_url, `Admin view item ${it.id} must have admin_whatsapp_url`);
+        });
+        assert.ok('admin_contact' in purchNotifRes.body, 'Response must expose admin_contact');
 
         // Part 3: Test POST /api/notifications/log-action-alert
         const logRes = await request(app)
