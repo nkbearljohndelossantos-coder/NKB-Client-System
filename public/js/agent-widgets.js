@@ -190,21 +190,59 @@
                 };
                 const urgencyStyle = urgencyColors[item.urgency] || 'bg-slate-100 text-slate-800 border-slate-200';
 
+                const targetContactText = item.recipient_name 
+                    ? `<div class="text-[10px] text-slate-500 font-medium flex items-center gap-1.5 pt-0.5">
+                         <span class="text-xs">👤</span>
+                         <span>${item.recipient_name} ${item.recipient_role ? `• <span class="text-slate-400 font-semibold">${item.recipient_role}</span>` : ''}</span>
+                         ${item.recipient_phone ? `<span class="font-mono text-[9px] bg-slate-200/70 text-slate-600 px-1.5 py-0.2 rounded font-bold">${item.recipient_phone}</span>` : ''}
+                       </div>`
+                    : '';
+
                 return `
-                    <div class="p-3.5 bg-slate-50 hover:bg-indigo-50/40 rounded-2xl border border-slate-200 hover:border-indigo-200 transition space-y-2">
+                    <div class="p-3.5 bg-slate-50 hover:bg-indigo-50/40 rounded-2xl border border-slate-200 hover:border-indigo-200 transition space-y-2.5 shadow-2xs">
                         <div class="flex items-start justify-between gap-2">
                             <div class="flex items-center gap-1.5 font-bold text-slate-900 text-xs">
-                                <span>${item.icon || '📌'}</span>
+                                <span class="text-sm">${item.icon || '📌'}</span>
                                 <span class="leading-tight">${item.title}</span>
                             </div>
-                            <span class="px-2 py-0.5 text-[9px] font-black uppercase rounded-full border ${urgencyStyle}">
+                            <span class="px-2 py-0.5 text-[9px] font-black uppercase rounded-full border ${urgencyStyle} flex-shrink-0">
                                 ${item.urgency}
                             </span>
                         </div>
                         <p class="text-[11px] text-slate-600 leading-relaxed">${item.description}</p>
-                        <div class="pt-1 flex justify-end">
+                        ${targetContactText}
+                        
+                        <!-- Instant Notification Channels & Task Link -->
+                        <div class="pt-1.5 border-t border-slate-200/60 flex items-center justify-between gap-1.5 flex-wrap">
+                            <div class="flex items-center gap-1">
+                                <!-- WhatsApp Action -->
+                                <button type="button" 
+                                        onclick="window.NKB_Agents.sendActionWhatsApp('${item.id}')" 
+                                        title="Send Action Required notice via WhatsApp" 
+                                        class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[10px] font-bold shadow-xs flex items-center gap-1 transition cursor-pointer">
+                                    <span>💬</span>
+                                    <span>WhatsApp</span>
+                                </button>
+                                <!-- SMS Action -->
+                                <button type="button" 
+                                        onclick="window.NKB_Agents.sendActionSMS('${item.id}')" 
+                                        title="Send Action Required notice via SMS" 
+                                        class="px-2.5 py-1 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-[10px] font-bold shadow-xs flex items-center gap-1 transition cursor-pointer">
+                                    <span>📱</span>
+                                    <span>SMS</span>
+                                </button>
+                                <!-- Copy Alert Action -->
+                                <button type="button" 
+                                        onclick="window.NKB_Agents.copyActionAlert('${item.id}')" 
+                                        title="Copy formatted notice to clipboard" 
+                                        class="p-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-[10px] font-bold transition cursor-pointer">
+                                    <span>📋</span>
+                                </button>
+                            </div>
+                            
+                            <!-- Go to Task Action -->
                             <button onclick="window.NKB_Agents.executePendingAction('${item.id}')" 
-                                    class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[11px] font-bold shadow-sm flex items-center gap-1 transition">
+                                    class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-bold shadow-xs flex items-center gap-1 transition cursor-pointer ml-auto">
                                 <span>Go to Task</span>
                                 <span>➔</span>
                             </button>
@@ -212,6 +250,121 @@
                     </div>
                 `;
             }).join('');
+        }
+    }
+
+    async function sendActionWhatsApp(itemId) {
+        const item = (pendingData.items || []).find(i => i.id === itemId);
+        if (!item) return;
+
+        try {
+            fetchApi('/api/notifications/log-action-alert', {
+                method: 'POST',
+                body: JSON.stringify({
+                    notification_id: item.id,
+                    channel: 'WHATSAPP',
+                    recipient_phone: item.recipient_phone,
+                    title: item.title
+                })
+            });
+        } catch (_) {}
+
+        if (item.whatsapp_url) {
+            window.open(item.whatsapp_url, '_blank');
+        } else {
+            const raw = item.whatsapp_message || `${item.title}\n${item.description}`;
+            window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(raw)}`, '_blank');
+        }
+        if (window.NKB && window.NKB.showToast) {
+            window.NKB.showToast('💬 WhatsApp action alert opened!', 'info');
+        }
+    }
+
+    async function sendActionSMS(itemId) {
+        const item = (pendingData.items || []).find(i => i.id === itemId);
+        if (!item) return;
+
+        try {
+            fetchApi('/api/notifications/log-action-alert', {
+                method: 'POST',
+                body: JSON.stringify({
+                    notification_id: item.id,
+                    channel: 'SMS',
+                    recipient_phone: item.recipient_phone,
+                    title: item.title
+                })
+            });
+        } catch (_) {}
+
+        if (item.sms_url) {
+            window.location.href = item.sms_url;
+        } else {
+            const raw = item.sms_message || `${item.title}: ${item.description}`;
+            window.location.href = `sms:?body=${encodeURIComponent(raw)}`;
+        }
+        if (window.NKB && window.NKB.showToast) {
+            window.NKB.showToast('📱 SMS messenger launched!', 'info');
+        }
+    }
+
+    function copyActionAlert(itemId) {
+        const item = (pendingData.items || []).find(i => i.id === itemId);
+        if (!item) return;
+
+        const textToCopy = item.whatsapp_message || item.description || item.title;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                if (window.NKB && window.NKB.showToast) {
+                    window.NKB.showToast('📋 Action notice copied to clipboard!', 'success');
+                }
+            }).catch(() => {
+                fallbackCopy(textToCopy);
+            });
+        } else {
+            fallbackCopy(textToCopy);
+        }
+    }
+
+    function fallbackCopy(text) {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+            document.execCommand('copy');
+            if (window.NKB && window.NKB.showToast) {
+                window.NKB.showToast('📋 Action notice copied to clipboard!', 'success');
+            }
+        } catch (_) {}
+        document.body.removeChild(ta);
+    }
+
+    function shareAllPendingActionsWhatsApp() {
+        const items = pendingData.items || [];
+        if (items.length === 0) {
+            if (window.NKB && window.NKB.showToast) {
+                window.NKB.showToast('No pending actions to share.', 'info');
+            }
+            return;
+        }
+
+        const dateStr = new Date().toLocaleDateString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        let text = `📋 *NKB ACTION REQUIRED SUMMARY (${items.length} Tasks)*\n📅 As of: ${dateStr}\n\n`;
+
+        items.forEach((it, idx) => {
+            const urgencyMarker = it.urgency === 'CRITICAL' ? '🚨' : (it.urgency === 'HIGH' ? '⚠️' : '📌');
+            text += `${idx + 1}. ${urgencyMarker} *[${it.urgency}] ${it.title}*\n`;
+            if (it.recipient_name) text += `   👤 Assignee: ${it.recipient_name} ${it.recipient_phone ? `(${it.recipient_phone})` : ''}\n`;
+            text += `   📝 ${it.description.substring(0, 110)}${it.description.length > 110 ? '...' : ''}\n\n`;
+        });
+
+        text += `👉 *Portal Link:*\nhttp://my.nkbmanufacturing.com/admin.html\n\nPlease complete assigned actions promptly.`;
+
+        window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+        if (window.NKB && window.NKB.showToast) {
+            window.NKB.showToast('💬 Opened WhatsApp briefing with all tasks!', 'success');
         }
     }
 
@@ -880,15 +1033,22 @@
 
             <!-- ACTION NOTIFICATIONS FLYOUT -->
             <div id="agent-bell-flyout" class="hidden fixed bottom-24 right-6 z-[99999] w-96 max-w-[92vw] bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-fade-in" style="position: fixed !important; bottom: 92px !important; right: 24px !important; z-index: 99999 !important; max-height: 520px;">
-                <div class="px-5 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+                <div class="px-4 py-3.5 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
                     <div class="flex items-center gap-2">
                         <span class="text-lg">🔔</span>
                         <div>
                             <h4 class="font-extrabold text-sm leading-tight">Action Required</h4>
-                            <p class="text-[10px] text-slate-400">Pending tasks & confirmation workflow</p>
+                            <p class="text-[10px] text-slate-400">Tasks & notifications</p>
                         </div>
                     </div>
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-1.5">
+                        <button type="button" 
+                                onclick="window.NKB_Agents.shareAllPendingActionsWhatsApp()" 
+                                title="Share all pending actions via WhatsApp"
+                                class="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[10px] font-bold flex items-center gap-1 transition cursor-pointer">
+                            <span>💬</span>
+                            <span>Briefing</span>
+                        </button>
                         <span id="agent-bell-count-pill" class="px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full text-[10px] font-black">
                             0 Actions
                         </span>
@@ -939,6 +1099,10 @@
         toggleBellFlyout,
         toggleChatFlyout,
         executePendingAction,
+        sendActionWhatsApp,
+        sendActionSMS,
+        copyActionAlert,
+        shareAllPendingActionsWhatsApp,
         openDockedChat,
         closeDockedChat,
         closeTopDockedChat,

@@ -3869,6 +3869,66 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.ok(qcApproveRes.body.data.qc_notes.includes('Certificate of Analysis verified'));
     });
 
+    test('87. Action Required Notifications WhatsApp & SMS Integration', async () => {
+        const admToken = getAuthToken('SUPER_ADMIN');
+        const purchToken = getAuthToken('PURCHASING');
+
+        // Part 1: Check GET /api/notifications/pending returns WhatsApp & SMS attributes
+        const res = await request(app)
+            .get('/api/notifications/pending')
+            .set('Authorization', `Bearer ${admToken}`);
+        assert.strictEqual(res.status, 200);
+        assert.strictEqual(res.body.success, true);
+        assert.ok(Array.isArray(res.body.items));
+
+        if (res.body.items.length > 0) {
+            const first = res.body.items[0];
+            assert.ok(first.whatsapp_url, 'Must include whatsapp_url');
+            assert.ok(first.sms_url, 'Must include sms_url');
+            assert.ok(first.whatsapp_message, 'Must include whatsapp_message');
+            assert.ok(first.sms_message, 'Must include sms_message');
+            assert.ok(first.whatsapp_url.includes('whatsapp') || first.whatsapp_url.includes('wa.me'));
+            assert.ok(first.sms_url.startsWith('sms:'));
+            assert.ok(first.whatsapp_message.includes('ACTION REQUIRED'));
+        }
+
+        // Part 2: Purchasing user notifications have WhatsApp & SMS for all items
+        const purchNotifRes = await request(app)
+            .get('/api/notifications/pending')
+            .set('Authorization', `Bearer ${purchToken}`);
+        assert.strictEqual(purchNotifRes.status, 200);
+        purchNotifRes.body.items.forEach(it => {
+            assert.ok(it.whatsapp_url, `Item ${it.id} must have whatsapp_url`);
+            assert.ok(it.sms_url, `Item ${it.id} must have sms_url`);
+            assert.ok(it.whatsapp_message, `Item ${it.id} must have whatsapp_message`);
+            assert.ok(it.sms_message, `Item ${it.id} must have sms_message`);
+        });
+
+        // Part 3: Test POST /api/notifications/log-action-alert
+        const logRes = await request(app)
+            .post('/api/notifications/log-action-alert')
+            .set('Authorization', `Bearer ${admToken}`)
+            .send({
+                notification_id: 'test-action-1',
+                channel: 'WHATSAPP',
+                recipient_phone: '+639170000005',
+                title: 'Urgent Requisition Sourcing'
+            });
+        assert.strictEqual(logRes.status, 200);
+        assert.strictEqual(logRes.body.success, true);
+
+        // Part 4: Test GET /api/notifications/summary-message
+        const summaryRes = await request(app)
+            .get('/api/notifications/summary-message')
+            .set('Authorization', `Bearer ${admToken}`);
+        assert.strictEqual(summaryRes.status, 200);
+        assert.strictEqual(summaryRes.body.success, true);
+        assert.ok(summaryRes.body.whatsappUrl);
+        assert.ok(summaryRes.body.smsUrl);
+        assert.ok(summaryRes.body.summaryText);
+        assert.ok(summaryRes.body.summaryText.includes('NKB ACTION REQUIRED SUMMARY'));
+    });
+
     after(() => {
         try {
             realtimeSyncService.closeAllClients();
