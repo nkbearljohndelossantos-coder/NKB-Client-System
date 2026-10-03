@@ -993,6 +993,15 @@ function runMigrations(dbInstance, isMysql) {
                 }
             }
             try { dbInstance.exec(`ALTER TABLE supply_requests ADD COLUMN bom_items TEXT;`); } catch (_) {}
+            try { dbInstance.exec(`ALTER TABLE supply_requests ADD COLUMN qc_status TEXT;`); } catch (_) {}
+            try { dbInstance.exec(`ALTER TABLE supply_requests ADD COLUMN qc_notes TEXT;`); } catch (_) {}
+            try { dbInstance.exec(`ALTER TABLE supply_requests ADD COLUMN qc_inspected_by TEXT;`); } catch (_) {}
+            try { dbInstance.exec(`ALTER TABLE supply_requests ADD COLUMN qc_inspected_at TEXT;`); } catch (_) {}
+            try { dbInstance.exec(`ALTER TABLE supply_requests ADD COLUMN purchasing_response TEXT;`); } catch (_) {}
+            try { dbInstance.exec(`ALTER TABLE supply_requests ADD COLUMN purchasing_response_notes TEXT;`); } catch (_) {}
+            try { dbInstance.exec(`ALTER TABLE supply_requests ADD COLUMN purchasing_responded_at TEXT;`); } catch (_) {}
+            try { dbInstance.exec(`ALTER TABLE users ADD COLUMN whatsapp_number TEXT;`); } catch (_) {}
+            try { dbInstance.exec(`ALTER TABLE users ADD COLUMN phone TEXT;`); } catch (_) {}
         } catch (srErr) {
             console.warn('Supply requests table init note:', srErr.message);
         }
@@ -1582,11 +1591,12 @@ if (useMysql) {
     try {
         const staffPassHash = '$2b$10$kl1WcRCmVd96aR4ozG/Qk.pkgDmHagy7Kz2ec2rVi9e2xjn338bh.'; // bcrypt for Staff123!
         const defaultStaff = [
-            { id: 'b0000000-0000-0000-0000-000000000001', name: 'Production Supervisor', email: 'production@nkbmanufacturing.com', role: 'PRODUCTION', hash: staffPassHash, plain: 'Staff123!' },
-            { id: 'c0000000-0000-0000-0000-000000000001', name: 'Logistics & Warehouse Officer', email: 'warehouse@nkbmanufacturing.com', role: 'WAREHOUSE', hash: staffPassHash, plain: 'Staff123!' },
-            { id: 'd0000000-0000-0000-0000-000000000001', name: 'Senior Accountant', email: 'accounting@nkbmanufacturing.com', role: 'ACCOUNTING', hash: staffPassHash, plain: 'Staff123!' },
-            { id: 'e0000000-0000-0000-0000-000000000001', name: 'Inventory Officer', email: 'inventory@nkbmanufacturing.com', role: 'INVENTORY', hash: '$2b$10$4sevv4zs6rfH/jwtBabcPeAFyGSkvf/1tJ5DGlAfVnZkrQsftdKvC', plain: 'Staff123!' },
-            { id: 'f0000000-0000-0000-0000-000000000001', name: 'Purchasing Officer', email: 'purchasing@nkbmanufacturing.com', role: 'PURCHASING', hash: staffPassHash, plain: 'Staff123!' }
+            { id: 'b0000000-0000-0000-0000-000000000001', name: 'Production Supervisor', email: 'production@nkbmanufacturing.com', role: 'PRODUCTION', hash: staffPassHash, plain: 'Staff123!', phone: '+639170000002', whatsapp_number: '+639170000002' },
+            { id: 'c0000000-0000-0000-0000-000000000001', name: 'Logistics & Warehouse Officer', email: 'warehouse@nkbmanufacturing.com', role: 'WAREHOUSE', hash: staffPassHash, plain: 'Staff123!', phone: '+639170000003', whatsapp_number: '+639170000003' },
+            { id: 'd0000000-0000-0000-0000-000000000001', name: 'Senior Accountant', email: 'accounting@nkbmanufacturing.com', role: 'ACCOUNTING', hash: staffPassHash, plain: 'Staff123!', phone: '+639170000004', whatsapp_number: '+639170000004' },
+            { id: 'e0000000-0000-0000-0000-000000000001', name: 'Inventory Officer', email: 'inventory@nkbmanufacturing.com', role: 'INVENTORY', hash: '$2b$10$4sevv4zs6rfH/jwtBabcPeAFyGSkvf/1tJ5DGlAfVnZkrQsftdKvC', plain: 'Staff123!', phone: '+639170000005', whatsapp_number: '+639170000005' },
+            { id: 'f0000000-0000-0000-0000-000000000001', name: 'Purchasing Officer', email: 'purchasing@nkbmanufacturing.com', role: 'PURCHASING', hash: staffPassHash, plain: 'Staff123!', phone: '+639170000006', whatsapp_number: '+639170000006' },
+            { id: 'g0000000-0000-0000-0000-000000000001', name: 'Quality Control Inspector', email: 'qc@nkbmanufacturing.com', role: 'QC', hash: staffPassHash, plain: 'Staff123!', phone: '+639170000007', whatsapp_number: '+639170000007' }
         ];
 
         for (const staff of defaultStaff) {
@@ -1594,12 +1604,12 @@ if (useMysql) {
             const useHash = staff.hash || staffPassHash;
             if (!existing) {
                 db.prepare(`
-                    INSERT INTO users (id, name, email, password_hash, plain_password, role, is_active)
-                    VALUES (?, ?, ?, ?, ?, ?, 1)
-                `).run(staff.id, staff.name, staff.email, useHash, staff.plain || 'Staff123!', staff.role);
+                    INSERT INTO users (id, name, email, password_hash, plain_password, role, phone, whatsapp_number, is_active)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+                `).run(staff.id, staff.name, staff.email, useHash, staff.plain || 'Staff123!', staff.role, staff.phone, staff.whatsapp_number);
                 console.log(`👷 Auto-provisioned Staff: ${staff.name} (${staff.email})`);
             } else {
-                db.prepare("UPDATE users SET password_hash = ?, plain_password = COALESCE(plain_password, ?), role = ?, is_active = 1 WHERE id = ?").run(useHash, staff.plain || 'Staff123!', staff.role, existing.id);
+                db.prepare("UPDATE users SET password_hash = ?, plain_password = COALESCE(plain_password, ?), role = ?, phone = COALESCE(phone, ?), whatsapp_number = COALESCE(whatsapp_number, ?), is_active = 1 WHERE id = ?").run(useHash, staff.plain || 'Staff123!', staff.role, staff.phone, staff.whatsapp_number, existing.id);
             }
         }
 

@@ -14,7 +14,7 @@ router.get('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, 
     const { role, status, search } = req.query;
 
     let query = `
-        SELECT u.id, u.name, u.email, u.role, u.is_active, u.plain_password, u.created_at, u.updated_at,
+        SELECT u.id, u.name, u.email, u.phone, u.whatsapp_number, u.role, u.is_active, u.plain_password, u.created_at, u.updated_at,
                c.id as client_id, c.company_name
         FROM users u
         LEFT JOIN clients c ON u.client_id = c.id
@@ -33,9 +33,9 @@ router.get('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, 
     }
 
     if (search) {
-        query += ' AND (u.name LIKE ? OR u.email LIKE ? OR c.company_name LIKE ?)';
+        query += ' AND (u.name LIKE ? OR u.email LIKE ? OR u.phone LIKE ? OR u.whatsapp_number LIKE ? OR c.company_name LIKE ?)';
         const term = `%${search}%`;
-        params.push(term, term, term);
+        params.push(term, term, term, term, term);
     }
 
     query += ' ORDER BY u.created_at DESC';
@@ -49,7 +49,7 @@ router.get('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, 
  */
 router.get('/:id', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.CEO), (req, res) => {
     const user = db.prepare(`
-        SELECT u.id, u.name, u.email, u.role, u.is_active, u.plain_password, u.created_at, u.updated_at,
+        SELECT u.id, u.name, u.email, u.phone, u.whatsapp_number, u.role, u.is_active, u.plain_password, u.created_at, u.updated_at,
                c.id as client_id, c.company_name
         FROM users u
         LEFT JOIN clients c ON u.client_id = c.id
@@ -68,7 +68,7 @@ router.get('/:id', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMI
  * Create new staff or client user
  */
 router.post('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN), (req, res) => {
-    const { name, email, password, role, client_id } = req.body;
+    const { name, email, password, role, client_id, phone, whatsapp_number } = req.body;
 
     if (!name || !email || !password || !role) {
         return res.status(400).json({
@@ -124,11 +124,13 @@ router.post('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN)
 
     const id = uuidv4();
     const passwordHash = bcrypt.hashSync(password, 12);
+    const cleanPhone = phone ? phone.trim() : null;
+    const cleanWhatsapp = whatsapp_number ? whatsapp_number.trim() : (cleanPhone || null);
 
     db.prepare(`
-        INSERT INTO users (id, name, email, password_hash, plain_password, role, client_id, is_active)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 1)
-    `).run(id, name.trim(), cleanEmail, passwordHash, password, cleanRole, cleanRole === ROLES.CLIENT ? client_id : null);
+        INSERT INTO users (id, name, email, password_hash, plain_password, role, client_id, phone, whatsapp_number, is_active)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+    `).run(id, name.trim(), cleanEmail, passwordHash, password, cleanRole, cleanRole === ROLES.CLIENT ? client_id : null, cleanPhone, cleanWhatsapp);
 
     logAudit({
         userId: req.user.id,
@@ -137,12 +139,12 @@ router.post('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN)
         action: 'CREATE_USER',
         entityType: 'USER',
         entityId: id,
-        details: { name: name.trim(), email: cleanEmail, role: cleanRole, clientId: client_id || null },
+        details: { name: name.trim(), email: cleanEmail, role: cleanRole, clientId: client_id || null, phone: cleanPhone, whatsapp: cleanWhatsapp },
         ipAddress: req.ip
     });
 
     const created = db.prepare(`
-        SELECT u.id, u.name, u.email, u.role, u.is_active, u.plain_password, u.created_at, c.company_name
+        SELECT u.id, u.name, u.email, u.phone, u.whatsapp_number, u.role, u.is_active, u.plain_password, u.created_at, c.company_name
         FROM users u
         LEFT JOIN clients c ON u.client_id = c.id
         WHERE u.id = ?
@@ -161,7 +163,7 @@ router.post('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN)
  */
 router.put('/:id', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN), (req, res) => {
     const { id } = req.params;
-    const { name, email, role, is_active, client_id, password } = req.body;
+    const { name, email, role, is_active, client_id, password, phone, whatsapp_number } = req.body;
 
     const targetUser = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
     if (!targetUser) {
@@ -217,6 +219,8 @@ router.put('/:id', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMI
 
     const updatedName = name ? name.trim() : targetUser.name;
     const updatedStatus = is_active !== undefined ? (is_active ? 1 : 0) : targetUser.is_active;
+    const updatedPhone = phone !== undefined ? (phone ? phone.trim() : null) : targetUser.phone;
+    const updatedWhatsapp = whatsapp_number !== undefined ? (whatsapp_number ? whatsapp_number.trim() : null) : targetUser.whatsapp_number;
 
     // Prevent self-deactivation
     if (req.user.id === id && updatedStatus === 0) {
@@ -248,9 +252,9 @@ router.put('/:id', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMI
 
     db.prepare(`
         UPDATE users
-        SET name = ?, email = ?, password_hash = ?, plain_password = ?, role = ?, is_active = ?, client_id = ?, updated_at = datetime('now', 'localtime')
+        SET name = ?, email = ?, phone = ?, whatsapp_number = ?, password_hash = ?, plain_password = ?, role = ?, is_active = ?, client_id = ?, updated_at = datetime('now', 'localtime')
         WHERE id = ?
-    `).run(updatedName, updatedEmail, updatedPasswordHash, updatedPlainPassword, updatedRole, updatedStatus, updatedClientId, id);
+    `).run(updatedName, updatedEmail, updatedPhone, updatedWhatsapp, updatedPasswordHash, updatedPlainPassword, updatedRole, updatedStatus, updatedClientId, id);
 
     logAudit({
         userId: req.user.id,
@@ -261,13 +265,13 @@ router.put('/:id', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.ADMI
         entityId: id,
         details: {
             old: { name: targetUser.name, email: targetUser.email, role: targetUser.role, isActive: targetUser.is_active },
-            new: { name: updatedName, email: updatedEmail, role: updatedRole, isActive: updatedStatus, passwordChanged }
+            new: { name: updatedName, email: updatedEmail, role: updatedRole, isActive: updatedStatus, passwordChanged, phone: updatedPhone, whatsapp: updatedWhatsapp }
         },
         ipAddress: req.ip
     });
 
     const updated = db.prepare(`
-        SELECT u.id, u.name, u.email, u.role, u.is_active, u.plain_password, u.created_at, u.updated_at,
+        SELECT u.id, u.name, u.email, u.phone, u.whatsapp_number, u.role, u.is_active, u.plain_password, u.created_at, u.updated_at,
                c.id as client_id, c.company_name
         FROM users u
         LEFT JOIN clients c ON u.client_id = c.id

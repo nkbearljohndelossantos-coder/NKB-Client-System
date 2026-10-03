@@ -20,6 +20,19 @@ window.cachedOrders = cachedOrders;
 window.cachedDeliveries = cachedDeliveries;
 window.cachedInvoices = cachedInvoices;
 
+function formatWhatsAppUrl(rawPhone, message = '') {
+    if (!rawPhone) return '#';
+    let clean = String(rawPhone).replace(/[^\d+]/g, '');
+    if (clean.startsWith('0')) {
+        clean = '63' + clean.slice(1);
+    } else if (clean.startsWith('+')) {
+        clean = clean.slice(1);
+    }
+    const textParam = message ? `?text=${encodeURIComponent(message)}` : '';
+    return `https://wa.me/${clean}${textParam}`;
+}
+window.formatWhatsAppUrl = formatWhatsAppUrl;
+
 async function ensureCategoriesLoaded() {
     if (!cachedCategories || cachedCategories.length === 0) {
         const res = await NKB.api('/api/products/categories');
@@ -10190,6 +10203,14 @@ async function loadUsers() {
                     <td class="py-3 px-4">
                         <div class="font-bold text-slate-900">${u.name}</div>
                         <div class="text-[11px] text-slate-400 font-mono">${u.email}</div>
+                        ${(u.whatsapp_number || u.phone) ? `
+                            <div class="mt-1 flex items-center gap-1.5">
+                                <a href="${formatWhatsAppUrl(u.whatsapp_number || u.phone, 'Hello ' + u.name + ', notification from NKB Operations.')}" target="_blank" class="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 text-[10px] font-bold inline-flex items-center gap-1 transition" title="Open WhatsApp Chat">
+                                    <span>💬</span>
+                                    <span>${u.whatsapp_number || u.phone}</span>
+                                </a>
+                            </div>
+                        ` : '<div class="text-[10px] text-slate-400 italic mt-0.5">No WhatsApp set</div>'}
                     </td>
                     <td class="py-3 px-4">
                         <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold border ${roleBadges[u.role] || 'bg-slate-100 text-slate-800 border-slate-200'}">
@@ -10361,6 +10382,11 @@ async function openCreateUserModal() {
                         <input type="email" id="usr-email" placeholder="staff@nkbmanufacturing.com" required class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition">
                     </div>
                     <div>
+                        <label class="block text-slate-700 mb-1 font-bold">WhatsApp / Mobile Contact Number</label>
+                        <input type="text" id="usr-whatsapp" placeholder="+63 917 123 4567 or 09171234567" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition font-mono">
+                        <p class="text-[10px] text-slate-400 mt-1">Used for automated WhatsApp / SMS notifications on QC inspections and requisition alerts.</p>
+                    </div>
+                    <div>
                         <label class="block text-slate-700 mb-1 font-bold">Initial Password <span class="text-rose-500">*</span></label>
                         <input type="password" id="usr-pwd" placeholder="Minimum 8 characters" required minlength="8" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition">
                     </div>
@@ -10403,6 +10429,7 @@ async function submitCreateUser(e) {
     e.preventDefault();
     const name = document.getElementById('usr-name')?.value.trim();
     const email = document.getElementById('usr-email')?.value.trim();
+    const whatsapp_number = document.getElementById('usr-whatsapp')?.value.trim();
     const password = document.getElementById('usr-pwd')?.value;
     const role = document.getElementById('usr-role')?.value;
     const client_id = role === 'CLIENT' ? document.getElementById('usr-client-id')?.value : null;
@@ -10426,7 +10453,7 @@ async function submitCreateUser(e) {
     try {
         const res = await NKB.api('/api/users', {
             method: 'POST',
-            body: JSON.stringify({ name, email, password, role, client_id })
+            body: JSON.stringify({ name, email, password, role, client_id, phone: whatsapp_number, whatsapp_number })
         });
 
         if (res.success) {
@@ -10507,6 +10534,11 @@ async function openEditUserModal(userId) {
                         <label class="block text-slate-700 mb-1 font-bold">Corporate / Login Email <span class="text-rose-500">*</span></label>
                         <input type="email" id="usr-edit-email" value="${u.email ? u.email.replace(/"/g, '&quot;') : ''}" required class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition">
                     </div>
+                    <div>
+                        <label class="block text-slate-700 mb-1 font-bold">WhatsApp / Mobile Contact Number</label>
+                        <input type="text" id="usr-edit-whatsapp" value="${(u.whatsapp_number || u.phone || '').replace(/"/g, '&quot;')}" placeholder="+63 917 123 4567 or 09171234567" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition font-mono">
+                        <p class="text-[10px] text-slate-400 mt-1">Used for automated WhatsApp / SMS notifications on QC inspections and requisition alerts.</p>
+                    </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
                             <label class="block text-slate-700 mb-1 font-bold">Assigned Role <span class="text-rose-500">*</span></label>
@@ -10560,6 +10592,7 @@ async function submitEditUser(e, userId) {
     e.preventDefault();
     const name = document.getElementById('usr-edit-name')?.value.trim();
     const email = document.getElementById('usr-edit-email')?.value.trim();
+    const whatsapp_number = document.getElementById('usr-edit-whatsapp')?.value.trim();
     const role = document.getElementById('usr-edit-role')?.value;
     const client_id = role === 'CLIENT' ? document.getElementById('usr-edit-client-id')?.value : null;
     const is_active_el = document.getElementById('usr-edit-status');
@@ -10588,7 +10621,7 @@ async function submitEditUser(e, userId) {
     }
 
     try {
-        const payload = { name, email, role, is_active, client_id };
+        const payload = { name, email, role, is_active, client_id, phone: whatsapp_number, whatsapp_number };
         if (password) payload.password = password;
 
         const res = await NKB.api(`/api/users/${userId}`, {
@@ -10692,8 +10725,14 @@ async function loadPurchasingRequisitions() {
         'SUBMITTED': 'bg-amber-100 text-amber-800 border-amber-200',
         'ORDERED': 'bg-blue-100 text-blue-800 border-blue-200',
         'IN_TRANSIT': 'bg-purple-100 text-purple-800 border-purple-200',
-        'DELIVERED': 'bg-emerald-100 text-emerald-800 border-emerald-200',
-        'CANCELLED': 'bg-rose-100 text-rose-800 border-rose-200'
+        'PENDING_QC': 'bg-indigo-100 text-indigo-800 border-indigo-200 font-bold',
+        'QC_DECLINED': 'bg-rose-100 text-rose-800 border-rose-200 font-extrabold',
+        'REORDERED': 'bg-sky-100 text-sky-800 border-sky-200',
+        'RETURNED_TO_SUPPLIER': 'bg-orange-100 text-orange-800 border-orange-200 font-bold',
+        'REJECTED': 'bg-red-100 text-red-800 border-red-200 font-black',
+        'QC_BYPASSED': 'bg-teal-100 text-teal-800 border-teal-200',
+        'DELIVERED': 'bg-emerald-100 text-emerald-800 border-emerald-200 font-bold',
+        'CANCELLED': 'bg-slate-100 text-slate-800 border-slate-200'
     };
 
     const urgencyBadges = {
@@ -10702,7 +10741,18 @@ async function loadPurchasingRequisitions() {
         'NORMAL': 'bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold'
     };
 
-    tbody.innerHTML = res.data.map(r => `
+    tbody.innerHTML = res.data.map(r => {
+        const reqWa = r.requested_by_whatsapp || r.requested_by_phone;
+        const qcWa = r.qc_inspector_whatsapp || r.qc_inspector_phone;
+        
+        let statusLabel = r.status;
+        if (r.status === 'PENDING_QC') statusLabel = '🔬 PENDING QC';
+        else if (r.status === 'QC_DECLINED') statusLabel = '⚠️ QC DECLINED';
+        else if (r.status === 'DELIVERED' && r.qc_status === 'PASSED') statusLabel = '✅ QC PASSED';
+        else if (r.status === 'RETURNED_TO_SUPPLIER') statusLabel = '↩️ RETURNED TO SUPPLIER';
+        else if (r.status === 'REJECTED') statusLabel = '🚫 REJECTED';
+
+        return `
         <tr class="hover:bg-slate-50 transition">
             <td class="py-3 px-4">
                 <div class="font-black text-indigo-700 font-mono">${r.po_number}</div>
@@ -10711,7 +10761,9 @@ async function loadPurchasingRequisitions() {
             <td class="py-3 px-4 max-w-sm">
                 <div class="text-xs font-bold text-slate-800 line-clamp-2">${r.materials_needed}</div>
                 ${formatRequisitionBomHtml(r.bom_items)}
-                ${r.notes ? `<div class="text-[10px] text-slate-400 truncate mt-1">${r.notes}</div>` : ''}
+                ${r.qc_notes ? `<div class="text-[10px] text-rose-600 bg-rose-50/60 p-1.5 rounded-lg border border-rose-100 mt-1 line-clamp-2"><b>QC:</b> ${r.qc_notes}</div>` : ''}
+                ${r.purchasing_response_notes ? `<div class="text-[10px] text-indigo-600 bg-indigo-50/60 p-1.5 rounded-lg border border-indigo-100 mt-1 line-clamp-2"><b>Purchasing (${r.purchasing_response}):</b> ${r.purchasing_response_notes}</div>` : ''}
+                ${r.notes && !r.qc_notes && !r.purchasing_response_notes ? `<div class="text-[10px] text-slate-400 truncate mt-1">${r.notes}</div>` : ''}
             </td>
             <td class="py-3 px-4">
                 <span class="inline-block px-2.5 py-0.5 rounded-full text-[10px] border ${urgencyBadges[r.urgency] || 'bg-slate-100 text-slate-700'}">
@@ -10722,21 +10774,54 @@ async function loadPurchasingRequisitions() {
                 ${r.target_date || 'ASAP'}
             </td>
             <td class="py-3 px-4">
-                <span class="inline-block px-2.5 py-0.5 rounded-lg text-[10px] font-bold border ${statusBadges[r.status] || 'bg-slate-100 text-slate-700'}">
-                    ${r.status}
-                </span>
+                <div class="flex flex-col gap-1 items-start">
+                    <span class="inline-block px-2.5 py-0.5 rounded-lg text-[10px] border ${statusBadges[r.status] || 'bg-slate-100 text-slate-700'}">
+                        ${statusLabel}
+                    </span>
+                    ${r.qc_status && r.status !== 'PENDING_QC' ? `
+                        <span class="text-[9px] font-bold px-1.5 py-0.5 border rounded ${r.qc_status === 'PASSED' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : (r.qc_status === 'DECLINED' ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-slate-50 text-slate-600 border-slate-200')}">
+                            QC: ${r.qc_status}
+                        </span>
+                    ` : ''}
+                    ${r.purchasing_response ? `
+                        <span class="text-[9px] font-bold px-1.5 py-0.5 bg-teal-50 text-teal-700 border border-teal-200 rounded">
+                            Purchasing: ${r.purchasing_response}
+                        </span>
+                    ` : ''}
+                </div>
             </td>
             <td class="py-3 px-4 text-slate-500 text-xs">
-                <div>${r.requested_by_name}</div>
+                <div class="flex items-center gap-1 font-semibold text-slate-800">
+                    <span>${r.requested_by_name}</span>
+                    ${reqWa ? `<a href="${formatWhatsAppUrl(reqWa, `Hello, regarding requisition for PO ${r.po_number}: `)}" target="_blank" title="WhatsApp Requester" class="text-emerald-600 hover:text-emerald-700 text-xs">💬</a>` : ''}
+                </div>
                 <div class="text-[10px] text-slate-400 font-mono">${NKB.formatDate(r.created_at)}</div>
             </td>
             <td class="py-3 px-4 text-right whitespace-nowrap">
-                <button onclick="openUpdateRequisitionModal('${r.id}')" class="px-2.5 py-1 bg-teal-50 border border-teal-200 hover:bg-teal-100 text-teal-700 rounded-lg text-xs font-bold shadow-sm transition inline-flex items-center gap-1 cursor-pointer">
-                    <span>✏️</span> Manage
-                </button>
+                <div class="flex items-center justify-end gap-1.5">
+                    ${r.status === 'PENDING_QC' ? `
+                        <button onclick="openQcInspectionModal('${r.id}')" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold shadow-sm transition inline-flex items-center gap-1 cursor-pointer">
+                            <span>🔬</span> Inspect (QC)
+                        </button>
+                    ` : ''}
+                    ${r.status === 'QC_DECLINED' ? `
+                        <button onclick="openPurchasingResponseModal('${r.id}')" class="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold shadow-sm transition inline-flex items-center gap-1 cursor-pointer">
+                            <span>⚠️</span> Respond to QC
+                        </button>
+                    ` : ''}
+                    ${qcWa ? `
+                        <a href="${formatWhatsAppUrl(qcWa, `Hello QC, regarding Raw Material Requisition for PO ${r.po_number}: `)}" target="_blank" title="WhatsApp QC Inspector (${r.qc_inspector_name || 'QC'})" class="p-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 rounded-lg text-xs font-bold transition inline-flex items-center">
+                            💬
+                        </a>
+                    ` : ''}
+                    <button onclick="openUpdateRequisitionModal('${r.id}')" class="px-2.5 py-1 bg-teal-50 border border-teal-200 hover:bg-teal-100 text-teal-700 rounded-lg text-xs font-bold shadow-sm transition inline-flex items-center gap-1 cursor-pointer">
+                        <span>✏️</span> Manage
+                    </button>
+                </div>
             </td>
         </tr>
-    `).join('');
+        `;
+    }).join('');
 }
 
 async function openUpdateRequisitionModal(reqId) {
@@ -10749,6 +10834,9 @@ async function openUpdateRequisitionModal(reqId) {
     const r = res.data;
     const root = document.getElementById('modals-root');
     if (!root) return;
+
+    const reqWa = r.requested_by_whatsapp || r.requested_by_phone;
+    const qcWa = r.qc_inspector_whatsapp || r.qc_inspector_phone;
 
     root.innerHTML = `
         <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
@@ -10768,8 +10856,59 @@ async function openUpdateRequisitionModal(reqId) {
                     <div class="font-bold text-slate-700">Materials Needed:</div>
                     <div class="text-slate-900 font-medium whitespace-pre-line">${r.materials_needed}</div>
                     ${formatRequisitionBomHtml(r.bom_items)}
-                    <div class="text-[11px] text-slate-500 pt-1 border-t border-slate-200/60 mt-1">Requested by: <b>${r.requested_by_name}</b> | Urgency: <b class="text-rose-600">${r.urgency}</b></div>
+                    <div class="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-200/60 mt-1">
+                        <span>Requested by: <b>${r.requested_by_name}</b> | Urgency: <b class="text-rose-600">${r.urgency}</b></span>
+                        ${reqWa ? `<a href="${formatWhatsAppUrl(reqWa, `Hello, regarding requisition ${r.po_number}`)}" target="_blank" class="text-emerald-600 hover:text-emerald-700 font-bold">💬 WhatsApp Requester</a>` : ''}
+                    </div>
                 </div>
+
+                ${r.qc_notes || r.qc_status ? `
+                    <div class="p-3.5 bg-rose-50/70 rounded-2xl border border-rose-200 text-xs space-y-1">
+                        <div class="flex items-center justify-between font-bold text-rose-800">
+                            <span class="flex items-center gap-1.5"><span>🔬</span> QC Inspection: <b>${r.qc_status || 'REPORTED'}</b></span>
+                            <span class="text-[10px] font-mono text-rose-600">${r.qc_inspected_at ? NKB.formatDate(r.qc_inspected_at) : ''}</span>
+                        </div>
+                        <div class="text-rose-950 font-medium whitespace-pre-line bg-white/70 p-2 rounded-xl border border-rose-100">${r.qc_notes || 'No QC defect notes recorded.'}</div>
+                        <div class="flex items-center justify-between text-[11px] text-rose-700 pt-1">
+                            <span>Inspected by: <b>${r.qc_inspector_name || 'QC Inspector'}</b></span>
+                            ${qcWa ? `<a href="${formatWhatsAppUrl(qcWa, `Hello QC, regarding PO ${r.po_number}`)}" target="_blank" class="text-emerald-700 hover:text-emerald-800 font-bold">💬 WhatsApp QC</a>` : ''}
+                        </div>
+                    </div>
+                ` : ''}
+
+                ${r.purchasing_response ? `
+                    <div class="p-3.5 bg-indigo-50/70 rounded-2xl border border-indigo-200 text-xs space-y-1">
+                        <div class="flex items-center justify-between font-bold text-indigo-800">
+                            <span class="flex items-center gap-1.5"><span>🛒</span> Purchasing Resolution: <b>${r.purchasing_response}</b></span>
+                            <span class="text-[10px] font-mono text-indigo-600">${r.purchasing_responded_at ? NKB.formatDate(r.purchasing_responded_at) : ''}</span>
+                        </div>
+                        <div class="text-indigo-950 font-medium whitespace-pre-line bg-white/70 p-2 rounded-xl border border-indigo-100">${r.purchasing_response_notes || 'No response notes.'}</div>
+                    </div>
+                ` : ''}
+
+                ${r.status === 'PENDING_QC' ? `
+                    <div class="p-3 bg-indigo-50 rounded-2xl border border-indigo-200 flex items-center justify-between">
+                        <div>
+                            <div class="text-xs font-bold text-indigo-900">🔬 Awaiting Quality Inspection</div>
+                            <div class="text-[11px] text-indigo-700">Incoming raw materials must be tested and passed by QC before inventory stocking.</div>
+                        </div>
+                        <button type="button" onclick="closeModal(); openQcInspectionModal('${r.id}')" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-sm transition">
+                            Run QC Check
+                        </button>
+                    </div>
+                ` : ''}
+
+                ${r.status === 'QC_DECLINED' ? `
+                    <div class="p-3 bg-rose-50 rounded-2xl border border-rose-200 flex items-center justify-between">
+                        <div>
+                            <div class="text-xs font-bold text-rose-900">⚠️ QC Inspection Declined</div>
+                            <div class="text-[11px] text-rose-700">Purchasing action required: Reject, Re-order, Return to supplier, or Bypass QC.</div>
+                        </div>
+                        <button type="button" onclick="closeModal(); openPurchasingResponseModal('${r.id}')" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold shadow-sm transition">
+                            Respond to QC
+                        </button>
+                    </div>
+                ` : ''}
 
                 <form onsubmit="submitUpdateRequisition(event, '${r.id}')" class="space-y-3.5 text-xs">
                     <div>
@@ -10778,15 +10917,19 @@ async function openUpdateRequisitionModal(reqId) {
                             <option value="SUBMITTED" ${r.status === 'SUBMITTED' ? 'selected' : ''}>⚠️ SUBMITTED (Sourcing Supplier)</option>
                             <option value="ORDERED" ${r.status === 'ORDERED' ? 'selected' : ''}>📦 ORDERED (PO Issued to Vendor)</option>
                             <option value="IN_TRANSIT" ${r.status === 'IN_TRANSIT' ? 'selected' : ''}>🚚 IN TRANSIT (Shipped by Vendor)</option>
-                            <option value="DELIVERED" ${r.status === 'DELIVERED' ? 'selected' : ''}>✅ DELIVERED (Received at Warehouse & Fulfilled)</option>
+                            <option value="PENDING_QC" ${r.status === 'PENDING_QC' ? 'selected' : ''}>🔬 PENDING QC (Received - Awaiting Quality Check)</option>
+                            <option value="QC_DECLINED" ${r.status === 'QC_DECLINED' ? 'selected' : ''}>⚠️ QC DECLINED (Defective - Needs Purchasing Action)</option>
+                            <option value="RETURNED_TO_SUPPLIER" ${r.status === 'RETURNED_TO_SUPPLIER' ? 'selected' : ''}>↩️ RETURNED TO SUPPLIER (Shipped Back / RMA)</option>
+                            <option value="REJECTED" ${r.status === 'REJECTED' ? 'selected' : ''}>🚫 REJECTED (Lot Scrapped / Voided)</option>
+                            <option value="DELIVERED" ${r.status === 'DELIVERED' ? 'selected' : ''}>✅ DELIVERED (Accepted & Stocked into Inventory)</option>
                             <option value="CANCELLED" ${r.status === 'CANCELLED' ? 'selected' : ''}>❌ CANCELLED</option>
                         </select>
-                        <p class="text-[10px] text-slate-400 mt-1">Marking as DELIVERED unblocks production and updates PO raw materials to SUFFICIENT.</p>
+                        <p class="text-[10px] text-slate-400 mt-1">Select PENDING_QC upon receiving items to require QC Inspector review, or DELIVERED to finalize inventory stocking.</p>
                     </div>
 
                     <div>
                         <label class="block text-slate-700 mb-1 font-bold">Supplier / Order Tracking Details</label>
-                        <input type="text" id="req-update-supplier" placeholder="e.g., Croda Chemicals / PO# 88492 / ETA Friday" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-500 transition">
+                        <input type="text" id="req-update-supplier" value="${r.supplier_details || ''}" placeholder="e.g., Croda Chemicals / PO# 88492 / ETA Friday" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-500 transition">
                     </div>
 
                     <div>
@@ -10796,7 +10939,7 @@ async function openUpdateRequisitionModal(reqId) {
 
                     <div>
                         <label class="block text-slate-700 mb-1 font-bold">Procurement Notes / Instructions</label>
-                        <textarea id="req-update-notes" rows="2" placeholder="Additional vendor or quality inspection notes..." class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-500 transition"></textarea>
+                        <textarea id="req-update-notes" rows="2" placeholder="Additional vendor or quality inspection notes..." class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-500 transition">${r.notes || ''}</textarea>
                     </div>
 
                     <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
@@ -10851,6 +10994,399 @@ async function submitUpdateRequisition(e, reqId) {
         }
     }
 }
+
+async function openQcInspectionModal(reqId) {
+    const res = await NKB.api(`/api/supply-requests/${reqId}`);
+    if (!res.success || !res.data) {
+        NKB.showToast('Failed to load requisition details for QC inspection.', 'error');
+        return;
+    }
+    const r = res.data;
+    const root = document.getElementById('modals-root');
+    if (!root) return;
+
+    const reqWa = r.requested_by_whatsapp || r.requested_by_phone;
+    const waChatLink = reqWa ? formatWhatsAppUrl(reqWa, `Hello Purchasing, this is QC regarding Raw Material Requisition for PO ${r.po_number}: `) : null;
+
+    root.innerHTML = `
+        <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+            <div class="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 my-auto max-h-[90vh] overflow-y-auto">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 text-base font-bold">🔬</div>
+                        <div>
+                            <h3 class="text-base font-extrabold text-slate-900">QC Raw Material Quality Check</h3>
+                            <p class="text-[11px] text-slate-500">${r.po_number} • ${r.client_name}</p>
+                        </div>
+                    </div>
+                    <button onclick="closeModal()" class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 font-bold flex items-center justify-center transition cursor-pointer">✕</button>
+                </div>
+
+                <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-1.5">
+                    <div class="font-bold text-slate-700">Materials Received:</div>
+                    <div class="text-slate-900 font-medium whitespace-pre-line">${r.materials_needed}</div>
+                    ${formatRequisitionBomHtml(r.bom_items)}
+                    <div class="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-200/60 mt-1">
+                        <span>Requester: <b>${r.requested_by_name}</b></span>
+                        ${waChatLink ? `<a href="${waChatLink}" target="_blank" class="text-emerald-600 hover:text-emerald-700 font-bold flex items-center gap-1">💬 WhatsApp Purchasing</a>` : ''}
+                    </div>
+                    ${r.supplier_details ? `<div class="text-[11px] text-slate-500">Supplier/Tracking: <b class="text-slate-700">${r.supplier_details}</b></div>` : ''}
+                </div>
+
+                <form onsubmit="submitQcInspection(event, '${r.id}')" class="space-y-4 text-xs">
+                    <div>
+                        <label class="block text-slate-700 mb-1 font-bold">QC Inspection Decision <span class="text-rose-500">*</span></label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <label class="flex items-center gap-2 p-3 border rounded-xl cursor-pointer hover:bg-emerald-50/50 has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50 transition">
+                                <input type="radio" name="qc_decision" value="APPROVE" checked class="text-emerald-600 focus:ring-emerald-500">
+                                <div>
+                                    <div class="font-bold text-emerald-800">✅ Approve & Pass QC</div>
+                                    <div class="text-[10px] text-slate-500">Meets specifications, restock inventory & unblock production</div>
+                                </div>
+                            </label>
+                            <label class="flex items-center gap-2 p-3 border rounded-xl cursor-pointer hover:bg-rose-50/50 has-[:checked]:border-rose-500 has-[:checked]:bg-rose-50 transition">
+                                <input type="radio" name="qc_decision" value="DECLINE" class="text-rose-600 focus:ring-rose-500">
+                                <div>
+                                    <div class="font-bold text-rose-800">❌ Decline (Defective)</div>
+                                    <div class="text-[10px] text-slate-500">Does not meet specs, escalate to Purchasing for response</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-slate-700 mb-1 font-bold">Inspection Findings & Defect Notes <span class="text-rose-500">*</span></label>
+                        <textarea id="qc-inspection-notes" rows="3" placeholder="Enter CoA verification, visual inspection, assay / batch results, or defect descriptions..." class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 transition"></textarea>
+                        <p class="text-[10px] text-slate-400 mt-1">If declining, specific defect reasons are required so Purchasing can reject, reorder, return, or bypass.</p>
+                    </div>
+
+                    <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition">Cancel</button>
+                        <button type="submit" id="btn-qc-submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-lg shadow-indigo-600/20 transition">Submit QC Decision</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+}
+
+async function submitQcInspection(e, reqId) {
+    e.preventDefault();
+    const decisionEl = document.querySelector('input[name="qc_decision"]:checked');
+    const decision = decisionEl ? decisionEl.value : 'APPROVE';
+    const qc_notes = document.getElementById('qc-inspection-notes')?.value.trim() || '';
+
+    if (decision === 'DECLINE' && !qc_notes) {
+        NKB.showToast('Please provide defect notes explaining why the raw material was declined.', 'warning');
+        return;
+    }
+
+    const btn = document.getElementById('btn-qc-submit');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = 'Submitting...';
+    }
+
+    try {
+        const res = await NKB.api(`/api/supply-requests/${reqId}/qc-decision`, {
+            method: 'POST',
+            body: JSON.stringify({ decision, qc_notes })
+        });
+
+        if (res.success) {
+            NKB.showToast(res.message || 'QC decision submitted successfully!', 'success');
+            closeModal();
+            loadPurchasingRequisitions();
+            if (typeof loadOrders === 'function') loadOrders();
+            if (window.NKB_Agents && window.NKB_Agents.refreshPendingNotifications) {
+                window.NKB_Agents.refreshPendingNotifications();
+            }
+        } else {
+            NKB.showToast(res.message || res.error || 'Failed to submit QC decision.', 'error');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerText = 'Submit QC Decision';
+            }
+        }
+    } catch (err) {
+        NKB.showToast('Network error submitting QC decision.', 'error');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = 'Submit QC Decision';
+        }
+    }
+}
+
+async function openPurchasingResponseModal(reqId) {
+    const res = await NKB.api(`/api/supply-requests/${reqId}`);
+    if (!res.success || !res.data) {
+        NKB.showToast('Failed to load requisition details for purchasing response.', 'error');
+        return;
+    }
+    const r = res.data;
+    const root = document.getElementById('modals-root');
+    if (!root) return;
+
+    const qcWa = r.qc_inspector_whatsapp || r.qc_inspector_phone;
+    const waChatLink = qcWa ? formatWhatsAppUrl(qcWa, `Hello QC Inspector, regarding declined requisition for PO ${r.po_number}: `) : null;
+
+    root.innerHTML = `
+        <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+            <div class="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 my-auto max-h-[90vh] overflow-y-auto">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 rounded-xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 text-base font-bold">⚠️</div>
+                        <div>
+                            <h3 class="text-base font-extrabold text-slate-900">Purchasing Action: QC Declined Material</h3>
+                            <p class="text-[11px] text-slate-500">${r.po_number} • ${r.client_name}</p>
+                        </div>
+                    </div>
+                    <button onclick="closeModal()" class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 font-bold flex items-center justify-center transition cursor-pointer">✕</button>
+                </div>
+
+                <!-- QC Defect Report Card -->
+                <div class="p-3.5 bg-rose-50/70 rounded-2xl border border-rose-200 text-xs space-y-2">
+                    <div class="flex items-center justify-between font-bold text-rose-900">
+                        <span class="flex items-center gap-1.5"><span>🔬</span> QC Inspection Defect Report:</span>
+                        <span class="text-[10px] font-mono text-rose-700">${r.qc_inspected_at ? NKB.formatDate(r.qc_inspected_at) : ''}</span>
+                    </div>
+                    <div class="text-rose-950 font-medium whitespace-pre-line bg-white/70 p-2.5 rounded-xl border border-rose-100">${r.qc_notes || 'Defective material reported by QC.'}</div>
+                    <div class="flex items-center justify-between text-[11px] text-rose-700 pt-1">
+                        <span>Inspector: <b>${r.qc_inspector_name || 'QC Inspector'}</b></span>
+                        ${waChatLink ? `<a href="${waChatLink}" target="_blank" class="text-emerald-700 hover:text-emerald-800 font-bold flex items-center gap-1">💬 WhatsApp QC Inspector</a>` : ''}
+                    </div>
+                </div>
+
+                <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-1">
+                    <div class="font-bold text-slate-700">Materials: <span class="font-medium text-slate-900">${r.materials_needed}</span></div>
+                    ${formatRequisitionBomHtml(r.bom_items)}
+                </div>
+
+                <form onsubmit="submitPurchasingResponse(event, '${r.id}')" class="space-y-4 text-xs">
+                    <div>
+                        <label class="block text-slate-700 mb-1 font-bold">Select Purchasing Resolution <span class="text-rose-500">*</span></label>
+                        <div class="space-y-2">
+                            <label class="flex items-start gap-2.5 p-3 border rounded-xl cursor-pointer hover:bg-slate-50 has-[:checked]:border-rose-500 has-[:checked]:bg-rose-50/40 transition">
+                                <input type="radio" name="purchasing_action" value="REJECT" checked class="mt-1 text-rose-600 focus:ring-rose-500">
+                                <div>
+                                    <div class="font-bold text-rose-900">1. Reject Lot (REJECT)</div>
+                                    <div class="text-[10px] text-slate-500">Permanently reject and void this lot/delivery. Closes requisition as rejected.</div>
+                                </div>
+                            </label>
+
+                            <label class="flex items-start gap-2.5 p-3 border rounded-xl cursor-pointer hover:bg-slate-50 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50/40 transition">
+                                <input type="radio" name="purchasing_action" value="REORDER" class="mt-1 text-blue-600 focus:ring-blue-500">
+                                <div>
+                                    <div class="font-bold text-blue-900">2. Re-Order Replacement (REORDER)</div>
+                                    <div class="text-[10px] text-slate-500">Request supplier to expedite an urgent replacement lot. Resets status to ORDERED for new shipment.</div>
+                                </div>
+                            </label>
+
+                            <label class="flex items-start gap-2.5 p-3 border rounded-xl cursor-pointer hover:bg-slate-50 has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50/40 transition">
+                                <input type="radio" name="purchasing_action" value="RETURN_TO_SUPPLIER" class="mt-1 text-amber-600 focus:ring-amber-500">
+                                <div>
+                                    <div class="font-bold text-amber-900">3. Return Item Back to Supplier (RETURN_TO_SUPPLIER)</div>
+                                    <div class="text-[10px] text-slate-500">Initiate return merchandise authorization (RMA) or vendor pickup for credit / exchange.</div>
+                                </div>
+                            </label>
+
+                            <label class="flex items-start gap-2.5 p-3 border rounded-xl cursor-pointer hover:bg-slate-50 has-[:checked]:border-teal-500 has-[:checked]:bg-teal-50/40 transition">
+                                <input type="radio" name="purchasing_action" value="BYPASS_QC" class="mt-1 text-teal-600 focus:ring-teal-500">
+                                <div>
+                                    <div class="font-bold text-teal-900">4. Decline Report & Bypass QC Check (BYPASS_QC)</div>
+                                    <div class="text-[10px] text-slate-500">Purchasing/Management concession: decline QC finding, bypass QC check, accept items into inventory and unblock PO.</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-slate-700 mb-1 font-bold">Action Details / Supplier Communication Notes</label>
+                        <textarea id="purchasing-response-notes" rows="2" placeholder="e.g., Vendor RMA #1209 issued; or vendor agreed to credit; or bypass authorized by Management..." class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-rose-500 transition"></textarea>
+                    </div>
+
+                    <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition">Cancel</button>
+                        <button type="submit" id="btn-purchasing-resp-submit" class="px-5 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-xl font-bold shadow-lg shadow-teal-600/20 transition">Execute Resolution</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+}
+
+async function submitPurchasingResponse(e, reqId) {
+    e.preventDefault();
+    const actionEl = document.querySelector('input[name="purchasing_action"]:checked');
+    const action = actionEl ? actionEl.value : 'REJECT';
+    const notes = document.getElementById('purchasing-response-notes')?.value.trim() || '';
+
+    const btn = document.getElementById('btn-purchasing-resp-submit');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = 'Processing...';
+    }
+
+    try {
+        const res = await NKB.api(`/api/supply-requests/${reqId}/purchasing-response`, {
+            method: 'POST',
+            body: JSON.stringify({ action, notes })
+        });
+
+        if (res.success) {
+            NKB.showToast(res.message || 'Purchasing resolution applied successfully!', 'success');
+            closeModal();
+            loadPurchasingRequisitions();
+            if (typeof loadOrders === 'function') loadOrders();
+            if (window.NKB_Agents && window.NKB_Agents.refreshPendingNotifications) {
+                window.NKB_Agents.refreshPendingNotifications();
+            }
+        } else {
+            NKB.showToast(res.message || res.error || 'Failed to submit purchasing response.', 'error');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerText = 'Execute Resolution';
+            }
+        }
+    } catch (err) {
+        NKB.showToast('Network error processing resolution.', 'error');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = 'Execute Resolution';
+        }
+    }
+}
+
+async function openMyProfileModal() {
+    const res = await NKB.api('/api/auth/profile');
+    if (!res.success || !res.user) {
+        NKB.showToast('Failed to load profile details.', 'error');
+        return;
+    }
+    const u = res.user;
+    const root = document.getElementById('modals-root');
+    if (!root) return;
+
+    root.innerHTML = `
+        <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+            <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 my-auto">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 text-lg font-bold">👤</div>
+                        <div>
+                            <h3 class="text-base font-extrabold text-slate-900">My Staff Profile</h3>
+                            <p class="text-[11px] text-slate-500">${u.role} • ${u.username}</p>
+                        </div>
+                    </div>
+                    <button onclick="closeModal()" class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 font-bold flex items-center justify-center transition cursor-pointer">✕</button>
+                </div>
+
+                <form onsubmit="submitMyProfile(event)" class="space-y-3.5 text-xs">
+                    <div>
+                        <label class="block text-slate-700 mb-1 font-bold">Full Name <span class="text-rose-500">*</span></label>
+                        <input type="text" id="my-profile-name" value="${u.name || ''}" required class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 transition font-medium">
+                    </div>
+
+                    <div>
+                        <label class="block text-slate-700 mb-1 font-bold">Email Address</label>
+                        <input type="email" value="${u.email || ''}" disabled class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-100 text-slate-500 cursor-not-allowed">
+                    </div>
+
+                    <div>
+                        <label class="block text-slate-700 mb-1 font-bold flex items-center justify-between">
+                            <span class="flex items-center gap-1.5"><span class="text-emerald-500 text-sm">💬</span> WhatsApp Number</span>
+                            <span class="text-[10px] text-slate-400">For direct WhatsApp alerts</span>
+                        </label>
+                        <input type="tel" id="my-profile-whatsapp" value="${u.whatsapp_number || ''}" placeholder="e.g., +639171234567 or 09171234567" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 transition font-medium">
+                    </div>
+
+                    <div>
+                        <label class="block text-slate-700 mb-1 font-bold flex items-center justify-between">
+                            <span class="flex items-center gap-1.5"><span class="text-blue-500 text-sm">📞</span> Mobile / Contact Phone</span>
+                            <span class="text-[10px] text-slate-400">Voice / SMS</span>
+                        </label>
+                        <input type="tel" id="my-profile-phone" value="${u.phone || ''}" placeholder="e.g., +639171234567" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 transition font-medium">
+                    </div>
+
+                    <div class="pt-2 border-t border-slate-100">
+                        <label class="block text-slate-700 mb-1 font-bold flex items-center justify-between">
+                            <span>Change Password</span>
+                            <span class="text-[10px] text-slate-400">Leave blank to keep unchanged</span>
+                        </label>
+                        <input type="password" id="my-profile-password" placeholder="New secure password" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 transition font-medium">
+                    </div>
+
+                    <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition">Cancel</button>
+                        <button type="submit" id="btn-my-profile-submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-lg shadow-indigo-600/20 transition">Save Profile</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+}
+
+async function submitMyProfile(e) {
+    e.preventDefault();
+    const name = document.getElementById('my-profile-name')?.value.trim();
+    const whatsapp_number = document.getElementById('my-profile-whatsapp')?.value.trim();
+    const phone = document.getElementById('my-profile-phone')?.value.trim();
+    const password = document.getElementById('my-profile-password')?.value;
+
+    if (!name) {
+        NKB.showToast('Name is required.', 'warning');
+        return;
+    }
+
+    const btn = document.getElementById('btn-my-profile-submit');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = 'Saving...';
+    }
+
+    try {
+        const payload = { name, whatsapp_number, phone };
+        if (password) payload.password = password;
+
+        const res = await NKB.api('/api/auth/profile', {
+            method: 'PUT',
+            body: JSON.stringify(payload)
+        });
+
+        if (res.success) {
+            NKB.showToast(res.message || 'Profile updated successfully!', 'success');
+            if (NKB.user) {
+                NKB.user.name = res.user.name;
+                NKB.user.whatsapp_number = res.user.whatsapp_number;
+                NKB.user.phone = res.user.phone;
+                if (typeof NKB.updateHeaderProfile === 'function') {
+                    NKB.updateHeaderProfile();
+                }
+            }
+            closeModal();
+            if (typeof loadUsers === 'function') loadUsers();
+        } else {
+            NKB.showToast(res.message || res.error || 'Failed to update profile.', 'error');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerText = 'Save Profile';
+            }
+        }
+    } catch (err) {
+        NKB.showToast('Network error updating profile.', 'error');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = 'Save Profile';
+        }
+    }
+}
+
+window.openQcInspectionModal = openQcInspectionModal;
+window.submitQcInspection = submitQcInspection;
+window.openPurchasingResponseModal = openPurchasingResponseModal;
+window.submitPurchasingResponse = submitPurchasingResponse;
+window.openMyProfileModal = openMyProfileModal;
+window.submitMyProfile = submitMyProfile;
 
 // -------------------------------------------------------------
 // 12. PROPRIETARY FORMULATIONS & BILL OF MATERIALS (BOM)

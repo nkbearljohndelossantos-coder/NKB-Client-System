@@ -3654,6 +3654,221 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         realtimeSyncService.closeAllClients();
     });
 
+    test('86. Raw Material Quality Control (QC) Inspection Workflow & Staff Profile Contact Notification System', async () => {
+        const purchToken = getAuthToken('PURCHASING');
+        const qcToken = getAuthToken('QC');
+
+        // Part 1: Staff Profile & WhatsApp Contact Updating
+        const profileUpdateRes = await request(app)
+            .put('/api/auth/profile')
+            .set('Authorization', `Bearer ${purchToken}`)
+            .send({
+                name: 'Lead Purchasing Specialist',
+                whatsapp_number: '+639178889999',
+                phone: '+639178889999'
+            });
+        assert.strictEqual(profileUpdateRes.status, 200);
+        assert.strictEqual(profileUpdateRes.body.user.whatsapp_number, '+639178889999');
+
+        const getProfileRes = await request(app)
+            .get('/api/auth/profile')
+            .set('Authorization', `Bearer ${purchToken}`);
+        assert.strictEqual(getProfileRes.status, 200);
+        assert.strictEqual(getProfileRes.body.user.name, 'Lead Purchasing Specialist');
+        assert.strictEqual(getProfileRes.body.user.whatsapp_number, '+639178889999');
+
+        const usersListRes = await request(app)
+            .get('/api/users')
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(usersListRes.status, 200);
+        const purchUserInList = usersListRes.body.data.find(u => u.email === 'purchasing@nkbmanufacturing.com');
+        assert.ok(purchUserInList);
+        assert.strictEqual(purchUserInList.whatsapp_number, '+639178889999');
+
+        // Part 2: Create a PO to link supply requests
+        const poRes = await request(app)
+            .post('/api/orders')
+            .set('Authorization', `Bearer ${clientToken}`)
+            .send({
+                client_id: demoClient.id,
+                items: [{ product_id: lotionProduct.id, target_quantity: 500, unit_price: 120.0 }]
+            });
+        assert.strictEqual(poRes.status, 201);
+        const poId = poRes.body.data.id;
+
+        // Part 3: Create Raw Material Requisition
+        const createReqRes = await request(app)
+            .post('/api/supply-requests')
+            .set('Authorization', `Bearer ${purchToken}`)
+            .send({
+                po_id: poId,
+                materials_needed: 'Kojic Acid Dipalmitate (50kg Drum) & Niacinamide USP Grade (25kg)',
+                urgency: 'HIGH',
+                target_date: '2026-10-15',
+                notes: 'Batch production starting soon'
+            });
+        assert.strictEqual(createReqRes.status, 201);
+        const reqId = createReqRes.body.data.id;
+        assert.strictEqual(createReqRes.body.data.status, 'SUBMITTED');
+
+        // Part 4: Purchasing updates status to PENDING_QC upon receiving arrival
+        const movePendingQcRes = await request(app)
+            .put(`/api/supply-requests/${reqId}`)
+            .set('Authorization', `Bearer ${purchToken}`)
+            .send({
+                status: 'PENDING_QC',
+                supplier_details: 'Croda Chemicals / PO# CR-90812'
+            });
+        assert.strictEqual(movePendingQcRes.status, 200);
+        assert.strictEqual(movePendingQcRes.body.data.status, 'PENDING_QC');
+
+        // Part 5: QC Inspector DECLINES defective raw material
+        // Validation: qc_notes required when declining
+        const failDeclineRes = await request(app)
+            .post(`/api/supply-requests/${reqId}/qc-decision`)
+            .set('Authorization', `Bearer ${qcToken}`)
+            .send({ decision: 'DECLINE', qc_notes: '' });
+        assert.strictEqual(failDeclineRes.status, 400);
+
+        const declineRes = await request(app)
+            .post(`/api/supply-requests/${reqId}/qc-decision`)
+            .set('Authorization', `Bearer ${qcToken}`)
+            .send({
+                decision: 'DECLINE',
+                qc_notes: 'Failed HPLC purity assay: 84% active concentration vs 99% minimum specification.'
+            });
+        assert.strictEqual(declineRes.status, 200);
+        assert.strictEqual(declineRes.body.data.status, 'QC_DECLINED');
+        assert.strictEqual(declineRes.body.data.qc_status, 'DECLINED');
+        assert.ok(declineRes.body.data.qc_notes.includes('Failed HPLC purity assay'));
+
+        // Part 6: Purchasing responds to QC Declined report with REORDER
+        const reorderRes = await request(app)
+            .post(`/api/supply-requests/${reqId}/purchasing-response`)
+            .set('Authorization', `Bearer ${purchToken}`)
+            .send({
+                action: 'REORDER',
+                notes: 'Contacted vendor rep. Rush replacement batch dispatched.'
+            });
+        assert.strictEqual(reorderRes.status, 200);
+        assert.strictEqual(reorderRes.body.data.status, 'ORDERED');
+        assert.strictEqual(reorderRes.body.data.purchasing_response, 'REORDER');
+
+        // Part 7: Purchasing updates back to PENDING_QC upon replacement delivery
+        await request(app)
+            .put(`/api/supply-requests/${reqId}`)
+            .set('Authorization', `Bearer ${purchToken}`)
+            .send({ status: 'PENDING_QC', supplier_details: 'Replacement Lot #RL-4410' });
+
+        // QC declines again for damaged containers
+        await request(app)
+            .post(`/api/supply-requests/${reqId}/qc-decision`)
+            .set('Authorization', `Bearer ${qcToken}`)
+            .send({ decision: 'DECLINE', qc_notes: 'Drums punctured during transit, contaminated seal.' });
+
+        // Purchasing responds with RETURN_TO_SUPPLIER
+        const returnRes = await request(app)
+            .post(`/api/supply-requests/${reqId}/purchasing-response`)
+            .set('Authorization', `Bearer ${purchToken}`)
+            .send({
+                action: 'RETURN_TO_SUPPLIER',
+                notes: 'RMA #4492 authorized by Croda logistics for courier pickup.'
+            });
+        assert.strictEqual(returnRes.status, 200);
+        assert.strictEqual(returnRes.body.data.status, 'RETURNED_TO_SUPPLIER');
+        assert.strictEqual(returnRes.body.data.purchasing_response, 'RETURN_TO_SUPPLIER');
+
+        // Part 8: Test REJECT resolution on a fresh lot
+        const req2Res = await request(app)
+            .post('/api/supply-requests')
+            .set('Authorization', `Bearer ${purchToken}`)
+            .send({
+                po_id: poId,
+                materials_needed: 'Decyl Glucoside 200L',
+                urgency: 'NORMAL'
+            });
+        const req2Id = req2Res.body.data.id;
+        await request(app)
+            .put(`/api/supply-requests/${req2Id}`)
+            .set('Authorization', `Bearer ${purchToken}`)
+            .send({ status: 'PENDING_QC' });
+
+        await request(app)
+            .post(`/api/supply-requests/${req2Id}/qc-decision`)
+            .set('Authorization', `Bearer ${qcToken}`)
+            .send({ decision: 'DECLINE', qc_notes: 'Foreign debris observed in drum.' });
+
+        const rejectRes = await request(app)
+            .post(`/api/supply-requests/${req2Id}/purchasing-response`)
+            .set('Authorization', `Bearer ${purchToken}`)
+            .send({
+                action: 'REJECT',
+                notes: 'Lot scrapped permanently.'
+            });
+        assert.strictEqual(rejectRes.status, 200);
+        assert.strictEqual(rejectRes.body.data.status, 'REJECTED');
+        assert.strictEqual(rejectRes.body.data.purchasing_response, 'REJECT');
+
+        // Part 9: Test BYPASS_QC resolution
+        const req3Res = await request(app)
+            .post('/api/supply-requests')
+            .set('Authorization', `Bearer ${purchToken}`)
+            .send({
+                po_id: poId,
+                materials_needed: 'Fragrance Compound Vanilla 10kg',
+                urgency: 'CRITICAL'
+            });
+        const req3Id = req3Res.body.data.id;
+        await request(app)
+            .put(`/api/supply-requests/${req3Id}`)
+            .set('Authorization', `Bearer ${purchToken}`)
+            .send({ status: 'PENDING_QC' });
+
+        await request(app)
+            .post(`/api/supply-requests/${req3Id}/qc-decision`)
+            .set('Authorization', `Bearer ${qcToken}`)
+            .send({ decision: 'DECLINE', qc_notes: 'Slight odor deviation from standard reference.' });
+
+        const bypassRes = await request(app)
+            .post(`/api/supply-requests/${req3Id}/purchasing-response`)
+            .set('Authorization', `Bearer ${purchToken}`)
+            .send({
+                action: 'BYPASS_QC',
+                notes: 'Management concession: approved for secondary body wash line.'
+            });
+        assert.strictEqual(bypassRes.status, 200);
+        assert.strictEqual(bypassRes.body.data.status, 'DELIVERED');
+        assert.strictEqual(bypassRes.body.data.qc_status, 'BYPASSED');
+        assert.strictEqual(bypassRes.body.data.purchasing_response, 'BYPASS_QC');
+
+        // Part 10: Direct QC Approval Flow
+        const req4Res = await request(app)
+            .post('/api/supply-requests')
+            .set('Authorization', `Bearer ${purchToken}`)
+            .send({
+                po_id: poId,
+                materials_needed: 'Cetyl Alcohol Flakes 100kg',
+                urgency: 'HIGH'
+            });
+        const req4Id = req4Res.body.data.id;
+        await request(app)
+            .put(`/api/supply-requests/${req4Id}`)
+            .set('Authorization', `Bearer ${purchToken}`)
+            .send({ status: 'PENDING_QC' });
+
+        const qcApproveRes = await request(app)
+            .post(`/api/supply-requests/${req4Id}/qc-decision`)
+            .set('Authorization', `Bearer ${qcToken}`)
+            .send({
+                decision: 'APPROVE',
+                qc_notes: 'Certificate of Analysis verified, melting point within 48-52C spec.'
+            });
+        assert.strictEqual(qcApproveRes.status, 200);
+        assert.strictEqual(qcApproveRes.body.data.status, 'DELIVERED');
+        assert.strictEqual(qcApproveRes.body.data.qc_status, 'PASSED');
+        assert.ok(qcApproveRes.body.data.qc_notes.includes('Certificate of Analysis verified'));
+    });
+
     after(() => {
         try {
             realtimeSyncService.closeAllClients();

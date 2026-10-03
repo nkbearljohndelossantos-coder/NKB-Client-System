@@ -159,6 +159,64 @@ router.get('/pending', authenticateToken, (req, res) => {
                     }
                 });
             }
+
+            // QC Declined Requisitions awaiting Purchasing Response
+            const qcDeclinedRequisitions = db.prepare(`
+                SELECT sr.id, sr.materials_needed, sr.qc_notes, po.po_number, c.company_name
+                FROM supply_requests sr
+                LEFT JOIN purchase_orders po ON sr.po_id = po.id
+                LEFT JOIN clients c ON po.client_id = c.id
+                WHERE sr.status = 'QC_DECLINED'
+                ORDER BY sr.updated_at DESC
+            `).all();
+
+            for (const sr of qcDeclinedRequisitions) {
+                const poRef = sr.po_number || 'WH-STOCK-BOM';
+                items.push({
+                    id: `sr-qc-declined-${sr.id}`,
+                    category: 'PURCHASING',
+                    title: `QC Declined: ${poRef}`,
+                    description: `Defects: "${sr.qc_notes || 'Declined by QC'}". Action required: Reject, Re-order, Return to Supplier, or Bypass QC Check.`,
+                    urgency: 'CRITICAL',
+                    icon: '⚠️',
+                    target: {
+                        tab: 'purchasing',
+                        reqId: sr.id,
+                        poNumber: poRef,
+                        action: 'PURCHASING_RESPONSE'
+                    }
+                });
+            }
+        }
+
+        // 4b. Quality Control (QC) Department: Incoming Raw Materials Pending Quality Checking
+        if (role === ROLES.SUPER_ADMIN || role === ROLES.IT_ADMIN || role === ROLES.ADMIN || role === ROLES.QC || role === ROLES.CEO) {
+            const pendingQcRequisitions = db.prepare(`
+                SELECT sr.id, sr.materials_needed, sr.urgency, po.po_number, c.company_name
+                FROM supply_requests sr
+                LEFT JOIN purchase_orders po ON sr.po_id = po.id
+                LEFT JOIN clients c ON po.client_id = c.id
+                WHERE sr.status = 'PENDING_QC'
+                ORDER BY sr.updated_at DESC
+            `).all();
+
+            for (const sr of pendingQcRequisitions) {
+                const poRef = sr.po_number || 'WH-STOCK-BOM';
+                items.push({
+                    id: `sr-qc-pending-${sr.id}`,
+                    category: 'QC',
+                    title: `QC Inspection Needed: ${poRef}`,
+                    description: `Verify raw chemical quality & COA: ${sr.materials_needed.slice(0, 65)}${sr.materials_needed.length > 65 ? '...' : ''}`,
+                    urgency: sr.urgency === 'CRITICAL' ? 'CRITICAL' : 'HIGH',
+                    icon: '🔬',
+                    target: {
+                        tab: 'purchasing',
+                        reqId: sr.id,
+                        poNumber: poRef,
+                        action: 'QC_INSPECT'
+                    }
+                });
+            }
         }
 
         // 5. Production Department: Ready for Job Order / Compounding Batches & SO Queue Reminders

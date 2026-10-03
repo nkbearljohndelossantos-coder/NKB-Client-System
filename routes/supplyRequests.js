@@ -5,11 +5,85 @@ const db = require('../database/db');
 const { authenticateToken, requireRoles, ROLES } = require('../middleware/auth');
 const { logAudit } = require('../services/auditService');
 
+function getEnrichedSupplyRequest(id) {
+    return db.prepare(`
+        SELECT sr.*, 
+               COALESCE(po.po_number, 'WH-STOCK-BOM') as po_number,
+               COALESCE(po.status, 'STOCK_REPLENISHMENT') as po_status,
+               po.expected_delivery_date as po_delivery_date,
+               COALESCE(c.company_name, 'Warehouse Raw Materials') as client_name,
+               COALESCE(u.name, 'Inventory Officer') as requested_by_name,
+               u.email as requested_by_email,
+               u.phone as requested_by_phone,
+               u.whatsapp_number as requested_by_whatsapp,
+               qcu.name as qc_inspector_name,
+               qcu.phone as qc_inspector_phone,
+               qcu.whatsapp_number as qc_inspector_whatsapp
+        FROM supply_requests sr
+        LEFT JOIN purchase_orders po ON sr.po_id = po.id
+        LEFT JOIN clients c ON po.client_id = c.id
+        LEFT JOIN users u ON sr.requested_by = u.id
+        LEFT JOIN users qcu ON sr.qc_inspected_by = qcu.id
+        WHERE sr.id = ?
+    `).get(id);
+}
+
+function checkAndFulfillPoRawMaterials(poId) {
+    if (!poId || poId === 'WAREHOUSE-STOCK') return false;
+    const remainingPending = db.prepare(`
+        SELECT COUNT(*) as count 
+        FROM supply_requests 
+        WHERE po_id = ? AND status NOT IN ('DELIVERED', 'QC_APPROVED', 'QC_BYPASSED', 'CANCELLED')
+    `).get(poId);
+
+    if (!remainingPending || remainingPending.count === 0) {
+        db.prepare(`
+            UPDATE purchase_orders
+            SET raw_materials_status = 'SUFFICIENT',
+                updated_at = datetime('now', 'localtime')
+            WHERE id = ?
+        `).run(poId);
+        return true;
+    }
+    return false;
+}
+
+function restockBomMaterialsIfPresent(bomItemsJson, notesPrefix = '') {
+    if (!bomItemsJson) return;
+    try {
+        const items = typeof bomItemsJson === 'string' ? JSON.parse(bomItemsJson) : bomItemsJson;
+        if (!Array.isArray(items)) return;
+        for (const item of items) {
+            const rawMatId = item.raw_material_id;
+            const code = item.material_code;
+            const qty = Number(item.needed_qty || item.quantity || 0);
+            if (qty > 0) {
+                let target = null;
+                if (rawMatId) target = db.prepare('SELECT * FROM raw_materials_inventory WHERE id = ?').get(rawMatId);
+                if (!target && code) target = db.prepare('SELECT * FROM raw_materials_inventory WHERE UPPER(material_code) = UPPER(?)').get(code);
+                if (target) {
+                    const newStock = Number((Number(target.current_stock || 0) + qty).toFixed(4));
+                    const newStatus = (newStock <= 0) ? 'OUT_OF_STOCK' : ((target.minimum_stock_level > 0 && newStock <= target.minimum_stock_level) ? 'LOW_STOCK' : 'IN_STOCK');
+                    const noteAdd = notesPrefix ? `[${notesPrefix} +${qty} ${target.unit || 'kg'}]` : `[Restocked +${qty} ${target.unit || 'kg'}]`;
+                    const updatedNotes = target.notes ? `${target.notes} | ${noteAdd}` : noteAdd;
+                    db.prepare(`
+                        UPDATE raw_materials_inventory
+                        SET current_stock = ?, status = ?, notes = ?, updated_at = datetime('now', 'localtime')
+                        WHERE id = ?
+                    `).run(newStock, newStatus, updatedNotes, target.id);
+                }
+            }
+        }
+    } catch (e) {
+        console.warn('restockBomMaterials error:', e.message);
+    }
+}
+
 /**
  * GET /api/supply-requests
  * Retrieve all supply requisitions submitted by Inventory for Purchasing Department
  */
-router.get('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.PURCHASING, ROLES.INVENTORY, ROLES.CEO), (req, res) => {
+router.get('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.PURCHASING, ROLES.INVENTORY, ROLES.QC, ROLES.CEO), (req, res) => {
     try {
         const { status, urgency, search } = req.query;
 
@@ -20,11 +94,17 @@ router.get('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_ADMI
                    po.expected_delivery_date as po_delivery_date,
                    COALESCE(c.company_name, 'Warehouse Raw Materials') as client_name,
                    COALESCE(u.name, 'Inventory Officer') as requested_by_name,
-                   u.email as requested_by_email
+                   u.email as requested_by_email,
+                   u.phone as requested_by_phone,
+                   u.whatsapp_number as requested_by_whatsapp,
+                   qcu.name as qc_inspector_name,
+                   qcu.phone as qc_inspector_phone,
+                   qcu.whatsapp_number as qc_inspector_whatsapp
             FROM supply_requests sr
             LEFT JOIN purchase_orders po ON sr.po_id = po.id
             LEFT JOIN clients c ON po.client_id = c.id
             LEFT JOIN users u ON sr.requested_by = u.id
+            LEFT JOIN users qcu ON sr.qc_inspected_by = qcu.id
             WHERE 1=1
         `;
         const params = [];
@@ -132,7 +212,7 @@ router.post('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_ADM
             ipAddress: req.ip
         });
 
-        const createdReq = db.prepare('SELECT * FROM supply_requests WHERE id = ?').get(reqId);
+        const createdReq = getEnrichedSupplyRequest(reqId);
         return res.status(201).json({
             success: true,
             message: 'Bill of Materials (BOM) raw material requisition submitted to Purchasing Department.',
@@ -148,22 +228,9 @@ router.post('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_ADM
  * GET /api/supply-requests/:id
  * Retrieve a single supply request by ID
  */
-router.get('/:id', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.PURCHASING, ROLES.INVENTORY, ROLES.CEO), (req, res) => {
+router.get('/:id', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.PURCHASING, ROLES.INVENTORY, ROLES.QC, ROLES.CEO), (req, res) => {
     const { id } = req.params;
-    const reqItem = db.prepare(`
-        SELECT sr.*, 
-               COALESCE(po.po_number, 'WH-STOCK-BOM') as po_number,
-               COALESCE(po.status, 'STOCK_REPLENISHMENT') as po_status,
-               po.expected_delivery_date as po_delivery_date,
-               COALESCE(c.company_name, 'Warehouse Raw Materials') as client_name,
-               COALESCE(u.name, 'Inventory Officer') as requested_by_name,
-               u.email as requested_by_email
-        FROM supply_requests sr
-        LEFT JOIN purchase_orders po ON sr.po_id = po.id
-        LEFT JOIN clients c ON po.client_id = c.id
-        LEFT JOIN users u ON sr.requested_by = u.id
-        WHERE sr.id = ?
-    `).get(id);
+    const reqItem = getEnrichedSupplyRequest(id);
 
     if (!reqItem) {
         return res.status(404).json({ success: false, error: 'NOT_FOUND', message: 'Requisition not found.' });
@@ -185,7 +252,11 @@ router.put('/:id', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_A
         return res.status(404).json({ success: false, error: 'NOT_FOUND', message: 'Requisition not found.' });
     }
 
-    const validStatuses = ['SUBMITTED', 'ORDERED', 'IN_TRANSIT', 'DELIVERED', 'CANCELLED'];
+    const validStatuses = [
+        'SUBMITTED', 'ORDERED', 'IN_TRANSIT', 'PENDING_QC',
+        'QC_APPROVED', 'QC_DECLINED', 'REJECTED', 'REORDERED',
+        'RETURNED_TO_SUPPLIER', 'QC_BYPASSED', 'DELIVERED', 'CANCELLED'
+    ];
     const updatedStatus = status ? status.toUpperCase().trim() : existing.status;
     if (status && !validStatuses.includes(updatedStatus)) {
         return res.status(400).json({
@@ -206,30 +277,23 @@ router.put('/:id', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_A
 
     const updatedTargetDate = target_date !== undefined ? target_date : existing.target_date;
 
+    let qcStatus = existing.qc_status;
+    if (updatedStatus === 'PENDING_QC' && !qcStatus) {
+        qcStatus = 'PENDING';
+    } else if (updatedStatus === 'DELIVERED' && !qcStatus) {
+        qcStatus = 'PASSED';
+    }
+
     db.prepare(`
         UPDATE supply_requests
-        SET status = ?, notes = ?, target_date = ?, updated_at = datetime('now', 'localtime')
+        SET status = ?, notes = ?, target_date = ?, qc_status = ?, updated_at = datetime('now', 'localtime')
         WHERE id = ?
-    `).run(updatedStatus, updatedNotes, updatedTargetDate, id);
+    `).run(updatedStatus, updatedNotes, updatedTargetDate, qcStatus, id);
 
-    // If marked as DELIVERED, check if all requests for this PO are fulfilled
     let poRawMaterialsUpdated = false;
-    if (updatedStatus === 'DELIVERED' && existing.po_id && existing.po_id !== 'WAREHOUSE-STOCK') {
-        const remainingPending = db.prepare(`
-            SELECT COUNT(*) as count 
-            FROM supply_requests 
-            WHERE po_id = ? AND status NOT IN ('DELIVERED', 'CANCELLED')
-        `).get(existing.po_id);
-
-        if (!remainingPending || remainingPending.count === 0) {
-            db.prepare(`
-                UPDATE purchase_orders
-                SET raw_materials_status = 'SUFFICIENT',
-                    updated_at = datetime('now', 'localtime')
-                WHERE id = ?
-            `).run(existing.po_id);
-            poRawMaterialsUpdated = true;
-        }
+    if (updatedStatus === 'DELIVERED' || updatedStatus === 'QC_APPROVED' || updatedStatus === 'QC_BYPASSED') {
+        poRawMaterialsUpdated = checkAndFulfillPoRawMaterials(existing.po_id);
+        restockBomMaterialsIfPresent(existing.bom_items, 'Delivered');
     }
 
     logAudit({
@@ -248,26 +312,232 @@ router.put('/:id', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_A
         ipAddress: req.ip
     });
 
-    const updated = db.prepare(`
-        SELECT sr.*, 
-               COALESCE(po.po_number, 'WH-STOCK-BOM') as po_number,
-               COALESCE(po.status, 'STOCK_REPLENISHMENT') as po_status,
-               po.expected_delivery_date as po_delivery_date,
-               COALESCE(c.company_name, 'Warehouse Raw Materials') as client_name,
-               COALESCE(u.name, 'Inventory Officer') as requested_by_name,
-               u.email as requested_by_email
-        FROM supply_requests sr
-        LEFT JOIN purchase_orders po ON sr.po_id = po.id
-        LEFT JOIN clients c ON po.client_id = c.id
-        LEFT JOIN users u ON sr.requested_by = u.id
-        WHERE sr.id = ?
-    `).get(id);
+    const updated = getEnrichedSupplyRequest(id);
 
     return res.json({
         success: true,
         message: `Requisition status updated to ${updatedStatus}.` + (poRawMaterialsUpdated ? ' Linked Purchase Order materials marked as SUFFICIENT.' : ''),
         data: updated
     });
+});
+
+/**
+ * POST /api/supply-requests/:id/qc-decision
+ * QC Inspector approves or declines the incoming raw material shipment
+ */
+router.post('/:id/qc-decision', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.QC, ROLES.CEO), (req, res) => {
+    try {
+        const { id } = req.params;
+        const { decision, qc_notes } = req.body;
+
+        const existing = db.prepare('SELECT * FROM supply_requests WHERE id = ?').get(id);
+        if (!existing) {
+            return res.status(404).json({ success: false, error: 'NOT_FOUND', message: 'Requisition not found.' });
+        }
+
+        const cleanDecision = (decision || '').toUpperCase().trim();
+        if (cleanDecision !== 'APPROVE' && cleanDecision !== 'DECLINE') {
+            return res.status(400).json({
+                success: false,
+                error: 'INVALID_DECISION',
+                message: "Decision must be 'APPROVE' or 'DECLINE'."
+            });
+        }
+
+        if (cleanDecision === 'DECLINE' && (!qc_notes || !qc_notes.trim())) {
+            return res.status(400).json({
+                success: false,
+                error: 'QC_NOTES_REQUIRED',
+                message: 'QC inspection defect notes are required when declining raw materials so Purchasing can take action.'
+            });
+        }
+
+        const now = db.prepare("SELECT datetime('now', 'localtime') as now").get().now;
+        let newStatus = existing.status;
+        let newQcStatus = '';
+        let poRawMaterialsUpdated = false;
+
+        if (cleanDecision === 'APPROVE') {
+            newStatus = 'DELIVERED';
+            newQcStatus = 'PASSED';
+            const finalNotes = qc_notes ? `[QC PASSED]: ${qc_notes.trim()}` : '[QC PASSED]: Raw material approved for production.';
+            const combinedNotes = existing.notes ? `${existing.notes}\n${finalNotes}` : finalNotes;
+
+            db.prepare(`
+                UPDATE supply_requests
+                SET status = ?, qc_status = ?, qc_notes = ?, qc_inspected_by = ?, qc_inspected_at = ?, notes = ?, updated_at = ?
+                WHERE id = ?
+            `).run(newStatus, newQcStatus, qc_notes || 'QC Approved', req.user.id, now, combinedNotes, now, id);
+
+            poRawMaterialsUpdated = checkAndFulfillPoRawMaterials(existing.po_id);
+            restockBomMaterialsIfPresent(existing.bom_items, 'QC Approved');
+
+            logAudit({
+                userId: req.user.id,
+                userName: req.user.name,
+                userRole: req.user.role,
+                action: 'QC_APPROVE_RAW_MATERIAL',
+                entityType: 'SUPPLY_REQUEST',
+                entityId: id,
+                details: { poId: existing.po_id, qcNotes: qc_notes, poRawMaterialsUpdated },
+                ipAddress: req.ip
+            });
+
+            const updated = getEnrichedSupplyRequest(id);
+            return res.json({
+                success: true,
+                message: 'Raw material QC Approved! Materials verified and released into inventory.' + (poRawMaterialsUpdated ? ' Linked Purchase Order materials marked as SUFFICIENT.' : ''),
+                data: updated
+            });
+        } else {
+            // DECLINE
+            newStatus = 'QC_DECLINED';
+            newQcStatus = 'DECLINED';
+            const finalNotes = `[QC DECLINED]: ${qc_notes.trim()}`;
+            const combinedNotes = existing.notes ? `${existing.notes}\n${finalNotes}` : finalNotes;
+
+            db.prepare(`
+                UPDATE supply_requests
+                SET status = ?, qc_status = ?, qc_notes = ?, qc_inspected_by = ?, qc_inspected_at = ?, notes = ?, updated_at = ?
+                WHERE id = ?
+            `).run(newStatus, newQcStatus, qc_notes.trim(), req.user.id, now, combinedNotes, now, id);
+
+            logAudit({
+                userId: req.user.id,
+                userName: req.user.name,
+                userRole: req.user.role,
+                action: 'QC_DECLINE_RAW_MATERIAL',
+                entityType: 'SUPPLY_REQUEST',
+                entityId: id,
+                details: { poId: existing.po_id, qcNotes: qc_notes.trim() },
+                ipAddress: req.ip
+            });
+
+            const updated = getEnrichedSupplyRequest(id);
+            return res.json({
+                success: true,
+                message: 'Raw material QC Declined. Inspection report sent to Purchasing Department for response (Reject, Re-order, Return to Supplier, or Bypass QC Check).',
+                data: updated
+            });
+        }
+    } catch (err) {
+        console.error('Error recording QC decision:', err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/supply-requests/:id/purchasing-response
+ * Purchasing Department responds to a QC Declined raw material report:
+ * 1. REJECT: permanently reject the lot
+ * 2. REORDER: re-order replacement from supplier
+ * 3. RETURN_TO_SUPPLIER: return defective items back to supplier
+ * 4. BYPASS_QC: decline QC report and bypass QC check (force accept into inventory)
+ */
+router.post('/:id/purchasing-response', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.PURCHASING, ROLES.CEO), (req, res) => {
+    try {
+        const { id } = req.params;
+        const { action, notes } = req.body;
+
+        const existing = db.prepare('SELECT * FROM supply_requests WHERE id = ?').get(id);
+        if (!existing) {
+            return res.status(404).json({ success: false, error: 'NOT_FOUND', message: 'Requisition not found.' });
+        }
+
+        const cleanAction = (action || '').toUpperCase().trim();
+        const validActions = ['REJECT', 'REORDER', 'RETURN_TO_SUPPLIER', 'BYPASS_QC'];
+        if (!validActions.includes(cleanAction)) {
+            return res.status(400).json({
+                success: false,
+                error: 'INVALID_ACTION',
+                message: `Action must be one of: ${validActions.join(', ')}`
+            });
+        }
+
+        const now = db.prepare("SELECT datetime('now', 'localtime') as now").get().now;
+        let newStatus = '';
+        let newQcStatus = existing.qc_status;
+        let responseMsg = '';
+        let poRawMaterialsUpdated = false;
+
+        const responseNoteText = (notes || '').trim();
+
+        if (cleanAction === 'REJECT') {
+            newStatus = 'REJECTED';
+            const logText = `[Purchasing Response - REJECTED]: ${responseNoteText || 'Lot rejected.'}`;
+            const combinedNotes = existing.notes ? `${existing.notes}\n${logText}` : logText;
+
+            db.prepare(`
+                UPDATE supply_requests
+                SET status = ?, purchasing_response = 'REJECT', purchasing_response_notes = ?, purchasing_responded_at = ?, notes = ?, updated_at = ?
+                WHERE id = ?
+            `).run(newStatus, responseNoteText, now, combinedNotes, now, id);
+
+            responseMsg = 'Raw material requisition marked as REJECTED.';
+        } else if (cleanAction === 'REORDER') {
+            newStatus = 'ORDERED';
+            newQcStatus = 'PENDING';
+            const logText = `[Purchasing Response - RE-ORDERED]: ${responseNoteText || 'Re-ordered replacement lot from supplier.'}`;
+            const combinedNotes = existing.notes ? `${existing.notes}\n${logText}` : logText;
+
+            db.prepare(`
+                UPDATE supply_requests
+                SET status = ?, qc_status = ?, purchasing_response = 'REORDER', purchasing_response_notes = ?, purchasing_responded_at = ?, notes = ?, updated_at = ?
+                WHERE id = ?
+            `).run(newStatus, newQcStatus, responseNoteText, now, combinedNotes, now, id);
+
+            responseMsg = 'Purchasing placed a RE-ORDER for replacement materials from supplier.';
+        } else if (cleanAction === 'RETURN_TO_SUPPLIER') {
+            newStatus = 'RETURNED_TO_SUPPLIER';
+            const logText = `[Purchasing Response - RETURN TO SUPPLIER]: ${responseNoteText || 'Item scheduled for return back to supplier.'}`;
+            const combinedNotes = existing.notes ? `${existing.notes}\n${logText}` : logText;
+
+            db.prepare(`
+                UPDATE supply_requests
+                SET status = ?, purchasing_response = 'RETURN_TO_SUPPLIER', purchasing_response_notes = ?, purchasing_responded_at = ?, notes = ?, updated_at = ?
+                WHERE id = ?
+            `).run(newStatus, responseNoteText, now, combinedNotes, now, id);
+
+            responseMsg = 'Raw material lot marked as RETURNED TO SUPPLIER.';
+        } else if (cleanAction === 'BYPASS_QC') {
+            newStatus = 'DELIVERED';
+            newQcStatus = 'BYPASSED';
+            const logText = `[Purchasing Response - DECLINED QC REPORT & BYPASSED QC CHECK]: ${responseNoteText || 'Authorized concession / bypass QC check.'}`;
+            const combinedNotes = existing.notes ? `${existing.notes}\n${logText}` : logText;
+
+            db.prepare(`
+                UPDATE supply_requests
+                SET status = ?, qc_status = ?, purchasing_response = 'BYPASS_QC', purchasing_response_notes = ?, purchasing_responded_at = ?, notes = ?, updated_at = ?
+                WHERE id = ?
+            `).run(newStatus, newQcStatus, responseNoteText, now, combinedNotes, now, id);
+
+            poRawMaterialsUpdated = checkAndFulfillPoRawMaterials(existing.po_id);
+            restockBomMaterialsIfPresent(existing.bom_items, 'Purchasing Bypassed QC');
+
+            responseMsg = 'Purchasing declined the QC report and bypassed QC check. Materials accepted into inventory.' + (poRawMaterialsUpdated ? ' Linked Purchase Order materials marked as SUFFICIENT.' : '');
+        }
+
+        logAudit({
+            userId: req.user.id,
+            userName: req.user.name,
+            userRole: req.user.role,
+            action: `PURCHASING_RESPONSE_${cleanAction}`,
+            entityType: 'SUPPLY_REQUEST',
+            entityId: id,
+            details: { poId: existing.po_id, action: cleanAction, notes: responseNoteText, poRawMaterialsUpdated },
+            ipAddress: req.ip
+        });
+
+        const updated = getEnrichedSupplyRequest(id);
+        return res.json({
+            success: true,
+            message: responseMsg,
+            data: updated
+        });
+    } catch (err) {
+        console.error('Error recording purchasing response:', err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
 });
 
 module.exports = router;

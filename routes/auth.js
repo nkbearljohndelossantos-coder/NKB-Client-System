@@ -634,4 +634,95 @@ router.post('/google-verify', (req, res) => {
     }
 });
 
+/**
+ * GET /api/auth/profile
+ * Retrieve current logged in user's profile details
+ */
+router.get('/profile', authenticateToken, (req, res) => {
+    try {
+        const user = db.prepare(`
+            SELECT u.id, u.name, u.email, u.phone, u.whatsapp_number, u.role, u.client_id, u.is_active, u.created_at, u.updated_at,
+                   c.company_name
+            FROM users u
+            LEFT JOIN clients c ON u.client_id = c.id
+            WHERE u.id = ?
+        `).get(req.user.id);
+
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'User not found.' });
+        }
+
+        return res.json({ success: true, data: user, user });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * PUT /api/auth/profile
+ * Update current logged in staff member's own profile (name, phone, whatsapp_number, password)
+ */
+router.put('/profile', authenticateToken, (req, res) => {
+    try {
+        const { name, phone, whatsapp_number, password } = req.body;
+
+        const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'User not found.' });
+        }
+
+        const updatedName = name && name.trim() ? name.trim() : user.name;
+        const updatedPhone = phone !== undefined ? (phone ? phone.trim() : null) : user.phone;
+        const updatedWhatsapp = whatsapp_number !== undefined ? (whatsapp_number ? whatsapp_number.trim() : null) : user.whatsapp_number;
+
+        let updatedHash = user.password_hash;
+        let updatedPlain = user.plain_password;
+        if (password && password.trim().length > 0) {
+            if (password.trim().length < 8) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'WEAK_PASSWORD',
+                    message: 'New password must be at least 8 characters long.'
+                });
+            }
+            updatedHash = bcrypt.hashSync(password.trim(), 12);
+            updatedPlain = password.trim();
+        }
+
+        db.prepare(`
+            UPDATE users
+            SET name = ?, phone = ?, whatsapp_number = ?, password_hash = ?, plain_password = ?, updated_at = datetime('now', 'localtime')
+            WHERE id = ?
+        `).run(updatedName, updatedPhone, updatedWhatsapp, updatedHash, updatedPlain, user.id);
+
+        logAudit({
+            userId: user.id,
+            userName: updatedName,
+            userRole: user.role,
+            action: 'UPDATE_OWN_PROFILE',
+            entityType: 'USER',
+            entityId: user.id,
+            details: { phone: updatedPhone, whatsapp: updatedWhatsapp },
+            ipAddress: req.ip
+        });
+
+        const updated = db.prepare(`
+            SELECT u.id, u.name, u.email, u.phone, u.whatsapp_number, u.role, u.client_id, u.is_active, u.created_at, u.updated_at,
+                   c.company_name
+            FROM users u
+            LEFT JOIN clients c ON u.client_id = c.id
+            WHERE u.id = ?
+        `).get(user.id);
+
+        return res.json({
+            success: true,
+            message: 'Your profile and contact information have been updated.',
+            data: updated,
+            user: updated
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 module.exports = router;
