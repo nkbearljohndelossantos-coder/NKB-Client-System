@@ -116,7 +116,7 @@ function switchClientTab(tabId) {
     else if (tabId === 'tracking') loadClientTracking();
     else if (tabId === 'dr-acceptance') loadClientDeliveries();
     else if (tabId === 'invoices') loadClientInvoices();
-    else if (tabId === 'buffer') loadClientBuffer();
+    else if (tabId === 'buffer') switchClientTab('dashboard');
 }
 window.switchClientTab = switchClientTab;
 

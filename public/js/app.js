@@ -2949,7 +2949,6 @@ function getCommandPaletteData() {
             { id: 'invoices', name: 'Sales Invoices', icon: '🧾', desc: 'Billing & AR accounts' },
             { id: 'payments', name: 'Payments & Collections', icon: '💵', desc: 'Recorded payments & reconciliation' },
             { id: 'payables', name: 'Accounts Payable', icon: '💸', desc: 'Cheque requests, approvals & disbursements' },
-            { id: 'buffer', name: 'Buffer Inventory', icon: '📦', desc: 'Client reserved stock buffer' },
             { id: 'formulations', name: 'Lab & Formulations', icon: '🧪', desc: 'Chemical formulations & recipes' },
             { id: 'clients', name: 'B2B Clients Directory', icon: '🏢', desc: 'Customer accounts & special pricing' },
             { id: 'products', name: 'Products Catalog', icon: '🧴', desc: 'Cosmetic formulas & assigned products' },
@@ -3030,7 +3029,6 @@ function getCommandPaletteData() {
             { id: 'my-orders', name: 'My Orders', icon: '📦', desc: 'Live status of submitted POs' },
             { id: 'dr-acceptance', name: 'DR Acceptance', icon: '📥', desc: 'Accept & sign delivery receipts' },
             { id: 'invoices', name: 'Invoices & Statements', icon: '🧾', desc: 'Billing history & balance' },
-            { id: 'buffer', name: 'Buffer Stock', icon: '📦', desc: 'View reserved factory inventory' },
             { id: 'place-order', name: 'Place Order', icon: '🛍️', desc: 'Catalog & ordering page' }
         ];
 

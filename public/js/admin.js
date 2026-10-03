@@ -482,7 +482,7 @@ function switchTab(tabId) {
     else if (tabId === 'invoices') loadInvoices();
     else if (tabId === 'payments') loadPayments();
     else if (tabId === 'payables') loadPayables();
-    else if (tabId === 'buffer') loadBufferStock();
+    else if (tabId === 'buffer') switchTab('orders');
     else if (tabId === 'clients') loadClients();
     else if (tabId === 'products') loadProducts();
     else if (tabId === 'formulations') loadFormulations();
