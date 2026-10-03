@@ -137,6 +137,8 @@ async function loadClientDashboard() {
             if (el) el.textContent = text;
         };
         setElText('client-kpi-open-pos', NKB.formatNumber(d.openPOs));
+        const clientExpected = d.openPOsValue != null ? d.openPOsValue : (d.expectedDeliveryAmount || 0);
+        setElText('client-kpi-open-pos-sub', `${NKB.formatCurrency(clientExpected)} expected value →`);
         setElText('client-kpi-pending-drs', NKB.formatNumber(d.ongoingDeliveries != null ? d.ongoingDeliveries : d.pendingDRs));
         setElText('client-kpi-purchased-month', NKB.formatCurrency(d.purchasedThisMonth || 0));
         setElText('client-kpi-purchased-month-sub', `${NKB.formatCurrency(d.purchasedPaidThisMonth || 0)} paid this month`);

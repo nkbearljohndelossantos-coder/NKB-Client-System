@@ -75,7 +75,8 @@ router.get('/overview', authenticateToken, enforceClientIsolation, (req, res) =>
                 availableBufferUnits: availableBuffer.total_units,
                 activeProduction: activeProduction.count,
                 purchasedThisMonth: clientMonthPurchases.total_purchased,
-                purchasedPaidThisMonth: clientMonthPurchases.total_paid
+                purchasedPaidThisMonth: clientMonthPurchases.total_paid,
+                expectedDeliveryAmount: openPOs.total_val
             }
         });
     }
@@ -99,6 +100,29 @@ router.get('/overview', authenticateToken, enforceClientIsolation, (req, res) =>
     `).get().total;
 
     const totalBufferUnits = db.prepare("SELECT COALESCE(SUM(quantity_remaining), 0) as total FROM client_buffer_stock WHERE status IN ('AVAILABLE', 'PARTIALLY_RELEASED', 'RESERVED')").get().total;
+
+    // Total Amount Expected If All Products Are Delivered (Active/Open Orders Pipeline)
+    const expectedRevenueStats = db.prepare(`
+        SELECT 
+            COALESCE(SUM(grand_total), 0) as total_expected,
+            COUNT(*) as open_orders_count
+        FROM purchase_orders 
+        WHERE status NOT IN ('COMPLETED', 'CANCELLED', 'VOIDED')
+    `).get();
+
+    const orderItemsStats = db.prepare(`
+        SELECT 
+            COALESCE(SUM(poi.target_quantity), 0) as total_ordered_units,
+            COALESCE(SUM(COALESCE(poi.delivered_quantity, 0)), 0) as total_delivered_units,
+            COALESCE(SUM(CASE 
+                WHEN poi.target_quantity > COALESCE(poi.delivered_quantity, 0) 
+                THEN (poi.target_quantity - COALESCE(poi.delivered_quantity, 0)) * poi.unit_price 
+                ELSE 0 
+            END), 0) as remaining_undelivered_amount
+        FROM purchase_order_items poi
+        JOIN purchase_orders po ON poi.po_id = po.id
+        WHERE po.status NOT IN ('COMPLETED', 'CANCELLED', 'VOIDED')
+    `).get();
 
     // Monthly Sales & Revenue Statistics
     const monthSales = db.prepare(`
@@ -191,6 +215,10 @@ router.get('/overview', authenticateToken, enforceClientIsolation, (req, res) =>
             arTotal,
             overdueAR,
             totalBufferUnits,
+            expectedDeliveryAmount: expectedRevenueStats.total_expected,
+            remainingDeliveryAmount: orderItemsStats.remaining_undelivered_amount,
+            totalOrderedUnits: orderItemsStats.total_ordered_units,
+            totalDeliveredUnits: orderItemsStats.total_delivered_units,
             salesThisMonth: {
                 month: currentMonth,
                 totalSold: monthSales.total_sold,

@@ -530,7 +530,22 @@ async function loadDashboard() {
 
     if (kpiRes.success && kpiRes.data) {
         const d = kpiRes.data;
-        setElText('kpi-open-pos', NKB.formatNumber(d.openPOs));
+        const expectedAmount = d.expectedDeliveryAmount || 0;
+        const remainingAmount = d.remainingDeliveryAmount != null ? d.remainingDeliveryAmount : expectedAmount;
+        const orderedUnits = d.totalOrderedUnits || 0;
+        const deliveredUnits = d.totalDeliveredUnits || 0;
+        const openOrdersCount = d.openPOs || 0;
+
+        // Expected Revenue If All Delivered KPI Card
+        setElText('kpi-expected-delivery-amount', NKB.formatCurrency(expectedAmount));
+        if (deliveredUnits > 0 && remainingAmount < expectedAmount) {
+            setElText('kpi-expected-delivery-sub', `${NKB.formatCurrency(remainingAmount)} remaining · ${openOrdersCount} orders →`);
+        } else {
+            setElText('kpi-expected-delivery-sub', `${NKB.formatNumber(orderedUnits)} units across ${openOrdersCount} active orders →`);
+        }
+
+        setElText('kpi-open-pos', NKB.formatNumber(openOrdersCount));
+        setElText('kpi-open-pos-sub', `${NKB.formatCurrency(expectedAmount)} expected revenue →`);
         setElText('kpi-active-batches', NKB.formatNumber(d.activeBatches));
         setElText('kpi-pending-approval-batches', `${d.pendingApprovalBatches} over-tolerance requiring approval`);
         setElText('kpi-ongoing-deliveries', NKB.formatNumber(d.ongoingDeliveries || 0));
@@ -538,6 +553,10 @@ async function loadDashboard() {
         setElText('kpi-ar-total', NKB.formatCurrency(d.arTotal));
         setElText('kpi-overdue-ar', `${NKB.formatCurrency(d.overdueAR)} overdue`);
         setElText('kpi-ar-overdue', `${NKB.formatCurrency(d.overdueAR)} overdue`);
+
+        // Sub-stat card for Expected Delivery Revenue
+        setElText('stat-expected-delivery-amount', NKB.formatCurrency(expectedAmount));
+        setElText('stat-expected-delivery-sub', `${NKB.formatNumber(orderedUnits)} units across ${openOrdersCount} active orders`);
 
         // Monthly Sales Performance & Statistics
         const sm = d.salesThisMonth || {};
@@ -13295,8 +13314,9 @@ async function loadProductionSupervisorDashboard() {
         const activeBatchesCount = (kpiRes && kpiRes.data && kpiRes.data.activeBatches != null) ? kpiRes.data.activeBatches : 0;
         const ongoingDeliveriesCount = (kpiRes && kpiRes.data && kpiRes.data.ongoingDeliveries != null) ? kpiRes.data.ongoingDeliveries : 0;
 
+        const expectedRevenue = (kpiRes && kpiRes.data && kpiRes.data.expectedDeliveryAmount) || 0;
         setElText('prod-kpi-total-pos', NKB.formatNumber(totalPOCount));
-        setElText('prod-kpi-open-pos-sub', `${NKB.formatNumber(openPOCount)} active open sales orders →`);
+        setElText('prod-kpi-open-pos-sub', `${NKB.formatNumber(openPOCount)} active open orders · ${NKB.formatCurrency(expectedRevenue)} expected →`);
         setElText('prod-kpi-active-batches', NKB.formatNumber(activeBatchesCount));
         setElText('prod-kpi-active-today', NKB.formatNumber(activeTodayCount));
         setElText('prod-kpi-ongoing-deliveries', NKB.formatNumber(ongoingDeliveriesCount));

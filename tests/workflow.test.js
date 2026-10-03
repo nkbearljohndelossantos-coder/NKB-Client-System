@@ -2268,6 +2268,10 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.ok(Array.isArray(overview.salesThisMonth.salesTrend), 'salesTrend must be an array');
         assert.strictEqual(overview.salesThisMonth.salesTrend.length, 6, 'salesTrend must have 6 months');
         assert.ok(Array.isArray(overview.salesThisMonth.topProducts), 'topProducts must be an array');
+        assert.ok(typeof overview.expectedDeliveryAmount === 'number', 'expectedDeliveryAmount must be a number');
+        assert.ok(typeof overview.remainingDeliveryAmount === 'number', 'remainingDeliveryAmount must be a number');
+        assert.ok(typeof overview.totalOrderedUnits === 'number', 'totalOrderedUnits must be a number');
+        assert.ok(overview.expectedDeliveryAmount >= 0, 'expectedDeliveryAmount must be non-negative');
 
         // 5. Verify Client Overview API returns Monthly Purchases
         const clientOverviewRes = await request(app)
