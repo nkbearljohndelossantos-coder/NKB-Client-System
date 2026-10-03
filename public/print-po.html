@@ -215,6 +215,50 @@
                 flex-direction: column;
                 justify-content: flex-start;
                 position: relative;
+                overflow: hidden;
+            }
+
+            .header-section, .doc-title-container, .metadata-grid, .order-box, .bank-details-section, .po-notes-section {
+                position: relative;
+                z-index: 1;
+            }
+
+            .doc-watermark {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                pointer-events: none;
+                user-select: none;
+                -webkit-user-select: none;
+                z-index: 0;
+                opacity: 0.065;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 100%;
+            }
+
+            .doc-watermark img {
+                width: 280px;
+                height: auto;
+                max-width: 45%;
+                object-fit: contain;
+                filter: grayscale(100%);
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            @media print {
+                .doc-watermark {
+                    opacity: 0.075 !important;
+                    -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
+                }
+                .doc-watermark img {
+                    -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
+                }
             }
 
             /* Edit Mode Indicator Styles */
@@ -680,6 +724,11 @@
 
     <!-- Printable Sheet (A4 Portrait) -->
     <div class="print-sheet" id="po-printable-sheet">
+
+        <!-- Watermark (NKB Logo) -->
+        <div class="doc-watermark" aria-hidden="true">
+            <img src="/images/nkb-logo.png" alt="NKB Watermark">
+        </div>
 
         <!-- Header: Centered Company Info -->
         <div class="header-section">

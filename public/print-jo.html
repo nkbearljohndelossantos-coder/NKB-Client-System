@@ -386,6 +386,51 @@
             display: flex;
             flex-direction: column;
             justify-content: space-between;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .slip-content > * {
+            position: relative;
+            z-index: 1;
+        }
+
+        .slip-watermark {
+            position: absolute !important;
+            top: 50% !important;
+            left: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            pointer-events: none !important;
+            user-select: none !important;
+            -webkit-user-select: none !important;
+            z-index: 0 !important;
+            opacity: 0.065 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 100% !important;
+        }
+
+        .slip-watermark img {
+            width: 190px;
+            height: auto;
+            max-width: 55%;
+            object-fit: contain;
+            filter: grayscale(100%);
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
+
+        @media print {
+            .slip-watermark {
+                opacity: 0.075 !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            .slip-watermark img {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
         }
 
         /* Top Header */
@@ -1198,6 +1243,10 @@
 
             return `
                 <div class="slip-content">
+                    <!-- Watermark -->
+                    <div class="slip-watermark" aria-hidden="true">
+                        <img src="/images/nkb-logo.png" alt="NKB Watermark">
+                    </div>
                     <!-- Header -->
                     <div>
                         <div class="company-header">

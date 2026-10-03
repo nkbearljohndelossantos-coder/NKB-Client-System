@@ -40,3 +40,8 @@ temp/
 uploads/
 coverage/
 .system_generated/
+public/SO/*.png
+!public/SO/.gitkeep
+public/PO/*.png
+!public/PO/.gitkeep
+

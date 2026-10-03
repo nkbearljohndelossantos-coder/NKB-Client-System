@@ -45,6 +45,15 @@
                 max-width: 100% !important;
                 padding: 20px !important;
             }
+            .voucher-watermark {
+                opacity: 0.075 !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            .voucher-watermark img {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
         }
 
         .dotted-line {
@@ -52,6 +61,39 @@
         }
         .solid-underline {
             border-bottom: 1.5px solid #0f172a;
+        }
+
+        .voucher-sheet {
+            position: relative;
+            overflow: hidden;
+        }
+        .voucher-sheet > * {
+            position: relative;
+            z-index: 1;
+        }
+        .voucher-watermark {
+            position: absolute !important;
+            top: 50% !important;
+            left: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            pointer-events: none !important;
+            user-select: none !important;
+            -webkit-user-select: none !important;
+            z-index: 0 !important;
+            opacity: 0.065 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 100% !important;
+        }
+        .voucher-watermark img {
+            width: 280px;
+            height: auto;
+            max-width: 45%;
+            object-fit: contain;
+            filter: grayscale(100%);
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
         }
     </style>
 </head>
@@ -77,6 +119,11 @@
 
     <!-- Official Voucher Sheet Container -->
     <div class="max-w-4xl mx-auto bg-white border-2 border-slate-800 rounded-xl p-8 sm:p-10 shadow-xl voucher-sheet space-y-6">
+
+        <!-- Watermark (NKB Logo) -->
+        <div class="voucher-watermark" aria-hidden="true">
+            <img src="/images/nkb-logo.png" alt="NKB Watermark">
+        </div>
 
         <!-- Top Header & Company Branding -->
         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b-2 border-slate-800 pb-5">

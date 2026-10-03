@@ -57,6 +57,51 @@
                 box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
                 border: 1px solid #e2e8f0;
                 box-sizing: border-box;
+                position: relative;
+                overflow: hidden;
+            }
+        }
+
+        .print-sheet > * {
+            position: relative;
+            z-index: 1;
+        }
+
+        .doc-watermark {
+            position: absolute !important;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            user-select: none;
+            -webkit-user-select: none;
+            z-index: 0 !important;
+            opacity: 0.065;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+        }
+
+        .doc-watermark img {
+            width: 280px;
+            height: auto;
+            max-width: 45%;
+            object-fit: contain;
+            filter: grayscale(100%);
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
+
+        @media print {
+            .doc-watermark {
+                opacity: 0.075 !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            .doc-watermark img {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
             }
         }
 
@@ -190,6 +235,28 @@
         <span>✏️ <strong>Edit Mode Active:</strong> Click any text, delivery quantity, batch, driver, or vehicle plate to edit. Total dispatched units recalculate automatically.</span>
         <button type="button" onclick="toggleDrEditMode()" style="background: none; border: none; font-size: 11px; color: #1e40af; text-decoration: underline; cursor: pointer; font-weight: bold;">Done Editing</button>
     </div>
+
+    <!-- A4 Printable Sheet -->
+    <div class="print-sheet space-y-4 text-slate-800 relative overflow-hidden" id="dr-printable-sheet">
+        <!-- Watermark -->
+        <div class="doc-watermark" aria-hidden="true">
+            <img src="/images/nkb-logo.png" alt="NKB Watermark">
+        </div>
+
+        <!-- Header -->
+        <div class="flex justify-between items-start border-b border-slate-300 pb-3">
+            <div>
+                <h1 id="dr-company-name-hdr" class="text-xl font-extrabold text-slate-900 tracking-tight">NKB MANUFACTURING CORPORATION</h1>
+                <p class="text-[11px] text-slate-500 font-medium">Cosmetics & Personal Care Formulation Laboratory</p>
+                <p id="dr-tin-hdr" class="text-[10px] text-slate-500">TIN: 686-950-421-00000 · FDA Certified Facility</p>
+                <p id="dr-address-hdr" class="text-[10px] text-slate-500">Blk 4, Lot 5, Twig st., Sampaguita Village, Mambog II, Bacoor City, Cavite</p>
+                <p id="dr-contact-hdr" class="text-[10px] text-slate-500">Contact: (046) 885-0923 · Email: dispatch@nkbmanufacturing.com</p>
+            </div>
+            <div class="text-right space-y-0.5">
+                <h2 class="text-lg font-bold tracking-wider text-slate-900 uppercase">DELIVERY RECEIPT</h2>
+                <div id="dr-number-display" class="text-sm font-bold text-slate-800 font-mono">DR-XXXX-XXXXXX</div>
+                <div class="text-[11px] text-slate-500">Date: <span id="dr-date-display" class="font-semibold text-slate-800">-</span></div>
+            </div>
         </div>
 
         <!-- Client & PO Reference Info Grid -->
