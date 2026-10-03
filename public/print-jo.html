@@ -158,6 +158,15 @@
                 background: #e2e8f0;
             }
 
+            .toolbar-btn-snip {
+                background: #4f46e5;
+                color: #ffffff;
+                border-color: #4338ca;
+            }
+            .toolbar-btn-snip:hover {
+                background: #4338ca;
+            }
+
             .toolbar-btn-print {
                 background: #0f172a;
                 color: #ffffff;
@@ -856,6 +865,9 @@
                 <button type="button" onclick="setZoom('fit')" class="zoom-btn" id="zoom-fit">Fit Screen</button>
             </div>
 
+            <button type="button" onclick="startSnipping()" class="toolbar-btn toolbar-btn-snip" title="Crop or capture document as image (saved in folder SO/PO)">
+                <span>✂️ Snipping Tool</span>
+            </button>
             <button onclick="printReceipt()" class="toolbar-btn toolbar-btn-print" id="btn-print-main">
                 <span>🖨️ Print 2 Portrait Copies (A4 Landscape)</span>
             </button>
@@ -1493,6 +1505,33 @@
                 document.title = _docTitle || 'Sales Order / Job Order - NKB MANUFACTURING CORPORATION';
             }, 800);
         }
+
+        function startSnipping() {
+            const titleSelect = document.getElementById('doc-title-select');
+            const chosenTitle = titleSelect ? titleSelect.value : 'SALES ORDER';
+            
+            let poNum = '1';
+            if (typeof currentLoadedData !== 'undefined' && currentLoadedData && currentLoadedData.length > 0 && currentLoadedData[0].po_number) {
+                poNum = currentLoadedData[0].po_number;
+            } else {
+                const urlParams = new URLSearchParams(window.location.search);
+                poNum = urlParams.get('po_id') || urlParams.get('id') || '1';
+            }
+
+            const targetEl = document.querySelector('.page-container') || document.getElementById('pages-wrapper') || document.body;
+
+            if (window.NKBSnippingTool) {
+                window.NKBSnippingTool.start({
+                    getTargetElement: () => targetEl,
+                    getDocType: () => chosenTitle,
+                    getPoNumber: () => poNum
+                });
+            } else {
+                alert('Snipping tool is loading. Please try again in a moment.');
+            }
+        }
     </script>
+    <script src="/vendor/html2canvas.min.js"></script>
+    <script src="/js/snipping-tool.js"></script>
 </body>
 </html>

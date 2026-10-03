@@ -1651,6 +1651,97 @@ router.post('/:id/declare-finished', authenticateToken, requireRoles('ADMIN', 'S
     });
 });
 
+/**
+ * POST /api/orders/save-snip
+ * Saves snipped / cropped image of SO or PO into designated SO or PO folder.
+ * Naming convention: SOPO{number}.png / PO{number}.png (e.g. SOPO1.png / PO1.png)
+ */
+router.post('/save-snip', async (req, res) => {
+    try {
+        const { docType, poNumber, imageData, filename: customFilename } = req.body || {};
+        if (!imageData) {
+            return res.status(400).json({ success: false, error: 'No image data provided' });
+        }
+
+        // Determine doc type and folder
+        const isSO = (docType && (
+            String(docType).toUpperCase().includes('SO') || 
+            String(docType).toUpperCase().includes('SALES') ||
+            String(docType).toUpperCase().includes('JOB')
+        ));
+        const folder = isSO ? 'SO' : 'PO';
+
+        // Format standard filename e.g. SOPO1.png / PO1.png
+        let filename = (customFilename || '').trim();
+        if (!filename) {
+            let clean = (poNumber || '').trim();
+            const matchYearSeq = clean.match(/^PO-\d{4}-(\d+)$/i);
+            let numStr = '';
+            if (matchYearSeq) {
+                numStr = String(parseInt(matchYearSeq[1], 10));
+            } else {
+                const matchSeq = clean.match(/^(?:PO|SO)-?(\d+)$/i);
+                if (matchSeq) {
+                    numStr = String(parseInt(matchSeq[1], 10));
+                } else {
+                    const digitMatch = clean.match(/(\d+)/);
+                    if (digitMatch) {
+                        numStr = String(parseInt(digitMatch[1], 10));
+                    } else {
+                        numStr = clean.replace(/^(SO|PO)[-_]?/i, '') || '1';
+                    }
+                }
+            }
+            if (!numStr) numStr = '1';
+            const prefix = isSO ? 'SOPO' : 'PO';
+            filename = `${prefix}${numStr}.png`;
+        }
+
+        // Clean filename of unsafe characters
+        filename = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+        if (!filename.toLowerCase().endsWith('.png')) {
+            filename += '.png';
+        }
+
+        // Decode base64 image data
+        const base64Data = imageData.replace(/^data:image\/\w+;base64,/, '');
+        const buffer = Buffer.from(base64Data, 'base64');
+
+        // Target storage directories: uploads/{SO,PO}, public/uploads/{SO,PO}, public/{SO,PO}
+        const fs = require('fs');
+        const path = require('path');
+
+        const targetDirs = [
+            path.join(__dirname, '..', 'uploads', folder),
+            path.join(__dirname, '..', 'public', 'uploads', folder),
+            path.join(__dirname, '..', 'public', folder)
+        ];
+
+        targetDirs.forEach(dir => {
+            if (!fs.existsSync(dir)) {
+                try { fs.mkdirSync(dir, { recursive: true }); } catch (_) {}
+            }
+            try {
+                fs.writeFileSync(path.join(dir, filename), buffer);
+            } catch (writeErr) {
+                console.warn(`Could not write snip image to ${dir}:`, writeErr.message);
+            }
+        });
+
+        const publicUrl = `/uploads/${folder}/${filename}`;
+        return res.json({
+            success: true,
+            folder,
+            filename,
+            url: publicUrl,
+            message: `Successfully saved snipped ${folder} image as ${filename}`
+        });
+    } catch (err) {
+        console.error('Error saving snip image:', err);
+        return res.status(500).json({ success: false, error: err.message || 'Failed to save snip image' });
+    }
+});
+
 router.evaluateOrderRemindersAndAutoPrioritize = evaluateOrderRemindersAndAutoPrioritize;
 
 module.exports = router;

@@ -1,6 +1,6 @@
 {
   "success": true,
-  "count": 60,
+  "count": 61,
   "batch_scaling": {
     "batch_size": 100,
     "uom": "kg"
@@ -317,9 +317,9 @@
       "formula_code": "FORM-2026-0013",
       "formula_name": "BELLASKIN 24K PDRN GOLD SERUM 5.0",
       "product_category": "Cosmetic",
-      "active_version": "V6.0",
+      "active_version": "V7.0",
       "version_status": "APPROVED",
-      "compounding_code": "CP-2026-0014",
+      "compounding_code": "CP-0982",
       "batch_size": 100,
       "batch_uom": "kg",
       "total_raw_materials_count": 14,
@@ -333,12 +333,12 @@
           "supplier": "MAYNILAD"
         },
         {
-          "material_code": "RM-EDTA",
-          "material_name": "TETRASODIUM EDTA",
+          "material_code": "RM-DI-EDTA",
+          "material_name": "DISODIUM EDTA",
           "category": "Cosmetic",
           "required_quantity": 0.1,
           "uom": "kg",
-          "supplier": "FW SPA"
+          "supplier": "HACHIMORI"
         },
         {
           "material_code": "RM-AEV525-01",
@@ -1285,6 +1285,204 @@
           "required_quantity": 0.4,
           "uom": "kg",
           "supplier": "FORMULAB"
+        }
+      ]
+    },
+    {
+      "formula_id": 79,
+      "formula_code": "FORM-2026-0089",
+      "formula_name": "BELLASKIN KERATIN+ ANTIDANDRUFF SHAMPOO (A2)",
+      "product_category": "Cosmetic",
+      "active_version": "V1.0",
+      "version_status": "APPROVED",
+      "compounding_code": "CP-0965",
+      "batch_size": 100,
+      "batch_uom": "kg",
+      "total_raw_materials_count": 23,
+      "raw_materials_needed": [
+        {
+          "material_code": "MAT-WAT-01",
+          "material_name": "DE-IONIZED WATER",
+          "category": "Cosmetic",
+          "required_quantity": 62.73,
+          "uom": "kg",
+          "supplier": "MAYNILAD"
+        },
+        {
+          "material_code": "RM-DI-EDTA",
+          "material_name": "DISODIUM EDTA",
+          "category": "Cosmetic",
+          "required_quantity": 0.1,
+          "uom": "kg",
+          "supplier": "HACHIMORI"
+        },
+        {
+          "material_code": "RM-GLYCE-01",
+          "material_name": "GLYCERIN (CHEMREZ)",
+          "category": "Cosmetic",
+          "required_quantity": 1.5,
+          "uom": "kg",
+          "supplier": "CHEMREZ"
+        },
+        {
+          "material_code": "RM-HEC",
+          "material_name": "HEC (HYDROXYETHYLCELLULOSE",
+          "category": "Cosmetic",
+          "required_quantity": 0.3,
+          "uom": "kg",
+          "supplier": "FW SPA"
+        },
+        {
+          "material_code": "RM-RESOFT-01",
+          "material_name": "RESOFT 14S (HYDROXYPROPYLTRIMONIUM CHLORIDE)",
+          "category": "Cosmetic",
+          "required_quantity": 0.75,
+          "uom": "kg",
+          "supplier": "EUNICE INC."
+        },
+        {
+          "material_code": "RM-SLES-01",
+          "material_name": "SLES GEL (TEXAPON)",
+          "category": "Cosmetic",
+          "required_quantity": 13.5,
+          "uom": "kg",
+          "supplier": "CCT"
+        },
+        {
+          "material_code": "RM-EMPIGEN",
+          "material_name": "EMPIGEN BS/FA (COCAMIDOPROPYL BETAINE)",
+          "category": "Cosmetic",
+          "required_quantity": 5,
+          "uom": "kg",
+          "supplier": "CHEMICO"
+        },
+        {
+          "material_code": "RM-CDEA-01",
+          "material_name": "CDEA (FW)",
+          "category": "Cosmetic",
+          "required_quantity": 1,
+          "uom": "kg",
+          "supplier": "FW SPA"
+        },
+        {
+          "material_code": "RM-GALSILK",
+          "material_name": "GALSILK (POLYQUATERNIUM)",
+          "category": "Cosmetic",
+          "required_quantity": 1,
+          "uom": "kg",
+          "supplier": "FW SPA"
+        },
+        {
+          "material_code": "RM-MERQUAT3330",
+          "material_name": "MERQUAT PLUS 3330 POLYMER",
+          "category": "Cosmetic",
+          "required_quantity": 2,
+          "uom": "kg",
+          "supplier": "CHEMICO"
+        },
+        {
+          "material_code": "RM-FENTACARE-1631",
+          "material_name": "FENTACARE 1631 30 -BRENNTAG",
+          "category": "Cosmetic",
+          "required_quantity": 1.5,
+          "uom": "kg",
+          "supplier": "BRENNTAG"
+        },
+        {
+          "material_code": "RM-SILSOFT-COMPOSER",
+          "material_name": "SILSOFT COMPOSER EMULSION",
+          "category": "Cosmetic",
+          "required_quantity": 1,
+          "uom": "kg",
+          "supplier": "CHEMICO"
+        },
+        {
+          "material_code": "RM-ISCA-PEG-01",
+          "material_name": "ISCAGUARD PEG",
+          "category": "Cosmetic",
+          "required_quantity": 0.9,
+          "uom": "kg",
+          "supplier": "CHEMICO"
+        },
+        {
+          "material_code": "RM-KERATIN-FW",
+          "material_name": "KERATIN HYDROLIZED (FW)",
+          "category": "Cosmetic",
+          "required_quantity": 0.9,
+          "uom": "kg",
+          "supplier": "FW SPA"
+        },
+        {
+          "material_code": "RM-AEVUM-VITA-406",
+          "material_name": "AEVUM VITA 406 (ANTI-DANDRUFF)",
+          "category": "Cosmetic",
+          "required_quantity": 1,
+          "uom": "kg",
+          "supplier": "CHEMICO"
+        },
+        {
+          "material_code": "RM-ARGAN-OIL",
+          "material_name": "ARGAN OIL",
+          "category": "Cosmetic",
+          "required_quantity": 0.1,
+          "uom": "kg",
+          "supplier": "KALIOREXI"
+        },
+        {
+          "material_code": "RM-SUNFLOWER",
+          "material_name": "SUNFLOWER OIL",
+          "category": "Cosmetic",
+          "required_quantity": 0.1,
+          "uom": "kg",
+          "supplier": "HACHIMORI"
+        },
+        {
+          "material_code": "RM-VIT E-01",
+          "material_name": "VITAMIN E (SYNTHETIC)",
+          "category": "Cosmetic",
+          "required_quantity": 0.01,
+          "uom": "kg",
+          "supplier": "FW SPA"
+        },
+        {
+          "material_code": "RM-PHYTO-01",
+          "material_name": "PHYTOACT GOLDEN SILK OIL",
+          "category": "Cosmetic",
+          "required_quantity": 0.01,
+          "uom": "kg",
+          "supplier": "CHEMICO"
+        },
+        {
+          "material_code": "FR-VALAYA-JJJ",
+          "material_name": "VALAYA FRAGRANCE OIL",
+          "category": "Cosmetic",
+          "required_quantity": 0.5,
+          "uom": "kg",
+          "supplier": "JJJ SHOP"
+        },
+        {
+          "material_code": "RM-CITRIC-SOLN-01",
+          "material_name": "CITRIC ACID 10% SOL'N",
+          "category": "Cosmetic",
+          "required_quantity": 4.6,
+          "uom": "kg",
+          "supplier": "HACHIMORI"
+        },
+        {
+          "material_code": "RM-QUICK-PEARL",
+          "material_name": "QUICK PEARL PK3",
+          "category": "Cosmetic",
+          "required_quantity": 1,
+          "uom": "kg",
+          "supplier": "CHEMICO"
+        },
+        {
+          "material_code": "RM-SALT-01",
+          "material_name": "SALT INDUSTRIAL (FW)",
+          "category": "Cosmetic",
+          "required_quantity": 0.5,
+          "uom": "kg",
+          "supplier": "FW SPA"
         }
       ]
     },
@@ -2291,6 +2489,108 @@
       ]
     },
     {
+      "formula_id": 54,
+      "formula_code": "FORM-2026-0064",
+      "formula_name": "BELLASKIN RETINOL SERUM 1.1 (30mL)",
+      "product_category": "Cosmetic",
+      "active_version": "V3.0",
+      "version_status": "APPROVED",
+      "compounding_code": "CP-0975",
+      "batch_size": 100,
+      "batch_uom": "kg",
+      "total_raw_materials_count": 11,
+      "raw_materials_needed": [
+        {
+          "material_code": "MAT-WAT-01",
+          "material_name": "DE-IONIZED WATER",
+          "category": "Cosmetic",
+          "required_quantity": 79.17,
+          "uom": "kg",
+          "supplier": "MAYNILAD"
+        },
+        {
+          "material_code": "RM-DI-EDTA",
+          "material_name": "DISODIUM EDTA",
+          "category": "Cosmetic",
+          "required_quantity": 0.1,
+          "uom": "kg",
+          "supplier": "HACHIMORI"
+        },
+        {
+          "material_code": "RM-ULTREZ10",
+          "material_name": "ULTREZ-10 CARBOPOL",
+          "category": "Cosmetic",
+          "required_quantity": 0.2,
+          "uom": "kg",
+          "supplier": "CHEMICO"
+        },
+        {
+          "material_code": "RM-PROCOL-HACHI",
+          "material_name": "PROPYLENE GLYCOL (HACHIMORI)",
+          "category": "Cosmetic",
+          "required_quantity": 5,
+          "uom": "kg",
+          "supplier": "HACHIMORI"
+        },
+        {
+          "material_code": "RM-GLYCE-01",
+          "material_name": "GLYCERIN (CHEMREZ)",
+          "category": "Cosmetic",
+          "required_quantity": 3,
+          "uom": "kg",
+          "supplier": "CHEMREZ"
+        },
+        {
+          "material_code": "RM-ETHYL-ALC-01",
+          "material_name": "ETHYL ALCOHOL - IND01",
+          "category": "Cosmetic",
+          "required_quantity": 7.9,
+          "uom": "kg",
+          "supplier": "LOYAL FAMILY"
+        },
+        {
+          "material_code": "RM-PEG40-01",
+          "material_name": "PEG40 - MEDMULS COH 40",
+          "category": "Cosmetic",
+          "required_quantity": 1,
+          "uom": "kg",
+          "supplier": "REDOLENCE"
+        },
+        {
+          "material_code": "RM-ISCA-PEG-01",
+          "material_name": "ISCAGUARD PEG",
+          "category": "Cosmetic",
+          "required_quantity": 0.8,
+          "uom": "kg",
+          "supplier": "CHEMICO"
+        },
+        {
+          "material_code": "FR-SWEETP-PEA-REDO",
+          "material_name": "SWEET PEA SWEET (REDO)",
+          "category": "Cosmetic",
+          "required_quantity": 0.03,
+          "uom": "kg",
+          "supplier": "REDOLENCE"
+        },
+        {
+          "material_code": "RM-ACTOSOME",
+          "material_name": "ACTOSOME RETINOL PALMITATE",
+          "category": "Cosmetic",
+          "required_quantity": 2,
+          "uom": "kg",
+          "supplier": "CHEMICO"
+        },
+        {
+          "material_code": "RM-TEA-01",
+          "material_name": "TEA (Triethanolamine)",
+          "category": "Cosmetic",
+          "required_quantity": 0.8,
+          "uom": "kg",
+          "supplier": "FW SPA"
+        }
+      ]
+    },
+    {
       "formula_id": 18,
       "formula_code": "FORM-2026-0028",
       "formula_name": "BELLASKIN RETINOL SERUM 1.2",
@@ -2379,108 +2679,6 @@
           "material_name": "TEA (Triethanolamine)",
           "category": "Cosmetic",
           "required_quantity": 0.03,
-          "uom": "kg",
-          "supplier": "FW SPA"
-        }
-      ]
-    },
-    {
-      "formula_id": 54,
-      "formula_code": "FORM-2026-0064",
-      "formula_name": "BELLASKIN RETINOL SERUM 2.0 (30mL)",
-      "product_category": "Cosmetic",
-      "active_version": "V1.0",
-      "version_status": "APPROVED",
-      "compounding_code": "CP-0572",
-      "batch_size": 100,
-      "batch_uom": "kg",
-      "total_raw_materials_count": 11,
-      "raw_materials_needed": [
-        {
-          "material_code": "MAT-WAT-01",
-          "material_name": "DE-IONIZED WATER",
-          "category": "Cosmetic",
-          "required_quantity": 80.47,
-          "uom": "kg",
-          "supplier": "MAYNILAD"
-        },
-        {
-          "material_code": "RM-DI-EDTA",
-          "material_name": "DISODIUM EDTA",
-          "category": "Cosmetic",
-          "required_quantity": 0.1,
-          "uom": "kg",
-          "supplier": "HACHIMORI"
-        },
-        {
-          "material_code": "RM-ULTREZ10",
-          "material_name": "ULTREZ-10 CARBOPOL",
-          "category": "Cosmetic",
-          "required_quantity": 0.2,
-          "uom": "kg",
-          "supplier": "CHEMICO"
-        },
-        {
-          "material_code": "RM-PROCOL-HACHI",
-          "material_name": "PROPYLENE GLYCOL (HACHIMORI)",
-          "category": "Cosmetic",
-          "required_quantity": 5,
-          "uom": "kg",
-          "supplier": "HACHIMORI"
-        },
-        {
-          "material_code": "RM-GLYCE-01",
-          "material_name": "GLYCERIN (CHEMREZ)",
-          "category": "Cosmetic",
-          "required_quantity": 3,
-          "uom": "kg",
-          "supplier": "CHEMREZ"
-        },
-        {
-          "material_code": "RM-ETHYL-ALC-01",
-          "material_name": "ETHYL ALCOHOL - IND01",
-          "category": "Cosmetic",
-          "required_quantity": 7.9,
-          "uom": "kg",
-          "supplier": "LOYAL FAMILY"
-        },
-        {
-          "material_code": "RM-PEG40-01",
-          "material_name": "PEG40 - MEDMULS COH 40",
-          "category": "Cosmetic",
-          "required_quantity": 1,
-          "uom": "kg",
-          "supplier": "REDOLENCE"
-        },
-        {
-          "material_code": "RM-ISCA-PEG-01",
-          "material_name": "ISCAGUARD PEG",
-          "category": "Cosmetic",
-          "required_quantity": 0.8,
-          "uom": "kg",
-          "supplier": "CHEMICO"
-        },
-        {
-          "material_code": "FR-SWEETP-PEA-REDO",
-          "material_name": "SWEET PEA SWEET (REDO)",
-          "category": "Cosmetic",
-          "required_quantity": 0.03,
-          "uom": "kg",
-          "supplier": "REDOLENCE"
-        },
-        {
-          "material_code": "RM-GENTINOL",
-          "material_name": "BIOGENIC GENTINOL-200",
-          "category": "Cosmetic",
-          "required_quantity": 0.7,
-          "uom": "kg",
-          "supplier": "BRENNTAG"
-        },
-        {
-          "material_code": "RM-TEA-01",
-          "material_name": "TEA (Triethanolamine)",
-          "category": "Cosmetic",
-          "required_quantity": 0.8,
           "uom": "kg",
           "supplier": "FW SPA"
         }
@@ -3519,7 +3717,7 @@
     {
       "formula_id": 76,
       "formula_code": "FORM-2026-0086",
-      "formula_name": "GELIS DERMA SOLUTION 2.1 (30mL)",
+      "formula_name": "GELIS DERMA SOLUTION 2.1 (30mL = 35g)",
       "product_category": "Cosmetic",
       "active_version": "V1.0",
       "version_status": "APPROVED",

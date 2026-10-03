@@ -164,6 +164,15 @@
                 background: #ffe4e6;
             }
 
+            .toolbar-btn-snip {
+                background: #4f46e5;
+                color: #ffffff;
+                border-color: #4338ca;
+            }
+            .toolbar-btn-snip:hover {
+                background: #4338ca;
+            }
+
             .toolbar-btn-print {
                 background: #0f172a;
                 color: #ffffff;
@@ -654,6 +663,9 @@
         </div>
 
         <div style="display: flex; align-items: center; gap: 8px;">
+            <button type="button" onclick="startSnipping()" class="toolbar-btn toolbar-btn-snip" title="Crop or capture document as image (saved in folder SO/PO)">
+                <span>✂️ Snipping Tool</span>
+            </button>
             <button onclick="printReceipt()" class="toolbar-btn toolbar-btn-print">
                 <span>🖨️ Print Document (A4)</span>
             </button>
@@ -1342,6 +1354,24 @@
                 document.title = _docTitle || 'Purchase Order / Sales Order - NKB Client System';
             }, 800);
         }
+
+        function startSnipping() {
+            const titleSelect = document.getElementById('doc-title-select');
+            const chosenTitle = titleSelect ? titleSelect.value : (document.getElementById('hdr-doc-title').textContent || 'SALES ORDER');
+            const poNum = (rawPoData && rawPoData.po_number) || document.getElementById('meta-doc-number').textContent || '1';
+
+            if (window.NKBSnippingTool) {
+                window.NKBSnippingTool.start({
+                    getTargetElement: () => document.getElementById('po-printable-sheet'),
+                    getDocType: () => chosenTitle,
+                    getPoNumber: () => poNum
+                });
+            } else {
+                alert('Snipping tool is loading. Please try again in a moment.');
+            }
+        }
     </script>
+    <script src="/vendor/html2canvas.min.js"></script>
+    <script src="/js/snipping-tool.js"></script>
 </body>
 </html>
