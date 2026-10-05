@@ -5587,11 +5587,7 @@ async function printSingleChequeVoucher(payableId) {
                 <div class="signatures">
                     <div class="sig-box">
                         <div class="sig-name">${cp.requestor_name || 'Senior Accountant'}</div>
-                        <div class="sig-role">Prepared by (Accounting)</div>
-                    </div>
-                    <div class="sig-box">
-                        <div class="sig-name">Finance Officer</div>
-                        <div class="sig-role">Checked & Verified by</div>
+                        <div class="sig-role">Prepared by: ${cp.requestor_name || 'Accountant'} / ${cp.requestor_role || 'Accounting'}</div>
                     </div>
                     <div class="sig-box">
                         <div class="sig-name">${cp.coo_confirmed_by || 'Executive COO'}</div>

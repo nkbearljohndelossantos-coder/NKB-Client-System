@@ -238,19 +238,14 @@
         </div>
 
         <!-- Signatures Matrix -->
-        <div class="grid grid-cols-4 gap-4 pt-4 border-t-2 border-slate-800 text-center">
+        <div class="grid grid-cols-3 gap-4 pt-4 border-t-2 border-slate-800 text-center">
             <div class="space-y-1">
                 <div class="h-10 border-b border-slate-800 flex items-end justify-center pb-1">
                     <span id="v-sig-prepared" class="font-bold text-xs text-slate-900 leading-none">Accounting</span>
                 </div>
-                <div class="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Prepared by (Requestor)</div>
+                <div id="v-sig-prepared-label" class="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Prepared by</div>
             </div>
-            <div class="space-y-1">
-                <div class="h-10 border-b border-slate-800 flex items-end justify-center pb-1">
-                    <span class="font-bold text-xs text-slate-900 leading-none">Finance Officer</span>
-                </div>
-                <div class="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Checked & Verified by</div>
-            </div>
+
             <div class="space-y-1">
                 <div class="h-10 border-b border-slate-800 flex items-end justify-center pb-1">
                     <span id="v-sig-approved" class="font-bold text-xs text-slate-900 leading-none">COO / Executive</span>
@@ -399,7 +394,9 @@
                 }
 
                 if (cp.requestor_name) {
+                    const role = cp.requestor_role || 'Accounting';
                     document.getElementById('v-sig-prepared').textContent = cp.requestor_name;
+                    document.getElementById('v-sig-prepared-label').textContent = `Prepared by: ${cp.requestor_name} / ${role}`;
                 }
                 if (cp.coo_confirmed_by) {
                     document.getElementById('v-sig-approved').textContent = cp.coo_confirmed_by;

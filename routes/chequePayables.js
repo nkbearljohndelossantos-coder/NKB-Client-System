@@ -535,7 +535,7 @@ router.get('/export-csv', authenticateToken, (req, res) => {
         const { status, category, bank, date_from, date_to, search } = req.query;
 
         let query = `
-            SELECT cp.*, u.name as requestor_name
+            SELECT cp.*, u.name as requestor_name, u.role as requestor_role
             FROM cheque_payables cp
             LEFT JOIN users u ON cp.requested_by = u.id
             WHERE 1=1
@@ -838,7 +838,7 @@ router.post('/', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER_A
 router.get('/:id', authenticateToken, (req, res) => {
     try {
         const item = db.prepare(`
-            SELECT cp.*, u.name as requestor_name, u.email as requestor_email
+            SELECT cp.*, u.name as requestor_name, u.role as requestor_role, u.email as requestor_email
             FROM cheque_payables cp
             LEFT JOIN users u ON cp.requested_by = u.id
             WHERE cp.id = ? OR cp.request_number = ?
