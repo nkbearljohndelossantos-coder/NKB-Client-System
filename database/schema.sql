@@ -711,6 +711,13 @@ CREATE TABLE IF NOT EXISTS payable_companies (
     created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 
+-- Payable Categories Table
+CREATE TABLE IF NOT EXISTS payable_categories (
+    id TEXT PRIMARY KEY,
+    name TEXT UNIQUE NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+
 -- Company Bank Accounts Table
 CREATE TABLE IF NOT EXISTS bank_accounts (
     id TEXT PRIMARY KEY,

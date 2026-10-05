@@ -54,6 +54,7 @@ const DEFAULT_CATEGORIES = [
     'Marketing Expenses',
     'Office Expenses',
     'Office Encashment',
+    'Credit Card',
     'Petty Cash',
     'Raw Materials',
     'Vehicle Payment',
@@ -374,7 +375,14 @@ router.get('/', authenticateToken, (req, res) => {
                 bankBreakdown: bankCounts
             },
             banks: DEFAULT_BANKS,
-            categories: DEFAULT_CATEGORIES,
+            categories: (() => {
+                try {
+                    const rows = db.prepare('SELECT name FROM payable_categories ORDER BY name ASC').all();
+                    return Array.from(new Set([...DEFAULT_CATEGORIES, ...(rows ? rows.map(r => r.name) : [])]));
+                } catch (_) {
+                    return DEFAULT_CATEGORIES;
+                }
+            })(),
             vendors: vendors,
             apiKeyPrefix: `${LIVE_API_KEY.slice(0, 15)}...`
         });
@@ -415,6 +423,45 @@ router.post('/companies', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN',
         const id = 'comp-' + uuidv4().slice(0, 8);
         try {
             db.prepare('INSERT OR IGNORE INTO payable_companies (id, name) VALUES (?, ?)').run(id, trimmed);
+        } catch (_) {}
+        return res.status(201).json({ success: true, data: { id, name: trimmed } });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * GET /api/cheque-payables/categories
+ * List all expense categories (built-in and user-added)
+ */
+router.get('/categories', authenticateToken, (req, res) => {
+    try {
+        let rows = [];
+        try {
+            rows = db.prepare('SELECT name FROM payable_categories ORDER BY name ASC').all();
+        } catch (_) {}
+        const dbNames = rows.map(r => r.name);
+        const unique = Array.from(new Set([...DEFAULT_CATEGORIES, ...dbNames]));
+        return res.json({ success: true, data: unique });
+    } catch (err) {
+        return res.json({ success: true, data: DEFAULT_CATEGORIES });
+    }
+});
+
+/**
+ * POST /api/cheque-payables/categories
+ * Add a new custom expense category dynamically
+ */
+router.post('/categories', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'CEO'), (req, res) => {
+    try {
+        const { name } = req.body;
+        if (!name || !String(name).trim()) {
+            return res.status(400).json({ success: false, error: 'Category name is required.' });
+        }
+        const trimmed = String(name).trim();
+        const id = 'cat-' + uuidv4().slice(0, 8);
+        try {
+            db.prepare('INSERT OR IGNORE INTO payable_categories (id, name) VALUES (?, ?)').run(id, trimmed);
         } catch (_) {}
         return res.status(201).json({ success: true, data: { id, name: trimmed } });
     } catch (err) {
@@ -515,10 +562,18 @@ router.get('/meta', authenticateToken, (req, res) => {
         vendors = Array.from(map.values()).sort((a, b) => a.localeCompare(b));
     } catch (_) {}
 
+    let categories = DEFAULT_CATEGORIES;
+    try {
+        const rows = db.prepare('SELECT name FROM payable_categories ORDER BY name ASC').all();
+        if (rows && rows.length > 0) {
+            categories = Array.from(new Set([...DEFAULT_CATEGORIES, ...rows.map(r => r.name)]));
+        }
+    } catch (_) {}
+
     return res.json({
         success: true,
         banks: DEFAULT_BANKS,
-        categories: DEFAULT_CATEGORIES,
+        categories: categories,
         payable_categories: PAYABLE_CATEGORIES,
         companies: companies,
         vendors: vendors,

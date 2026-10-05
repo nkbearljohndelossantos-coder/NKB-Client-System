@@ -2632,13 +2632,14 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.strictEqual(addCompRes.body.success, true);
         assert.strictEqual(addCompRes.body.data.name, 'Alpha Bio Labs Philippines');
 
-        // 3. Meta endpoint contains 21 categories and 7 designated banks and 3 payable_categories
+        // 3. Meta endpoint contains 23 categories and 7 designated banks and 3 payable_categories
         const metaRes = await request(app)
             .get('/api/cheque-payables/meta')
             .set('Authorization', `Bearer ${acctToken}`);
         assert.strictEqual(metaRes.status, 200);
-        assert.strictEqual(metaRes.body.categories.length, 22);
+        assert.strictEqual(metaRes.body.categories.length, 23);
         assert.ok(metaRes.body.categories.includes('Office Encashment'));
+        assert.ok(metaRes.body.categories.includes('Credit Card'));
         assert.ok(metaRes.body.categories.includes('Contribution - SSS'));
         assert.ok(metaRes.body.categories.includes('Contribution - PhilHealth'));
         assert.ok(metaRes.body.categories.includes('Contribution - Pag-ibig'));
@@ -2647,6 +2648,21 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.ok(metaRes.body.categories.includes('City Hall Expenses'));
         assert.ok(metaRes.body.banks.length >= 7);
         assert.deepStrictEqual(metaRes.body.payable_categories, ['Trade Payable', 'Personal Expenses', 'Accrued Expenses']);
+
+        // 3b. Add dynamic expense category
+        const addCatRes = await request(app)
+            .post('/api/cheque-payables/categories')
+            .set('Authorization', `Bearer ${acctToken}`)
+            .send({ name: 'Equipment Maintenance' });
+        assert.strictEqual(addCatRes.status, 201);
+        assert.strictEqual(addCatRes.body.success, true);
+        assert.strictEqual(addCatRes.body.data.name, 'Equipment Maintenance');
+
+        // Verify dynamic category is returned in /meta
+        const metaUpdatedRes = await request(app)
+            .get('/api/cheque-payables/meta')
+            .set('Authorization', `Bearer ${acctToken}`);
+        assert.ok(metaUpdatedRes.body.categories.includes('Equipment Maintenance'));
 
         // 4. Create payable request matching reference image fields with editable date_created
         const createRes = await request(app)

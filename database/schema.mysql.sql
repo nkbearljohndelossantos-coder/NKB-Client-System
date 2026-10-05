@@ -626,6 +626,13 @@ CREATE TABLE IF NOT EXISTS payable_companies (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 32. Payable Categories
+CREATE TABLE IF NOT EXISTS payable_categories (
+    id VARCHAR(36) PRIMARY KEY,
+    name VARCHAR(255) UNIQUE NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- 25. Insert Initial Root Super Admin Account (Password: Admin123!)
 INSERT INTO users (id, name, email, password_hash, plain_password, role, is_active) VALUES
 ('a0000000-0000-0000-0000-000000000001', 'Executive Admin', 'admin@nkbmanufacturing.com', '$2b$10$jny3GQXy8GwL8vkYVtV4EeTH2QDo8tfg6hJO/vbpG3Xrwakfqgx2G', 'Admin123!', 'SUPER_ADMIN', 1)

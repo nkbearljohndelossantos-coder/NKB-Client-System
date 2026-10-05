@@ -289,6 +289,66 @@ function runMigrations(dbInstance, isMysql) {
             }
         } catch (_) {}
 
+        // Payable Categories Table (Cheque Payables Expense Categories)
+        if (isMysql) {
+            try {
+                dbInstance.exec(`
+                    CREATE TABLE IF NOT EXISTS payable_categories (
+                        id VARCHAR(36) PRIMARY KEY,
+                        name VARCHAR(255) UNIQUE NOT NULL,
+                        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    );
+                `);
+            } catch (_) {}
+        } else {
+            try {
+                dbInstance.exec(`
+                    CREATE TABLE IF NOT EXISTS payable_categories (
+                        id TEXT PRIMARY KEY,
+                        name TEXT UNIQUE NOT NULL,
+                        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+                    );
+                `);
+            } catch (_) {}
+        }
+
+        // Seed Default Payable Categories
+        try {
+            const defaultCategories = [
+                'Commission',
+                'Returned of Borrow Funds',
+                'Contribution - SSS',
+                'Contribution - PhilHealth',
+                'Contribution - Pag-ibig',
+                'BIR Tax Payment',
+                'City Hall Tax Payment',
+                'City Hall Expenses',
+                'Investment Payout',
+                'Marketing Expenses',
+                'Office Expenses',
+                'Office Encashment',
+                'Credit Card',
+                'Petty Cash',
+                'Raw Materials',
+                'Vehicle Payment',
+                'Salaries',
+                'TDF',
+                'TDF(COOP)',
+                'Personal Expenses',
+                'Repair Expenses',
+                'Construction',
+                'Insurance (Personal)'
+            ];
+            for (const cat of defaultCategories) {
+                const id = 'cat-' + uuidv4().slice(0, 8);
+                if (isMysql) {
+                    dbInstance.exec(`INSERT IGNORE INTO payable_categories (id, name) VALUES ('${id}', '${cat.replace(/'/g, "\\'")}');`);
+                } else {
+                    dbInstance.prepare(`INSERT OR IGNORE INTO payable_categories (id, name) VALUES (?, ?)`).run(id, cat);
+                }
+            }
+        } catch (_) {}
+
         // Payable Vendors Table (Cheque Payables Vendor Suggestions)
         if (isMysql) {
             try {

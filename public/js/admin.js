@@ -3442,6 +3442,8 @@ function renderPayablesRows(payablesList, currentTotal) {
         if (c.includes('trade')) bg = 'bg-emerald-50 text-emerald-800 border-emerald-300 font-bold';
         else if (c.includes('personal')) bg = 'bg-purple-50 text-purple-800 border-purple-300 font-bold';
         else if (c.includes('accrued')) bg = 'bg-amber-50 text-amber-800 border-amber-300 font-bold';
+        else if (c.includes('credit') || c.includes('card')) bg = 'bg-rose-50 text-rose-800 border-rose-300 font-bold';
+        else if (c.includes('encashment')) bg = 'bg-indigo-50 text-indigo-800 border-indigo-300 font-bold';
         else if (c.includes('material')) bg = 'bg-emerald-50 text-emerald-700 border-emerald-200';
         else if (c.includes('pack')) bg = 'bg-purple-50 text-purple-700 border-purple-200';
         else if (c.includes('util')) bg = 'bg-amber-50 text-amber-700 border-amber-200';
@@ -3817,6 +3819,7 @@ const DEFAULT_PAYABLE_CATEGORIES_LIST = [
     'Marketing Expenses',
     'Office Expenses',
     'Office Encashment',
+    'Credit Card',
     'Petty Cash',
     'Raw Materials',
     'Vehicle Payment',
@@ -4155,6 +4158,131 @@ async function openAddPayableVendorModal() {
             NKB.showToast('Server error adding vendor.', 'error');
             saveBtn.disabled = false;
             saveBtn.textContent = 'Save Vendor';
+        }
+    }
+
+    if (saveBtn) saveBtn.onclick = handleSave;
+    if (input) {
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                handleSave();
+            } else if (e.key === 'Escape') {
+                overlay.remove();
+            }
+        });
+    }
+}
+
+async function openAddPayableCategoryModal() {
+    const existing = document.getElementById('add-category-mini-modal');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'add-category-mini-modal';
+    overlay.className = 'fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[9999]';
+    overlay.innerHTML = `
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full p-5 space-y-4 border border-slate-200">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                <h4 class="text-sm font-bold text-slate-800">Add New Expense Category</h4>
+                <button type="button" onclick="document.getElementById('add-category-mini-modal').remove()" class="text-slate-400 hover:text-slate-600 text-lg font-bold leading-none cursor-pointer">&times;</button>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Category Name</label>
+                <input type="text" id="add-category-input" placeholder="e.g. Credit Card, Utilities, Maintenance" class="w-full h-9 px-3 border border-slate-300 rounded-lg text-sm text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                <p class="text-[11px] text-slate-400 mt-1">This category will be saved and available for all cheque payables.</p>
+            </div>
+            <div class="flex items-center justify-end gap-2 pt-2">
+                <button type="button" onclick="document.getElementById('add-category-mini-modal').remove()" class="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition cursor-pointer">Cancel</button>
+                <button type="button" id="btn-save-new-category" class="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg shadow-xs transition cursor-pointer">Save Category</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const input = document.getElementById('add-category-input');
+    const saveBtn = document.getElementById('btn-save-new-category');
+    if (input) input.focus();
+
+    async function handleSave() {
+        const catName = input?.value?.trim();
+        if (!catName) {
+            NKB.showToast('Please enter a category name.', 'warning');
+            return;
+        }
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+        try {
+            const res = await NKB.api('/api/cheque-payables/categories', {
+                method: 'POST',
+                body: JSON.stringify({ name: catName })
+            });
+            if (res.success) {
+                const newCat = res.data.name;
+                NKB.showToast(`Category "${newCat}" added successfully!`, 'success');
+                if (typeof cachedPayablesMeta !== 'undefined') {
+                    if (!cachedPayablesMeta.categories) cachedPayablesMeta.categories = [];
+                    if (!cachedPayablesMeta.categories.includes(newCat)) cachedPayablesMeta.categories.push(newCat);
+                }
+                if (window.cachedPayablesMeta) {
+                    if (!window.cachedPayablesMeta.categories) window.cachedPayablesMeta.categories = [];
+                    if (!window.cachedPayablesMeta.categories.includes(newCat)) window.cachedPayablesMeta.categories.push(newCat);
+                }
+                if (Array.isArray(DEFAULT_PAYABLE_CATEGORIES_LIST) && !DEFAULT_PAYABLE_CATEGORIES_LIST.includes(newCat)) {
+                    DEFAULT_PAYABLE_CATEGORIES_LIST.push(newCat);
+                }
+
+                // Append to all line item category selects currently rendered
+                const lineItemSelects = document.querySelectorAll('.payable-item-cat');
+                lineItemSelects.forEach(sel => {
+                    const exists = Array.from(sel.options).some(o => o.value.toLowerCase() === newCat.toLowerCase());
+                    if (!exists) {
+                        const opt = document.createElement('option');
+                        opt.value = newCat;
+                        opt.textContent = newCat;
+                        sel.appendChild(opt);
+                    }
+                });
+                // If there are line item selects, select the new category on the active/last row
+                if (lineItemSelects.length > 0) {
+                    lineItemSelects[lineItemSelects.length - 1].value = newCat;
+                }
+
+                // Also append to top payable category select if present
+                const topSelect = document.getElementById('req-payable-category-type');
+                if (topSelect) {
+                    const exists = Array.from(topSelect.options).some(o => o.value.toLowerCase() === newCat.toLowerCase());
+                    if (!exists) {
+                        const opt = document.createElement('option');
+                        opt.value = newCat;
+                        opt.textContent = newCat;
+                        topSelect.appendChild(opt);
+                    }
+                }
+
+                // Also append to category filter on the table
+                const filterSelect = document.getElementById('payables-category-filter');
+                if (filterSelect) {
+                    const exists = Array.from(filterSelect.options).some(o => o.value.toLowerCase() === newCat.toLowerCase());
+                    if (!exists) {
+                        const opt = document.createElement('option');
+                        opt.value = newCat;
+                        opt.textContent = newCat;
+                        filterSelect.appendChild(opt);
+                    }
+                }
+
+                overlay.remove();
+            } else {
+                NKB.showToast(res.error || 'Failed to add category.', 'error');
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Save Category';
+            }
+        } catch (err) {
+            console.error('Add category error:', err);
+            NKB.showToast('Server error adding category.', 'error');
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Save Category';
         }
     }
 
@@ -4523,7 +4651,10 @@ async function openRequestPayableModal(payableId = null) {
 
                         <!-- Row 2: Payable Category (spans 2 columns on desktop) -->
                         <div class="sm:col-span-1 lg:col-span-2">
-                            <label class="block text-[11px] sm:text-xs font-semibold text-slate-600 mb-1">Payable Category *</label>
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="text-[11px] sm:text-xs font-semibold text-slate-600">Payable Category *</label>
+                                <button type="button" onclick="openAddPayableCategoryModal()" class="text-[11px] sm:text-xs text-blue-600 hover:text-blue-800 font-bold hover:underline inline-flex items-center gap-0.5 cursor-pointer" title="Add New Expense Category">+ Add</button>
+                            </div>
                             <select id="req-payable-category-type" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-300 rounded-md sm:rounded-lg bg-white text-xs sm:text-sm font-semibold text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 cursor-pointer">
                                 ${PAYABLE_CATEGORIES_LIST.map(cat => {
                                     const isSel = (cp?.payable_category && cp.payable_category.toLowerCase() === cat.toLowerCase()) ||
@@ -4643,7 +4774,12 @@ async function openRequestPayableModal(payableId = null) {
                                 <thead>
                                     <tr class="bg-slate-50 border-b border-slate-300 text-slate-700 text-[11px] sm:text-xs font-semibold">
                                         <th class="py-2 px-2.5 sm:px-3">Description</th>
-                                        <th class="py-2 px-2.5 sm:px-3 w-48 sm:w-56">Expense Category</th>
+                                        <th class="py-2 px-2.5 sm:px-3 w-48 sm:w-56">
+                                            <div class="flex items-center justify-between">
+                                                <span>Expense Category</span>
+                                                <button type="button" onclick="openAddPayableCategoryModal()" class="text-[11px] sm:text-xs text-blue-600 hover:text-blue-800 font-bold hover:underline inline-flex items-center gap-0.5 cursor-pointer" title="Add New Expense Category">+ Add</button>
+                                            </div>
+                                        </th>
                                         <th class="py-2 px-2.5 sm:px-3 w-20 sm:w-24 text-center">Quantity</th>
                                         <th class="py-2 px-2.5 sm:px-3 w-28 sm:w-32 text-right">Cost</th>
                                         <th class="py-2 px-2.5 sm:px-3 w-28 sm:w-32 text-right">Subtotal</th>
@@ -13032,6 +13168,7 @@ window.handlePaymentAttachmentSelect = handlePaymentAttachmentSelect;
 window.clearPaymentAttachment = clearPaymentAttachment;
 window.openAddPayableVendorModal = openAddPayableVendorModal;
 window.openAddPayableCompanyModal = openAddPayableCompanyModal;
+window.openAddPayableCategoryModal = openAddPayableCategoryModal;
 window.togglePayableVendorDropdown = togglePayableVendorDropdown;
 window.selectPayableVendor = selectPayableVendor;
 window.onPayableVendorInput = onPayableVendorInput;
