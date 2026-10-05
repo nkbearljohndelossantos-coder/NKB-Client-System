@@ -53,6 +53,7 @@ const DEFAULT_CATEGORIES = [
     'Investment Payout',
     'Marketing Expenses',
     'Office Expenses',
+    'Office Encashment',
     'Petty Cash',
     'Raw Materials',
     'Vehicle Payment',

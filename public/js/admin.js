@@ -3816,6 +3816,7 @@ const DEFAULT_PAYABLE_CATEGORIES_LIST = [
     'Investment Payout',
     'Marketing Expenses',
     'Office Expenses',
+    'Office Encashment',
     'Petty Cash',
     'Raw Materials',
     'Vehicle Payment',

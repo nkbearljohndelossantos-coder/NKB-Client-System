@@ -2637,7 +2637,8 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
             .get('/api/cheque-payables/meta')
             .set('Authorization', `Bearer ${acctToken}`);
         assert.strictEqual(metaRes.status, 200);
-        assert.strictEqual(metaRes.body.categories.length, 21);
+        assert.strictEqual(metaRes.body.categories.length, 22);
+        assert.ok(metaRes.body.categories.includes('Office Encashment'));
         assert.ok(metaRes.body.categories.includes('Contribution - SSS'));
         assert.ok(metaRes.body.categories.includes('Contribution - PhilHealth'));
         assert.ok(metaRes.body.categories.includes('Contribution - Pag-ibig'));
