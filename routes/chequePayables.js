@@ -11,9 +11,15 @@ const { authenticateToken, requireRoles } = require('../middleware/auth');
 const { getNextDocumentNumber } = require('../services/documentNumberService');
 const { logAudit } = require('../services/auditService');
 const { saveAttachment } = require('../services/attachmentService');
-const { getManilaDate } = require('../helpers/timezone');
+const { getManilaDate, getManilaDateTime } = require('../helpers/timezone');
 
 const LIVE_API_KEY = process.env.INVENTORY_API_KEY || 'nkb_inv_live_6ae6965c1ca61aef54939d6b1ecfac1b';
+
+const PAYABLE_CATEGORIES = [
+    'Trade Payable',
+    'Personal Expenses',
+    'Accrued Expenses'
+];
 
 const DEFAULT_BANKS = [
     { id: 'ba-bdo-coop', name: 'BDO: Norvin Bella (COOP) - 0080-5801-0563', bank_name: 'BDO', account_name: 'Norvin Bella (COOP)', account_number: '0080-5801-0563', company: 'NKB Manufacturing Coorporation - COOP' },
@@ -512,6 +518,7 @@ router.get('/meta', authenticateToken, (req, res) => {
         success: true,
         banks: DEFAULT_BANKS,
         categories: DEFAULT_CATEGORIES,
+        payable_categories: PAYABLE_CATEGORIES,
         companies: companies,
         vendors: vendors,
         apiKey: LIVE_API_KEY
@@ -629,7 +636,9 @@ router.post('/', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER_A
             comments,
             attachment_url,
             attachment_data,
-            notes
+            notes,
+            created_at,
+            date_created
         } = req.body;
 
         const finalPayee = (payee_name || vendor || '').trim();
@@ -680,7 +689,7 @@ router.post('/', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER_A
             return res.status(400).json({ success: false, error: 'Bank used for cheque is required.' });
         }
 
-        const finalCategory = (category || (processedLineItems && processedLineItems[0]?.category) || 'Raw Materials').trim();
+        const finalCategory = (category || (processedLineItems && processedLineItems[0]?.category) || payable_category || 'Trade Payable').trim();
         const finalPurpose = (purpose || description || 'Payable Requisition').trim();
 
         const id = uuidv4();
@@ -722,6 +731,19 @@ router.post('/', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER_A
 
         const serializedItems = processedLineItems ? JSON.stringify(processedLineItems) : null;
 
+        // Process editable Date Created
+        let finalCreatedAt = getManilaDateTime();
+        const rawCreated = created_at || date_created;
+        if (rawCreated && String(rawCreated).trim()) {
+            const str = String(rawCreated).trim();
+            if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+                const nowTime = getManilaDateTime().split(' ')[1] || '00:00:00';
+                finalCreatedAt = `${str} ${nowTime}`;
+            } else {
+                finalCreatedAt = str;
+            }
+        }
+
         db.prepare(`
             INSERT INTO cheque_payables (
                 id, request_number, payee_name, amount, cheque_date, bank_name,
@@ -736,7 +758,7 @@ router.post('/', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER_A
                 ?, ?, ?, ?, ?, ?,
                 ?, ?, ?,
                 ?, ?, 'PENDING_COO_APPROVAL', ?,
-                ?, ?, ?, datetime('now', 'localtime'), datetime('now', 'localtime')
+                ?, ?, ?, ?, datetime('now', 'localtime')
             )
         `).run(
             id,
@@ -751,7 +773,7 @@ router.post('/', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER_A
             finalCategory,
             finalPurpose,
             company_name ? String(company_name).trim() : null,
-            payable_category ? String(payable_category).trim() : 'Trade payable',
+            payable_category ? String(payable_category).trim() : 'Trade Payable',
             invoice_number ? String(invoice_number).trim() : null,
             invoice_date ? String(invoice_date).trim() : null,
             terms ? String(terms).trim() : 'Net 30',
@@ -764,7 +786,8 @@ router.post('/', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER_A
             req.user.id,
             req.user.name || 'Accountant',
             fullNotes,
-            LIVE_API_KEY
+            LIVE_API_KEY,
+            finalCreatedAt
         );
 
         const createdRecord = db.prepare('SELECT * FROM cheque_payables WHERE id = ?').get(id);
@@ -865,7 +888,9 @@ router.put('/:id', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER
             notes,
             attachment_data,
             attachment_url,
-            attachment_removed
+            attachment_removed,
+            created_at,
+            date_created
         } = req.body;
 
         const finalPayee = (payee_name || vendor || item.payee_name || '').trim();
@@ -914,11 +939,23 @@ router.put('/:id', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER
 
         const finalSerializedItems = processedLineItems ? JSON.stringify(processedLineItems) : (line_items ? (typeof line_items === 'string' ? line_items : JSON.stringify(line_items)) : item.line_items);
         const finalPurpose = (purpose || description || item.purpose || '').trim();
-        const finalCategory = (category || (processedLineItems && processedLineItems[0]?.category) || item.category || 'Raw Materials').trim();
+        const finalCategory = (category || (processedLineItems && processedLineItems[0]?.category) || payable_category || item.category || 'Trade Payable').trim();
         const finalInvoiceRef = (invoice_number || invoice_reference || item.invoice_reference || item.invoice_number || '').trim();
         const finalChequeNum = cheque_number !== undefined
             ? (cheque_number ? String(cheque_number).trim() : null)
             : item.cheque_number;
+
+        let updateCreatedAt = null;
+        const rawCreated = created_at || date_created;
+        if (rawCreated && String(rawCreated).trim()) {
+            const str = String(rawCreated).trim();
+            if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+                const existingTime = (item.created_at && item.created_at.split(' ')[1]) || getManilaDateTime().split(' ')[1] || '00:00:00';
+                updateCreatedAt = `${str} ${existingTime}`;
+            } else {
+                updateCreatedAt = str;
+            }
+        }
 
         db.prepare(`
             UPDATE cheque_payables
@@ -941,6 +978,7 @@ router.put('/:id', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER
                 comments = COALESCE(?, comments),
                 attachment_url = ?,
                 invoice_reference = COALESCE(?, invoice_reference),
+                created_at = COALESCE(?, created_at),
                 updated_at = datetime('now', 'localtime')
             WHERE id = ?
         `).run(
@@ -963,6 +1001,7 @@ router.put('/:id', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER
             comments ? String(comments).trim() : null,
             savedAttachment,
             finalInvoiceRef || null,
+            updateCreatedAt,
             item.id
         );
 

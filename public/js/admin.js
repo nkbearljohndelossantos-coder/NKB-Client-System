@@ -3386,8 +3386,8 @@ async function loadPayables() {
 
         // Populate Category Filter Dropdown if needed
         const catSelect = document.getElementById('payables-category-filter');
-        if (catSelect && cachedPayablesMeta.categories && catSelect.options.length <= 1) {
-            cachedPayablesMeta.categories.forEach(cat => {
+        if (catSelect && catSelect.options.length <= 1) {
+            PAYABLE_CATEGORIES_LIST.forEach(cat => {
                 const opt = document.createElement('option');
                 opt.value = cat;
                 opt.textContent = cat;
@@ -3439,7 +3439,10 @@ function renderPayablesRows(payablesList, currentTotal) {
     const getCategoryBadge = (cat) => {
         const c = String(cat || '').toLowerCase();
         let bg = 'bg-slate-100 text-slate-700 border-slate-200';
-        if (c.includes('material')) bg = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+        if (c.includes('trade')) bg = 'bg-emerald-50 text-emerald-800 border-emerald-300 font-bold';
+        else if (c.includes('personal')) bg = 'bg-purple-50 text-purple-800 border-purple-300 font-bold';
+        else if (c.includes('accrued')) bg = 'bg-amber-50 text-amber-800 border-amber-300 font-bold';
+        else if (c.includes('material')) bg = 'bg-emerald-50 text-emerald-700 border-emerald-200';
         else if (c.includes('pack')) bg = 'bg-purple-50 text-purple-700 border-purple-200';
         else if (c.includes('util')) bg = 'bg-amber-50 text-amber-700 border-amber-200';
         else if (c.includes('rent')) bg = 'bg-blue-50 text-blue-700 border-blue-200';
@@ -3447,7 +3450,7 @@ function renderPayablesRows(payablesList, currentTotal) {
         else if (c.includes('maint') || c.includes('repair')) bg = 'bg-orange-50 text-orange-700 border-orange-200';
         else if (c.includes('freight') || c.includes('logist')) bg = 'bg-teal-50 text-teal-700 border-teal-200';
         else if (c.includes('tax')) bg = 'bg-rose-50 text-rose-700 border-rose-200';
-        return `<span class="px-2 py-0.5 rounded-md text-[10px] font-bold border ${bg} whitespace-nowrap">${cat || 'General'}</span>`;
+        return `<span class="px-2 py-0.5 rounded-md text-[10px] font-bold border ${bg} whitespace-nowrap">${cat || 'Trade Payable'}</span>`;
     };
 
     const getStatusBadge = (status) => {
@@ -3507,7 +3510,7 @@ function renderPayablesRows(payablesList, currentTotal) {
                     <div class="font-bold text-slate-900 leading-tight">${cp.payee_name}</div>
                     ${cp.invoice_reference ? `<div class="text-[10px] text-indigo-600 font-mono mt-0.5 font-semibold">Ref: ${cp.invoice_reference}</div>` : ''}
                 </td>
-                <td class="py-3.5 px-4">${getCategoryBadge(cp.category)}</td>
+                <td class="py-3.5 px-4">${getCategoryBadge(cp.payable_category || cp.category || 'Trade Payable')}</td>
                 <td class="py-3.5 px-4">
                     <div class="font-bold text-slate-800">${cp.bank_name || '—'}</div>
                     ${cp.bank_account_number ? `<div class="text-[10px] text-slate-400 font-mono">${cp.bank_account_number}</div>` : ''}
@@ -3589,7 +3592,9 @@ function filterPayablesTable() {
             matchesStatus = cp.status === status;
         }
 
-        const matchesCategory = !category || cp.category === category;
+        const matchesCategory = !category ||
+            (cp.payable_category && cp.payable_category.toLowerCase() === category.toLowerCase()) ||
+            (cp.category && cp.category.toLowerCase() === category.toLowerCase());
         const matchesBank = !bank || (cp.bank_name && cp.bank_name.toLowerCase().includes(bank));
         const matchesDateFrom = !dateFrom || cp.cheque_date >= dateFrom;
         const matchesDateTo = !dateTo || cp.cheque_date <= dateTo;
@@ -3792,6 +3797,12 @@ const PAYABLE_COMPANY_BANK_MAP = {
     'New Yra Enterprises': 'BDO: New Yra Enterprises - 0036-8801-3196',
     'NKB Cosmetic Products Trading': 'BDO: NKB Cosmetic Products Trading - 0105-4800-3245'
 };
+
+const PAYABLE_CATEGORIES_LIST = [
+    'Trade Payable',
+    'Personal Expenses',
+    'Accrued Expenses'
+];
 
 const DEFAULT_PAYABLE_CATEGORIES_LIST = [
     'Commission',
@@ -4322,14 +4333,15 @@ function addPayableItemRow(item = null) {
     if (!tbody) return;
 
     const desc = item ? (item.description || '') : '';
-    const cat = item ? (item.category || 'Raw Materials') : 'Raw Materials';
+    const cat = item ? (item.category || 'Trade Payable') : 'Trade Payable';
     const qty = item && item.quantity != null ? parseFloat(item.quantity) : 1;
     const cost = item && item.cost != null ? parseFloat(item.cost) : 0;
     const subtotal = qty * cost;
 
-    const categories = (cachedPayablesMeta?.categories?.length > 0)
+    const baseCategories = (cachedPayablesMeta?.categories?.length > 0)
         ? cachedPayablesMeta.categories
         : DEFAULT_PAYABLE_CATEGORIES_LIST;
+    const categories = Array.from(new Set([...PAYABLE_CATEGORIES_LIST, ...baseCategories]));
 
     const tr = document.createElement('tr');
     tr.className = 'border-b border-slate-200 hover:bg-slate-50/70 transition';
@@ -4436,21 +4448,15 @@ async function openRequestPayableModal(payableId = null) {
     const selectedCompany = cp?.company_name || companies[0];
     const defaultBankName = PAYABLE_COMPANY_BANK_MAP[selectedCompany] || banksList[0]?.bank_name || banksList[0]?.name;
 
-    // Formatting date created
-    let dateCreatedFormatted = today;
+    // Formatting date created for input (YYYY-MM-DD for editable date picker)
+    let dateCreatedInputVal = today;
     if (cp?.created_at) {
         try {
             const d = new Date(cp.created_at);
             if (!isNaN(d.getTime())) {
-                const mm = String(d.getMonth() + 1).padStart(2, '0');
-                const dd = String(d.getDate()).padStart(2, '0');
-                const yyyy = d.getFullYear();
-                dateCreatedFormatted = `${mm}/${dd}/${yyyy}`;
+                dateCreatedInputVal = cp.created_at.slice(0, 10);
             }
         } catch (_) {}
-    } else {
-        const parts = today.split('-');
-        if (parts.length === 3) dateCreatedFormatted = `${parts[1]}/${parts[2]}/${parts[0]}`;
     }
 
     const payableNumberDisplay = cp?.request_number || 'PB-Auto';
@@ -4502,10 +4508,10 @@ async function openRequestPayableModal(payableId = null) {
                             <input type="text" id="req-payable-check-no" value="${cp?.cheque_number || ''}" placeholder="e.g. 0004928172" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-300 rounded-md sm:rounded-lg bg-white text-xs sm:text-sm font-mono text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                         </div>
 
-                        <!-- Row 1: Date Created -->
+                        <!-- Row 1: Date Created (Editable) -->
                         <div>
-                            <label class="block text-[11px] sm:text-xs font-semibold text-slate-600 mb-1">Date Created</label>
-                            <input type="text" id="req-payable-created-date" readonly value="${dateCreatedFormatted}" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-200 rounded-md sm:rounded-lg bg-slate-50 text-xs sm:text-sm text-slate-600 font-medium cursor-not-allowed">
+                            <label class="block text-[11px] sm:text-xs font-semibold text-slate-600 mb-1">Date Created *</label>
+                            <input type="date" id="req-payable-created-date" value="${dateCreatedInputVal}" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-300 rounded-md sm:rounded-lg bg-white text-xs sm:text-sm font-medium text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 cursor-pointer" title="Editable Date Created">
                         </div>
 
                         <!-- Row 1: Payable Number (Blue label in reference) -->
@@ -4516,8 +4522,14 @@ async function openRequestPayableModal(payableId = null) {
 
                         <!-- Row 2: Payable Category (spans 2 columns on desktop) -->
                         <div class="sm:col-span-1 lg:col-span-2">
-                            <label class="block text-[11px] sm:text-xs font-semibold text-slate-600 mb-1">Payable Category</label>
-                            <input type="text" id="req-payable-category-type" value="${cp?.payable_category || 'Trade payable'}" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-300 rounded-md sm:rounded-lg bg-white text-xs sm:text-sm font-medium text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                            <label class="block text-[11px] sm:text-xs font-semibold text-slate-600 mb-1">Payable Category *</label>
+                            <select id="req-payable-category-type" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-300 rounded-md sm:rounded-lg bg-white text-xs sm:text-sm font-semibold text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 cursor-pointer">
+                                ${PAYABLE_CATEGORIES_LIST.map(cat => {
+                                    const isSel = (cp?.payable_category && cp.payable_category.toLowerCase() === cat.toLowerCase()) ||
+                                                  (!cp?.payable_category && cat === 'Trade Payable');
+                                    return `<option value="${cat}" ${isSel ? 'selected' : ''}>${cat}</option>`;
+                                }).join('')}
+                            </select>
                         </div>
 
                         <!-- Row 2: Invoice Date -->
@@ -4744,7 +4756,8 @@ async function submitRequestPayable(e) {
     const companyName = document.getElementById('req-payable-company')?.value;
     const chequeNumber = document.getElementById('req-payable-check-no')?.value?.trim() || null;
     const invoiceDate = document.getElementById('req-payable-invoice-date')?.value || null;
-    const payableCategory = document.getElementById('req-payable-category-type')?.value?.trim() || 'Trade payable';
+    const createdDate = document.getElementById('req-payable-created-date')?.value?.trim() || null;
+    const payableCategory = document.getElementById('req-payable-category-type')?.value?.trim() || 'Trade Payable';
     const payee = document.getElementById('req-payable-payee')?.value?.trim();
     const terms = document.getElementById('req-payable-terms')?.value || 'Net 30';
     const dueDate = document.getElementById('req-payable-due-date')?.value || null;
@@ -4764,7 +4777,7 @@ async function submitRequestPayable(e) {
     let calculatedTotal = 0;
     rows.forEach(r => {
         const desc = r.querySelector('.payable-item-desc')?.value?.trim() || '';
-        const cat = r.querySelector('.payable-item-cat')?.value || 'Raw Materials';
+        const cat = r.querySelector('.payable-item-cat')?.value || 'Trade Payable';
         const qty = parseFloat(r.querySelector('.payable-item-qty')?.value) || 0;
         const cost = parseFloat(r.querySelector('.payable-item-cost')?.value) || 0;
         const sub = qty * cost;
@@ -4790,6 +4803,8 @@ async function submitRequestPayable(e) {
             company_name: companyName,
             cheque_number: chequeNumber,
             invoice_date: invoiceDate,
+            created_at: createdDate || undefined,
+            date_created: createdDate || undefined,
             payable_category: payableCategory,
             payee_name: payee,
             vendor: payee,
@@ -4803,7 +4818,7 @@ async function submitRequestPayable(e) {
             comments: comments,
             line_items: lineItems,
             amount: calculatedTotal,
-            category: lineItems[0]?.category || 'Raw Materials',
+            category: payableCategory || lineItems[0]?.category || 'Trade Payable',
             attachment_data: currentPayableAttachmentBase64,
             attachment_url: currentPayableExistingAttachmentUrl,
             attachment_removed: currentPayableAttachmentRemoved

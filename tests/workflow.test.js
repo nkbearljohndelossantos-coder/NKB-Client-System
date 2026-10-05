@@ -2632,7 +2632,7 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.strictEqual(addCompRes.body.success, true);
         assert.strictEqual(addCompRes.body.data.name, 'Alpha Bio Labs Philippines');
 
-        // 3. Meta endpoint contains 21 categories and 7 designated banks
+        // 3. Meta endpoint contains 21 categories and 7 designated banks and 3 payable_categories
         const metaRes = await request(app)
             .get('/api/cheque-payables/meta')
             .set('Authorization', `Bearer ${acctToken}`);
@@ -2645,8 +2645,9 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.ok(metaRes.body.categories.includes('City Hall Tax Payment'));
         assert.ok(metaRes.body.categories.includes('City Hall Expenses'));
         assert.ok(metaRes.body.banks.length >= 7);
+        assert.deepStrictEqual(metaRes.body.payable_categories, ['Trade Payable', 'Personal Expenses', 'Accrued Expenses']);
 
-        // 4. Create payable request matching reference image fields
+        // 4. Create payable request matching reference image fields with editable date_created
         const createRes = await request(app)
             .post('/api/cheque-payables')
             .set('Authorization', `Bearer ${acctToken}`)
@@ -2655,10 +2656,11 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
                 vendor: 'MARK JOSEPH Q. REALUYO',
                 invoice_number: '239683',
                 invoice_date: '2026-09-25',
+                date_created: '2026-08-15',
                 control_number: '1993',
                 terms: 'Net 30',
                 due_date: '2026-10-25',
-                payable_category: 'Trade payable',
+                payable_category: 'Personal Expenses',
                 description: 'RAW MATERIALS',
                 bank_name: 'BDO: NKB Cosmetics Manufacturing - 0105-4800-4829',
                 bank_account_number: '0105-4800-4829',
@@ -2674,12 +2676,16 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.strictEqual(createRes.body.data.company_name, 'NKB Cosmetics Manufacturing');
         assert.strictEqual(createRes.body.data.invoice_number, '239683');
         assert.strictEqual(createRes.body.data.control_number, '1993');
+        assert.strictEqual(createRes.body.data.payable_category, 'Personal Expenses');
+        assert.ok(createRes.body.data.created_at.startsWith('2026-08-15'));
 
-        // 5. Update / Edit payable request (Editing Payable mode)
+        // 5. Update / Edit payable request (Editing Payable mode with editable date_created)
         const updateRes = await request(app)
             .put(`/api/cheque-payables/${payableId}`)
             .set('Authorization', `Bearer ${acctToken}`)
             .send({
+                date_created: '2026-08-20',
+                payable_category: 'Accrued Expenses',
                 line_items: [
                     { description: 'PERFUME BOTTLES 50ML', category: 'Raw Materials', quantity: 2, cost: 30000, subtotal: 60000 }
                 ],
@@ -2688,6 +2694,8 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.strictEqual(updateRes.status, 200);
         assert.strictEqual(updateRes.body.success, true);
         assert.strictEqual(parseFloat(updateRes.body.data.amount), 60000);
+        assert.strictEqual(updateRes.body.data.payable_category, 'Accrued Expenses');
+        assert.ok(updateRes.body.data.created_at.startsWith('2026-08-20'));
         assert.strictEqual(updateRes.body.data.comments, 'Updated check particulars with batch code');
 
         // Clean up
