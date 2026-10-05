@@ -1,6 +1,6 @@
 {
   "success": true,
-  "count": 61,
+  "count": 62,
   "batch_scaling": {
     "batch_size": 100,
     "uom": "kg"
@@ -11,9 +11,9 @@
       "formula_code": "FORM-2026-0088",
       "formula_name": "BACCARAT",
       "product_category": "Perfume Brand",
-      "active_version": "V1.0",
+      "active_version": "V2.0",
       "version_status": "APPROVED",
-      "compounding_code": "CP-0894",
+      "compounding_code": "CP-0995",
       "batch_size": 100,
       "batch_uom": "kg",
       "total_raw_materials_count": 6,
@@ -27,12 +27,12 @@
           "supplier": "LOYAL FAMILY"
         },
         {
-          "material_code": "RM-PEG40-01",
-          "material_name": "PEG40 - MEDMULS COH 40",
+          "material_code": "RM-PROCOL-HACHI",
+          "material_name": "PROPYLENE GLYCOL (HACHIMORI)",
           "category": "Cosmetic",
-          "required_quantity": 1,
+          "required_quantity": 3,
           "uom": "kg",
-          "supplier": "REDOLENCE"
+          "supplier": "HACHIMORI"
         },
         {
           "material_code": "PAR-BCT-0001",
@@ -43,12 +43,12 @@
           "supplier": "REDOLENCE"
         },
         {
-          "material_code": "RM-PROCOL-HACHI",
-          "material_name": "PROPYLENE GLYCOL (HACHIMORI)",
+          "material_code": "RM-PEG40-01",
+          "material_name": "PEG40 - MEDMULS COH 40",
           "category": "Cosmetic",
-          "required_quantity": 3,
+          "required_quantity": 1,
           "uom": "kg",
-          "supplier": "HACHIMORI"
+          "supplier": "REDOLENCE"
         },
         {
           "material_code": "RM-FIXATIVE-01",
@@ -3829,6 +3829,140 @@
           "required_quantity": 0.5,
           "uom": "kg",
           "supplier": "FW SPA"
+        }
+      ]
+    },
+    {
+      "formula_id": 81,
+      "formula_code": "FORM-2026-0091",
+      "formula_name": "GELIS GIDERM SUNSCREEN SPF50 3.0",
+      "product_category": "Cosmetic",
+      "active_version": "V1.0",
+      "version_status": "APPROVED",
+      "compounding_code": "CP-0999",
+      "batch_size": 100,
+      "batch_uom": "kg",
+      "total_raw_materials_count": 15,
+      "raw_materials_needed": [
+        {
+          "material_code": "MAT-WAT-01",
+          "material_name": "DE-IONIZED WATER",
+          "category": "Cosmetic",
+          "required_quantity": 77.9,
+          "uom": "kg",
+          "supplier": "MAYNILAD"
+        },
+        {
+          "material_code": "RM-DI-EDTA",
+          "material_name": "DISODIUM EDTA",
+          "category": "Cosmetic",
+          "required_quantity": 0.1,
+          "uom": "kg",
+          "supplier": "HACHIMORI"
+        },
+        {
+          "material_code": "RM-ULTREZ10",
+          "material_name": "ULTREZ-10 CARBOPOL",
+          "category": "Cosmetic",
+          "required_quantity": 0.5,
+          "uom": "kg",
+          "supplier": "CHEMICO"
+        },
+        {
+          "material_code": "RM-GLYCE-01",
+          "material_name": "GLYCERIN (CHEMREZ)",
+          "category": "Cosmetic",
+          "required_quantity": 2,
+          "uom": "kg",
+          "supplier": "CHEMREZ"
+        },
+        {
+          "material_code": "RM-ANATASE-01",
+          "material_name": "TiO2 (TITANIUM ANATASE)",
+          "category": "Cosmetic",
+          "required_quantity": 0.5,
+          "uom": "kg",
+          "supplier": "QUAD"
+        },
+        {
+          "material_code": "RM-OMC-01",
+          "material_name": "OMC  (CHEMICO)",
+          "category": "Cosmetic",
+          "required_quantity": 5,
+          "uom": "kg",
+          "supplier": "CHEMICO"
+        },
+        {
+          "material_code": "RM-PROCOL-01",
+          "material_name": "PROPYLENE GLYCOL (TRANSWORLD)",
+          "category": "Cosmetic",
+          "required_quantity": 3,
+          "uom": "kg",
+          "supplier": "TRANSWORLD"
+        },
+        {
+          "material_code": "RM-ELEM100-QUAD-01",
+          "material_name": "ELEM100 (DIMETHICONE 100CST - QUAD)",
+          "category": "Cosmetic",
+          "required_quantity": 2,
+          "uom": "kg",
+          "supplier": "QUAD"
+        },
+        {
+          "material_code": "RM-ISCA-PEG-01",
+          "material_name": "ISCAGUARD PEG",
+          "category": "Cosmetic",
+          "required_quantity": 0.8,
+          "uom": "kg",
+          "supplier": "CHEMICO"
+        },
+        {
+          "material_code": "RM-IHD-01",
+          "material_name": "IHD (ISOHEXADECANE)",
+          "category": "Cosmetic",
+          "required_quantity": 3,
+          "uom": "kg",
+          "supplier": "QUAD"
+        },
+        {
+          "material_code": "RM-CR50",
+          "material_name": "CR50  (SI01-2 TIO2 CR-50)",
+          "category": "Cosmetic",
+          "required_quantity": 1,
+          "uom": "kg",
+          "supplier": "CHEMICO"
+        },
+        {
+          "material_code": "RM-HARMONIE-SHEA",
+          "material_name": "HARMONIE SHEA BUTTER EMULSION",
+          "category": "Cosmetic",
+          "required_quantity": 2,
+          "uom": "kg",
+          "supplier": "CHEMICO"
+        },
+        {
+          "material_code": "RM-NOVEMER",
+          "material_name": "NOVEMER EC-2",
+          "category": "Cosmetic",
+          "required_quantity": 1,
+          "uom": "kg",
+          "supplier": "CHEMICO"
+        },
+        {
+          "material_code": "RM-SUNCATDE-01",
+          "material_name": "SUNCAT DE",
+          "category": "Cosmetic",
+          "required_quantity": 1,
+          "uom": "kg",
+          "supplier": "BRENNTAG"
+        },
+        {
+          "material_code": "RM-POL80-01",
+          "material_name": "POL80 (PRODUCT 39 AT - CHEMICO)",
+          "category": "Cosmetic",
+          "required_quantity": 0.2,
+          "uom": "kg",
+          "supplier": "CHEMICO"
         }
       ]
     },

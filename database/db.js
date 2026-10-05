@@ -1373,6 +1373,14 @@ function runMigrations(dbInstance, isMysql) {
             console.warn('Raw materials inventory init note:', rmErr.message);
         }
 
+        try {
+            // Seed / sync JLS Skin Essentials OPC perfume catalog (82 items, 79 pesos)
+            const { seedJlsPerfumes } = require('./seed-jls-perfumes');
+            seedJlsPerfumes(dbInstance);
+        } catch (jlsErr) {
+            console.warn('JLS perfumes catalog init note:', jlsErr.message);
+        }
+
         // Idempotent migration: Shift historical UTC timestamps in SQLite to Philippine Time (Asia/Manila, UTC+8)
         if (!isMysql) {
             try {
