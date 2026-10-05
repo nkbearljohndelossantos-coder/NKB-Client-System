@@ -31,48 +31,48 @@
             
             <div class="flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0">
                 <!-- Live Real-Time Synchronization Indicator -->
-                <div id="live-sync-indicator" class="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-950/70 text-emerald-400 border border-emerald-500/30 shadow-inner select-none transition-all" title="Live Real-Time Sync Active: Portal updates automatically">
-                    <span class="relative flex h-2 w-2">
+                <div id="live-sync-indicator" class="hidden sm:inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-950/70 text-emerald-400 border border-emerald-500/30 shadow-inner select-none transition-all whitespace-nowrap flex-shrink-0" title="Live Real-Time Sync Active: Portal updates automatically">
+                    <span class="relative flex h-2 w-2 flex-shrink-0">
                         <span id="live-sync-ping" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                         <span id="live-sync-dot" class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                     </span>
-                    <span id="live-sync-text">Live Sync</span>
-                    <span id="live-sync-count" class="px-1.5 py-0.2 text-[9px] font-mono rounded-full bg-emerald-900 text-emerald-200 border border-emerald-700/50">1 online</span>
+                    <span id="live-sync-text" class="hidden lg:inline whitespace-nowrap">Live Sync</span>
+                    <span id="live-sync-count" class="px-1.5 py-0.5 text-[9px] font-mono rounded-full bg-emerald-900 text-emerald-200 border border-emerald-700/50 whitespace-nowrap flex-shrink-0">1 online</span>
                 </div>
 
                 <!-- Contact Support Button (Header) -->
-                <button type="button" onclick="openContactSupportModal()" class="px-2 sm:px-3 py-1 sm:py-1.5 bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-white rounded-lg sm:rounded-xl text-xs font-bold transition flex items-center gap-1 border border-indigo-500/30 shadow-sm cursor-pointer" title="Send Online Inquiry or Message IT Support">
+                <button type="button" onclick="openContactSupportModal()" class="px-2 sm:px-3 py-1 sm:py-1.5 bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-white rounded-lg sm:rounded-xl text-xs font-bold transition flex items-center gap-1 border border-indigo-500/30 shadow-sm cursor-pointer flex-shrink-0" title="Send Online Inquiry or Message IT Support">
                     <span class="text-sm">💬</span>
                     <span class="hidden md:inline">Contact</span><span>Support</span>
                 </button>
 
                 <!-- GUEST HEADER ACTIONS (When browsing without an account) -->
-                <div id="guest-header-actions" class="hidden flex items-center gap-1.5 sm:gap-2">
-                    <button type="button" onclick="openCompanyLoginModal()" class="px-2 sm:px-3 py-1 sm:py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg sm:rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm shadow-indigo-600/30 cursor-pointer" title="Sign In for B2B Corporate Clients">
+                <div id="guest-header-actions" class="hidden flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                    <button type="button" onclick="openCompanyLoginModal()" class="px-2 sm:px-3 py-1 sm:py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg sm:rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm shadow-indigo-600/30 cursor-pointer flex-shrink-0" title="Sign In for B2B Corporate Clients">
                         <span>🏢</span><span class="hidden sm:inline">Company</span><span>Sign In</span>
                     </button>
                     <!-- LOG IN AS STAFF BUTTON (Upper Right Corner) -->
-                    <a href="/login" class="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black rounded-lg sm:rounded-xl text-xs transition flex items-center gap-1 shadow-md shadow-amber-500/20 whitespace-nowrap" title="Operations & Staff Sign In Portal">
+                    <a href="/login" class="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black rounded-lg sm:rounded-xl text-xs transition flex items-center gap-1 shadow-md shadow-amber-500/20 whitespace-nowrap flex-shrink-0" title="Operations & Staff Sign In Portal">
                         <span>🛡️</span><span class="hidden sm:inline">Log In as</span><span>Staff</span>
                     </a>
                 </div>
 
                 <!-- AUTHENTICATED HEADER ACTIONS (When logged in as company/staff) -->
-                <div id="auth-header-actions" class="flex items-center gap-1.5 sm:gap-2">
-                    <a href="/admin.html" id="link-admin-view" class="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 border border-slate-700 transition">
-                        <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                <div id="auth-header-actions" class="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                    <a href="/admin.html" id="link-admin-view" class="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 border border-slate-700 transition flex-shrink-0">
+                        <svg class="w-3.5 h-3.5 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                         <span>Operations View</span>
                     </a>
-                    <button id="btn-change-password" onclick="openClientChangePasswordModal()" class="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-amber-300 border border-slate-700 transition">
-                        <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
-                        <span class="hidden sm:inline">Change Password</span>
+                    <button id="btn-change-password" onclick="openClientChangePasswordModal()" class="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-amber-300 border border-slate-700 transition flex-shrink-0">
+                        <svg class="w-3.5 h-3.5 text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+                        <span class="hidden md:inline">Change Password</span>
                     </button>
-                    <div class="flex items-center gap-2 pl-2 border-l border-slate-800">
-                        <div class="text-right hidden sm:block">
-                            <div id="nav-company-name" class="text-xs font-semibold text-slate-200 leading-tight">ABC Cosmetics Trading</div>
-                            <div id="nav-user-name" class="text-[10px] text-slate-400 font-medium">Maria Santos</div>
+                    <div class="flex items-center gap-2 pl-2 border-l border-slate-800 flex-shrink-0">
+                        <div class="text-right hidden sm:flex flex-col items-end justify-center leading-tight max-w-[120px] lg:max-w-[160px] flex-shrink-0">
+                            <div id="nav-company-name" class="text-xs font-semibold text-slate-200 truncate w-full text-right">ABC Cosmetics Trading</div>
+                            <div id="nav-user-name" class="text-[10px] text-slate-400 font-medium truncate w-full text-right">Maria Santos</div>
                         </div>
-                        <button onclick="NKB.logout()" class="px-2 sm:px-2.5 py-1 bg-slate-800 hover:bg-rose-950/40 text-slate-300 hover:text-rose-300 border border-slate-700 hover:border-rose-700/50 rounded-lg text-xs font-medium transition cursor-pointer">
+                        <button onclick="NKB.logout()" class="px-2 sm:px-2.5 py-1 bg-slate-800 hover:bg-rose-950/40 text-slate-300 hover:text-rose-300 border border-slate-700 hover:border-rose-700/50 rounded-lg text-xs font-medium transition cursor-pointer flex-shrink-0">
                             Logout
                         </button>
                     </div>

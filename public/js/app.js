@@ -462,30 +462,31 @@ const NKB = {
         },
 
         injectHeaderControls: function() {
-            // Find user name container in navigation
-            const navUserContainer = document.querySelector('#nav-user-name')?.closest('.flex');
-            if (navUserContainer && !document.getElementById('btn-header-lock-screen')) {
-                const parent = navUserContainer.parentElement;
-                if (parent) {
-                    const lockBtn = document.createElement('button');
-                    lockBtn.id = 'btn-header-lock-screen';
-                    lockBtn.type = 'button';
-                    lockBtn.onclick = () => this.lock('manual');
-                    lockBtn.className = 'px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer shadow-2xs';
-                    lockBtn.title = 'Lock Screen (Alt+L)';
-                    lockBtn.innerHTML = `<span>🔒</span><span class="hidden sm:inline">Lock</span>`;
+            // If already present in markup, do not inject
+            if (document.getElementById('btn-header-lock-screen')) return;
 
-                    const settingsBtn = document.createElement('button');
-                    settingsBtn.id = 'btn-header-pin-settings';
-                    settingsBtn.type = 'button';
-                    settingsBtn.onclick = () => this.openSettingsModal();
-                    settingsBtn.className = 'p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 rounded-lg text-xs font-semibold transition flex items-center justify-center cursor-pointer shadow-2xs';
-                    settingsBtn.title = 'Sleep Timer & Security PIN Settings';
-                    settingsBtn.innerHTML = `<span>⚙️</span>`;
+            // Find user profile button container in navigation (avoid targeting inner elements of buttons)
+            const userProfileBtn = document.querySelector('#nav-user-name')?.closest('button');
+            const parent = userProfileBtn?.parentElement;
+            if (parent && !document.getElementById('btn-header-lock-screen')) {
+                const lockBtn = document.createElement('button');
+                lockBtn.id = 'btn-header-lock-screen';
+                lockBtn.type = 'button';
+                lockBtn.onclick = () => this.lock('manual');
+                lockBtn.className = 'px-2 sm:px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 rounded-lg text-xs font-semibold transition flex items-center gap-1 cursor-pointer flex-shrink-0';
+                lockBtn.title = 'Lock Screen (Alt+L)';
+                lockBtn.innerHTML = `<span>🔒</span><span class="hidden md:inline text-xs">Lock</span>`;
 
-                    parent.insertBefore(settingsBtn, navUserContainer);
-                    parent.insertBefore(lockBtn, navUserContainer);
-                }
+                const settingsBtn = document.createElement('button');
+                settingsBtn.id = 'btn-header-pin-settings';
+                settingsBtn.type = 'button';
+                settingsBtn.onclick = () => this.openSettingsModal();
+                settingsBtn.className = 'p-1 sm:px-1.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 rounded-lg text-xs font-semibold transition flex items-center justify-center cursor-pointer flex-shrink-0';
+                settingsBtn.title = 'Sleep Timer & Security PIN Settings';
+                settingsBtn.innerHTML = `<span>⚙️</span>`;
+
+                parent.insertBefore(lockBtn, userProfileBtn);
+                parent.insertBefore(settingsBtn, userProfileBtn);
             }
 
             // Also check Client view buttons
@@ -495,7 +496,7 @@ const NKB = {
                 lockBtn.id = 'btn-client-lock-screen';
                 lockBtn.type = 'button';
                 lockBtn.onclick = () => this.lock('manual');
-                lockBtn.className = 'inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 border border-slate-700 transition cursor-pointer';
+                lockBtn.className = 'inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 border border-slate-700 transition cursor-pointer flex-shrink-0';
                 lockBtn.title = 'Lock Screen (Alt+L)';
                 lockBtn.innerHTML = `<span>🔒</span><span class="hidden sm:inline">Lock</span>`;
 
@@ -1233,13 +1234,13 @@ const NKB = {
             if (!pill || !dot || !text) return;
 
             if (state === 'online') {
-                pill.className = 'hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-950/70 text-emerald-400 border border-emerald-500/30 shadow-inner select-none transition-all';
-                dot.className = 'relative inline-flex rounded-full h-2 w-2 bg-emerald-500';
+                pill.className = 'hidden sm:inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-950/70 text-emerald-400 border border-emerald-500/30 shadow-inner select-none transition-all whitespace-nowrap flex-shrink-0';
+                dot.className = 'relative inline-flex rounded-full h-2 w-2 bg-emerald-500 flex-shrink-0';
                 if (ping) ping.className = 'animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75';
                 text.textContent = 'Live Sync';
             } else {
-                pill.className = 'hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-950/70 text-amber-400 border border-amber-500/30 shadow-inner select-none transition-all';
-                dot.className = 'relative inline-flex rounded-full h-2 w-2 bg-amber-500';
+                pill.className = 'hidden sm:inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-950/70 text-amber-400 border border-amber-500/30 shadow-inner select-none transition-all whitespace-nowrap flex-shrink-0';
+                dot.className = 'relative inline-flex rounded-full h-2 w-2 bg-amber-500 flex-shrink-0';
                 if (ping) ping.className = 'hidden';
                 text.textContent = 'Reconnecting...';
             }
