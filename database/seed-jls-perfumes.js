@@ -267,13 +267,6 @@ function seedJlsPerfumes(dbInstance) {
     }
 }
 
-if (require.main === module) {
-    const path = require('path');
-    const db = require(path.join(__dirname, 'db'));
-    seedJlsPerfumes(db);
-    console.log('✅ JLS Perfumes seeded successfully via CLI.');
-}
-
 module.exports = {
     seedJlsPerfumes,
     JLS_PERFUMES,
