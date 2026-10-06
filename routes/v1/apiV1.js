@@ -12,6 +12,7 @@ const { getNextDocumentNumber } = require('../../services/documentNumberService'
 const { getOrderMaterialBreakdown } = require('../../services/formulationService');
 const { logAudit } = require('../../services/auditService');
 const { saveAttachment } = require('../../services/attachmentService');
+const { sendOutboundPayload } = require('../../services/outboundSyncService');
 
 // All v1 endpoints (except openapi.json and ping) require a valid API key
 router.use((req, res, next) => {
@@ -445,6 +446,72 @@ router.post('/orders', requireScope('orders:write'), (req, res) => {
     } catch (err) {
         return res.status(500).json({ success: false, error: err.message });
     }
+});
+
+/**
+ * PUT /api/v1/orders/:id
+ * Edit an existing Purchase Order via API
+ */
+router.put('/orders/:id', requireScope(['orders:write', 'data:receive']), (req, res) => {
+    try {
+        const order = db.prepare('SELECT * FROM purchase_orders WHERE id = ? OR po_number = ?').get(req.params.id, req.params.id);
+        if (!order) {
+            return res.status(404).json({ success: false, error: 'ORDER_NOT_FOUND', message: 'Purchase Order not found.' });
+        }
+
+        // If API key is tied to a client, verify ownership
+        if (req.clientId && order.client_id !== req.clientId) {
+            return res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Access denied to this purchase order.' });
+        }
+
+        const { expected_delivery_date, tolerance_percent, billing_policy, notes, form_of_payment, status } = req.body;
+
+        db.prepare(`
+            UPDATE purchase_orders
+            SET expected_delivery_date = COALESCE(?, expected_delivery_date),
+                tolerance_percent = COALESCE(?, tolerance_percent),
+                billing_policy = COALESCE(?, billing_policy),
+                notes = COALESCE(?, notes),
+                form_of_payment = COALESCE(?, form_of_payment),
+                status = COALESCE(?, status),
+                updated_at = datetime('now', 'localtime')
+            WHERE id = ?
+        `).run(
+            expected_delivery_date || null,
+            tolerance_percent !== undefined ? parseFloat(tolerance_percent) : null,
+            billing_policy || null,
+            notes || null,
+            form_of_payment || null,
+            status || null,
+            order.id
+        );
+
+        const updated = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(order.id);
+        const items = db.prepare('SELECT * FROM purchase_order_items WHERE po_id = ?').all(order.id);
+        updated.items = items;
+
+        logAudit({
+            userId: req.apiKey.userId || 'system',
+            userName: req.apiKey.name,
+            userRole: 'API',
+            action: 'API_UPDATE_ORDER',
+            entityType: 'ORDER',
+            entityId: order.po_number,
+            details: { poNumber: order.po_number, updatedFields: req.body }
+        });
+
+        return res.json({
+            success: true,
+            message: `Purchase Order ${order.po_number} updated successfully.`,
+            data: updated
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+router.patch('/orders/:id', requireScope(['orders:write', 'data:receive']), (req, res) => {
+    return router.handle(Object.assign(req, { method: 'PUT' }), res);
 });
 
 /**
@@ -1025,6 +1092,451 @@ router.post('/payables', requireScope('payables:write'), (req, res) => {
         });
     } catch (err) {
         return res.status(400).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * PUT /api/v1/payables/:id
+ * Edit an existing cheque payable record
+ */
+router.put('/payables/:id', requireScope(['payables:write', 'data:receive']), (req, res) => {
+    try {
+        const item = db.prepare('SELECT * FROM cheque_payables WHERE id = ? OR request_number = ?').get(req.params.id, req.params.id);
+        if (!item) {
+            return res.status(404).json({ success: false, error: 'NOT_FOUND', message: 'Cheque payable record not found.' });
+        }
+
+        const {
+            payee_name,
+            amount,
+            cheque_date,
+            bank_name,
+            bank_account_number,
+            bank_account_id,
+            cheque_number,
+            category,
+            purpose,
+            company_name,
+            payable_category,
+            invoice_reference,
+            invoice_number,
+            line_items,
+            comments,
+            notes,
+            coo_notes,
+            attachment_url,
+            attachment_data
+        } = req.body;
+
+        const numAmount = amount !== undefined ? parseFloat(amount) : item.amount;
+        if (isNaN(numAmount) || numAmount <= 0) {
+            return res.status(400).json({ success: false, error: 'INVALID_AMOUNT', message: 'Amount must be greater than 0.' });
+        }
+
+        let savedAttachment = item.attachment_url;
+        if (attachment_data || attachment_url) {
+            savedAttachment = saveAttachment(attachment_data || attachment_url, 'payables');
+        }
+
+        const stringifiedLineItems = line_items !== undefined
+            ? (typeof line_items === 'string' ? line_items : JSON.stringify(line_items))
+            : item.line_items;
+
+        db.prepare(`
+            UPDATE cheque_payables
+            SET payee_name = COALESCE(?, payee_name),
+                amount = ?,
+                cheque_date = COALESCE(?, cheque_date),
+                bank_name = COALESCE(?, bank_name),
+                bank_account_number = COALESCE(?, bank_account_number),
+                bank_account_id = COALESCE(?, bank_account_id),
+                cheque_number = COALESCE(?, cheque_number),
+                category = COALESCE(?, category),
+                purpose = COALESCE(?, purpose),
+                company_name = COALESCE(?, company_name),
+                payable_category = COALESCE(?, payable_category),
+                invoice_reference = COALESCE(?, invoice_reference),
+                invoice_number = COALESCE(?, invoice_number),
+                line_items = ?,
+                comments = COALESCE(?, comments),
+                coo_notes = COALESCE(?, coo_notes),
+                attachment_url = ?,
+                updated_at = datetime('now', 'localtime')
+            WHERE id = ?
+        `).run(
+            payee_name ? String(payee_name).trim() : null,
+            numAmount,
+            cheque_date || null,
+            bank_name ? String(bank_name).trim() : null,
+            bank_account_number || null,
+            bank_account_id || null,
+            cheque_number || null,
+            category ? String(category).trim() : null,
+            purpose ? String(purpose).trim() : null,
+            company_name ? String(company_name).trim() : null,
+            payable_category ? String(payable_category).trim() : null,
+            invoice_reference || null,
+            invoice_number || null,
+            stringifiedLineItems,
+            comments || notes || null,
+            coo_notes || null,
+            savedAttachment,
+            item.id
+        );
+
+        const updated = db.prepare('SELECT * FROM cheque_payables WHERE id = ?').get(item.id);
+
+        logAudit({
+            userId: req.apiKey.userId || 'system',
+            userName: req.apiKey.name,
+            userRole: 'API',
+            action: 'API_UPDATE_CHEQUE_PAYABLE',
+            entityType: 'PAYABLE',
+            entityId: item.request_number,
+            details: { requestNumber: item.request_number, updatedFields: req.body }
+        });
+
+        return res.json({
+            success: true,
+            message: `Cheque payable ${item.request_number} updated successfully.`,
+            data: updated
+        });
+    } catch (err) {
+        return res.status(400).json({ success: false, error: err.message });
+    }
+});
+
+router.patch('/payables/:id', requireScope(['payables:write', 'data:receive']), (req, res) => {
+    return router.handle(Object.assign(req, { method: 'PUT' }), res);
+});
+
+// =========================================================================
+// API 1: INBOUND DATA MANAGEMENT (RECEIVING & EDITING DATA)
+// =========================================================================
+
+/**
+ * POST /api/v1/data/receive
+ * Inbound API to ingest, sync, and create/update datasets from external platforms
+ */
+router.post('/data/receive', requireScope('data:receive'), (req, res) => {
+    try {
+        const { entity, mode = 'CREATE', data } = req.body;
+        if (!entity || !data) {
+            return res.status(400).json({
+                success: false,
+                error: 'MISSING_PAYLOAD',
+                message: 'Both entity and data are required in the payload.'
+            });
+        }
+
+        const records = Array.isArray(data) ? data : [data];
+        const results = [];
+        const normalizedEntity = String(entity).toLowerCase().trim();
+
+        if (normalizedEntity === 'payables') {
+            for (const r of records) {
+                if (mode.toUpperCase() === 'UPDATE' && (r.id || r.request_number)) {
+                    const existing = db.prepare('SELECT id FROM cheque_payables WHERE id = ? OR request_number = ?').get(r.id, r.request_number);
+                    if (existing) {
+                        db.prepare(`
+                            UPDATE cheque_payables
+                            SET payee_name = COALESCE(?, payee_name),
+                                amount = COALESCE(?, amount),
+                                cheque_date = COALESCE(?, cheque_date),
+                                bank_name = COALESCE(?, bank_name),
+                                cheque_number = COALESCE(?, cheque_number),
+                                category = COALESCE(?, category),
+                                purpose = COALESCE(?, purpose),
+                                status = COALESCE(?, status),
+                                updated_at = datetime('now', 'localtime')
+                            WHERE id = ?
+                        `).run(r.payee_name || null, r.amount ? parseFloat(r.amount) : null, r.cheque_date || null, r.bank_name || null, r.cheque_number || null, r.category || null, r.purpose || null, r.status || null, existing.id);
+                        results.push(db.prepare('SELECT * FROM cheque_payables WHERE id = ?').get(existing.id));
+                        continue;
+                    }
+                }
+                const id = r.id || uuidv4();
+                const reqNum = r.request_number || getNextDocumentNumber('CHQ');
+                db.prepare(`
+                    INSERT INTO cheque_payables (
+                        id, request_number, payee_name, amount, cheque_date, bank_name,
+                        bank_account_number, cheque_number, category, purpose,
+                        invoice_reference, status, requested_by, requested_by_name,
+                        api_key_used, created_at, updated_at
+                    ) VALUES (
+                        ?, ?, ?, ?, ?, ?,
+                        ?, ?, ?, ?,
+                        ?, COALESCE(?, 'PENDING_COO_APPROVAL'), ?, ?,
+                        ?, datetime('now', 'localtime'), datetime('now', 'localtime')
+                    )
+                `).run(
+                    id, reqNum, String(r.payee_name || 'Vendor').trim(), parseFloat(r.amount || 0),
+                    r.cheque_date || new Date().toISOString().split('T')[0], String(r.bank_name || 'BDO').trim(),
+                    r.bank_account_number || null, r.cheque_number || null,
+                    String(r.category || 'Trade Payable').trim(), String(r.purpose || 'Disbursement').trim(),
+                    r.invoice_reference || null, r.status || null,
+                    req.apiKey.userId || 'system', req.apiKey.name || 'Inbound API',
+                    req.apiKey.name || 'Inbound API'
+                );
+                results.push(db.prepare('SELECT * FROM cheque_payables WHERE id = ?').get(id));
+            }
+        } else if (normalizedEntity === 'materials' || normalizedEntity === 'inventory') {
+            for (const r of records) {
+                if (!r.material_code) continue;
+                const existing = db.prepare('SELECT id FROM raw_materials_inventory WHERE material_code = ?').get(r.material_code);
+                if (existing) {
+                    db.prepare(`
+                        UPDATE raw_materials_inventory
+                        SET material_name = COALESCE(?, material_name),
+                            current_stock = COALESCE(?, current_stock),
+                            unit_cost = COALESCE(?, unit_cost),
+                            unit = COALESCE(?, unit),
+                            minimum_stock_level = COALESCE(?, minimum_stock_level),
+                            status = COALESCE(?, status),
+                            location = COALESCE(?, location),
+                            updated_at = datetime('now', 'localtime')
+                        WHERE id = ?
+                    `).run(
+                        r.material_name || null,
+                        r.current_stock !== undefined ? parseFloat(r.current_stock) : null,
+                        r.unit_cost !== undefined ? parseFloat(r.unit_cost) : null,
+                        r.unit || null,
+                        r.minimum_stock_level !== undefined ? parseFloat(r.minimum_stock_level) : null,
+                        r.status || null,
+                        r.location || null,
+                        existing.id
+                    );
+                    results.push(db.prepare('SELECT * FROM raw_materials_inventory WHERE id = ?').get(existing.id));
+                } else {
+                    const id = r.id || uuidv4();
+                    db.prepare(`
+                        INSERT INTO raw_materials_inventory (
+                            id, material_code, material_name, category, supplier,
+                            current_stock, unit, minimum_stock_level, unit_cost, location,
+                            status, created_at, updated_at
+                        ) VALUES (
+                            ?, ?, ?, ?, ?,
+                            ?, ?, ?, ?, ?,
+                            ?, datetime('now', 'localtime'), datetime('now', 'localtime')
+                        )
+                    `).run(
+                        id, r.material_code, r.material_name || r.material_code, r.category || 'Active Ingredients', r.supplier || null,
+                        parseFloat(r.current_stock || 0), r.unit || 'kg', parseFloat(r.minimum_stock_level || 10), parseFloat(r.unit_cost || 0), r.location || 'Warehouse Zone A',
+                        r.status || 'IN_STOCK'
+                    );
+                    results.push(db.prepare('SELECT * FROM raw_materials_inventory WHERE id = ?').get(id));
+                }
+            }
+        } else if (normalizedEntity === 'orders') {
+            for (const r of records) {
+                if (!r.client_id) continue;
+                const id = r.id || uuidv4();
+                const poNumber = r.po_number || getNextDocumentNumber('PO');
+                const soNumber = r.so_number || poNumber.replace('PO-', 'SO-');
+                db.prepare(`
+                    INSERT INTO purchase_orders (
+                        id, po_number, so_number, client_id, expected_delivery_date,
+                        tolerance_percent, billing_policy, form_of_payment, notes,
+                        status, subtotal, tax_amount, grand_total, created_by,
+                        created_at, updated_at
+                    ) VALUES (
+                        ?, ?, ?, ?, ?,
+                        ?, ?, ?, ?,
+                        ?, ?, ?, ?, ?,
+                        datetime('now', 'localtime'), datetime('now', 'localtime')
+                    )
+                `).run(
+                    id, poNumber, soNumber, r.client_id, r.expected_delivery_date || null,
+                    parseFloat(r.tolerance_percent || 10), r.billing_policy || 'ACTUAL_DELIVERY', r.form_of_payment || 'COD / Bank Transfer', r.notes || 'Inbound API',
+                    r.status || 'PENDING_APPROVAL', parseFloat(r.subtotal || 0), parseFloat(r.tax_amount || 0), parseFloat(r.grand_total || 0), req.apiKey.userId || 'system'
+                );
+                results.push(db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id));
+            }
+        } else {
+            return res.status(400).json({
+                success: false,
+                error: 'UNSUPPORTED_ENTITY',
+                message: `Entity '${entity}' is not supported for Inbound API. Use 'payables', 'materials', or 'orders'.`
+            });
+        }
+
+        logAudit({
+            userId: req.apiKey.userId || 'system',
+            userName: req.apiKey.name,
+            userRole: 'API',
+            action: 'API_INBOUND_DATA_RECEIVE',
+            entityType: entity.toUpperCase(),
+            entityId: `${results.length}_records`,
+            details: { mode, processedCount: results.length }
+        });
+
+        return res.status(200).json({
+            success: true,
+            entity: normalizedEntity,
+            mode,
+            processedCount: results.length,
+            data: results
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * PUT /api/v1/data/edit/:entity/:id
+ * Inbound API to edit an existing entity by ID
+ */
+router.put('/data/edit/:entity/:id', requireScope('data:receive'), (req, res) => {
+    try {
+        const { entity, id } = req.params;
+        const normalizedEntity = String(entity).toLowerCase().trim();
+
+        if (normalizedEntity === 'payables') {
+            return router.handle(Object.assign(req, { url: `/payables/${id}`, method: 'PUT' }), res);
+        } else if (normalizedEntity === 'orders') {
+            return router.handle(Object.assign(req, { url: `/orders/${id}`, method: 'PUT' }), res);
+        } else if (normalizedEntity === 'materials' || normalizedEntity === 'inventory') {
+            const item = db.prepare('SELECT * FROM raw_materials_inventory WHERE id = ? OR material_code = ?').get(id, id);
+            if (!item) {
+                return res.status(404).json({ success: false, error: 'MATERIAL_NOT_FOUND', message: 'Raw material record not found.' });
+            }
+            const { material_name, current_stock, unit_cost, minimum_stock_level, location, status, unit } = req.body;
+            db.prepare(`
+                UPDATE raw_materials_inventory
+                SET material_name = COALESCE(?, material_name),
+                    current_stock = COALESCE(?, current_stock),
+                    unit_cost = COALESCE(?, unit_cost),
+                    minimum_stock_level = COALESCE(?, minimum_stock_level),
+                    location = COALESCE(?, location),
+                    status = COALESCE(?, status),
+                    unit = COALESCE(?, unit),
+                    updated_at = datetime('now', 'localtime')
+                WHERE id = ?
+            `).run(
+                material_name || null,
+                current_stock !== undefined ? parseFloat(current_stock) : null,
+                unit_cost !== undefined ? parseFloat(unit_cost) : null,
+                minimum_stock_level !== undefined ? parseFloat(minimum_stock_level) : null,
+                location || null,
+                status || null,
+                unit || null,
+                item.id
+            );
+            const updated = db.prepare('SELECT * FROM raw_materials_inventory WHERE id = ?').get(item.id);
+            return res.json({ success: true, message: `Material ${item.material_code} updated successfully.`, data: updated });
+        } else {
+            return res.status(400).json({ success: false, error: 'UNSUPPORTED_ENTITY', message: `Editing entity '${entity}' is not supported.` });
+        }
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+router.patch('/data/edit/:entity/:id', requireScope('data:receive'), (req, res) => {
+    return router.handle(Object.assign(req, { method: 'PUT' }), res);
+});
+
+// =========================================================================
+// API 2: OUTBOUND DATA MANAGEMENT (SENDING & STREAMING DATA)
+// =========================================================================
+
+/**
+ * POST /api/v1/data/send
+ * Outbound API to transmit/dispatch data payloads to an external target URL or webhook
+ */
+router.post('/data/send', requireScope('data:send'), async (req, res) => {
+    try {
+        const { targetUrl, event = 'DATA_PUSH', entity = 'OPERATIONAL', data, headers = {}, secret = null } = req.body;
+        if (!targetUrl) {
+            return res.status(400).json({
+                success: false,
+                error: 'MISSING_TARGET_URL',
+                message: 'targetUrl is required in the outbound transmission request.'
+            });
+        }
+        if (data === undefined) {
+            return res.status(400).json({
+                success: false,
+                error: 'MISSING_DATA',
+                message: 'data payload is required.'
+            });
+        }
+
+        const result = await sendOutboundPayload({
+            targetUrl,
+            event,
+            entity,
+            data,
+            headers,
+            secret
+        });
+
+        return res.status(result.success ? 200 : 502).json({
+            success: result.success,
+            transmitted: result.success,
+            targetUrl,
+            statusCode: result.statusCode,
+            durationMs: result.durationMs,
+            responseData: result.responseData,
+            error: result.error || null
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * GET /api/v1/data/export/:entity
+ * Outbound API for external systems to pull and synchronize latest data updates
+ */
+router.get('/data/export/:entity', requireScope('data:send'), (req, res) => {
+    try {
+        const { entity } = req.params;
+        const { since, limit = 50, status } = req.query;
+        const maxLimit = Math.min(200, Math.max(1, parseInt(limit, 10) || 50));
+
+        let table;
+        const norm = String(entity).toLowerCase().trim();
+        if (norm === 'payables') table = 'cheque_payables';
+        else if (norm === 'orders') table = 'purchase_orders';
+        else if (norm === 'deliveries') table = 'delivery_receipts';
+        else if (norm === 'invoices') table = 'sales_invoices';
+        else if (norm === 'materials' || norm === 'inventory') table = 'raw_materials_inventory';
+        else if (norm === 'products') table = 'products';
+        else {
+            return res.status(400).json({
+                success: false,
+                error: 'INVALID_ENTITY',
+                message: `Entity '${entity}' is not exportable. Supported: payables, orders, deliveries, invoices, materials, products.`
+            });
+        }
+
+        let query = `SELECT * FROM ${table} WHERE 1=1`;
+        const params = [];
+
+        if (since) {
+            query += ` AND updated_at >= ?`;
+            params.push(since);
+        }
+        if (status) {
+            query += ` AND status = ?`;
+            params.push(status);
+        }
+
+        query += ` ORDER BY updated_at DESC LIMIT ?`;
+        params.push(maxLimit);
+
+        const records = db.prepare(query).all(...params);
+
+        return res.json({
+            success: true,
+            entity: norm,
+            count: records.length,
+            timestamp: new Date().toISOString(),
+            data: records
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
     }
 });
 

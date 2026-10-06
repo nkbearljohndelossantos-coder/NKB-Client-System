@@ -3963,6 +3963,172 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.ok(summaryRes.body.summaryText.includes('NKB ACTION REQUIRED SUMMARY'));
     });
 
+    test('88. Two-Way Integration APIs: Inbound Data Receiving & Editing API and Outbound Data Sending & Export API', async () => {
+        const http = require('http');
+
+        // Step 1: Create an API key with data:receive and data:send scopes
+        const keyRes = await request(app)
+            .post('/api/api-keys')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                name: 'Two-Way Integration Sync Key',
+                scopes: ['data:receive', 'data:send', 'payables:read', 'payables:write'],
+                rateLimitRpm: 100
+            });
+        assert.strictEqual(keyRes.status, 201);
+        const apiKey = keyRes.body.rawKey;
+
+        // Step 2: Test API 1 - Inbound Receiving (POST /api/v1/data/receive) for raw materials
+        const receiveMatRes = await request(app)
+            .post('/api/v1/data/receive')
+            .set('x-api-key', apiKey)
+            .send({
+                entity: 'materials',
+                mode: 'CREATE',
+                data: [{
+                    material_code: 'RM-INT-TEST-001',
+                    material_name: 'Organic Aloe Vera Extract',
+                    category: 'Botanical Extracts',
+                    current_stock: 150.5,
+                    unit_cost: 45.0,
+                    unit: 'kg',
+                    location: 'Warehouse Bay 3'
+                }]
+            });
+        assert.strictEqual(receiveMatRes.status, 200);
+        assert.strictEqual(receiveMatRes.body.success, true);
+        assert.strictEqual(receiveMatRes.body.processedCount, 1);
+        assert.strictEqual(receiveMatRes.body.data[0].material_code, 'RM-INT-TEST-001');
+
+        // Step 3: Test API 1 - Inbound Editing (PUT /api/v1/data/edit/materials/:id)
+        const editMatRes = await request(app)
+            .put('/api/v1/data/edit/materials/RM-INT-TEST-001')
+            .set('x-api-key', apiKey)
+            .send({
+                material_name: 'Organic Aloe Vera Extract (Ultra Pure)',
+                current_stock: 200.0,
+                unit_cost: 48.5
+            });
+        assert.strictEqual(editMatRes.status, 200);
+        assert.strictEqual(editMatRes.body.success, true);
+        assert.strictEqual(editMatRes.body.data.current_stock, 200.0);
+        assert.strictEqual(editMatRes.body.data.material_name, 'Organic Aloe Vera Extract (Ultra Pure)');
+
+        // Step 4: Test API 1 - Inbound Receiving for Payables (POST /api/v1/data/receive)
+        const receivePayableRes = await request(app)
+            .post('/api/v1/data/receive')
+            .set('x-api-key', apiKey)
+            .send({
+                entity: 'payables',
+                mode: 'CREATE',
+                data: {
+                    payee_name: 'Apex Packaging Supplies Co.',
+                    amount: 35000.0,
+                    cheque_date: '2026-10-15',
+                    bank_name: 'BDO Unibank',
+                    category: 'Packaging Materials',
+                    purpose: 'Custom Cosmetic Bottles Batch 88'
+                }
+            });
+        assert.strictEqual(receivePayableRes.status, 200);
+        assert.strictEqual(receivePayableRes.body.success, true);
+        const createdPayable = receivePayableRes.body.data[0];
+        assert.ok(createdPayable.id);
+        assert.strictEqual(createdPayable.payee_name, 'Apex Packaging Supplies Co.');
+
+        // Step 5: Test API 1 - Inbound Editing for Payables (PUT /api/v1/payables/:id)
+        const editPayableRes = await request(app)
+            .put(`/api/v1/payables/${createdPayable.id}`)
+            .set('x-api-key', apiKey)
+            .send({
+                amount: 38500.0,
+                notes: 'Adjusted for additional expedited freight fee'
+            });
+        assert.strictEqual(editPayableRes.status, 200);
+        assert.strictEqual(editPayableRes.body.success, true);
+        assert.strictEqual(editPayableRes.body.data.amount, 38500.0);
+
+        // Step 6: Test API 2 - Outbound Export / Stream (GET /api/v1/data/export/:entity)
+        const exportRes = await request(app)
+            .get('/api/v1/data/export/payables?limit=10')
+            .set('x-api-key', apiKey);
+        assert.strictEqual(exportRes.status, 200);
+        assert.strictEqual(exportRes.body.success, true);
+        assert.ok(Array.isArray(exportRes.body.data));
+        assert.ok(exportRes.body.count > 0);
+        assert.ok(exportRes.body.data.some(p => p.payee_name === 'Apex Packaging Supplies Co.'));
+
+        // Step 7: Test API 2 - Outbound Dispatch (POST /api/v1/data/send)
+        // Missing targetUrl -> 400
+        const badSendRes = await request(app)
+            .post('/api/v1/data/send')
+            .set('x-api-key', apiKey)
+            .send({ data: { message: 'hello' } });
+        assert.strictEqual(badSendRes.status, 400);
+        assert.strictEqual(badSendRes.body.error, 'MISSING_TARGET_URL');
+
+        // Missing data -> 400
+        const badDataSendRes = await request(app)
+            .post('/api/v1/data/send')
+            .set('x-api-key', apiKey)
+            .send({ targetUrl: 'http://localhost:9999/webhook' });
+        assert.strictEqual(badDataSendRes.status, 400);
+        assert.strictEqual(badDataSendRes.body.error, 'MISSING_DATA');
+
+        // Spin up a mock external webhook destination
+        let receivedWebhook = null;
+        let receivedSig = null;
+        const mockServer = http.createServer((req, res) => {
+            receivedSig = req.headers['x-nkb-signature'];
+            let body = '';
+            req.on('data', chunk => { body += chunk; });
+            req.on('end', () => {
+                try {
+                    receivedWebhook = JSON.parse(body);
+                } catch (_) {
+                    receivedWebhook = body;
+                }
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ ack: true, receivedAt: Date.now() }));
+            });
+        });
+
+        await new Promise(resolve => mockServer.listen(0, resolve));
+        const mockPort = mockServer.address().port;
+        const mockUrl = `http://127.0.0.1:${mockPort}/erp/webhook`;
+
+        try {
+            const sendRes = await request(app)
+                .post('/api/v1/data/send')
+                .set('x-api-key', apiKey)
+                .send({
+                    targetUrl: mockUrl,
+                    event: 'PAYABLE_SYNC',
+                    entity: 'PAYABLE',
+                    secret: 'super-secret-sync-key',
+                    data: {
+                        request_number: createdPayable.request_number,
+                        amount: 38500.0,
+                        status: 'PENDING_COO_APPROVAL'
+                    }
+                });
+
+            assert.strictEqual(sendRes.status, 200);
+            assert.strictEqual(sendRes.body.success, true);
+            assert.strictEqual(sendRes.body.transmitted, true);
+            assert.ok(sendRes.body.durationMs >= 0);
+            assert.strictEqual(sendRes.body.responseData.ack, true);
+
+            // Assert webhook received payload and signature
+            assert.ok(receivedWebhook);
+            assert.strictEqual(receivedWebhook.event, 'PAYABLE_SYNC');
+            assert.strictEqual(receivedWebhook.payload.amount, 38500.0);
+            assert.ok(receivedSig, 'x-nkb-signature header must be present on HMAC signed dispatch');
+        } finally {
+            await new Promise(resolve => mockServer.close(resolve));
+        }
+    });
+
     after(() => {
         try {
             realtimeSyncService.closeAllClients();

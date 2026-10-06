@@ -18,7 +18,9 @@ const AVAILABLE_SCOPES = [
     { id: 'orders:write', name: 'Create Orders', description: 'Create and submit purchase orders programmatically from external eCommerce or ERP' },
     { id: 'deliveries:read', name: 'Read Deliveries', description: 'Track delivery receipts (DRs), dispatch status, drivers, and client acceptance' },
     { id: 'invoices:read', name: 'Read Invoices', description: 'View sales invoices, balances, due dates, and payment history' },
-    { id: 'inventory:read', name: 'Read Inventory & BOM', description: 'Access finished stock levels, raw material pull requirements, and compounding breakdown' }
+    { id: 'inventory:read', name: 'Read Inventory & BOM', description: 'Access finished stock levels, raw material pull requirements, and compounding breakdown' },
+    { id: 'data:receive', name: 'Receive & Edit Inbound Data', description: 'Ingest new records, update datasets, and edit operational entities via Inbound API' },
+    { id: 'data:send', name: 'Send & Dispatch Outbound Data', description: 'Trigger transmissions, stream outbound exports, and dispatch data to external endpoints' }
 ];
 
 /**

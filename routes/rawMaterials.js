@@ -63,9 +63,9 @@ router.get('/', authenticateToken, (req, res) => {
     } else if (sortMode === 'MOST_CRITICAL') {
         query += ` ORDER BY CASE status WHEN 'OUT_OF_STOCK' THEN 1 WHEN 'LOW_STOCK' THEN 2 ELSE 3 END, (CAST(current_stock AS REAL) / CASE WHEN COALESCE(minimum_stock_level, 0) <= 0 THEN 1 ELSE minimum_stock_level END) ASC, COALESCE(is_fast_moving, 0) DESC, material_name ASC`;
     } else if (sortMode === 'ALPHABETICAL_ASC' || sortMode === 'ALPHABETICAL') {
-        query += ` ORDER BY material_name COLLATE NOCASE ASC, material_code ASC`;
+        query += ` ORDER BY LOWER(material_name) ASC, material_code ASC`;
     } else if (sortMode === 'ALPHABETICAL_DESC') {
-        query += ` ORDER BY material_name COLLATE NOCASE DESC, material_code ASC`;
+        query += ` ORDER BY LOWER(material_name) DESC, material_code ASC`;
     } else if (sortMode === 'CODE_ASC') {
         query += ` ORDER BY material_code ASC`;
     } else if (sortMode === 'STOCK_LOW') {

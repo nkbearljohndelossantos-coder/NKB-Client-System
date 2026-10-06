@@ -627,6 +627,11 @@ function closeClientModal() {
         closeContactSupportModal();
         return;
     }
+    const drModal = document.getElementById('modal-dr-accept');
+    if (drModal) {
+        drModal.remove();
+        return;
+    }
     const dynamicModals = document.querySelectorAll('#client-modals-root > div:not(#modal-google-verify):not(#modal-company-login):not(#modal-contact-support)');
     if (dynamicModals.length > 0) {
         dynamicModals.forEach(m => m.remove());
@@ -980,9 +985,13 @@ async function openClientDRAcceptModal(drId) {
     }
     const dr = res.data;
 
-    const root = document.getElementById('client-modals-root');
-    root.innerHTML = `
-        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50 overflow-y-auto">
+    const existingModal = document.getElementById('modal-dr-accept');
+    if (existingModal) existingModal.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'modal-dr-accept';
+    overlay.className = 'fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50 overflow-y-auto';
+    overlay.innerHTML = `
             <div class="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl space-y-6 my-8">
                 <div class="flex justify-between items-center border-b border-slate-100 pb-4">
                     <div>
@@ -1067,15 +1076,10 @@ async function openClientDRAcceptModal(drId) {
                     </div>
                 </form>
             </div>
-        </div>
     `;
+    document.body.appendChild(overlay);
 
     setupSignatureCanvas();
-}
-
-function closeClientModal() {
-    const root = document.getElementById('client-modals-root');
-    if (root) root.innerHTML = '';
 }
 
 function setupSignatureCanvas() {

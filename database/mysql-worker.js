@@ -57,6 +57,9 @@ async function createPoolWithFallback() {
                 multipleStatements: true
             });
             const conn = await testPool.getConnection();
+            try {
+                await conn.query("SET SESSION sql_mode = CONCAT_WS(',', @@sql_mode, 'PIPES_AS_CONCAT')");
+            } catch (_) {}
             conn.release();
             return testPool;
         } catch (err) {

@@ -5754,6 +5754,7 @@ async function printSingleChequeVoucher(payableId) {
 async function loadBufferStock() {
     const res = await NKB.api('/api/buffer-stock');
     const tbody = document.getElementById('table-buffer-body');
+    if (!tbody) return;
 
     if (res.success && res.data && res.data.length > 0) {
         tbody.innerHTML = res.data.map(bs => `
@@ -6214,75 +6215,6 @@ async function openClientPricingModal(clientId, companyName) {
     `;
 
     await loadClientPricingData(clientId);
-}
-
-function toggleAssignMasterProductForm() {
-    const box = document.getElementById('box-assign-master-product');
-    const boxNew = document.getElementById('box-create-client-product');
-    if (boxNew) boxNew.classList.add('hidden');
-    if (box) box.classList.toggle('hidden');
-}
-
-function toggleAddClientProductForm() {
-    const box = document.getElementById('box-create-client-product');
-    const boxAssign = document.getElementById('box-assign-master-product');
-    if (boxAssign) boxAssign.classList.add('hidden');
-    if (box) box.classList.toggle('hidden');
-}
-
-function onSelectMasterProductToAssign() {
-    const select = document.getElementById('assign-master-select');
-    const selectedOption = select.options[select.selectedIndex];
-    if (!selectedOption || !selectedOption.value) return;
-
-    const name = selectedOption.getAttribute('data-name') || '';
-    const sku = selectedOption.getAttribute('data-sku') || '';
-    const formula = selectedOption.getAttribute('data-formula') || '';
-    const price = selectedOption.getAttribute('data-price') || '';
-
-    const nameInput = document.getElementById('assign-custom-name');
-    const skuInput = document.getElementById('assign-custom-sku');
-    const formulaInput = document.getElementById('assign-custom-formula');
-    const priceInput = document.getElementById('assign-custom-price');
-
-    if (nameInput) nameInput.value = name;
-    if (skuInput) skuInput.value = sku;
-    if (formulaInput) formulaInput.value = formula;
-    if (priceInput) priceInput.value = price && !isNaN(price) ? parseFloat(price).toFixed(2) : '';
-}
-
-async function submitAssignMasterProduct(e, clientId) {
-    e.preventDefault();
-    const product_id = document.getElementById('assign-master-select').value;
-    const custom_name = document.getElementById('assign-custom-name').value;
-    const custom_sku = document.getElementById('assign-custom-sku').value;
-    const custom_formula_code = document.getElementById('assign-custom-formula').value;
-    const custom_price = parseFloat(document.getElementById('assign-custom-price').value);
-
-    if (!product_id) {
-        NKB.showToast('Please select a master product.', 'error');
-        return;
-    }
-
-    const res = await NKB.api(`/api/clients/${clientId}/pricing`, {
-        method: 'POST',
-        body: JSON.stringify({
-            product_id,
-            custom_name,
-            custom_sku,
-            custom_formula_code,
-            custom_price,
-            is_assigned: 1
-        })
-    });
-
-    if (res.success) {
-        NKB.showToast('Product successfully assigned to client!', 'success');
-        toggleAssignMasterProductForm();
-        await loadClientPricingData(clientId);
-    } else {
-        NKB.showToast(res.error || 'Failed to assign product.', 'error');
-    }
 }
 
 async function loadClientPricingData(clientId) {

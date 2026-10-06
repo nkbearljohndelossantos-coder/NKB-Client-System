@@ -19,6 +19,15 @@ function translateSql(sql) {
         /strftime\s*\(\s*'%Y-%m'\s*,\s*([a-zA-Z_][\w.]*)\s*\)/gi,
         "DATE_FORMAT($1, '%Y-%m')"
     );
+    translated = translated.replace(
+        /strftime\s*\(\s*'%s'\s*,\s*'now'(?:\s*,\s*'localtime')?\s*\)/gi,
+        'UNIX_TIMESTAMP(NOW())'
+    );
+    translated = translated.replace(
+        /strftime\s*\(\s*'%s'\s*,\s*([a-zA-Z_][\w.]*)\s*\)/gi,
+        'UNIX_TIMESTAMP($1)'
+    );
+    translated = translated.replace(/\bCOLLATE\s+NOCASE\b/gi, '');
     translated = translated.replace(/INSERT\s+OR\s+IGNORE\s+INTO/gi, 'INSERT IGNORE INTO');
 
     if (/INSERT\s+OR\s+REPLACE\s+INTO/i.test(translated)) {

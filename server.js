@@ -46,9 +46,27 @@ app.use((req, res, next) => {
     // Only parse if method is POST, PUT, PATCH, DELETE
     if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
         let rawData = '';
+        let bytesReceived = 0;
+        const MAX_BODY_BYTES = 50 * 1024 * 1024; // 50MB ceiling for high-res attachments / batch operations
+        let exceeded = false;
+
         req.setEncoding('utf8');
-        req.on('data', chunk => { rawData += chunk; });
+        req.on('data', chunk => {
+            if (exceeded) return;
+            bytesReceived += Buffer.byteLength(chunk);
+            if (bytesReceived > MAX_BODY_BYTES) {
+                exceeded = true;
+                req.pause();
+                return res.status(413).json({
+                    success: false,
+                    error: 'PAYLOAD_TOO_LARGE',
+                    message: 'Request payload exceeds 50MB ceiling.'
+                });
+            }
+            rawData += chunk;
+        });
         req.on('end', () => {
+            if (exceeded) return;
             req.rawBody = rawData;
             if (rawData && rawData.trim()) {
                 const trimmed = rawData.trim();
@@ -111,7 +129,12 @@ app.get('/favicon.ico', (req, res) => {
 
 // Testing Web Portal
 app.get(['/test', '/qa'], (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'test.html'));
+    const testFile = path.join(__dirname, 'public', 'test.html');
+    if (fs.existsSync(testFile)) {
+        res.sendFile(testFile);
+    } else {
+        res.redirect('/admin.html');
+    }
 });
 
 // COO Mobile Approval Web App

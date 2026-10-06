@@ -64,15 +64,16 @@ function requireScope(scopeName) {
         }
 
         const scopes = req.apiKey.scopes || [];
+        const requiredList = Array.isArray(scopeName) ? scopeName : [scopeName];
         const hasScope = scopes.includes('*') || 
                          scopes.includes('admin:all') || 
-                         scopes.includes(scopeName);
+                         requiredList.some(s => scopes.includes(s));
 
         if (!hasScope) {
             return res.status(403).json({
                 success: false,
                 error: 'INSUFFICIENT_SCOPE',
-                message: `This API endpoint requires the '${scopeName}' permission scope.`,
+                message: `This API endpoint requires one of the following permission scopes: ${requiredList.join(', ')}.`,
                 assignedScopes: scopes
             });
         }

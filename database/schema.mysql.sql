@@ -633,10 +633,91 @@ CREATE TABLE IF NOT EXISTS payable_categories (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 25. Insert Initial Root Super Admin Account (Password: Admin123!)
+-- 33. Payable Vendors Table
+CREATE TABLE IF NOT EXISTS payable_vendors (
+    id VARCHAR(36) PRIMARY KEY,
+    name VARCHAR(255) UNIQUE NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 34. Product Categories Table
+CREATE TABLE IF NOT EXISTS product_categories (
+    id VARCHAR(36) PRIMARY KEY,
+    name VARCHAR(255) UNIQUE NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 35. Company Bank Accounts Table
+CREATE TABLE IF NOT EXISTS bank_accounts (
+    id VARCHAR(36) PRIMARY KEY,
+    bank_name VARCHAR(100) NOT NULL,
+    account_number VARCHAR(100) NOT NULL,
+    account_name VARCHAR(255) NOT NULL,
+    account_type VARCHAR(50) DEFAULT 'Checking',
+    current_balance DECIMAL(14,4) NOT NULL DEFAULT 0.00,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_ba_bank (bank_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 36. Client Payment Submissions Table
+CREATE TABLE IF NOT EXISTS client_payment_submissions (
+    id VARCHAR(36) PRIMARY KEY,
+    submission_number VARCHAR(50) UNIQUE NOT NULL,
+    invoice_id VARCHAR(36) NOT NULL,
+    client_id VARCHAR(36) NOT NULL,
+    amount DECIMAL(14,4) NOT NULL,
+    payment_method VARCHAR(50) NOT NULL,
+    bank_name VARCHAR(100) NULL,
+    check_number VARCHAR(100) NULL,
+    check_date VARCHAR(50) NULL,
+    reference_number VARCHAR(100) NULL,
+    attachment_url TEXT NULL,
+    notes TEXT NULL,
+    status ENUM('PENDING_REVIEW', 'APPROVED', 'REJECTED') NOT NULL DEFAULT 'PENDING_REVIEW',
+    reviewed_by VARCHAR(36) NULL,
+    reviewed_at VARCHAR(50) NULL,
+    rejection_reason TEXT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_cps_status (status),
+    INDEX idx_cps_invoice (invoice_id),
+    INDEX idx_cps_client (client_id),
+    CONSTRAINT fk_cps_invoice FOREIGN KEY (invoice_id) REFERENCES sales_invoices(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_cps_client FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 37. Warehouse Raw Materials Inventory Table
+CREATE TABLE IF NOT EXISTS raw_materials_inventory (
+    id VARCHAR(36) PRIMARY KEY,
+    material_code VARCHAR(100) UNIQUE NOT NULL,
+    material_name VARCHAR(255) NOT NULL,
+    category VARCHAR(100) NOT NULL DEFAULT 'Active Ingredients',
+    supplier VARCHAR(255) NULL,
+    current_stock DECIMAL(14,4) NOT NULL DEFAULT 0.0000,
+    unit VARCHAR(50) NOT NULL DEFAULT 'kg',
+    minimum_stock_level DECIMAL(14,4) NOT NULL DEFAULT 10.0000,
+    unit_cost DECIMAL(14,4) NOT NULL DEFAULT 0.0000,
+    location VARCHAR(100) DEFAULT 'Warehouse Zone A',
+    batch_lot_number VARCHAR(100) NULL,
+    expiry_date VARCHAR(50) NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'IN_STOCK',
+    is_fast_moving TINYINT(1) DEFAULT 0,
+    issuance_count INT DEFAULT 0,
+    notes TEXT NULL,
+    updated_by VARCHAR(36) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_rmi_code (material_code),
+    INDEX idx_rmi_category (category),
+    INDEX idx_rmi_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 38. Insert Initial Root Super Admin Account (Password: Admin123!)
 INSERT INTO users (id, name, email, password_hash, plain_password, role, is_active) VALUES
 ('a0000000-0000-0000-0000-000000000001', 'Executive Admin', 'admin@nkbmanufacturing.com', '$2b$10$jny3GQXy8GwL8vkYVtV4EeTH2QDo8tfg6hJO/vbpG3Xrwakfqgx2G', 'Admin123!', 'SUPER_ADMIN', 1)
-ON DUPLICATE KEY UPDATE email = VALUES(email);
-ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash), plain_password = VALUES(plain_password), updated_at = CURRENT_TIMESTAMP;
+ON DUPLICATE KEY UPDATE email = VALUES(email), password_hash = VALUES(password_hash), plain_password = VALUES(plain_password), updated_at = CURRENT_TIMESTAMP;
 
 SET FOREIGN_KEY_CHECKS = 1;
+

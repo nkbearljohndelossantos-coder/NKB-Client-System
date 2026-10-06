@@ -131,11 +131,11 @@ const TABLE_DEFINITIONS = {
         icon: '💳',
         tableName: 'payments',
         primaryKey: 'id',
-        displayField: 'payment_reference',
-        searchFields: ['payment_reference', 'payment_method', 'status', 'notes'],
+        displayField: 'payment_number',
+        searchFields: ['payment_number', 'payment_method', 'reference_number', 'notes', 'bank_name', 'check_number'],
         editableColumns: [
-            'invoice_id', 'client_id', 'amount', 'payment_method',
-            'payment_reference', 'status', 'notes', 'payment_date'
+            'invoice_id', 'client_id', 'payment_number', 'amount', 'payment_method',
+            'reference_number', 'notes', 'payment_date', 'check_number', 'bank_name'
         ],
         joins: `
             LEFT JOIN clients c ON payments.client_id = c.id
@@ -148,12 +148,12 @@ const TABLE_DEFINITIONS = {
         icon: '💵',
         tableName: 'cheque_payables',
         primaryKey: 'id',
-        displayField: 'voucher_number',
-        searchFields: ['voucher_number', 'payee_name', 'company', 'cheque_number', 'status', 'expense_category'],
+        displayField: 'request_number',
+        searchFields: ['request_number', 'payee_name', 'company_name', 'cheque_number', 'status', 'category', 'purpose'],
         editableColumns: [
-            'voucher_number', 'payee_name', 'company', 'amount',
-            'bank_id', 'bank_name', 'cheque_number', 'issue_date',
-            'due_date', 'status', 'expense_category', 'description'
+            'request_number', 'payee_name', 'company_name', 'amount',
+            'bank_account_id', 'bank_name', 'cheque_number', 'cheque_date',
+            'due_date', 'status', 'category', 'purpose', 'invoice_reference', 'coo_notes'
         ],
         joins: '',
         selectFields: 'cheque_payables.*'
@@ -191,16 +191,17 @@ const TABLE_DEFINITIONS = {
     raw_materials: {
         label: 'Raw Materials & Stock',
         icon: '🌿',
-        tableName: 'raw_materials',
+        tableName: 'raw_materials_inventory',
         primaryKey: 'id',
         displayField: 'material_name',
-        searchFields: ['material_code', 'material_name', 'category'],
+        searchFields: ['material_code', 'material_name', 'category', 'supplier', 'location', 'batch_lot_number'],
         editableColumns: [
-            'material_code', 'material_name', 'category', 'current_stock',
-            'unit', 'minimum_stock_level', 'unit_cost'
+            'material_code', 'material_name', 'category', 'supplier',
+            'batch_lot_number', 'expiry_date', 'current_stock', 'unit',
+            'minimum_stock_level', 'unit_cost', 'location', 'status'
         ],
         joins: '',
-        selectFields: 'raw_materials.*'
+        selectFields: 'raw_materials_inventory.*'
     },
     users: {
         label: 'Staff & System Accounts',
@@ -297,7 +298,7 @@ router.get('/lookups', ...authorizeITAdmin, (req, res) => {
                     delivery_receipts: ['DRAFT', 'DISPATCHED', 'PENDING_CLIENT_ACCEPTANCE', 'ACCEPTED', 'INVOICED', 'REJECTED', 'CANCELLED'],
                     sales_invoices: ['DRAFT', 'ISSUED', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'CANCELLED'],
                     payments: ['PENDING', 'VERIFIED', 'REJECTED', 'CANCELLED'],
-                    cheque_payables: ['PENDING_COO', 'CONFIRMED_COO', 'RELEASED', 'CLEARED', 'CANCELLED', 'REJECTED'],
+                    cheque_payables: ['PENDING_COO_APPROVAL', 'CONFIRMED', 'ISSUED', 'CLEARED', 'REJECTED', 'VOIDED'],
                     users: ['SUPER_ADMIN', 'IT_ADMIN', 'ADMIN', 'CEO', 'QC', 'PURCHASING', 'PRODUCTION', 'WAREHOUSE', 'ACCOUNTING', 'INVENTORY', 'CLIENT'],
                     api_keys: ['ACTIVE', 'REVOKED', 'EXPIRED']
                 }

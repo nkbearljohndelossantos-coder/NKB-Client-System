@@ -773,7 +773,7 @@ router.post('/', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER_A
         try {
             const bankAcc = db.prepare(`
                 SELECT id, current_balance FROM bank_accounts 
-                WHERE is_active = 1 AND (LOWER(bank_name) LIKE LOWER(?) OR LOWER(?) LIKE '%' || LOWER(bank_name) || '%')
+                WHERE is_active = 1 AND (LOWER(bank_name) LIKE LOWER(?) OR INSTR(LOWER(?), LOWER(bank_name)) > 0)
                 LIMIT 1
             `).get(`%${bank_name}%`, bank_name);
             if (bankAcc) {
@@ -1230,7 +1230,7 @@ router.post('/:id/clear', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN',
         try {
             const bankAcc = db.prepare(`
                 SELECT id, current_balance FROM bank_accounts 
-                WHERE is_active = 1 AND (LOWER(bank_name) LIKE LOWER(?) OR LOWER(?) LIKE '%' || LOWER(bank_name) || '%')
+                WHERE is_active = 1 AND (LOWER(bank_name) LIKE LOWER(?) OR INSTR(LOWER(?), LOWER(bank_name)) > 0)
                 LIMIT 1
             `).get(`%${item.bank_name}%`, item.bank_name);
             if (bankAcc) {

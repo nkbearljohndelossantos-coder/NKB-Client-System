@@ -29,20 +29,20 @@ router.get('/', authenticateToken, (req, res) => {
             const payments = db.prepare(`
                 SELECT COALESCE(SUM(amount), 0) as total_inflows, COUNT(*) as inflow_count
                 FROM payments
-                WHERE LOWER(bank_name) LIKE LOWER(?) OR LOWER(?) LIKE '%' || LOWER(bank_name) || '%'
+                WHERE LOWER(bank_name) LIKE LOWER(?) OR INSTR(LOWER(?), LOWER(bank_name)) > 0
             `).get(`%${acc.bank_name}%`, acc.bank_name);
 
             const cheques = db.prepare(`
                 SELECT COALESCE(SUM(amount), 0) as total_outflows, COUNT(*) as outflow_count
                 FROM cheque_payables
-                WHERE (LOWER(bank_name) LIKE LOWER(?) OR LOWER(?) LIKE '%' || LOWER(bank_name) || '%')
+                WHERE (LOWER(bank_name) LIKE LOWER(?) OR INSTR(LOWER(?), LOWER(bank_name)) > 0)
                   AND status IN ('CONFIRMED', 'ISSUED', 'CLEARED')
             `).get(`%${acc.bank_name}%`, acc.bank_name);
 
             const pendingCheques = db.prepare(`
                 SELECT COALESCE(SUM(amount), 0) as pending_outflows, COUNT(*) as pending_count
                 FROM cheque_payables
-                WHERE (LOWER(bank_name) LIKE LOWER(?) OR LOWER(?) LIKE '%' || LOWER(bank_name) || '%')
+                WHERE (LOWER(bank_name) LIKE LOWER(?) OR INSTR(LOWER(?), LOWER(bank_name)) > 0)
                   AND status = 'PENDING_COO_APPROVAL'
             `).get(`%${acc.bank_name}%`, acc.bank_name);
 
@@ -99,7 +99,7 @@ router.get('/:id/ledger', authenticateToken, (req, res) => {
                 p.created_at
             FROM payments p
             JOIN clients c ON p.client_id = c.id
-            WHERE LOWER(p.bank_name) LIKE LOWER(?) OR LOWER(?) LIKE '%' || LOWER(p.bank_name) || '%'
+            WHERE LOWER(p.bank_name) LIKE LOWER(?) OR INSTR(LOWER(?), LOWER(p.bank_name)) > 0
         `).all(`%${account.bank_name}%`, account.bank_name);
 
         const cheques = db.prepare(`
@@ -116,7 +116,7 @@ router.get('/:id/ledger', authenticateToken, (req, res) => {
                 cp.created_at,
                 cp.status
             FROM cheque_payables cp
-            WHERE (LOWER(cp.bank_name) LIKE LOWER(?) OR LOWER(?) LIKE '%' || LOWER(cp.bank_name) || '%')
+            WHERE (LOWER(cp.bank_name) LIKE LOWER(?) OR INSTR(LOWER(?), LOWER(cp.bank_name)) > 0)
               AND cp.status IN ('CONFIRMED', 'ISSUED', 'CLEARED')
         `).all(`%${account.bank_name}%`, account.bank_name);
 
