@@ -154,6 +154,12 @@ function runMigrations(dbInstance, isMysql) {
                 dbInstance.exec(`ALTER TABLE cheque_payables ADD COLUMN ${col} ${textType};`);
             } catch (_) {}
         }
+        try {
+            dbInstance.exec(`ALTER TABLE cheque_payables ADD COLUMN is_imported ${intType} DEFAULT 0;`);
+        } catch (_) {}
+        try {
+            dbInstance.exec(`ALTER TABLE cheque_payables ADD COLUMN import_batch_id ${textType};`);
+        } catch (_) {}
 
         // Bank Accounts table
         if (isMysql) {

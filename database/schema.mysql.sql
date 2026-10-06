@@ -612,6 +612,8 @@ CREATE TABLE IF NOT EXISTS cheque_payables (
     coo_confirmed_at VARCHAR(50) NULL,
     coo_notes TEXT NULL,
     api_key_used VARCHAR(100) DEFAULT 'nkb_inv_live_6ae6965c1ca61aef54939d6b1ecfac1b',
+    is_imported INT NOT NULL DEFAULT 0,
+    import_batch_id VARCHAR(100) NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_payables_status (status),

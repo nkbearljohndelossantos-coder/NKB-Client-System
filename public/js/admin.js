@@ -3975,8 +3975,8 @@ function checkPayableOverdraft(overrideAmount = null) {
     }
 }
 
-function onPayableCompanyChange(selectEl) {
-    const compName = selectEl.value;
+function onPayableCompanyChange(elOrVal) {
+    const compName = (typeof elOrVal === 'string' ? elOrVal : elOrVal?.value)?.trim() || '';
     const targetBank = PAYABLE_COMPANY_BANK_MAP[compName];
     const bankSelect = document.getElementById('req-payable-bank');
     if (targetBank && bankSelect) {
@@ -4380,6 +4380,343 @@ function renderPayableVendorSuggestions(query = '') {
     container.classList.remove('hidden');
 }
 
+// =========================================================================
+// COMPANY SUGGESTIONS & AUTOCOMPLETE (SUGGESTIVE - NO + ADD BUTTON NEEDED)
+// =========================================================================
+
+function togglePayableCompanyDropdown() {
+    const container = document.getElementById('payable-company-suggestions');
+    if (!container) return;
+    if (container.classList.contains('hidden')) {
+        const input = document.getElementById('req-payable-company');
+        renderPayableCompanySuggestions(input ? input.value.trim().toLowerCase() : '');
+    } else {
+        container.classList.add('hidden');
+    }
+}
+
+function onPayableCompanyInput(inputEl) {
+    if (!inputEl) return;
+    renderPayableCompanySuggestions(inputEl.value.trim().toLowerCase());
+    onPayableCompanyChange(inputEl);
+}
+
+function onPayableCompanyFocus(inputEl) {
+    if (!inputEl) return;
+    renderPayableCompanySuggestions(inputEl.value.trim().toLowerCase());
+}
+
+function selectPayableCompany(compName) {
+    const input = document.getElementById('req-payable-company');
+    if (input) {
+        input.value = compName;
+        onPayableCompanyChange(input);
+        input.focus();
+    }
+    const container = document.getElementById('payable-company-suggestions');
+    if (container) container.classList.add('hidden');
+}
+
+function renderPayableCompanySuggestions(query = '') {
+    const container = document.getElementById('payable-company-suggestions');
+    if (!container) return;
+
+    const companies = ((typeof cachedPayablesMeta !== 'undefined' && cachedPayablesMeta?.companies?.length > 0)
+        ? cachedPayablesMeta.companies
+        : ((window.cachedPayablesMeta?.companies?.length > 0)
+            ? window.cachedPayablesMeta.companies
+            : DEFAULT_PAYABLE_COMPANIES_LIST));
+
+    const matches = query
+        ? companies.filter(c => c.toLowerCase().includes(query))
+        : companies;
+
+    if (matches.length === 0) {
+        container.innerHTML = `
+            <div class="px-3 py-2.5 text-slate-400 italic text-[11px]">
+                No matching suggested company. You can type any new company name.
+            </div>
+        `;
+        container.classList.remove('hidden');
+        return;
+    }
+
+    container.innerHTML = `
+        <div class="px-3 py-1.5 bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider sticky top-0 border-b border-slate-100 flex items-center justify-between select-none">
+            <span>Suggested Companies (${matches.length})</span>
+            <span class="text-[9px] text-slate-400 font-normal">Click to select</span>
+        </div>
+        ${matches.map(c => {
+            let highlighted = c;
+            if (query) {
+                const safeQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const regex = new RegExp(`(${safeQuery})`, 'gi');
+                highlighted = c.replace(regex, '<span class="bg-blue-100 text-blue-900 font-bold px-0.5 rounded">$1</span>');
+            }
+            return `
+                <div class="px-3 py-2 hover:bg-blue-50 cursor-pointer flex items-center justify-between transition text-slate-800 font-medium"
+                     onclick="selectPayableCompany('${c.replace(/'/g, "\\'")}')">
+                    <span class="truncate">${highlighted}</span>
+                    <span class="text-[10px] text-blue-600 opacity-60 ml-2 font-mono shrink-0">↵ Select</span>
+                </div>
+            `;
+        }).join('')}
+    `;
+    container.classList.remove('hidden');
+}
+
+// =========================================================================
+// EXPENSE CATEGORY SUGGESTIONS & AUTOCOMPLETE (SUGGESTIVE)
+// =========================================================================
+
+function togglePayableCategoryDropdown() {
+    const container = document.getElementById('payable-category-suggestions');
+    if (!container) return;
+    if (container.classList.contains('hidden')) {
+        const input = document.getElementById('req-payable-category-type');
+        renderPayableCategorySuggestions(input ? input.value.trim().toLowerCase() : '');
+    } else {
+        container.classList.add('hidden');
+    }
+}
+
+function onPayableCategoryInput(inputEl) {
+    if (!inputEl) return;
+    renderPayableCategorySuggestions(inputEl.value.trim().toLowerCase());
+}
+
+function onPayableCategoryFocus(inputEl) {
+    if (!inputEl) return;
+    renderPayableCategorySuggestions(inputEl.value.trim().toLowerCase());
+}
+
+function selectPayableCategory(catName) {
+    const input = document.getElementById('req-payable-category-type');
+    if (input) {
+        input.value = catName;
+        input.focus();
+    }
+    const container = document.getElementById('payable-category-suggestions');
+    if (container) container.classList.add('hidden');
+}
+
+function renderPayableCategorySuggestions(query = '') {
+    const container = document.getElementById('payable-category-suggestions');
+    if (!container) return;
+
+    const baseCategories = ((typeof cachedPayablesMeta !== 'undefined' && cachedPayablesMeta?.categories?.length > 0)
+        ? cachedPayablesMeta.categories
+        : ((window.cachedPayablesMeta?.categories?.length > 0)
+            ? window.cachedPayablesMeta.categories
+            : DEFAULT_PAYABLE_CATEGORIES_LIST));
+    const categories = Array.from(new Set([...PAYABLE_CATEGORIES_LIST, ...baseCategories]));
+
+    const matches = query
+        ? categories.filter(c => c.toLowerCase().includes(query))
+        : categories;
+
+    if (matches.length === 0) {
+        container.innerHTML = `
+            <div class="px-3 py-2.5 text-slate-400 italic text-[11px]">
+                No matching suggested category. You can type any custom category name.
+            </div>
+        `;
+        container.classList.remove('hidden');
+        return;
+    }
+
+    container.innerHTML = `
+        <div class="px-3 py-1.5 bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider sticky top-0 border-b border-slate-100 flex items-center justify-between select-none">
+            <span>Suggested Categories (${matches.length})</span>
+            <span class="text-[9px] text-slate-400 font-normal">Click to select</span>
+        </div>
+        ${matches.map(c => {
+            let highlighted = c;
+            if (query) {
+                const safeQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const regex = new RegExp(`(${safeQuery})`, 'gi');
+                highlighted = c.replace(regex, '<span class="bg-amber-100 text-amber-900 font-bold px-0.5 rounded">$1</span>');
+            }
+            return `
+                <div class="px-3 py-2 hover:bg-blue-50 cursor-pointer flex items-center justify-between transition text-slate-800 font-medium"
+                     onclick="selectPayableCategory('${c.replace(/'/g, "\\'")}')">
+                    <span class="truncate">${highlighted}</span>
+                    <span class="text-[10px] text-blue-600 opacity-60 ml-2 font-mono shrink-0">↵ Select</span>
+                </div>
+            `;
+        }).join('')}
+    `;
+    container.classList.remove('hidden');
+}
+
+// Global click-outside listener to dismiss suggestion dropdowns
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('#req-payable-payee') && !e.target.closest('#payable-vendor-suggestions') && !e.target.closest('[onclick*="togglePayableVendorDropdown"]')) {
+        const v = document.getElementById('payable-vendor-suggestions');
+        if (v) v.classList.add('hidden');
+    }
+    if (!e.target.closest('#req-payable-company') && !e.target.closest('#payable-company-suggestions') && !e.target.closest('[onclick*="togglePayableCompanyDropdown"]')) {
+        const c = document.getElementById('payable-company-suggestions');
+        if (c) c.classList.add('hidden');
+    }
+    if (!e.target.closest('#req-payable-category-type') && !e.target.closest('#payable-category-suggestions') && !e.target.closest('[onclick*="togglePayableCategoryDropdown"]')) {
+        const cat = document.getElementById('payable-category-suggestions');
+        if (cat) cat.classList.add('hidden');
+    }
+});
+
+// =========================================================================
+// IMPORT PAYABLES MODAL (INBOUND BATCH INGESTION)
+// =========================================================================
+
+function openImportPayablesModal() {
+    const root = document.getElementById('modals-root');
+    if (!root) return;
+
+    root.innerHTML = `
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-3 sm:p-5 z-50 overflow-y-auto">
+            <div class="bg-white rounded-2xl max-w-2xl w-full p-5 sm:p-7 shadow-2xl space-y-4 my-6 border border-slate-200">
+                <div class="flex justify-between items-center border-b border-slate-200 pb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xl">📥</span>
+                        <h3 class="text-base sm:text-lg font-bold text-slate-900">Import Cheque Payables</h3>
+                    </div>
+                    <button type="button" onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-2xl leading-none px-1 cursor-pointer">&times;</button>
+                </div>
+
+                <div class="space-y-3">
+                    <p class="text-xs text-slate-500">
+                        Paste a JSON array of payable records or upload a JSON file to bulk import. All imported records are saved as <strong>Pending COO Approval</strong> and can be edited and exported at any time.
+                    </p>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Upload File (.json)</label>
+                        <input type="file" id="import-payables-file" accept=".json,application/json" onchange="handleImportPayablesFile(event)" class="text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border file:border-slate-300 file:text-xs file:font-semibold file:bg-slate-50 hover:file:bg-slate-100 cursor-pointer">
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="text-xs font-semibold text-slate-700">JSON Payload</label>
+                            <button type="button" onclick="loadSamplePayablesJson()" class="text-[11px] text-indigo-600 hover:underline font-bold">Load Sample JSON</button>
+                        </div>
+                        <textarea id="import-payables-json" rows="10" placeholder='[\\n  {\\n    "payee_name": "ABC Chemical Corp",\\n    "amount": 25000,\\n    "category": "Raw Materials",\\n    "company_name": "NKB Manufacturing Corporation",\\n    "bank_name": "BDO"\\n  }\\n]' class="w-full p-3 font-mono text-xs border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+                    </div>
+
+                    <div id="import-payables-status" class="hidden text-xs p-3 rounded-xl"></div>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-3 border-t border-slate-200">
+                    <button type="button" onclick="closeModal()" class="px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer">Cancel</button>
+                    <button type="button" id="import-payables-submit-btn" onclick="submitImportPayables()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 transition cursor-pointer">Import Records</button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function handleImportPayablesFile(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const textarea = document.getElementById('import-payables-json');
+        if (textarea) textarea.value = e.target.result;
+    };
+    reader.readAsText(file);
+}
+
+function loadSamplePayablesJson() {
+    const textarea = document.getElementById('import-payables-json');
+    if (!textarea) return;
+    const sample = [
+        {
+            payee_name: "CHEMWORLD MARKETING CORPORATION",
+            amount: 45000.0,
+            category: "Raw Materials",
+            company_name: "NKB Manufacturing Corporation",
+            bank_name: "BDO",
+            purpose: "Organic Essential Oils Batch 2026",
+            cheque_date: NKB.getManilaDate(),
+            terms: "Net 30",
+            line_items: [
+                { description: "Lavender Essential Oil Pure", category: "Raw Materials", quantity: 10, cost: 2500, subtotal: 25000 },
+                { description: "Tea Tree Extract Cosmetic Grade", category: "Raw Materials", quantity: 20, cost: 1000, subtotal: 20000 }
+            ]
+        },
+        {
+            payee_name: "BESTPAK PACKAGING SOLUTIONS, INC.",
+            amount: 28500.0,
+            category: "Packaging Materials",
+            company_name: "NKB Cosmetics Manufacturing",
+            bank_name: "BDO",
+            purpose: "100ml Frosted Cosmetic Bottles with Pump",
+            cheque_date: NKB.getManilaDate(),
+            terms: "Net 15"
+        }
+    ];
+    textarea.value = JSON.stringify(sample, null, 2);
+}
+
+async function submitImportPayables() {
+    const textarea = document.getElementById('import-payables-json');
+    const statusBox = document.getElementById('import-payables-status');
+    const btn = document.getElementById('import-payables-submit-btn');
+    if (!textarea || !textarea.value.trim()) {
+        NKB.showToast('Please provide a JSON payload to import.', 'warning');
+        return;
+    }
+
+    let parsed;
+    try {
+        parsed = JSON.parse(textarea.value.trim());
+    } catch (parseErr) {
+        if (statusBox) {
+            statusBox.className = 'p-3 rounded-xl text-xs bg-rose-50 border border-rose-200 text-rose-800 font-semibold';
+            statusBox.textContent = `Invalid JSON format: ${parseErr.message}`;
+            statusBox.classList.remove('hidden');
+        }
+        return;
+    }
+
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Importing...';
+    }
+
+    try {
+        const res = await NKB.api('/api/cheque-payables/import', {
+            method: 'POST',
+            body: JSON.stringify(parsed)
+        });
+
+        if (res.success) {
+            NKB.showToast(`Successfully imported ${res.importedCount} cheque payables!`, 'success');
+            closeModal();
+            loadPayables();
+        } else {
+            if (statusBox) {
+                statusBox.className = 'p-3 rounded-xl text-xs bg-rose-50 border border-rose-200 text-rose-800 font-semibold';
+                statusBox.textContent = res.error || res.message || 'Failed to import records.';
+                statusBox.classList.remove('hidden');
+            }
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Import Records';
+            }
+        }
+    } catch (err) {
+        if (statusBox) {
+            statusBox.className = 'p-3 rounded-xl text-xs bg-rose-50 border border-rose-200 text-rose-800 font-semibold';
+            statusBox.textContent = err.message || 'Server error during import.';
+            statusBox.classList.remove('hidden');
+        }
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Import Records';
+        }
+    }
+}
+
 function onPayableTermChange(selectEl) {
     if (!selectEl) return;
     const term = selectEl.value;
@@ -4479,9 +4816,7 @@ function addPayableItemRow(item = null) {
             <input type="text" class="payable-item-desc w-full h-8 sm:h-9 px-2 sm:px-2.5 border border-slate-300 rounded text-xs sm:text-sm font-medium focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="e.g. RAW MATERIALS" value="${desc.replace(/"/g, '&quot;')}">
         </td>
         <td class="py-1.5 px-2 sm:px-2.5">
-            <select class="payable-item-cat w-full h-8 sm:h-9 px-2 sm:px-2.5 border border-slate-300 rounded text-xs sm:text-sm font-semibold focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
-                ${categories.map(c => `<option value="${c}" ${c === cat ? 'selected' : ''}>${c}</option>`).join('')}
-            </select>
+            <input type="text" class="payable-item-cat w-full h-8 sm:h-9 px-2 sm:px-2.5 border border-slate-300 rounded text-xs sm:text-sm font-semibold focus:border-blue-500 focus:ring-1 focus:ring-blue-500" list="payable-categories-datalist" value="${cat.replace(/"/g, '&quot;')}" placeholder="Type or select category..." autocomplete="off">
         </td>
         <td class="py-1.5 px-1.5 sm:px-2 text-center">
             <input type="number" step="any" min="0" class="payable-item-qty w-full h-8 sm:h-9 px-1.5 sm:px-2 border border-slate-300 rounded text-xs sm:text-sm font-semibold text-center focus:border-blue-500" value="${qty}" oninput="recalcPayableItem(this)">
@@ -4577,6 +4912,14 @@ async function openRequestPayableModal(payableId = null) {
     const selectedCompany = cp?.company_name || companies[0];
     const defaultBankName = PAYABLE_COMPANY_BANK_MAP[selectedCompany] || banksList[0]?.bank_name || banksList[0]?.name;
 
+    const baseCategories = ((typeof cachedPayablesMeta !== 'undefined' && cachedPayablesMeta?.categories?.length > 0)
+        ? cachedPayablesMeta.categories
+        : ((window.cachedPayablesMeta?.categories?.length > 0)
+            ? window.cachedPayablesMeta.categories
+            : DEFAULT_PAYABLE_CATEGORIES_LIST));
+    const categories = Array.from(new Set([...PAYABLE_CATEGORIES_LIST, ...baseCategories]));
+    const selectedCategory = cp?.payable_category || cp?.category || 'Trade Payable';
+
     // Formatting date created for input (YYYY-MM-DD for editable date picker)
     let dateCreatedInputVal = today;
     if (cp?.created_at) {
@@ -4620,15 +4963,34 @@ async function openRequestPayableModal(payableId = null) {
                 <form onsubmit="submitRequestPayable(event)" class="space-y-4">
                     <!-- Top Grid matching Reference Image with perfect symmetry across devices -->
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-3.5">
-                        <!-- Row 1: Company (with Add button in label header) -->
-                        <div>
+                        <!-- Row 1: Company (Suggestive, No Add button) -->
+                        <div class="relative">
                             <div class="flex items-center justify-between mb-1">
-                                <label class="text-[11px] sm:text-xs font-semibold text-slate-600">Company</label>
-                                <button type="button" onclick="openAddPayableCompanyModal()" class="text-[11px] sm:text-xs text-blue-600 hover:text-blue-800 font-bold hover:underline inline-flex items-center gap-0.5 cursor-pointer" title="Add New Company">+ Add</button>
+                                <label class="text-[11px] sm:text-xs font-semibold text-slate-600">Company *</label>
+                                <button type="button" onclick="togglePayableCompanyDropdown()" class="text-[10px] sm:text-[11px] text-blue-600 hover:text-blue-800 font-bold hover:underline inline-flex items-center gap-0.5 cursor-pointer" title="Click to view all suggested companies">
+                                    <span>Suggestions</span>
+                                    <span>▾</span>
+                                </button>
                             </div>
-                            <select id="req-payable-company" onchange="onPayableCompanyChange(this)" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-300 rounded-md sm:rounded-lg bg-white text-xs sm:text-sm font-semibold text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
-                                ${companies.map(c => `<option value="${c}" ${c === selectedCompany ? 'selected' : ''}>${c}</option>`).join('')}
-                            </select>
+                            <div class="relative">
+                                <input type="text" 
+                                       id="req-payable-company" 
+                                       list="payable-companies-datalist" 
+                                       required 
+                                       autocomplete="off" 
+                                       value="${selectedCompany}" 
+                                       placeholder="e.g. NKB MANUFACTURING CORPORATION" 
+                                       oninput="onPayableCompanyInput(this)" 
+                                       onfocus="onPayableCompanyFocus(this)" 
+                                       class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-300 rounded-md sm:rounded-lg bg-white text-xs sm:text-sm font-semibold text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                                <datalist id="payable-companies-datalist">
+                                    ${companies.map(c => `<option value="${c}">`).join('')}
+                                </datalist>
+                                <!-- Floating Interactive Suggestions Panel -->
+                                <div id="payable-company-suggestions" 
+                                     class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-2xl z-50 max-h-56 overflow-y-auto divide-y divide-slate-100 text-xs">
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Row 1: Cheque Number -->
@@ -4649,19 +5011,31 @@ async function openRequestPayableModal(payableId = null) {
                             <input type="text" id="req-payable-number" readonly value="${payableNumberDisplay}" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-blue-200 rounded-md sm:rounded-lg bg-blue-50/60 text-xs sm:text-sm text-blue-700 font-bold font-mono cursor-not-allowed">
                         </div>
 
-                        <!-- Row 2: Payable Category (spans 2 columns on desktop) -->
-                        <div class="sm:col-span-1 lg:col-span-2">
+                        <!-- Row 2: Payable Category (Suggestive, No Add button, spans 2 columns on desktop) -->
+                        <div class="sm:col-span-1 lg:col-span-2 relative">
                             <div class="flex items-center justify-between mb-1">
                                 <label class="text-[11px] sm:text-xs font-semibold text-slate-600">Payable Category *</label>
-                                <button type="button" onclick="openAddPayableCategoryModal()" class="text-[11px] sm:text-xs text-blue-600 hover:text-blue-800 font-bold hover:underline inline-flex items-center gap-0.5 cursor-pointer" title="Add New Expense Category">+ Add</button>
+                                <button type="button" onclick="togglePayableCategoryDropdown()" class="text-[10px] sm:text-[11px] text-blue-600 hover:text-blue-800 font-bold hover:underline inline-flex items-center gap-0.5 cursor-pointer" title="Click to view all suggested categories">
+                                    <span>Suggestions</span>
+                                    <span>▾</span>
+                                </button>
                             </div>
-                            <select id="req-payable-category-type" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-300 rounded-md sm:rounded-lg bg-white text-xs sm:text-sm font-semibold text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 cursor-pointer">
-                                ${PAYABLE_CATEGORIES_LIST.map(cat => {
-                                    const isSel = (cp?.payable_category && cp.payable_category.toLowerCase() === cat.toLowerCase()) ||
-                                                  (!cp?.payable_category && cat === 'Trade Payable');
-                                    return `<option value="${cat}" ${isSel ? 'selected' : ''}>${cat}</option>`;
-                                }).join('')}
-                            </select>
+                            <div class="relative">
+                                <input type="text" 
+                                       id="req-payable-category-type" 
+                                       list="payable-categories-datalist" 
+                                       required 
+                                       autocomplete="off" 
+                                       value="${selectedCategory}" 
+                                       placeholder="e.g. Trade Payable" 
+                                       oninput="onPayableCategoryInput(this)" 
+                                       onfocus="onPayableCategoryFocus(this)" 
+                                       class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-300 rounded-md sm:rounded-lg bg-white text-xs sm:text-sm font-semibold text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 cursor-pointer">
+                                <!-- Floating Interactive Suggestions Panel -->
+                                <div id="payable-category-suggestions" 
+                                     class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-2xl z-50 max-h-56 overflow-y-auto divide-y divide-slate-100 text-xs">
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Row 2: Invoice Date -->
@@ -4676,27 +5050,21 @@ async function openRequestPayableModal(payableId = null) {
                             <input type="text" id="req-payable-created-by" readonly value="${createdByDisplay}" class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-200 rounded-md sm:rounded-lg bg-slate-50 text-xs sm:text-sm text-slate-700 font-medium cursor-not-allowed">
                         </div>
 
-                        <!-- Row 3: Vendor (with Suggestions) -->
+                        <!-- Row 3: Vendor (Suggestive, No Add button) -->
                         <div class="relative">
                             <div class="flex items-center justify-between mb-1">
                                 <label class="text-[11px] sm:text-xs font-semibold text-slate-600">Vendor *</label>
-                                <div class="flex items-center gap-1.5">
-                                    <button type="button" onclick="openAddPayableVendorModal()" class="text-[10px] sm:text-[11px] text-emerald-600 hover:text-emerald-800 font-bold hover:underline inline-flex items-center gap-0.5 cursor-pointer" title="Add & Save New Vendor">
-                                        + Add
-                                    </button>
-                                    <span class="text-slate-300 select-none">|</span>
-                                    <button type="button" onclick="togglePayableVendorDropdown()" class="text-[10px] sm:text-[11px] text-blue-600 hover:text-blue-800 font-bold hover:underline inline-flex items-center gap-0.5 cursor-pointer" title="Click to view all suggested vendors">
-                                        <span>Suggestions</span>
-                                        <span>▾</span>
-                                    </button>
-                                </div>
+                                <button type="button" onclick="togglePayableVendorDropdown()" class="text-[10px] sm:text-[11px] text-blue-600 hover:text-blue-800 font-bold hover:underline inline-flex items-center gap-0.5 cursor-pointer" title="Click to view all suggested vendors">
+                                    <span>Suggestions</span>
+                                    <span>▾</span>
+                                </button>
                             </div>
                             <div class="relative">
                                 <input type="text" 
                                        id="req-payable-payee" 
                                        list="payable-vendors-datalist" 
                                        required 
-                                       autocomplete="off"
+                                       autocomplete="off" 
                                        value="${cp?.payee_name || cp?.vendor || ''}" 
                                        placeholder="e.g. CHEMWORLD MARKETING CORPORATION" 
                                        oninput="onPayableVendorInput(this)" 
@@ -4704,6 +5072,9 @@ async function openRequestPayableModal(payableId = null) {
                                        class="w-full h-9 sm:h-10 px-2.5 sm:px-3 border border-slate-300 rounded-md sm:rounded-lg bg-white text-xs sm:text-sm font-bold text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                                 <datalist id="payable-vendors-datalist">
                                     ${vendors.map(v => `<option value="${v}">`).join('')}
+                                </datalist>
+                                <datalist id="payable-categories-datalist">
+                                    ${categories.map(c => `<option value="${c}">`).join('')}
                                 </datalist>
                                 <!-- Floating Interactive Suggestions Panel -->
                                 <div id="payable-vendor-suggestions" 
@@ -4774,12 +5145,7 @@ async function openRequestPayableModal(payableId = null) {
                                 <thead>
                                     <tr class="bg-slate-50 border-b border-slate-300 text-slate-700 text-[11px] sm:text-xs font-semibold">
                                         <th class="py-2 px-2.5 sm:px-3">Description</th>
-                                        <th class="py-2 px-2.5 sm:px-3 w-48 sm:w-56">
-                                            <div class="flex items-center justify-between">
-                                                <span>Expense Category</span>
-                                                <button type="button" onclick="openAddPayableCategoryModal()" class="text-[11px] sm:text-xs text-blue-600 hover:text-blue-800 font-bold hover:underline inline-flex items-center gap-0.5 cursor-pointer" title="Add New Expense Category">+ Add</button>
-                                            </div>
-                                        </th>
+                                        <th class="py-2 px-2.5 sm:px-3 w-48 sm:w-56">Expense Category</th>
                                         <th class="py-2 px-2.5 sm:px-3 w-20 sm:w-24 text-center">Quantity</th>
                                         <th class="py-2 px-2.5 sm:px-3 w-28 sm:w-32 text-right">Cost</th>
                                         <th class="py-2 px-2.5 sm:px-3 w-28 sm:w-32 text-right">Subtotal</th>
@@ -5005,6 +5371,63 @@ async function submitRequestPayable(e) {
                     }).catch(() => {});
                 }
             }
+
+            // Persist new company to suggestions if not already known
+            if (companyName) {
+                const knownCompanies = ((typeof cachedPayablesMeta !== 'undefined' && cachedPayablesMeta?.companies?.length > 0)
+                    ? cachedPayablesMeta.companies
+                    : DEFAULT_PAYABLE_COMPANIES_LIST);
+                const compExists = knownCompanies.some(c => c.toLowerCase().trim() === companyName.toLowerCase().trim());
+                if (!compExists) {
+                    if (typeof cachedPayablesMeta !== 'undefined' && Array.isArray(cachedPayablesMeta?.companies)) {
+                        cachedPayablesMeta.companies.push(companyName);
+                        cachedPayablesMeta.companies.sort((a, b) => a.localeCompare(b));
+                    }
+                    if (window.cachedPayablesMeta && Array.isArray(window.cachedPayablesMeta.companies)) {
+                        if (!window.cachedPayablesMeta.companies.includes(companyName)) {
+                            window.cachedPayablesMeta.companies.push(companyName);
+                            window.cachedPayablesMeta.companies.sort((a, b) => a.localeCompare(b));
+                        }
+                    }
+                    if (Array.isArray(DEFAULT_PAYABLE_COMPANIES_LIST) && !DEFAULT_PAYABLE_COMPANIES_LIST.includes(companyName)) {
+                        DEFAULT_PAYABLE_COMPANIES_LIST.push(companyName);
+                        DEFAULT_PAYABLE_COMPANIES_LIST.sort((a, b) => a.localeCompare(b));
+                    }
+                    NKB.api('/api/cheque-payables/companies', {
+                        method: 'POST',
+                        body: JSON.stringify({ name: companyName })
+                    }).catch(() => {});
+                }
+            }
+
+            // Persist new categories to suggestions if not already known
+            const catsToPersist = [payableCategory, ...lineItems.map(li => li.category)].filter(Boolean);
+            const knownCats = ((typeof cachedPayablesMeta !== 'undefined' && cachedPayablesMeta?.categories?.length > 0)
+                ? cachedPayablesMeta.categories
+                : DEFAULT_PAYABLE_CATEGORIES_LIST);
+            catsToPersist.forEach(catName => {
+                const catExists = knownCats.some(c => c.toLowerCase().trim() === catName.toLowerCase().trim());
+                if (!catExists) {
+                    if (typeof cachedPayablesMeta !== 'undefined' && Array.isArray(cachedPayablesMeta?.categories)) {
+                        cachedPayablesMeta.categories.push(catName);
+                        cachedPayablesMeta.categories.sort((a, b) => a.localeCompare(b));
+                    }
+                    if (window.cachedPayablesMeta && Array.isArray(window.cachedPayablesMeta.categories)) {
+                        if (!window.cachedPayablesMeta.categories.includes(catName)) {
+                            window.cachedPayablesMeta.categories.push(catName);
+                            window.cachedPayablesMeta.categories.sort((a, b) => a.localeCompare(b));
+                        }
+                    }
+                    if (Array.isArray(DEFAULT_PAYABLE_CATEGORIES_LIST) && !DEFAULT_PAYABLE_CATEGORIES_LIST.includes(catName)) {
+                        DEFAULT_PAYABLE_CATEGORIES_LIST.push(catName);
+                        DEFAULT_PAYABLE_CATEGORIES_LIST.sort((a, b) => a.localeCompare(b));
+                    }
+                    NKB.api('/api/cheque-payables/categories', {
+                        method: 'POST',
+                        body: JSON.stringify({ name: catName })
+                    }).catch(() => {});
+                }
+            });
 
             closeModal();
             loadPayables();
@@ -15297,4 +15720,20 @@ function toggleRevealInputPassword(inputId) {
     }
 }
 window.toggleRevealInputPassword = toggleRevealInputPassword;
+
+// Payables Suggestive & Import Functions Window Exports
+window.openImportPayablesModal = openImportPayablesModal;
+window.handleImportPayablesFile = handleImportPayablesFile;
+window.loadSamplePayablesJson = loadSamplePayablesJson;
+window.submitImportPayables = submitImportPayables;
+window.togglePayableCompanyDropdown = togglePayableCompanyDropdown;
+window.onPayableCompanyInput = onPayableCompanyInput;
+window.onPayableCompanyFocus = onPayableCompanyFocus;
+window.selectPayableCompany = selectPayableCompany;
+window.renderPayableCompanySuggestions = renderPayableCompanySuggestions;
+window.togglePayableCategoryDropdown = togglePayableCategoryDropdown;
+window.onPayableCategoryInput = onPayableCategoryInput;
+window.onPayableCategoryFocus = onPayableCategoryFocus;
+window.selectPayableCategory = selectPayableCategory;
+window.renderPayableCategorySuggestions = renderPayableCategorySuggestions;
 

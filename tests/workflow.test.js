@@ -4129,6 +4129,157 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         }
     });
 
+    test('89. Cheque Payables Dedicated Import, Edit & Export APIs with Imported Data Export Verification', async () => {
+        // Step 1: Internal Import via POST /api/cheque-payables/import
+        const importPayload = [
+            {
+                payee_name: 'ZETA RAW CHEMICALS INC',
+                amount: 42000.0,
+                cheque_date: '2026-10-20',
+                bank_name: 'BDO Unibank',
+                category: 'Chemical Ingredients',
+                company_name: 'NKB MANUFACTURING CORPORATION',
+                purpose: 'Bulk Emulsifiers Initial',
+                line_items: [
+                    { description: 'Stearic Acid 25kg', category: 'Chemical Ingredients', quantity: 10, cost: 2500, subtotal: 25000 },
+                    { description: 'Cetyl Alcohol 25kg', category: 'Chemical Ingredients', quantity: 5, cost: 3400, subtotal: 17000 }
+                ]
+            },
+            {
+                payee_name: 'BETA PACKAGING CORPORATION',
+                amount: 18500.0,
+                cheque_date: '2026-10-22',
+                bank_name: 'Security Bank',
+                category: 'Packaging Materials',
+                company_name: 'NKB MANUFACTURING CORPORATION',
+                purpose: 'Pump Dispensers 5000pcs'
+            }
+        ];
+
+        const importRes = await request(app)
+            .post('/api/cheque-payables/import')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send(importPayload);
+
+        assert.strictEqual(importRes.status, 200);
+        assert.strictEqual(importRes.body.success, true);
+        assert.strictEqual(importRes.body.importedCount, 2);
+        assert.ok(importRes.body.batchId);
+        assert.ok(Array.isArray(importRes.body.data));
+        assert.strictEqual(importRes.body.data.length, 2);
+
+        const importedRecord1 = importRes.body.data[0];
+        const importedRecord2 = importRes.body.data[1];
+        assert.strictEqual(importedRecord1.payee_name, 'ZETA RAW CHEMICALS INC');
+        assert.strictEqual(importedRecord1.is_imported, 1);
+        assert.strictEqual(importedRecord1.import_batch_id, importRes.body.batchId);
+
+        // Verify suggestive entities were auto-learned
+        const catRow = db.prepare("SELECT * FROM payable_categories WHERE name = 'Chemical Ingredients'").get();
+        assert.ok(catRow, 'Imported category must be auto-persisted to payable_categories for suggestions');
+        const vdrRow = db.prepare("SELECT * FROM payable_vendors WHERE name = 'ZETA RAW CHEMICALS INC'").get();
+        assert.ok(vdrRow, 'Imported vendor must be auto-persisted to payable_vendors for suggestions');
+
+        // Step 2: Edit the imported record via PUT /api/cheque-payables/edit/:id
+        const editRes = await request(app)
+            .put(`/api/cheque-payables/edit/${importedRecord1.id}`)
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                amount: 45000.0,
+                purpose: 'Bulk Emulsifiers & Surfactants (Revised)'
+            });
+
+        assert.strictEqual(editRes.status, 200);
+        assert.strictEqual(editRes.body.success, true);
+        assert.strictEqual(editRes.body.data.amount, 45000.0);
+        assert.strictEqual(editRes.body.data.purpose, 'Bulk Emulsifiers & Surfactants (Revised)');
+
+        // Step 3: Outbound Export of Imported Data via GET /api/cheque-payables/export
+        // A) Verify JSON export includes the imported & edited record
+        const exportJsonRes = await request(app)
+            .get('/api/cheque-payables/export?only_imported=true')
+            .set('Authorization', `Bearer ${adminToken}`);
+
+        assert.strictEqual(exportJsonRes.status, 200);
+        assert.strictEqual(exportJsonRes.body.success, true);
+        assert.ok(Array.isArray(exportJsonRes.body.data));
+        assert.ok(exportJsonRes.body.count >= 2);
+
+        const foundEdited = exportJsonRes.body.data.find(r => r.id === importedRecord1.id);
+        assert.ok(foundEdited, 'Export must include the imported record');
+        assert.strictEqual(foundEdited.is_imported, true);
+        assert.strictEqual(foundEdited.amount, 45000.0);
+        assert.strictEqual(foundEdited.purpose, 'Bulk Emulsifiers & Surfactants (Revised)');
+        assert.strictEqual(foundEdited.payee_name, 'ZETA RAW CHEMICALS INC');
+
+        // B) Verify CSV export
+        const exportCsvRes = await request(app)
+            .get('/api/cheque-payables/export?format=csv&only_imported=true')
+            .set('Authorization', `Bearer ${adminToken}`);
+
+        assert.strictEqual(exportCsvRes.status, 200);
+        assert.ok(exportCsvRes.headers['content-type'].includes('text/csv'));
+        assert.ok(exportCsvRes.text.includes('ZETA RAW CHEMICALS INC'));
+        assert.ok(exportCsvRes.text.includes('45000.00'));
+        assert.ok(exportCsvRes.text.includes('YES'), 'CSV must show YES for Is Imported column');
+
+        // Step 4: External V1 API Verification with API Key
+        const apiKeyRes = await request(app)
+            .post('/api/api-keys')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                name: 'External Payables Sync Integration',
+                scopes: ['payables:write', 'payables:read'],
+                rateLimitRpm: 120
+            });
+        assert.strictEqual(apiKeyRes.status, 201);
+        const externalApiKey = apiKeyRes.body.rawKey;
+
+        // V1 Import
+        const v1ImportRes = await request(app)
+            .post('/api/v1/payables/import')
+            .set('x-api-key', externalApiKey)
+            .send({
+                payee_name: 'OMEGA PLASTICS PHILIPPINES',
+                amount: 62000.0,
+                category: 'Packaging Materials',
+                bank_name: 'Metrobank',
+                purpose: 'Custom Cosmetic Jars 10,000pcs'
+            });
+
+        assert.strictEqual(v1ImportRes.status, 200);
+        assert.strictEqual(v1ImportRes.body.success, true);
+        assert.strictEqual(v1ImportRes.body.importedCount, 1);
+        const v1ImportedItem = v1ImportRes.body.data[0];
+        assert.strictEqual(v1ImportedItem.payee_name, 'OMEGA PLASTICS PHILIPPINES');
+
+        // V1 Edit
+        const v1EditRes = await request(app)
+            .put(`/api/v1/payables/edit/${v1ImportedItem.id}`)
+            .set('x-api-key', externalApiKey)
+            .send({
+                amount: 65000.0,
+                purpose: 'Custom Cosmetic Jars 10,000pcs + Cap Seal'
+            });
+
+        assert.strictEqual(v1EditRes.status, 200);
+        assert.strictEqual(v1EditRes.body.success, true);
+        assert.strictEqual(v1EditRes.body.data.amount, 65000.0);
+
+        // V1 Export: Ensure imported data can be exported
+        const v1ExportRes = await request(app)
+            .get('/api/v1/payables/export?only_imported=true')
+            .set('x-api-key', externalApiKey);
+
+        assert.strictEqual(v1ExportRes.status, 200);
+        assert.strictEqual(v1ExportRes.body.success, true);
+        const foundV1 = v1ExportRes.body.data.find(r => r.id === v1ImportedItem.id);
+        assert.ok(foundV1, 'V1 Export must cleanly export imported record');
+        assert.strictEqual(foundV1.amount, 65000.0);
+        assert.strictEqual(foundV1.is_imported, true);
+        assert.strictEqual(foundV1.payee_name, 'OMEGA PLASTICS PHILIPPINES');
+    });
+
     after(() => {
         try {
             realtimeSyncService.closeAllClients();

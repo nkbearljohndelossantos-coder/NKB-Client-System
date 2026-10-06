@@ -847,6 +847,299 @@ router.get('/payables', requireScope('payables:read'), (req, res) => {
 });
 
 /**
+ * GET /api/v1/payables/export
+ * Outbound API: Export cheque payables (including imported records) in JSON or CSV
+ */
+router.get('/payables/export', requireScope(['payables:read', 'data:send']), (req, res) => {
+    try {
+        const {
+            include_imported = 'true',
+            only_imported = 'false',
+            status,
+            category,
+            company,
+            bank,
+            date_from,
+            date_to,
+            since,
+            search,
+            limit = 500,
+            format = 'json'
+        } = req.query;
+
+        let query = 'SELECT * FROM cheque_payables WHERE 1=1';
+        const params = [];
+
+        if (only_imported === 'true' || only_imported === '1') {
+            query += ' AND (is_imported = 1 OR import_batch_id IS NOT NULL)';
+        } else if (include_imported === 'false' || include_imported === '0') {
+            query += ' AND (is_imported = 0 OR is_imported IS NULL)';
+        }
+
+        if (status) {
+            query += ' AND status = ?';
+            params.push(status);
+        }
+        if (category) {
+            query += ' AND (category = ? OR payable_category = ?)';
+            params.push(category, category);
+        }
+        if (company) {
+            query += ' AND company_name LIKE ?';
+            params.push(`%${company}%`);
+        }
+        if (bank) {
+            query += ' AND bank_name LIKE ?';
+            params.push(`%${bank}%`);
+        }
+        if (date_from) {
+            query += ' AND cheque_date >= ?';
+            params.push(date_from);
+        }
+        if (date_to) {
+            query += ' AND cheque_date <= ?';
+            params.push(date_to);
+        }
+        if (since) {
+            query += ' AND updated_at >= ?';
+            params.push(since);
+        }
+        if (search) {
+            query += ' AND (payee_name LIKE ? OR request_number LIKE ? OR cheque_number LIKE ? OR purpose LIKE ? OR company_name LIKE ?)';
+            const term = `%${search.trim()}%`;
+            params.push(term, term, term, term, term);
+        }
+
+        const maxLimit = Math.min(2000, Math.max(1, parseInt(limit, 10) || 500));
+        query += ' ORDER BY cheque_date DESC, created_at DESC LIMIT ?';
+        params.push(maxLimit);
+
+        const rows = db.prepare(query).all(...params);
+
+        if (String(format).toLowerCase() === 'csv') {
+            const escapeCsv = (val) => {
+                if (val == null) return '""';
+                return `"${String(val).replace(/"/g, '""')}"`;
+            };
+            const headers = [
+                'ID', 'Request Number', 'Company', 'Payee / Vendor', 'Amount',
+                'Cheque Date', 'Due Date', 'Bank Name', 'Cheque Number',
+                'Category', 'Purpose', 'Status', 'Is Imported', 'Batch ID', 'Created At'
+            ];
+            const lines = [headers.map(escapeCsv).join(',')];
+            rows.forEach(r => {
+                lines.push([
+                    escapeCsv(r.id),
+                    escapeCsv(r.request_number),
+                    escapeCsv(r.company_name || ''),
+                    escapeCsv(r.payee_name),
+                    (parseFloat(r.amount) || 0).toFixed(2),
+                    escapeCsv(r.cheque_date),
+                    escapeCsv(r.due_date || ''),
+                    escapeCsv(r.bank_name),
+                    escapeCsv(r.cheque_number || ''),
+                    escapeCsv(r.category || r.payable_category || ''),
+                    escapeCsv(r.purpose),
+                    escapeCsv(r.status),
+                    r.is_imported ? 'YES' : 'NO',
+                    escapeCsv(r.import_batch_id || ''),
+                    escapeCsv(r.created_at)
+                ].join(','));
+            });
+            res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+            res.setHeader('Content-Disposition', `attachment; filename="payables_export_${new Date().toISOString().split('T')[0]}.csv"`);
+            return res.send('\uFEFF' + lines.join('\r\n'));
+        }
+
+        const formatted = rows.map(r => {
+            let parsedItems = null;
+            if (r.line_items) {
+                try {
+                    parsedItems = typeof r.line_items === 'string' ? JSON.parse(r.line_items) : r.line_items;
+                } catch (_) {
+                    parsedItems = r.line_items;
+                }
+            }
+            return {
+                ...r,
+                is_imported: !!r.is_imported,
+                line_items: parsedItems
+            };
+        });
+
+        return res.json({
+            success: true,
+            count: formatted.length,
+            exportedAt: new Date().toISOString(),
+            includeImported: include_imported !== 'false',
+            data: formatted
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/v1/payables/import
+ * Inbound API: Import cheque payables (single or batch)
+ */
+router.post('/payables/import', requireScope(['payables:write', 'data:receive']), (req, res) => {
+    try {
+        const rawPayload = req.body.payables || req.body.data || req.body.items || req.body;
+        const records = Array.isArray(rawPayload) ? rawPayload : [rawPayload];
+        
+        if (!records || records.length === 0 || typeof records[0] !== 'object') {
+            return res.status(400).json({ success: false, error: 'INVALID_PAYLOAD', message: 'Payload must contain a record or array of records to import.' });
+        }
+
+        const batchId = 'BATCH-' + Date.now() + '-' + uuidv4().slice(0, 6);
+        const imported = [];
+        const errors = [];
+
+        for (let i = 0; i < records.length; i++) {
+            const r = records[i];
+            try {
+                const id = r.id || uuidv4();
+                const reqNum = r.request_number || r.pb_number || r.chq_number || getNextDocumentNumber('CHQ');
+                const payee = (r.payee_name || r.vendor || 'Vendor').trim();
+                const compName = (r.company_name || r.company || 'NKB Manufacturing Corporation').trim();
+                const cat = (r.category || r.expense_category || r.payable_category || 'Trade Payable').trim();
+                const purpose = (r.purpose || r.description || 'Imported Payable').trim();
+                const bankName = (r.bank_name || 'BDO').trim();
+                const chequeDate = r.cheque_date || r.date || r.due_date || new Date().toISOString().split('T')[0];
+                const dueDate = r.due_date || chequeDate;
+                const terms = r.terms || 'Net 30';
+
+                let parsedItems = null;
+                let computedAmount = 0;
+                if (r.line_items) {
+                    const arr = Array.isArray(r.line_items) ? r.line_items : (typeof r.line_items === 'string' ? JSON.parse(r.line_items) : []);
+                    if (Array.isArray(arr) && arr.length > 0) {
+                        parsedItems = arr.map(it => {
+                            const q = parseFloat(it.quantity) || 1;
+                            const c = parseFloat(it.cost) || 0;
+                            const s = parseFloat(it.subtotal) || (q * c);
+                            computedAmount += s;
+                            return {
+                                description: it.description || '',
+                                category: it.category || cat,
+                                quantity: q,
+                                cost: c,
+                                subtotal: s
+                            };
+                        });
+                    }
+                }
+
+                const finalAmount = r.amount != null ? parseFloat(r.amount) : (computedAmount > 0 ? computedAmount : 0);
+                if (isNaN(finalAmount) || finalAmount <= 0) {
+                    throw new Error(`Record ${i + 1} (${payee}): Invalid or missing amount.`);
+                }
+
+                const serializedItems = parsedItems ? JSON.stringify(parsedItems) : (typeof r.line_items === 'string' ? r.line_items : null);
+
+                // Auto-learn suggestive entities
+                try {
+                    db.prepare('INSERT OR IGNORE INTO payable_companies (id, name) VALUES (?, ?)').run('comp-' + uuidv4().slice(0, 8), compName);
+                    db.prepare('INSERT OR IGNORE INTO payable_vendors (id, name) VALUES (?, ?)').run('vdr-' + uuidv4().slice(0, 8), payee);
+                    db.prepare('INSERT OR IGNORE INTO payable_categories (id, name) VALUES (?, ?)').run('cat-' + uuidv4().slice(0, 8), cat);
+                } catch (_) {}
+
+                const existing = db.prepare('SELECT id FROM cheque_payables WHERE id = ? OR request_number = ?').get(id, reqNum);
+                if (existing) {
+                    db.prepare(`
+                        UPDATE cheque_payables
+                        SET payee_name = COALESCE(?, payee_name),
+                            amount = ?,
+                            cheque_date = COALESCE(?, cheque_date),
+                            bank_name = COALESCE(?, bank_name),
+                            bank_account_number = COALESCE(?, bank_account_number),
+                            cheque_number = COALESCE(?, cheque_number),
+                            category = COALESCE(?, category),
+                            purpose = COALESCE(?, purpose),
+                            company_name = COALESCE(?, company_name),
+                            payable_category = COALESCE(?, payable_category),
+                            invoice_number = COALESCE(?, invoice_number),
+                            line_items = COALESCE(?, line_items),
+                            comments = COALESCE(?, comments),
+                            status = COALESCE(?, status),
+                            is_imported = 1,
+                            import_batch_id = ?,
+                            updated_at = datetime('now', 'localtime')
+                        WHERE id = ?
+                    `).run(
+                        payee, finalAmount, chequeDate, bankName, r.bank_account_number || null,
+                        r.cheque_number || null, cat, purpose, compName, cat, r.invoice_number || null,
+                        serializedItems, r.comments || r.notes || null, r.status || null, batchId, existing.id
+                    );
+                    imported.push(db.prepare('SELECT * FROM cheque_payables WHERE id = ?').get(existing.id));
+                } else {
+                    db.prepare(`
+                        INSERT INTO cheque_payables (
+                            id, request_number, payee_name, amount, cheque_date, bank_name,
+                            bank_account_number, bank_account_id, cheque_number, category, purpose,
+                            company_name, payable_category, invoice_number, invoice_date, terms,
+                            due_date, line_items, comments, status, requested_by, requested_by_name,
+                            api_key_used, is_imported, import_batch_id, created_at, updated_at
+                        ) VALUES (
+                            ?, ?, ?, ?, ?, ?,
+                            ?, ?, ?, ?, ?,
+                            ?, ?, ?, ?, ?,
+                            ?, ?, ?, ?, ?, ?,
+                            ?, 1, ?, datetime('now', 'localtime'), datetime('now', 'localtime')
+                        )
+                    `).run(
+                        id, reqNum, payee, finalAmount, chequeDate, bankName,
+                        r.bank_account_number || null, r.bank_account_id || null, r.cheque_number || null, cat, purpose,
+                        compName, cat, r.invoice_number || null, r.invoice_date || null, terms,
+                        dueDate, serializedItems, r.comments || r.notes || null, r.status || 'PENDING_COO_APPROVAL',
+                        req.apiKey?.userId || 'system', req.apiKey?.name || 'Developer API', req.apiKey?.name || 'Developer API', batchId
+                    );
+                    imported.push(db.prepare('SELECT * FROM cheque_payables WHERE id = ?').get(id));
+                }
+            } catch (recErr) {
+                errors.push({ index: i, error: recErr.message });
+            }
+        }
+
+        logAudit({
+            userId: req.apiKey?.userId || 'system',
+            userName: req.apiKey?.name || 'API v1',
+            userRole: 'API',
+            action: 'API_IMPORT_PAYABLES',
+            entityType: 'PAYABLE',
+            entityId: batchId,
+            details: { importedCount: imported.length, errorCount: errors.length, batchId }
+        });
+
+        return res.status(imported.length > 0 ? 200 : 400).json({
+            success: imported.length > 0,
+            message: `Successfully imported ${imported.length} cheque payable records.`,
+            batchId,
+            importedCount: imported.length,
+            errorCount: errors.length,
+            errors: errors.length > 0 ? errors : undefined,
+            data: imported
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * PUT /api/v1/payables/edit/:id
+ * PATCH /api/v1/payables/edit/:id
+ * Dedicated editing endpoint for any payable (including imported payables)
+ */
+router.put('/payables/edit/:id', requireScope(['payables:write', 'data:receive']), (req, res) => {
+    return router.handle(Object.assign(req, { url: `/payables/${req.params.id}`, method: 'PUT' }), res);
+});
+
+router.patch('/payables/edit/:id', requireScope(['payables:write', 'data:receive']), (req, res) => {
+    return router.handle(Object.assign(req, { url: `/payables/${req.params.id}`, method: 'PUT' }), res);
+});
+
+/**
  * GET /api/v1/payables/:id
  * Get single cheque payable by ID or request number
  */
@@ -1204,10 +1497,6 @@ router.put('/payables/:id', requireScope(['payables:write', 'data:receive']), (r
     } catch (err) {
         return res.status(400).json({ success: false, error: err.message });
     }
-});
-
-router.patch('/payables/:id', requireScope(['payables:write', 'data:receive']), (req, res) => {
-    return router.handle(Object.assign(req, { method: 'PUT' }), res);
 });
 
 // =========================================================================

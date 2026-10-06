@@ -435,6 +435,8 @@ CREATE TABLE IF NOT EXISTS cheque_payables (
     coo_confirmed_at TEXT,
     coo_notes TEXT,
     api_key_used TEXT DEFAULT 'nkb_inv_live_6ae6965c1ca61aef54939d6b1ecfac1b',
+    is_imported INTEGER NOT NULL DEFAULT 0,
+    import_batch_id TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     FOREIGN KEY (requested_by) REFERENCES users(id)
