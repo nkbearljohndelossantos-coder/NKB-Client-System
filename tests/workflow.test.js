@@ -4280,6 +4280,86 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.strictEqual(foundV1.payee_name, 'OMEGA PLASTICS PHILIPPINES');
     });
 
+    test('90. Custom Pricing in PO Creation and Edit Workflows with Auto-Persistence', async () => {
+        // Find or create a test product and test client
+        const clientRow = db.prepare("SELECT * FROM clients WHERE is_active = 1 LIMIT 1").get();
+        const prodRow = db.prepare("SELECT * FROM products WHERE is_active = 1 LIMIT 1").get();
+        assert.ok(clientRow, 'Active client must exist');
+        assert.ok(prodRow, 'Active product must exist');
+
+        const originalCustomPrice = 188.50;
+        const targetQty = 250;
+
+        // 1. Admin creates a PO specifying a custom unit price of 188.50
+        const createPoRes = await request(app)
+            .post('/api/orders')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                client_id: clientRow.id,
+                tolerance_percent: 10.0,
+                billing_policy: 'ACTUAL_DELIVERY',
+                notes: 'PO with negotiated custom rate',
+                items: [
+                    {
+                        product_id: prodRow.id,
+                        target_quantity: targetQty,
+                        unit_price: originalCustomPrice,
+                        save_custom_price: true
+                    }
+                ]
+            });
+
+        assert.strictEqual(createPoRes.status, 201);
+        assert.strictEqual(createPoRes.body.success, true);
+        const createdPo = createPoRes.body.data;
+        assert.strictEqual(createdPo.items.length, 1);
+        assert.strictEqual(createdPo.items[0].unit_price, originalCustomPrice);
+        assert.strictEqual(createdPo.items[0].subtotal, targetQty * originalCustomPrice);
+        assert.strictEqual(createdPo.subtotal, targetQty * originalCustomPrice);
+
+        // 2. Check persistence in client_product_prices
+        const persistedPricing = db.prepare("SELECT * FROM client_product_prices WHERE client_id = ? AND product_id = ?").get(clientRow.id, prodRow.id);
+        assert.ok(persistedPricing, 'Pricing record must exist in client_product_prices');
+        assert.strictEqual(persistedPricing.custom_price, originalCustomPrice);
+
+        // 3. Query GET /api/products?clientId=... to verify default_price matches custom price for this client
+        const catRes = await request(app)
+            .get(`/api/products?clientId=${clientRow.id}`)
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(catRes.status, 200);
+        const catProd = catRes.body.data.find(p => p.id === prodRow.id);
+        if (catProd) {
+            assert.strictEqual(catProd.default_price, originalCustomPrice);
+            assert.ok(catProd.has_custom_price);
+        }
+
+        // 4. Admin updates the PO with a modified custom price: 195.00
+        const updatedCustomPrice = 195.00;
+        const updatePoRes = await request(app)
+            .put(`/api/orders/${createdPo.id}`)
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                items: [
+                    {
+                        product_id: prodRow.id,
+                        target_quantity: targetQty,
+                        unit_price: updatedCustomPrice,
+                        save_custom_price: true
+                    }
+                ]
+            });
+
+        assert.strictEqual(updatePoRes.status, 200);
+        assert.strictEqual(updatePoRes.body.success, true);
+        const updatedPo = updatePoRes.body.data;
+        assert.strictEqual(updatedPo.items[0].unit_price, updatedCustomPrice);
+        assert.strictEqual(updatedPo.items[0].subtotal, targetQty * updatedCustomPrice);
+
+        // 5. Check client_product_prices updated to 195.00
+        const updatedPersistedPricing = db.prepare("SELECT * FROM client_product_prices WHERE client_id = ? AND product_id = ?").get(clientRow.id, prodRow.id);
+        assert.strictEqual(updatedPersistedPricing.custom_price, updatedCustomPrice);
+    });
+
     after(() => {
         try {
             realtimeSyncService.closeAllClients();

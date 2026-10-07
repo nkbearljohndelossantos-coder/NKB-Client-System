@@ -470,10 +470,31 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
                 throw new Error(`Product "${product.name}" (${product.sku}) is not assigned to your client account.`);
             }
 
-            const expectedClientPrice = (assignment && assignment.custom_price !== null && assignment.custom_price !== undefined) ? assignment.custom_price : product.default_price;
-
-            // In PO, the unit price is strictly fixed to the contracted rate
-            const unitPrice = Math.round((Number(expectedClientPrice) || 0) * 100) / 100;
+            const isStaff = ['ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'ACCOUNTING'].includes(req.user.role);
+            let unitPrice;
+            if (isStaff && item.unit_price !== undefined && item.unit_price !== null && !isNaN(parseFloat(item.unit_price))) {
+                unitPrice = Math.max(0, Math.round(parseFloat(item.unit_price) * 100) / 100);
+                // Persist / update custom pricing for this client so future orders remember it
+                if (item.save_custom_price !== false) {
+                    const existingCpp = db.prepare('SELECT id FROM client_product_prices WHERE client_id = ? AND product_id = ?').get(client_id, product.id);
+                    if (existingCpp) {
+                        db.prepare(`
+                            UPDATE client_product_prices 
+                            SET custom_price = ?, is_active = 1, updated_at = datetime('now', 'localtime') 
+                            WHERE id = ?
+                        `).run(unitPrice, existingCpp.id);
+                    } else {
+                        db.prepare(`
+                            INSERT INTO client_product_prices 
+                            (id, client_id, product_id, custom_price, is_active) 
+                            VALUES (?, ?, ?, ?, 1)
+                        `).run(uuidv4(), client_id, product.id, unitPrice);
+                    }
+                }
+            } else {
+                const expectedClientPrice = (assignment && assignment.custom_price !== null && assignment.custom_price !== undefined) ? assignment.custom_price : product.default_price;
+                unitPrice = Math.round((Number(expectedClientPrice) || 0) * 100) / 100;
+            }
 
             const lineSubtotal = Math.round(targetQty * unitPrice * 100) / 100;
             subtotal += lineSubtotal;
@@ -661,8 +682,31 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
                     throw new Error(`Product "${product.name}" (${product.sku}) is not assigned to your client account.`);
                 }
 
-                const expectedClientPrice = (assignment && assignment.custom_price !== null && assignment.custom_price !== undefined) ? assignment.custom_price : product.default_price;
-                const unitPrice = Math.round((Number(expectedClientPrice) || 0) * 100) / 100;
+                const isStaff = ['ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'ACCOUNTING'].includes(req.user.role);
+                let unitPrice;
+                if (isStaff && item.unit_price !== undefined && item.unit_price !== null && !isNaN(parseFloat(item.unit_price))) {
+                    unitPrice = Math.max(0, Math.round(parseFloat(item.unit_price) * 100) / 100);
+                    if (item.save_custom_price !== false) {
+                        const existingCpp = db.prepare('SELECT id FROM client_product_prices WHERE client_id = ? AND product_id = ?').get(po.client_id, product.id);
+                        if (existingCpp) {
+                            db.prepare(`
+                                UPDATE client_product_prices 
+                                SET custom_price = ?, is_active = 1, updated_at = datetime('now', 'localtime') 
+                                WHERE id = ?
+                            `).run(unitPrice, existingCpp.id);
+                        } else {
+                            db.prepare(`
+                                INSERT INTO client_product_prices 
+                                (id, client_id, product_id, custom_price, is_active) 
+                                VALUES (?, ?, ?, ?, 1)
+                            `).run(uuidv4(), po.client_id, product.id, unitPrice);
+                        }
+                    }
+                } else {
+                    const expectedClientPrice = (assignment && assignment.custom_price !== null && assignment.custom_price !== undefined) ? assignment.custom_price : product.default_price;
+                    unitPrice = Math.round((Number(expectedClientPrice) || 0) * 100) / 100;
+                }
+
                 const lineSubtotal = Math.round(targetQty * unitPrice * 100) / 100;
                 subtotal += lineSubtotal;
 

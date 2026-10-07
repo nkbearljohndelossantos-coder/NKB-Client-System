@@ -1522,7 +1522,7 @@ async function openViewPOModal(poId) {
                                 <h4 class="font-black text-slate-900 text-sm uppercase tracking-wider flex items-center gap-2">
                                     <span>📦</span><span>Individual Product Specifications & Lineage (${items.length})</span>
                                 </h4>
-                                <p class="text-[11px] text-slate-500">Every ordered cosmetic product with technical formulation, fixed price, and cleanroom assignments</p>
+                                <p class="text-[11px] text-slate-500">Every ordered cosmetic product with technical formulation, unit price, and cleanroom assignments</p>
                             </div>
                             <span class="text-slate-500 text-xs">Delivered: <strong class="text-indigo-900 font-bold font-mono">${NKB.formatNumber(totalDelivered)}</strong> of <strong class="font-mono">${NKB.formatNumber(totalTarget)} pcs</strong> (${totalTarget > 0 ? Math.round((totalDelivered / totalTarget) * 100) : 0}%)</span>
                         </div>
@@ -1547,7 +1547,7 @@ async function openViewPOModal(poId) {
                                             <th class="py-2.5 px-3 text-center">Shelf Life</th>
                                             <th class="py-2.5 px-3 text-center">Target Qty</th>
                                             ${canViewPrices ? `
-                                                <th class="py-2.5 px-3 text-right">Fixed Price</th>
+                                                <th class="py-2.5 px-3 text-right">Unit Price</th>
                                                 <th class="py-2.5 px-3 text-right">Line Total</th>
                                             ` : ''}
                                             <th class="py-2.5 px-3 text-center">Delivered</th>
@@ -2020,7 +2020,7 @@ async function openEditPOModal(poId) {
                                         <tr>
                                             <th class="py-3 px-3.5">Product</th>
                                             <th class="py-3 px-3.5 w-32">Target Qty (pcs)</th>
-                                            <th class="py-3 px-3.5 w-36">Fixed Unit Price (₱)</th>
+                                            <th class="py-3 px-3.5 w-36">Unit Price (₱)</th>
                                             <th class="py-3 px-3.5 w-32">Subtotal (₱)</th>
                                             <th class="py-3 px-2 w-12 text-center">Action</th>
                                         </tr>
@@ -2315,9 +2315,15 @@ function renderEditPOLineItems() {
                            class="w-full px-3 py-2 border border-slate-200 hover:border-slate-300 rounded-xl text-xs font-normal text-slate-800 text-center tracking-normal focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
                 </td>
                 <td class="py-3 px-3.5">
-                    <div class="px-3 py-2 bg-slate-50 border border-slate-200/80 rounded-xl text-xs font-normal text-slate-600 font-mono flex items-center justify-between shadow-sm">
-                        <span>₱${Number(item.unit_price || 0).toFixed(2)}</span>
-                        <span class="text-[9px] uppercase px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-medium border border-emerald-200/60">Fixed</span>
+                    <div class="relative">
+                        <span class="absolute left-2.5 top-2 text-slate-400 font-mono text-xs">₱</span>
+                        <input type="number" step="0.01" min="0" inputmode="decimal"
+                               value="${Number(item.unit_price || 0).toFixed(2)}" 
+                               oninput="updateEditPOLineItem(${idx}, 'unit_price', this.value)"
+                               onblur="if(this.value && !isNaN(this.value)) this.value = parseFloat(this.value).toFixed(2)"
+                               class="w-full pl-6 pr-2 py-2 border border-slate-200 hover:border-slate-300 rounded-xl text-xs font-bold font-mono text-emerald-700 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm"
+                               placeholder="0.00"
+                               title="Custom Unit Price for this client">
                     </div>
                 </td>
                 <td id="edit-po-line-total-${idx}" class="py-3 px-3.5 font-semibold text-slate-900 font-mono text-xs tracking-tight">
@@ -2372,6 +2378,9 @@ function updateEditPOLineItem(index, field, value) {
         return;
     } else if (field === 'target_quantity') {
         editPOLineItems[index].target_quantity = parseInt(value, 10) || 0;
+    } else if (field === 'unit_price') {
+        editPOLineItems[index].unit_price = Math.max(0, parseFloat(value) || 0);
+        editPOLineItems[index]._customPriceEntered = true;
     }
 
     const lineSubtotal = (editPOLineItems[index].target_quantity || 0) * (editPOLineItems[index].unit_price || 0);
@@ -2433,7 +2442,9 @@ async function submitEditPO(e) {
                 return {
                     product_id: item.product_id,
                     item_name: prod ? (prod.clean_name || prod.display_name || prod.name) : undefined,
-                    target_quantity: item.target_quantity
+                    target_quantity: item.target_quantity,
+                    unit_price: item.unit_price !== undefined ? Number(item.unit_price) : undefined,
+                    save_custom_price: true
                 };
             })
         })

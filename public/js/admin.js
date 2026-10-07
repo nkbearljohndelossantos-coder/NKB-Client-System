@@ -7358,7 +7358,7 @@ async function openCreatePOModal() {
                                         <tr>
                                             <th class="py-3 px-3.5">Product</th>
                                             <th class="py-3 px-3.5 w-32">Target Qty (pcs)</th>
-                                            <th class="py-3 px-3.5 w-36">Fixed Unit Price (₱)</th>
+                                            <th class="py-3 px-3.5 w-36">Unit Price (₱)</th>
                                             <th class="py-3 px-3.5 w-32">Subtotal (₱)</th>
                                             <th class="py-3 px-2 w-12 text-center">Action</th>
                                         </tr>
@@ -7700,6 +7700,9 @@ function updateAdminPOLineItem(index, field, value) {
         return;
     } else if (field === 'target_quantity') {
         adminPOLineItems[index].target_quantity = parseInt(value, 10) || 0;
+    } else if (field === 'unit_price') {
+        adminPOLineItems[index].unit_price = Math.max(0, parseFloat(value) || 0);
+        adminPOLineItems[index]._customPriceEntered = true;
     }
 
     // Update line total and summary totals
@@ -7763,9 +7766,15 @@ function renderAdminPOLineItems() {
                            class="w-full px-3 py-2 border border-slate-200 hover:border-slate-300 rounded-xl text-xs font-normal text-slate-800 text-center tracking-normal focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
                 </td>
                 <td class="py-3 px-3.5">
-                    <div class="px-3 py-2 bg-slate-50 border border-slate-200/80 rounded-xl text-xs font-normal text-slate-600 font-mono flex items-center justify-between shadow-sm">
-                        <span>₱${Number(item.unit_price || 0).toFixed(2)}</span>
-                        <span class="text-[9px] uppercase px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-medium border border-emerald-200/60">Fixed</span>
+                    <div class="relative">
+                        <span class="absolute left-2.5 top-2 text-slate-400 font-mono text-xs">₱</span>
+                        <input type="number" step="0.01" min="0" inputmode="decimal"
+                               value="${Number(item.unit_price || 0).toFixed(2)}" 
+                               oninput="updateAdminPOLineItem(${idx}, 'unit_price', this.value)"
+                               onblur="if(this.value && !isNaN(this.value)) this.value = parseFloat(this.value).toFixed(2)"
+                               class="w-full pl-6 pr-2 py-2 border border-slate-200 hover:border-slate-300 rounded-xl text-xs font-bold font-mono text-emerald-700 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm"
+                               placeholder="0.00"
+                               title="Custom Unit Price for this client">
                     </div>
                 </td>
                 <td id="admin-po-line-total-${idx}" class="py-3 px-3.5 font-semibold text-slate-900 font-mono text-xs tracking-tight">
@@ -7837,7 +7846,8 @@ async function submitCreatePO(e) {
                         product_id: item.product_id,
                         item_name: prod ? (prod.clean_name || prod.display_name || prod.name) : undefined,
                         target_quantity: item.target_quantity,
-                        unit_price: Math.round(Number(item.unit_price || 0) * 100) / 100
+                        unit_price: Math.round(Number(item.unit_price || 0) * 100) / 100,
+                        save_custom_price: true
                     };
                 })
             })
