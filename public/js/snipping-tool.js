@@ -305,14 +305,28 @@
             actionsBarEl.style.visibility = 'hidden';
 
             const scale = 2;
-            const canvas = await window.html2canvas(targetEl, {
-                scale: scale,
-                useCORS: true,
-                backgroundColor: '#ffffff',
-                logging: false,
-                scrollX: 0,
-                scrollY: 0
-            });
+            const prevScrollX = window.scrollX;
+            const prevScrollY = window.scrollY;
+            window.scrollTo(0, 0);
+            let canvas;
+            try {
+                canvas = await window.html2canvas(targetEl, {
+                    scale: scale,
+                    useCORS: true,
+                    backgroundColor: '#ffffff',
+                    logging: false,
+                    scrollX: 0,
+                    scrollY: 0,
+                    onclone: (clonedDoc) => {
+                        const wrap = clonedDoc.getElementById('pages-wrapper');
+                        if (wrap) {
+                            wrap.style.transform = 'none';
+                        }
+                    }
+                });
+            } finally {
+                window.scrollTo(prevScrollX, prevScrollY);
+            }
 
             overlayEl.style.visibility = 'visible';
             selectionBoxEl.style.visibility = 'visible';

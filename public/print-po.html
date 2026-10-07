@@ -8,6 +8,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Purchase Order / Sales Order - NKB Client System</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap" rel="stylesheet">
     <style>
         /* Base Reset */
         * {
@@ -17,7 +20,7 @@
         }
 
         body {
-            font-family: Arial, Helvetica, "Segoe UI", sans-serif;
+            font-family: 'Lato', 'Carlito', 'Segoe UI', Arial, Helvetica, sans-serif;
             color: #000000;
             background: #ffffff;
             -webkit-print-color-adjust: exact;
@@ -304,45 +307,54 @@
         }
 
         /* -------------------------------------------------------------
-           DOCUMENT LAYOUT (Exact Match to Reference Image)
+           DOCUMENT LAYOUT (Matched to reference SO-1294 image:
+           Lato sans-serif, regular-weight body, bold labels only where shown)
            ------------------------------------------------------------- */
+        .print-sheet,
+        .print-sheet * {
+            font-family: 'Lato', 'Carlito', 'Segoe UI', Arial, Helvetica, sans-serif;
+        }
+
         .header-section {
             text-align: center;
-            margin-bottom: 12px;
+            margin-bottom: 0;
         }
 
         .company-title {
-            font-size: 15pt;
-            font-weight: bold;
+            font-size: 16pt;
+            font-weight: 700;
             color: #000000;
-            letter-spacing: 0.2px;
-            margin-bottom: 3px;
+            letter-spacing: 0;
+            line-height: 1.15;
+            margin-bottom: 2px;
         }
 
         .company-address {
-            font-size: 8.2pt;
-            color: #1e293b;
+            font-size: 7.8pt;
+            font-weight: 400;
+            color: #000000;
             line-height: 1.35;
         }
 
         .company-tin {
-            font-size: 8.2pt;
-            color: #1e293b;
+            font-size: 7.8pt;
+            font-weight: 400;
+            color: #000000;
             line-height: 1.35;
-            margin-top: 1px;
         }
 
         .doc-title-container {
             text-align: center;
-            margin: 10px 0 14px 0;
+            margin: 16px 0 12px 0;
         }
 
         .doc-title {
-            font-size: 11.5pt;
-            font-weight: bold;
+            font-size: 12.5pt;
+            font-weight: 700;
             text-transform: uppercase;
             text-decoration: underline;
-            letter-spacing: 0.5px;
+            text-underline-offset: 2px;
+            letter-spacing: 0.2px;
             color: #000000;
         }
 
@@ -351,25 +363,20 @@
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            font-size: 8.5pt;
-            line-height: 1.45;
-            margin-bottom: 16px;
+            font-size: 9pt;
+            font-weight: 400;
+            line-height: 1.3;
+            margin-bottom: 14px;
         }
 
         .meta-customer-col {
             max-width: 60%;
         }
 
-        .customer-name {
-            font-weight: bold;
-            color: #000000;
-        }
-
-        .customer-address {
-            color: #000000;
-        }
-
+        .customer-name,
+        .customer-address,
         .customer-tin {
+            font-weight: 400;
             color: #000000;
         }
 
@@ -379,66 +386,66 @@
         }
 
         .order-number {
-            font-weight: bold;
-            font-size: 9.5pt;
+            font-weight: 700;
+            font-size: 9pt;
             color: #000000;
-            margin-bottom: 1px;
         }
 
         /* Bordered Main Items Box (Surrounds items and financial totals) */
         .order-box {
-            border: 1px solid #d1d5db;
-            border-radius: 4px;
-            padding: 10px 14px 14px 14px;
-            margin-bottom: 16px;
+            border: 1px solid #c8c8c8;
+            border-radius: 2px;
+            padding: 8px 12px 10px 12px;
+            margin-bottom: 18px;
             background: #ffffff;
         }
 
         .items-table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 9.5pt;
+            font-size: 9pt;
         }
 
         .items-table th {
-            font-weight: 800;
+            font-weight: 700;
             color: #000000;
-            padding: 5px 4px 8px 4px;
+            padding: 3px 4px 5px 4px;
             text-align: left;
-            border-bottom: 1.5px solid #000000;
-            font-size: 9.5pt;
-            letter-spacing: 0.2px;
+            border-bottom: none;
+            font-size: 9pt;
+            letter-spacing: 0;
         }
 
-        .items-table th.th-desc { width: 50%; }
-        .items-table th.th-qty { width: 14%; text-align: right; }
-        .items-table th.th-uom { width: 8%; text-align: left; padding-left: 8px; }
-        .items-table th.th-price { width: 14%; text-align: right; }
-        .items-table th.th-subtotal { width: 14%; text-align: right; }
+        .items-table th.th-desc { width: 48%; }
+        .items-table th.th-qty { width: 11%; text-align: right; }
+        .items-table th.th-uom { width: 7%; text-align: left; padding-left: 6px; }
+        .items-table th.th-price { width: 17%; text-align: right; }
+        .items-table th.th-subtotal { width: 17%; text-align: right; }
         .items-table th.th-actions { width: 5%; text-align: center; }
 
         .items-table td {
-            padding: 6px 4px;
+            padding: 3px 4px;
             vertical-align: top;
             color: #000000;
-            line-height: 1.35;
-            font-size: 9.5pt;
+            line-height: 1.3;
+            font-size: 9pt;
+            font-weight: 400;
         }
 
         .td-desc {
-            padding-right: 10px !important;
+            padding-right: 14px !important;
             word-break: break-word;
-            font-weight: 700 !important;
-            font-size: 9.5pt !important;
+            font-weight: 400 !important;
+            font-size: 9pt !important;
             color: #000000 !important;
-            line-height: 1.4 !important;
+            line-height: 1.3 !important;
         }
 
         .td-desc .prod-name {
-            font-weight: 800 !important;
+            font-weight: 400 !important;
             color: #000000 !important;
-            font-size: 9.5pt !important;
-            letter-spacing: 0.15px;
+            font-size: 9pt !important;
+            letter-spacing: 0;
             text-transform: uppercase;
             display: block;
         }
@@ -446,28 +453,28 @@
         .td-qty {
             text-align: right;
             font-variant-numeric: tabular-nums;
-            font-weight: 700;
+            font-weight: 400;
             color: #000000;
         }
 
         .td-uom {
             text-align: left;
-            padding-left: 8px !important;
-            font-weight: 700;
+            padding-left: 6px !important;
+            font-weight: 400;
             color: #000000;
         }
 
         .td-price {
             text-align: right;
             font-variant-numeric: tabular-nums;
-            font-weight: 700;
+            font-weight: 400;
             color: #000000;
         }
 
         .td-subtotal {
             text-align: right;
             font-variant-numeric: tabular-nums;
-            font-weight: 800;
+            font-weight: 400;
             color: #000000;
         }
 
@@ -491,29 +498,33 @@
             color: #ffffff;
         }
 
-        /* Totals Block (Inside the Bordered Box at bottom right) */
+        /* Totals Block (Inside the Bordered Box at bottom right, no divider line) */
         .totals-section {
             display: flex;
             justify-content: flex-end;
-            margin-top: 14px;
-            padding-top: 10px;
-            border-top: 1px solid #f3f4f6;
+            margin-top: 26px;
+            padding-top: 0;
+            border-top: none;
         }
 
         .totals-table {
-            width: 240px;
+            width: 36%;
+            min-width: 210px;
             border-collapse: collapse;
-            font-size: 8.8pt;
+            font-size: 9pt;
             white-space: nowrap;
         }
 
         .totals-table td {
-            padding: 3px 0;
+            padding: 3px 4px;
+            font-weight: 400;
         }
 
         .totals-table td.total-label {
             text-align: right;
-            padding-right: 18px;
+            width: 50%;
+            padding-right: 4px;
+            font-weight: 400;
             color: #000000;
         }
 
@@ -523,33 +534,37 @@
             color: #000000;
         }
 
-        .totals-table tr.total-row-bold td {
-            font-weight: bold;
+        /* Reference: label stays regular, only the amount is bold */
+        .totals-table tr.total-row-bold td.total-val {
+            font-weight: 700;
+        }
+        .totals-table tr.total-row-bold td.total-label {
+            font-weight: 400;
         }
 
         /* Order Notes / Description Section (Under Products, Above Bank Details) */
         .po-notes-section {
-            font-size: 8.5pt;
+            font-size: 8pt;
             color: #000000;
-            line-height: 1.45;
-            margin-top: 12px;
-            margin-bottom: 8px;
+            line-height: 1.35;
+            margin-top: 0;
+            margin-bottom: 12px;
         }
 
         .notes-heading {
-            font-weight: bold;
-            font-size: 8.5pt;
+            font-weight: 700;
+            font-size: 8pt;
             color: #000000;
             margin-bottom: 2px;
         }
 
         .notes-body {
-            font-size: 8.5pt;
+            font-size: 8pt;
             color: #000000;
             white-space: pre-wrap;
-            line-height: 1.45;
-            padding: 3px 0;
-            min-height: 16px;
+            line-height: 1.35;
+            padding: 2px 0;
+            min-height: 14px;
         }
 
         body.edit-mode-active .notes-body:empty:before {
@@ -567,86 +582,66 @@
             display: none !important;
         }
 
-        /* Bank Details Footer (Outside/Below the Bordered Box) */
+        /* Bank Details Footer (Plain text, below the bordered box) */
         .bank-details-section {
-            font-size: 8.5pt;
+            font-size: 8pt;
             color: #000000;
-            line-height: 1.45;
-            margin-top: 10px;
+            line-height: 1.3;
+            margin-top: 0;
         }
 
         .bank-intro {
-            margin-bottom: 6px;
-            color: #0f172a;
-            font-weight: bold;
+            margin-bottom: 10px;
+            color: #000000;
+            font-weight: 700;
         }
 
         .bank-lines {
-            font-weight: normal;
+            font-weight: 400;
             color: #000000;
-            line-height: 1.4;
+            line-height: 1.3;
         }
 
         .bank-accounts-container {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            margin-top: 6px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px 36px;
+            margin-top: 0;
         }
 
         .bank-account-item {
-            border: 1px solid #cbd5e1;
-            border-left: 3.5px solid #0f172a;
-            border-radius: 4px;
-            padding: 6px 9px;
-            background: #f8fafc;
+            border: none;
+            border-radius: 0;
+            padding: 0;
+            background: transparent;
             font-size: 8pt;
-            line-height: 1.35;
+            line-height: 1.3;
         }
 
-        .bank-account-item .bank-title {
-            font-weight: 800;
-            font-size: 8pt;
-            color: #0f172a;
-            text-transform: uppercase;
-            letter-spacing: 0.2px;
-        }
-
-        .bank-account-item .bank-acc-name {
-            font-size: 7.5pt;
-            color: #334155;
-            margin-top: 1px;
-        }
-
-        .bank-account-item .bank-acc-no {
-            font-family: 'Courier New', Courier, monospace;
-            font-weight: 800;
-            font-size: 9.5pt;
-            color: #0284c7;
-            letter-spacing: 0.5px;
-            margin-top: 2px;
-        }
-
+        .bank-account-item .bank-title,
+        .bank-account-item .bank-acc-name,
+        .bank-account-item .bank-acc-no,
         .bank-account-item .bank-branch-info {
-            font-size: 7pt;
-            color: #64748b;
-            margin-top: 2px;
+            font-family: inherit;
+            font-size: 8pt;
+            font-weight: 400;
+            color: #000000;
+            text-transform: none;
+            letter-spacing: 0;
+            margin-top: 0;
         }
 
         @media (max-width: 640px) {
             .bank-accounts-container {
-                grid-template-columns: 1fr;
+                flex-direction: column;
                 gap: 8px;
             }
         }
 
         @media print {
             .bank-account-item {
-                border: 1px solid #94a3b8 !important;
-                border-left: 3.5px solid #000000 !important;
-                background: #ffffff !important;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
+                border: none !important;
+                background: transparent !important;
             }
             .bank-account-item .bank-acc-no {
                 color: #000000 !important;
@@ -790,12 +785,12 @@
                         <td class="total-label">Discount</td>
                         <td class="total-val" id="disp-discount" contenteditable="false" onblur="recalculateTotals()">0.00</td>
                     </tr>
-                    <tr>
+                    <tr id="row-payment-made">
                         <td class="total-label">Payment Made</td>
                         <td class="total-val" id="disp-payment-made" contenteditable="false" onblur="recalculateTotals()">0.00</td>
                     </tr>
                     <tr class="total-row-bold">
-                        <td class="total-label">Total Balance</td>
+                        <td class="total-label" id="lbl-total-balance">Total Balance</td>
                         <td class="total-val" id="disp-total-balance" contenteditable="false">0.00</td>
                     </tr>
                 </table>
@@ -810,7 +805,7 @@
 
         <!-- Bank Details Section (Outside/Below the Bordered Box at Bottom Left) -->
         <div class="bank-details-section avoid-break">
-            <div class="bank-intro">Please deposit payment to any of the following accredited bank account/s:</div>
+            <div class="bank-intro" id="hdr-bank-intro">Please deposit payment to the following bank account/s:</div>
             <div class="bank-lines" id="disp-bank-details" contenteditable="false">
                 <div class="bank-accounts-container">
                     <div class="bank-account-item">
@@ -1018,6 +1013,17 @@
             if (legacyTotalEl && legacyTotalEl !== balanceEl) {
                 legacyTotalEl.textContent = formatNumber2(totalBalance);
             }
+            syncTotalsLayout(paymentMade);
+        }
+
+        // Reference layout shows Subtotal / VAT / Discount / Total only.
+        // Show "Payment Made" + "Total Balance" only when a payment exists (or while editing).
+        function syncTotalsLayout(paymentMade) {
+            const row = document.getElementById('row-payment-made');
+            const lbl = document.getElementById('lbl-total-balance');
+            const hasPayment = Math.abs(Number(paymentMade) || 0) >= 0.005;
+            if (row) row.style.display = (hasPayment || isEditMode) ? '' : 'none';
+            if (lbl) lbl.textContent = hasPayment ? 'Total Balance' : 'Total';
         }
 
         function addNewItemRow() {
@@ -1166,6 +1172,7 @@
             if (legacyTotalEl && legacyTotalEl !== balanceEl) {
                 legacyTotalEl.textContent = formatNumber2(finalTotalBalance);
             }
+            syncTotalsLayout(finalPaymentMade);
 
             // Note / Description Logic (Under Products, Above Bank Details)
             const notesEl = document.getElementById('disp-po-notes');
@@ -1186,7 +1193,7 @@
             // Bank Details Logic
             const bankEl = document.getElementById('disp-bank-details');
             if (isVyuceutical) {
-                bankEl.innerHTML = `BDO UNIBANK, INC.<br>Vyuceutical Beauty Products Trading<br>0080-5801-0717`;
+                bankEl.innerHTML = `BDO Unibank, Inc.<br>Vyuceutical Beauty Products Trading<br>0080 5801 0717`;
             } else {
                 bankEl.innerHTML = `
                     <div class="bank-accounts-container">

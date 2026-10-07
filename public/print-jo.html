@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sales Order / Job Order - NKB MANUFACTURING CORPORATION</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap" rel="stylesheet">
     <style>
         /* Base Reset */
         * {
@@ -14,54 +17,58 @@
         }
 
         body {
-            font-family: Arial, Helvetica, sans-serif;
+            font-family: 'Lato', 'Carlito', 'Segoe UI', Arial, Helvetica, sans-serif;
             color: #000000;
             background: #ffffff;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
         }
 
-        /* -------------------------------------------------------------
-           PRINT STYLING (Strictly 1 A4 Landscape Sheet = 2 Side-by-Side Portrait Copies)
-           ------------------------------------------------------------- */
+        /* Dynamic page orientation styling */
         @page {
-            size: A4 landscape;
+            size: portrait;
             margin: 0;
         }
 
+        /* -------------------------------------------------------------
+           PRINT STYLING (Strictly 1 Page for Both Copy 1 & Copy 2 Slips)
+           ------------------------------------------------------------- */
         @media print {
-            @page {
-                size: A4 landscape;
-                margin: 0;
-            }
-
             html, body {
-                width: 297mm !important;
+                width: 100% !important;
                 height: auto !important;
                 margin: 0 !important;
                 padding: 0 !important;
                 background: #ffffff !important;
                 overflow: visible !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
             }
 
             .no-print {
                 display: none !important;
             }
 
-            .pages-wrapper {
-                width: 297mm !important;
+            /* PORTRAIT PRINT (Default: 2 Stacked Copies on 1 Portrait Sheet) */
+            body.layout-portrait .pages-wrapper,
+            body:not(.layout-landscape) .pages-wrapper {
+                width: 100% !important;
+                max-width: 200mm !important;
                 margin: 0 auto !important;
-                padding: 6mm 8mm !important;
+                padding: 3mm 6mm !important;
                 box-sizing: border-box !important;
             }
 
-            .page-container {
-                width: 281mm !important; /* 297mm - 2*8mm margin */
-                height: 198mm !important; /* 210mm - 2*6mm margin */
+            body.layout-portrait .page-container,
+            body:not(.layout-landscape) .page-container {
+                width: 100% !important;
+                max-width: 198mm !important;
+                height: 275mm !important; /* Fits both Letter (279mm) and A4 (297mm) */
+                max-height: 275mm !important;
                 margin: 0 auto !important;
                 padding: 0 !important;
                 display: flex !important;
-                flex-direction: row !important; /* SIDE BY SIDE PORTRAIT COPIES */
+                flex-direction: column !important;
                 justify-content: space-between !important;
                 align-items: stretch !important;
                 box-shadow: none !important;
@@ -74,25 +81,96 @@
                 box-sizing: border-box !important;
             }
 
-            .page-container:last-child {
-                page-break-after: avoid !important;
-                break-after: avoid !important;
-            }
-
-            .portrait-slip {
-                width: 136mm !important; /* (281mm - 9mm cut divider) / 2 */
-                max-width: 136mm !important;
-                height: 198mm !important;
-                max-height: 198mm !important;
+            body.layout-portrait .portrait-slip,
+            body:not(.layout-landscape) .portrait-slip {
+                width: 100% !important;
+                max-width: 100% !important;
+                height: 133mm !important;
+                max-height: 133mm !important;
+                min-height: auto !important;
                 overflow: hidden !important;
                 display: flex !important;
                 flex-direction: column !important;
-                justify-content: space-between !important;
-                padding: 1.5mm 2.5mm !important;
+                justify-content: flex-start !important;
+                gap: 1.5mm !important;
+                padding: 1.5mm 3mm !important;
+                box-sizing: border-box !important;
+                border: none !important;
+            }
+
+            body.layout-portrait .cut-divider,
+            body:not(.layout-landscape) .cut-divider {
+                width: 100% !important;
+                height: 5mm !important;
+                margin: 0 !important;
+                display: flex !important;
+                flex-direction: row !important;
+                align-items: center !important;
+                justify-content: center !important;
+                gap: 8px !important;
+            }
+
+            body.layout-portrait .cut-line-bar-vertical,
+            body:not(.layout-landscape) .cut-line-bar-vertical {
+                flex: 1 !important;
+                border-left: none !important;
+                border-top: 1px dashed #64748b !important;
+                height: 1px !important;
+                width: auto !important;
+            }
+
+            body.layout-portrait .cut-badge-vertical,
+            body:not(.layout-landscape) .cut-badge-vertical {
+                writing-mode: horizontal-tb !important;
+                transform: none !important;
+                padding: 0 8px !important;
+                font-size: 7.5pt !important;
+            }
+
+            /* LANDSCAPE PRINT (2 Side-by-Side Copies on 1 Landscape Sheet) */
+            body.layout-landscape .pages-wrapper {
+                width: 297mm !important;
+                margin: 0 auto !important;
+                padding: 5mm 7mm !important;
                 box-sizing: border-box !important;
             }
 
-            .cut-divider {
+            body.layout-landscape .page-container {
+                width: 283mm !important;
+                height: 198mm !important;
+                margin: 0 auto !important;
+                padding: 0 !important;
+                display: flex !important;
+                flex-direction: row !important;
+                justify-content: space-between !important;
+                align-items: stretch !important;
+                box-shadow: none !important;
+                border: none !important;
+                page-break-after: always !important;
+                break-after: page !important;
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+                overflow: hidden !important;
+                box-sizing: border-box !important;
+            }
+
+            body.layout-landscape .portrait-slip {
+                width: 136mm !important;
+                max-width: 136mm !important;
+                height: 198mm !important;
+                max-height: 198mm !important;
+                min-height: auto !important;
+                overflow: hidden !important;
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: flex-start !important;
+                gap: 2mm !important;
+                padding: 1.5mm 2.5mm !important;
+                box-sizing: border-box !important;
+                border: none !important;
+            }
+
+            body.layout-landscape .cut-divider {
                 width: 9mm !important;
                 height: 198mm !important;
                 margin: 0 !important;
@@ -100,6 +178,22 @@
                 flex-direction: column !important;
                 align-items: center !important;
                 justify-content: center !important;
+            }
+
+            body.layout-landscape .cut-line-bar-vertical {
+                flex: 1 !important;
+                border-left: 1px dashed #94a3b8 !important;
+                width: 1px !important;
+            }
+
+            body.layout-landscape .cut-badge-vertical {
+                writing-mode: vertical-rl !important;
+                transform: rotate(180deg) !important;
+            }
+
+            .page-container:last-child {
+                page-break-after: avoid !important;
+                break-after: avoid !important;
             }
         }
 
@@ -110,11 +204,11 @@
             body {
                 background-color: #f1f5f9;
                 background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
-                padding: 16px 16px 60px 16px;
+                padding: 12px 12px 40px 12px;
                 display: flex;
                 flex-direction: column;
                 align-items: center;
-                gap: 20px;
+                gap: 16px;
                 min-height: 100vh;
             }
 
@@ -125,13 +219,13 @@
                 flex-wrap: wrap;
                 justify-content: space-between;
                 align-items: center;
-                gap: 12px;
+                gap: 10px;
                 background: #ffffff;
                 padding: 10px 16px;
                 border-radius: 14px;
                 box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0,0,0,0.05);
                 position: sticky;
-                top: 12px;
+                top: 10px;
                 z-index: 100;
             }
 
@@ -228,7 +322,101 @@
                 color: #ffffff;
             }
 
-            .pages-wrapper {
+            /* SCREEN: DEFAULT / PORTRAIT (Stacked Top & Bottom) */
+            body.layout-portrait .pages-wrapper,
+            body:not(.layout-landscape) .pages-wrapper {
+                display: flex;
+                flex-direction: column;
+                gap: 20px;
+                align-items: center;
+                width: 100%;
+                max-width: 860px;
+                transition: transform 0.2s ease-out;
+                transform-origin: top center;
+            }
+
+            body.layout-portrait .page-container,
+            body:not(.layout-landscape) .page-container {
+                width: 100%;
+                max-width: 860px;
+                height: auto;
+                min-height: auto;
+                padding: 10px 14px;
+                background: #ffffff;
+                box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0, 0, 0, 0.05);
+                border-radius: 12px;
+                display: flex;
+                flex-direction: column; /* STACKED TOP AND BOTTOM */
+                justify-content: flex-start;
+                align-items: stretch;
+                box-sizing: border-box;
+                position: relative;
+                gap: 8px;
+            }
+
+            body.layout-portrait .portrait-slip,
+            body:not(.layout-landscape) .portrait-slip {
+                width: 100%;
+                max-width: 100%;
+                height: auto;
+                min-height: auto;
+                overflow: visible;
+                display: flex;
+                flex-direction: column;
+                justify-content: flex-start;
+                gap: 4px;
+                padding: 10px 14px;
+                background: #ffffff;
+                border: 1px dashed #cbd5e1;
+                border-radius: 8px;
+                box-sizing: border-box;
+                position: relative;
+            }
+
+            body.layout-portrait .cut-divider,
+            body:not(.layout-landscape) .cut-divider {
+                width: 100%;
+                height: 20px;
+                display: flex;
+                flex-direction: row;
+                align-items: center;
+                justify-content: center;
+                gap: 12px;
+                color: #94a3b8;
+                user-select: none;
+                padding: 0 8px;
+                box-sizing: border-box;
+            }
+
+            body.layout-portrait .cut-line-bar-vertical,
+            body:not(.layout-landscape) .cut-line-bar-vertical {
+                flex: 1;
+                border-left: none;
+                border-top: 1.5px dashed #cbd5e1;
+                height: 1px;
+                width: auto;
+            }
+
+            body.layout-portrait .cut-badge-vertical,
+            body:not(.layout-landscape) .cut-badge-vertical {
+                background: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-radius: 12px;
+                padding: 2px 10px;
+                font-weight: 800;
+                font-size: 9px;
+                letter-spacing: 0.8px;
+                color: #64748b;
+                white-space: nowrap;
+                writing-mode: horizontal-tb;
+                transform: none;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            /* SCREEN: LANDSCAPE (Side-by-Side) */
+            body.layout-landscape .pages-wrapper {
                 display: flex;
                 flex-direction: column;
                 gap: 28px;
@@ -239,34 +427,35 @@
                 transform-origin: top center;
             }
 
-            .page-container {
+            body.layout-landscape .page-container {
                 width: 100%;
                 max-width: 1160px;
-                min-height: 680px;
                 height: auto;
-                padding: 16px 20px;
+                min-height: 560px;
+                padding: 14px 18px;
                 background: #ffffff;
                 box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0, 0, 0, 0.05);
                 border-radius: 14px;
                 display: flex;
-                flex-direction: row; /* SIDE BY SIDE PORTRAIT COPIES */
+                flex-direction: row; /* SIDE BY SIDE */
                 justify-content: space-between;
                 align-items: stretch;
                 box-sizing: border-box;
                 position: relative;
-                gap: 16px;
+                gap: 14px;
             }
 
-            .portrait-slip {
+            body.layout-landscape .portrait-slip {
                 flex: 1;
                 min-width: 0;
                 height: auto;
-                min-height: 640px;
+                min-height: 520px;
                 overflow: visible;
                 display: flex;
                 flex-direction: column;
-                justify-content: space-between;
-                padding: 14px 18px;
+                justify-content: flex-start;
+                gap: 4px;
+                padding: 12px 16px;
                 background: #ffffff;
                 border: 1px dashed #cbd5e1;
                 border-radius: 10px;
@@ -274,25 +463,7 @@
                 position: relative;
             }
 
-            .slip-screen-tag {
-                display: flex;
-                justify-content: center;
-                margin-bottom: 8px;
-            }
-
-            .slip-screen-tag-pill {
-                font-size: 10px;
-                font-weight: 800;
-                text-transform: uppercase;
-                letter-spacing: 0.6px;
-                background: #f1f5f9;
-                color: #475569;
-                padding: 3px 12px;
-                border-radius: 20px;
-                border: 1px solid #e2e8f0;
-            }
-
-            .cut-divider {
+            body.layout-landscape .cut-divider {
                 width: 24px;
                 display: flex;
                 flex-direction: column;
@@ -306,13 +477,13 @@
                 align-self: stretch;
             }
 
-            .cut-line-bar-vertical {
+            body.layout-landscape .cut-line-bar-vertical {
                 flex: 1;
                 border-left: 1.5px dashed #cbd5e1;
                 width: 1.5px;
             }
 
-            .cut-badge-vertical {
+            body.layout-landscape .cut-badge-vertical {
                 background: #f8fafc;
                 border: 1px solid #e2e8f0;
                 border-radius: 12px;
@@ -329,37 +500,60 @@
                 align-items: center;
                 justify-content: center;
             }
+
+            .slip-screen-tag {
+                display: flex;
+                justify-content: center;
+                margin-bottom: 2px;
+            }
+
+            .slip-screen-tag-pill {
+                font-size: 9.5px;
+                font-weight: 800;
+                text-transform: uppercase;
+                letter-spacing: 0.6px;
+                background: #f1f5f9;
+                color: #475569;
+                padding: 2px 10px;
+                border-radius: 20px;
+                border: 1px solid #e2e8f0;
+            }
         }
 
         @media screen and (max-width: 900px) {
             body {
-                padding: 12px 8px 40px 8px;
+                padding: 8px 6px 30px 6px;
+                gap: 10px;
             }
 
             .no-print-toolbar {
                 flex-direction: column;
                 align-items: stretch;
                 gap: 8px;
+                padding: 8px 12px;
             }
 
             .page-container {
-                flex-direction: column;
-                align-items: stretch;
-                padding: 14px 12px;
-                gap: 16px;
+                flex-direction: column !important;
+                align-items: stretch !important;
+                padding: 8px 8px !important;
+                gap: 6px !important;
             }
 
             .portrait-slip {
-                max-width: 100%;
-                width: 100%;
+                max-width: 100% !important;
+                width: 100% !important;
+                min-height: auto !important;
+                padding: 8px 8px !important;
+                gap: 3px !important;
             }
 
             .cut-divider {
                 width: 100% !important;
-                height: 24px !important;
+                height: 18px !important;
                 flex-direction: row !important;
-                padding: 0 10px !important;
-                gap: 12px !important;
+                padding: 0 6px !important;
+                gap: 8px !important;
             }
 
             .cut-line-bar-vertical {
@@ -373,7 +567,8 @@
             .cut-badge-vertical {
                 writing-mode: horizontal-tb !important;
                 transform: none !important;
-                padding: 0 8px !important;
+                padding: 0 6px !important;
+                font-size: 8.5px !important;
             }
         }
 
@@ -382,10 +577,11 @@
            ------------------------------------------------------------- */
         .slip-content {
             width: 100%;
-            height: 100%;
+            height: auto;
             display: flex;
             flex-direction: column;
-            justify-content: space-between;
+            justify-content: flex-start;
+            gap: 3px;
             position: relative;
             overflow: hidden;
         }
@@ -515,9 +711,10 @@
 
         /* Line Items Table */
         .table-wrapper {
-            flex: 1;
-            min-height: 38mm;
-            margin-bottom: 3px;
+            width: 100%;
+            min-height: auto;
+            flex: none;
+            margin-bottom: 2px;
         }
 
         .items-table {
@@ -695,7 +892,7 @@
         .signatures-container {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            column-gap: 15mm;
+            column-gap: 12mm;
             margin-top: 2px;
             font-size: 7.5pt;
         }
@@ -703,7 +900,7 @@
         .sig-column {
             display: flex;
             flex-direction: column;
-            gap: 5px;
+            gap: 4px;
         }
 
         .sig-item {
@@ -719,7 +916,7 @@
 
         .sig-underline {
             width: 100%;
-            height: 14px;
+            height: 11px;
             border-bottom: 1px solid #000000;
         }
 
@@ -890,6 +1087,13 @@
                 <select id="doc-title-select" onchange="updateDocTitle()">
                     <option value="SALES ORDER" selected>SALES ORDER (as in photo)</option>
                     <option value="JOB ORDER">JOB ORDER</option>
+                </select>
+            </div>
+            <div class="title-toggle">
+                <span>Layout:</span>
+                <select id="doc-layout-select" onchange="updateDocLayout()">
+                    <option value="portrait" selected>📄 2 Copies • Portrait (Stacked)</option>
+                    <option value="landscape">📑 2 Copies • Landscape (Side-by-Side)</option>
                 </select>
             </div>
             <button type="button" onclick="toggleEditMode()" id="btn-toggle-edit" class="toolbar-btn toolbar-btn-edit">
@@ -1336,12 +1540,23 @@
                 if (btn) btn.classList.add('active');
                 
                 const winW = window.innerWidth;
-                if (winW < 1220) {
-                    const ratio = Math.max(0.45, Math.min(1, (winW - 48) / 1160));
-                    wrapper.style.transform = `scale(${ratio.toFixed(2)})`;
-                    wrapper.style.transformOrigin = 'top center';
+                const isLandscape = document.body.classList.contains('layout-landscape');
+                if (isLandscape) {
+                    if (winW < 1220) {
+                        const ratio = Math.max(0.45, Math.min(1, (winW - 48) / 1160));
+                        wrapper.style.transform = `scale(${ratio.toFixed(2)})`;
+                        wrapper.style.transformOrigin = 'top center';
+                    } else {
+                        wrapper.style.transform = 'none';
+                    }
                 } else {
-                    wrapper.style.transform = 'none';
+                    if (winW < 860 && winW > 600) {
+                        const ratio = Math.max(0.70, Math.min(1, (winW - 32) / 840));
+                        wrapper.style.transform = `scale(${ratio.toFixed(2)})`;
+                        wrapper.style.transformOrigin = 'top center';
+                    } else {
+                        wrapper.style.transform = 'none';
+                    }
                 }
             } else {
                 const num = Number(val);
@@ -1355,6 +1570,42 @@
                     wrapper.style.transform = `scale(${num})`;
                     wrapper.style.transformOrigin = 'top center';
                 }
+            }
+        }
+
+        function updateDocLayout(layoutMode) {
+            const select = document.getElementById('doc-layout-select');
+            const chosen = layoutMode || (select ? select.value : 'portrait');
+            if (select && select.value !== chosen) select.value = chosen;
+
+            const printBtn = document.getElementById('btn-print-main');
+
+            let pageStyle = document.getElementById('dynamic-page-orientation');
+            if (!pageStyle) {
+                pageStyle = document.createElement('style');
+                pageStyle.id = 'dynamic-page-orientation';
+                document.head.appendChild(pageStyle);
+            }
+
+            if (chosen === 'landscape') {
+                document.body.classList.remove('layout-portrait');
+                document.body.classList.add('layout-landscape');
+                pageStyle.textContent = '@page { size: A4 landscape; margin: 0; }';
+                if (printBtn) {
+                    printBtn.innerHTML = '<span>🖨️ Print 2 Copies (A4 Landscape)</span>';
+                }
+            } else {
+                document.body.classList.remove('layout-landscape');
+                document.body.classList.add('layout-portrait');
+                pageStyle.textContent = '@page { size: portrait; margin: 0; }';
+                if (printBtn) {
+                    printBtn.innerHTML = '<span>🖨️ Print 2 Copies (Portrait Stacked)</span>';
+                }
+            }
+
+            const activeFit = document.getElementById('zoom-fit');
+            if (activeFit && activeFit.classList.contains('active')) {
+                setZoom('fit');
             }
         }
 
@@ -1436,6 +1687,9 @@
                 if (badge) badge.textContent = `(${clientName} • ${soNo} • ${itemCount} Product${itemCount !== 1 ? 's' : ''})`;
                 if (printBtn) printBtn.innerHTML = `<span>🖨️ Print 2 Portrait Copies (A4 Landscape)</span>`;
             }
+
+            // Apply the selected layout (portrait stacked by default) — also sets @page and print label
+            updateDocLayout();
 
             // Auto-fit on small screens if window is narrow
             if (window.innerWidth < 1200) {
