@@ -868,9 +868,16 @@ async function loadOrders() {
             <tr class="bg-white hover:bg-slate-50/90 transition shadow-xs rounded-2xl group ${isVoided ? 'opacity-60 bg-rose-50/20' : ''}">
                 <td class="py-3.5 px-4 whitespace-nowrap rounded-l-2xl border-y border-l border-slate-200/90 border-l-4 ${statusBorderColor}">
                     <div class="text-[11px] text-slate-500 font-semibold leading-none mb-1">${NKB.formatDate(po.po_date)}</div>
-                    <button type="button" onclick="openViewPOModal('${po.id}')" class="font-mono font-black text-indigo-600 hover:text-indigo-800 hover:underline text-left block text-sm tracking-tight" title="Click to view full PO details">
-                        ${po.po_number}
-                    </button>
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        <button type="button" onclick="openViewPOModal('${po.id}')" class="font-mono font-black text-indigo-600 hover:text-indigo-800 hover:underline text-left block text-sm tracking-tight" title="Click to view full PO details">
+                            ${po.po_number}
+                        </button>
+                        ${po.category ? `
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border shadow-2xs inline-flex items-center gap-1" style="background-color: ${po.effective_category_color || po.category_color || '#8b5cf6'}18; color: ${po.effective_category_color || po.category_color || '#8b5cf6'}; border-color: ${po.effective_category_color || po.category_color || '#8b5cf6'}40;" title="Category: ${po.category}">
+                                <span class="w-1.5 h-1.5 rounded-full" style="background-color: ${po.effective_category_color || po.category_color || '#8b5cf6'}"></span>${po.category}
+                            </span>
+                        ` : ''}
+                    </div>
                     ${po.form_of_payment ? `
                         <div class="mt-1">
                             <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 inline-flex items-center gap-1" title="Term of Payment: ${po.form_of_payment}">
@@ -7254,7 +7261,7 @@ async function openCreatePOModal() {
                     </button>
                 </div>
                 <form id="form-create-po" onsubmit="submitCreatePO(event)" class="space-y-4 text-xs font-normal flex-1 overflow-y-auto pr-1">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                         <div>
                             <label class="block text-slate-500 font-medium text-xs mb-1.5 uppercase tracking-wider">Select Client *</label>
                             <select id="po-client-id" onchange="onAdminPOClientChanged()" required class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white font-normal text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
@@ -7279,6 +7286,13 @@ async function openCreatePOModal() {
                                 <option value="CUSTOM">Custom Term...</option>
                             </select>
                             <input type="text" id="create-po-form-of-payment-custom" placeholder="e.g. 50% DP, 50% upon delivery..." class="hidden mt-1.5 w-full px-3 py-2 border border-slate-200 rounded-xl bg-white text-xs font-normal text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
+                        </div>
+                        <div>
+                            <label class="block text-slate-500 font-medium text-xs mb-1.5 uppercase tracking-wider">Order Category</label>
+                            <select id="create-po-category" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white font-normal text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
+                                <option value="">Auto-Detect from Items</option>
+                                ${(window.cachedOrderCategories || []).map(cat => `<option value="${cat.name}">${cat.name}</option>`).join('')}
+                            </select>
                         </div>
                         <!-- Hidden Billing Policy (defaults to ACTUAL_DELIVERY) -->
                         <input type="hidden" id="po-billing-policy" value="ACTUAL_DELIVERY">
@@ -7839,6 +7853,7 @@ async function submitCreatePO(e) {
                 tolerance_percent: tolerance,
                 billing_policy: policy,
                 form_of_payment: formOfPayment,
+                category: document.getElementById('create-po-category')?.value || undefined,
                 notes,
                 items: adminPOLineItems.map(item => {
                     const prod = adminPOCatalog.find(p => p.id === item.product_id);
@@ -13606,6 +13621,7 @@ async function loadITManagement(table = null, page = 1) {
     }
 
     renderITTablePills();
+    await loadOrderCategories();
     await fetchAndRenderITRecords();
 }
 
@@ -14356,7 +14372,318 @@ async function deleteITRecord(table, id) {
     }
 }
 
+// =============================================================
+// ORDER CATEGORIES & COLOR CODING MANAGEMENT (IT Management)
+// =============================================================
+
+const DEFAULT_SUGGESTED_COLORS = [
+    { name: 'Royal Violet (Perfume)', hex: '#8b5cf6' },
+    { name: 'Rose Pink (Fragrance)', hex: '#ec4899' },
+    { name: 'Warm Amber (Soap)', hex: '#f59e0b' },
+    { name: 'Emerald Green (Lotion)', hex: '#10b981' },
+    { name: 'Sky Blue', hex: '#0ea5e9' },
+    { name: 'Indigo Blue', hex: '#6366f1' },
+    { name: 'Teal', hex: '#14b8a6' },
+    { name: 'Vibrant Orange', hex: '#f97316' },
+    { name: 'Cyan Aqua', hex: '#06b6d4' },
+    { name: 'Lime Green', hex: '#84cc16' },
+    { name: 'Fuchsia', hex: '#d946ef' },
+    { name: 'Slate Gray', hex: '#64748b' }
+];
+
+window.cachedOrderCategories = window.cachedOrderCategories || [];
+
+async function loadOrderCategories() {
+    try {
+        const res = await NKB.api('/api/order-categories');
+        if (res.success && res.data) {
+            window.cachedOrderCategories = res.data.categories || [];
+            renderOrderCategoriesGrid(window.cachedOrderCategories);
+            populateCategoryAssignDropdowns(window.cachedOrderCategories);
+        }
+    } catch (err) {
+        console.error('Failed to load order categories:', err);
+    }
+}
+
+function renderOrderCategoriesGrid(categories) {
+    const grid = document.getElementById('it-categories-grid');
+    if (!grid) return;
+
+    if (!categories || categories.length === 0) {
+        grid.innerHTML = '<div class="col-span-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-center text-slate-400 text-xs">No order categories configured yet. Click "+ New Category" to create one.</div>';
+        return;
+    }
+
+    grid.innerHTML = categories.map(cat => {
+        const color = cat.color || '#8b5cf6';
+        return `
+            <div class="bg-white p-3.5 rounded-xl border border-slate-200/90 shadow-2xs hover:border-slate-300 transition space-y-2.5">
+                <div class="flex items-center justify-between gap-2">
+                    <span class="px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-wider border shadow-2xs inline-flex items-center gap-1.5" style="background-color: ${color}18; color: ${color}; border-color: ${color}40;">
+                        <span class="w-2 h-2 rounded-full" style="background-color: ${color}"></span>
+                        <span>${cat.name}</span>
+                    </span>
+                    <span class="px-2 py-0.5 rounded-md text-[10.5px] font-bold bg-slate-100 text-slate-700 font-mono">
+                        ${cat.order_count || 0} Orders
+                    </span>
+                </div>
+                ${cat.description ? `<p class="text-[11px] text-slate-500 line-clamp-2">${cat.description}</p>` : '<p class="text-[11px] text-slate-400 italic">No description</p>'}
+                <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-[11px]">
+                    <span class="font-mono text-[10px] text-slate-500 font-bold">${color.toUpperCase()}</span>
+                    <div class="flex items-center gap-1">
+                        <button type="button" onclick="openCategoryModal('${cat.id}')" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold text-xs cursor-pointer">✏️ Edit</button>
+                        <button type="button" onclick="deleteCategory('${cat.id}', '${cat.name.replace(/'/g, "\\'")}')" class="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg font-bold text-xs cursor-pointer" title="Delete Category">🗑️</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function populateCategoryAssignDropdowns(categories) {
+    const catSelect = document.getElementById('it-assign-cat-select');
+    if (catSelect) {
+        catSelect.innerHTML = '<option value="">-- Choose Category --</option>' +
+            categories.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+    }
+
+    const poSelect = document.getElementById('it-assign-po-select');
+    if (poSelect) {
+        const orders = (window.cachedOrders && window.cachedOrders.length > 0)
+            ? window.cachedOrders
+            : ((typeof itLookups !== 'undefined' && itLookups && itLookups.orders) ? itLookups.orders : []);
+        poSelect.innerHTML = '<option value="">-- Select Purchase Order --</option>' +
+            orders.map(o => {
+                const catTag = o.category ? ` [${o.category}]` : '';
+                return `<option value="${o.id}">${o.po_number || o.id} - ${o.company_name || o.client_company_name || ''}${catTag}</option>`;
+            }).join('');
+    }
+
+    renderCategoryModalSwatches();
+}
+
+function renderCategoryModalSwatches() {
+    const container = document.getElementById('cat-modal-swatches');
+    if (!container) return;
+
+    container.innerHTML = DEFAULT_SUGGESTED_COLORS.map(sw => {
+        return `
+            <button type="button" onclick="setCategoryModalColor('${sw.hex}')" title="${sw.name} (${sw.hex})" class="h-7 rounded-lg border-2 border-white shadow-2xs hover:scale-110 transition cursor-pointer flex items-center justify-center" style="background-color: ${sw.hex}">
+            </button>
+        `;
+    }).join('');
+}
+
+function setCategoryModalColor(hex) {
+    const picker = document.getElementById('cat-modal-color-picker');
+    const hexInput = document.getElementById('cat-modal-color-hex');
+    if (picker) picker.value = hex;
+    if (hexInput) hexInput.value = hex.toUpperCase();
+    updateCategoryModalPreview();
+}
+
+function onCategoryColorPickerChange(val) {
+    const hexInput = document.getElementById('cat-modal-color-hex');
+    if (hexInput) hexInput.value = val.toUpperCase();
+    updateCategoryModalPreview();
+}
+
+function onCategoryColorHexInput(val) {
+    const picker = document.getElementById('cat-modal-color-picker');
+    if (/^#[0-9A-Fa-f]{6}$/.test(val)) {
+        if (picker) picker.value = val;
+    }
+    updateCategoryModalPreview();
+}
+
+function updateCategoryModalPreview() {
+    const hexInput = document.getElementById('cat-modal-color-hex');
+    const nameInput = document.getElementById('cat-modal-name');
+    const preview = document.getElementById('cat-modal-preview');
+    const previewDot = document.getElementById('cat-modal-preview-dot');
+    const previewText = document.getElementById('cat-modal-preview-text');
+
+    const color = (hexInput && hexInput.value && /^#[0-9A-Fa-f]{6}$/.test(hexInput.value)) ? hexInput.value : '#8b5cf6';
+    const text = (nameInput && nameInput.value.trim()) ? nameInput.value.trim() : 'Preview Badge';
+
+    if (preview) {
+        preview.style.backgroundColor = `${color}18`;
+        preview.style.color = color;
+        preview.style.borderColor = `${color}40`;
+    }
+    if (previewDot) previewDot.style.backgroundColor = color;
+    if (previewText) previewText.textContent = text;
+}
+
+function openCategoryModal(catId = null) {
+    const modal = document.getElementById('modal-order-category');
+    if (!modal) return;
+
+    const idInput = document.getElementById('cat-modal-id');
+    const nameInput = document.getElementById('cat-modal-name');
+    const descInput = document.getElementById('cat-modal-desc');
+    const titleEl = document.getElementById('cat-modal-title');
+
+    renderCategoryModalSwatches();
+
+    if (catId) {
+        const cat = (window.cachedOrderCategories || []).find(c => c.id === catId);
+        if (cat) {
+            if (idInput) idInput.value = cat.id;
+            if (nameInput) nameInput.value = cat.name;
+            if (descInput) descInput.value = cat.description || '';
+            if (titleEl) titleEl.textContent = `Edit Category: ${cat.name}`;
+            setCategoryModalColor(cat.color || '#8b5cf6');
+        }
+    } else {
+        if (idInput) idInput.value = '';
+        if (nameInput) nameInput.value = '';
+        if (descInput) descInput.value = '';
+        if (titleEl) titleEl.textContent = 'New Order Category';
+        setCategoryModalColor('#8b5cf6');
+    }
+
+    if (nameInput) {
+        nameInput.oninput = updateCategoryModalPreview;
+    }
+
+    modal.classList.remove('hidden');
+    setTimeout(() => { if (nameInput) nameInput.focus(); }, 50);
+}
+
+function closeCategoryModal() {
+    const modal = document.getElementById('modal-order-category');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function saveCategory(e) {
+    if (e) e.preventDefault();
+    const id = document.getElementById('cat-modal-id')?.value;
+    const name = document.getElementById('cat-modal-name')?.value?.trim();
+    const description = document.getElementById('cat-modal-desc')?.value?.trim();
+    const color = document.getElementById('cat-modal-color-hex')?.value?.trim() || '#8b5cf6';
+
+    if (!name) {
+        NKB.showToast('Please enter a category name.', 'error');
+        return;
+    }
+
+    const payload = { name, color, description };
+    const method = id ? 'PUT' : 'POST';
+    const url = id ? `/api/order-categories/${id}` : '/api/order-categories';
+
+    try {
+        const res = await NKB.api(url, {
+            method,
+            body: JSON.stringify(payload)
+        });
+
+        if (res.success) {
+            NKB.showToast(`Category "${name}" saved successfully!`, 'success');
+            closeCategoryModal();
+            await loadOrderCategories();
+            if (typeof loadOrders === 'function') loadOrders();
+            if (typeof renderProductionOrdersQueue === 'function') renderProductionOrdersQueue();
+        } else {
+            NKB.showToast(res.error || 'Failed to save category.', 'error');
+        }
+    } catch (err) {
+        console.error('Error saving category:', err);
+        NKB.showToast(err.message, 'error');
+    }
+}
+
+async function deleteCategory(id, name) {
+    if (!confirm(`Are you sure you want to delete category "${name}"? Orders assigned to this category will be unassigned.`)) {
+        return;
+    }
+
+    try {
+        const res = await NKB.api(`/api/order-categories/${id}`, {
+            method: 'DELETE'
+        });
+
+        if (res.success) {
+            NKB.showToast(`Category "${name}" deleted.`, 'info');
+            await loadOrderCategories();
+            if (typeof loadOrders === 'function') loadOrders();
+        } else {
+            NKB.showToast(res.error || 'Failed to delete category.', 'error');
+        }
+    } catch (err) {
+        console.error('Error deleting category:', err);
+        NKB.showToast(err.message, 'error');
+    }
+}
+
+async function executeAssignOrderCategory() {
+    const poSelect = document.getElementById('it-assign-po-select');
+    const catSelect = document.getElementById('it-assign-cat-select');
+
+    const poId = poSelect ? poSelect.value : null;
+    const category = catSelect ? catSelect.value : null;
+
+    if (!poId) {
+        NKB.showToast('Please select a purchase order.', 'error');
+        return;
+    }
+
+    try {
+        const res = await NKB.api('/api/order-categories/assign', {
+            method: 'POST',
+            body: JSON.stringify({ po_ids: [poId], category })
+        });
+
+        if (res.success) {
+            NKB.showToast(`Category updated to "${category || 'None'}"!`, 'success');
+            await loadOrderCategories();
+            if (typeof loadOrders === 'function') loadOrders();
+        } else {
+            NKB.showToast(res.error || 'Failed to assign category.', 'error');
+        }
+    } catch (err) {
+        console.error('Error assigning category:', err);
+        NKB.showToast(err.message, 'error');
+    }
+}
+
+async function executeAutoAssignCategories() {
+    if (!confirm('Auto-detect fragrance, perfume, soap, and lotion keywords and assign categories to all matching orders?')) {
+        return;
+    }
+
+    try {
+        const res = await NKB.api('/api/order-categories/auto-assign', {
+            method: 'POST'
+        });
+
+        if (res.success) {
+            NKB.showToast(`⚡ Auto-assigned categories to ${res.data?.assigned_count || 0} order(s)!`, 'success');
+            await loadOrderCategories();
+            if (typeof loadOrders === 'function') loadOrders();
+            if (typeof renderProductionOrdersQueue === 'function') renderProductionOrdersQueue();
+        } else {
+            NKB.showToast(res.error || 'Failed to auto-assign categories.', 'error');
+        }
+    } catch (err) {
+        console.error('Error auto-assigning categories:', err);
+        NKB.showToast(err.message, 'error');
+    }
+}
+
 // Global exports for inline HTML event handlers
+window.loadOrderCategories = loadOrderCategories;
+window.openCategoryModal = openCategoryModal;
+window.closeCategoryModal = closeCategoryModal;
+window.saveCategory = saveCategory;
+window.deleteCategory = deleteCategory;
+window.executeAssignOrderCategory = executeAssignOrderCategory;
+window.executeAutoAssignCategories = executeAutoAssignCategories;
+window.setCategoryModalColor = setCategoryModalColor;
+window.onCategoryColorPickerChange = onCategoryColorPickerChange;
+window.onCategoryColorHexInput = onCategoryColorHexInput;
+window.updateCategoryModalPreview = updateCategoryModalPreview;
 window.loadITManagement = loadITManagement;
 window.selectITTable = selectITTable;
 window.debounceITSearch = debounceITSearch;
@@ -14704,7 +15031,14 @@ function renderProductionSalesOrderBoard() {
                             <button onclick="updateOrderProductionSchedule('${po.id}', { move_direction: 'DOWN' })" title="Move Down in Queue" class="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-bold cursor-pointer">↓</button>
                         </div>
                         <div>
-                            <button onclick="openViewPOModal('${po.id}')" class="font-black text-indigo-600 hover:underline text-xs cursor-pointer block leading-tight text-left">${soNum}</button>
+                            <div class="flex items-center gap-1.5 flex-wrap">
+                                <button onclick="openViewPOModal('${po.id}')" class="font-black text-indigo-600 hover:underline text-xs cursor-pointer block leading-tight text-left">${soNum}</button>
+                                ${po.category ? `
+                                    <span class="px-1.5 py-0.2 rounded-full text-[9px] font-black uppercase tracking-wider border shadow-2xs inline-flex items-center gap-1" style="background-color: ${po.effective_category_color || po.category_color || '#8b5cf6'}18; color: ${po.effective_category_color || po.category_color || '#8b5cf6'}; border-color: ${po.effective_category_color || po.category_color || '#8b5cf6'}40;" title="Category: ${po.category}">
+                                        <span class="w-1.5 h-1.5 rounded-full" style="background-color: ${po.effective_category_color || po.category_color || '#8b5cf6'}"></span>${po.category}
+                                    </span>
+                                ` : ''}
+                            </div>
                             <div class="text-[9.5px] text-slate-400 font-mono mt-0.5">${po.po_number} · ${po.po_date ? po.po_date.slice(5) : ''}</div>
                         </div>
                     </div>

@@ -1829,6 +1829,56 @@
                     </div>
                 </div>
 
+                <!-- ORDER CATEGORIES & COLOR CODING CONTROL PANEL -->
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                        <div class="flex items-center gap-2.5">
+                            <span class="text-2xl">🏷️</span>
+                            <div>
+                                <h3 class="font-black text-slate-900 text-sm sm:text-base">Order Categories & Color-Coded Assignment</h3>
+                                <p class="text-xs text-slate-500">Configure order categories (Fragrance, Perfume, Soap, Lotion, etc.) with custom hex & palette colors. Category pills display across PO lists, SO Queue, and order views.</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <button onclick="executeAutoAssignCategories()" class="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer" title="Auto-detect perfume, fragrance, soap, lotion keywords and tag existing orders">
+                                <span>⚡ Auto-Assign Existing Orders</span>
+                            </button>
+                            <button onclick="openCategoryModal()" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-indigo-600/20 cursor-pointer">
+                                <span>➕ New Category</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Category Cards Grid -->
+                    <div>
+                        <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Configured Categories & Palettes</div>
+                        <div id="it-categories-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                            <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 text-center text-slate-400 text-xs">Loading categories...</div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Order Category Assigner -->
+                    <div class="pt-3 border-t border-slate-100">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div class="flex items-center gap-2">
+                                <span class="text-sm">🎯</span>
+                                <span class="text-xs font-bold text-slate-700">Quick Assign Category to Order:</span>
+                            </div>
+                            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-1 max-w-2xl sm:justify-end">
+                                <select id="it-assign-po-select" class="text-xs p-2 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white flex-1 min-w-[200px]">
+                                    <option value="">Select Purchase Order...</option>
+                                </select>
+                                <select id="it-assign-cat-select" class="text-xs p-2 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white min-w-[150px]">
+                                    <option value="">Select Category...</option>
+                                </select>
+                                <button onclick="executeAssignOrderCategory()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition flex items-center justify-center gap-1.5 shrink-0 cursor-pointer">
+                                    <span>Assign</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- TABLE SELECTOR PILLS -->
                 <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
                     <div class="text-xs font-bold uppercase tracking-wider text-slate-400">Select Database Entity / Records To Edit</div>
@@ -2197,6 +2247,73 @@
                     </button>
                     <button type="submit" form="form-it-edit-record" id="it-modal-save-btn" class="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-md shadow-rose-600/20 transition flex items-center gap-1.5">
                         <span>💾 Save Record Changes</span>
+                    </button>
+                </div>
+        <!-- ORDER CATEGORY MODAL -->
+        <div id="modal-order-category" class="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+            <div class="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-150">
+                <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+                    <div class="flex items-center gap-2.5">
+                        <span class="text-xl">🏷️</span>
+                        <div>
+                            <h3 class="font-bold text-sm text-white" id="cat-modal-title">New Order Category</h3>
+                            <div class="text-[10px] text-slate-400">Set customized name, color, and manufacturing description</div>
+                        </div>
+                    </div>
+                    <button type="button" onclick="closeCategoryModal()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+
+                <form id="form-order-category" onsubmit="saveCategory(event)" class="p-6 space-y-4 overflow-y-auto text-xs">
+                    <input type="hidden" id="cat-modal-id">
+
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-700 mb-1">Category Name *</label>
+                        <input type="text" id="cat-modal-name" required placeholder="e.g. Perfume, Fragrance, Soap, Lotion..." class="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 font-bold text-slate-800">
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-700 mb-1">Description (Optional)</label>
+                        <input type="text" id="cat-modal-desc" placeholder="e.g. Fine fragrances, colognes & body mists" class="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 text-slate-700">
+                    </div>
+
+                    <!-- Color Picker Section -->
+                    <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <label class="text-[11px] font-bold text-slate-700">Badge & Indicator Color *</label>
+                            <!-- Live Preview Pill -->
+                            <span id="cat-modal-preview" class="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider border shadow-2xs inline-flex items-center gap-1.5" style="background-color: #8b5cf618; color: #8b5cf6; border-color: #8b5cf640;">
+                                <span id="cat-modal-preview-dot" class="w-2 h-2 rounded-full" style="background-color: #8b5cf6"></span>
+                                <span id="cat-modal-preview-text">Preview Badge</span>
+                            </span>
+                        </div>
+
+                        <!-- Custom Hex & Color Picker -->
+                        <div class="flex items-center gap-3">
+                            <input type="color" id="cat-modal-color-picker" value="#8b5cf6" onchange="onCategoryColorPickerChange(this.value)" class="w-10 h-10 rounded-xl border border-slate-300 p-0.5 cursor-pointer shrink-0">
+                            <div class="flex-1">
+                                <label class="text-[10px] text-slate-400 uppercase font-bold block mb-0.5">Hex Code</label>
+                                <input type="text" id="cat-modal-color-hex" value="#8b5cf6" oninput="onCategoryColorHexInput(this.value)" placeholder="#8b5cf6" class="w-full text-xs p-2 font-mono border border-slate-300 rounded-lg bg-white uppercase font-bold text-slate-800">
+                            </div>
+                        </div>
+
+                        <!-- Suggested Swatches Palette -->
+                        <div>
+                            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Suggested Manufacturing Colors</span>
+                            <div class="grid grid-cols-6 gap-2" id="cat-modal-swatches">
+                                <!-- Populated dynamically by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+                </form>
+
+                <div class="px-6 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+                    <button type="button" onclick="closeCategoryModal()" class="px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 transition">
+                        Cancel
+                    </button>
+                    <button type="submit" form="form-order-category" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 transition flex items-center gap-1.5 cursor-pointer">
+                        <span>💾 Save Category</span>
                     </button>
                 </div>
             </div>

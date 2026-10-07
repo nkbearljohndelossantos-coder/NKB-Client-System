@@ -1463,9 +1463,14 @@ async function openViewPOModal(poId) {
                     <div class="flex items-center gap-3">
                         <span class="text-2xl">📋</span>
                         <div>
-                            <div class="flex items-center gap-2">
+                            <div class="flex items-center gap-2 flex-wrap">
                                 <h3 class="text-xl font-black text-slate-900 font-mono">${po.po_number}</h3>
                                 ${NKB.renderStatusBadge(po.status)}
+                                ${po.category ? `
+                                    <span class="px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-wider border shadow-2xs inline-flex items-center gap-1.5" style="background-color: ${po.effective_category_color || po.category_color || '#8b5cf6'}18; color: ${po.effective_category_color || po.category_color || '#8b5cf6'}; border-color: ${po.effective_category_color || po.category_color || '#8b5cf6'}40;" title="Order Category: ${po.category}">
+                                        <span class="w-2 h-2 rounded-full" style="background-color: ${po.effective_category_color || po.category_color || '#8b5cf6'}"></span>${po.category}
+                                    </span>
+                                ` : ''}
                             </div>
                             <p class="text-xs text-slate-500">Purchase Order Details & Manufacturing Specifications</p>
                         </div>
@@ -1981,20 +1986,29 @@ async function openEditPOModal(poId) {
                     </div>
 
                     <input type="hidden" id="edit-po-billing-policy" value="${po.billing_policy || 'ACTUAL_DELIVERY'}">
-                    <div>
-                        <label class="block text-slate-500 font-medium text-xs mb-1.5 uppercase tracking-wider">Term of Payment *</label>
-                        <select id="edit-po-form-of-payment" onchange="toggleCustomPOTerm('edit')" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white font-normal text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
-                            <option value="COD" ${selectedTerm === 'COD' ? 'selected' : ''}>COD (Cash on Delivery)</option>
-                            <option value="7d" ${selectedTerm === '7d' ? 'selected' : ''}>7d (7 Days)</option>
-                            <option value="15d" ${selectedTerm === '15d' ? 'selected' : ''}>15d (15 Days)</option>
-                            <option value="30d" ${selectedTerm === '30d' ? 'selected' : ''}>30d (30 Days)</option>
-                            <option value="45d" ${selectedTerm === '45d' ? 'selected' : ''}>45d (45 Days)</option>
-                            <option value="60d" ${selectedTerm === '60d' ? 'selected' : ''}>60d (60 Days)</option>
-                            <option value="90d" ${selectedTerm === '90d' ? 'selected' : ''}>90d (90 Days)</option>
-                            <option value="105d" ${selectedTerm === '105d' ? 'selected' : ''}>105d (105 Days)</option>
-                            <option value="CUSTOM" ${isCustom ? 'selected' : ''}>Custom Term...</option>
-                        </select>
-                        <input type="text" id="edit-po-form-of-payment-custom" value="${isCustom ? rawTerm.replace(/"/g, '&quot;') : ''}" placeholder="e.g. 50% DP, 50% upon delivery..." class="${isCustom ? '' : 'hidden'} mt-1.5 w-full px-3 py-2 border border-slate-200 rounded-xl bg-white text-xs font-normal text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                        <div>
+                            <label class="block text-slate-500 font-medium text-xs mb-1.5 uppercase tracking-wider">Term of Payment *</label>
+                            <select id="edit-po-form-of-payment" onchange="toggleCustomPOTerm('edit')" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white font-normal text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
+                                <option value="COD" ${selectedTerm === 'COD' ? 'selected' : ''}>COD (Cash on Delivery)</option>
+                                <option value="7d" ${selectedTerm === '7d' ? 'selected' : ''}>7d (7 Days)</option>
+                                <option value="15d" ${selectedTerm === '15d' ? 'selected' : ''}>15d (15 Days)</option>
+                                <option value="30d" ${selectedTerm === '30d' ? 'selected' : ''}>30d (30 Days)</option>
+                                <option value="45d" ${selectedTerm === '45d' ? 'selected' : ''}>45d (45 Days)</option>
+                                <option value="60d" ${selectedTerm === '60d' ? 'selected' : ''}>60d (60 Days)</option>
+                                <option value="90d" ${selectedTerm === '90d' ? 'selected' : ''}>90d (90 Days)</option>
+                                <option value="105d" ${selectedTerm === '105d' ? 'selected' : ''}>105d (105 Days)</option>
+                                <option value="CUSTOM" ${isCustom ? 'selected' : ''}>Custom Term...</option>
+                            </select>
+                            <input type="text" id="edit-po-form-of-payment-custom" value="${isCustom ? rawTerm.replace(/"/g, '&quot;') : ''}" placeholder="e.g. 50% DP, 50% upon delivery..." class="${isCustom ? '' : 'hidden'} mt-1.5 w-full px-3 py-2 border border-slate-200 rounded-xl bg-white text-xs font-normal text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
+                        </div>
+                        <div>
+                            <label class="block text-slate-500 font-medium text-xs mb-1.5 uppercase tracking-wider">Order Category</label>
+                            <select id="edit-po-category" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white font-normal text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
+                                <option value="">-- No Category --</option>
+                                ${(window.cachedOrderCategories || []).map(cat => `<option value="${cat.name}" ${po.category && po.category.toLowerCase() === cat.name.toLowerCase() ? 'selected' : ''}>${cat.name}</option>`).join('')}
+                            </select>
+                        </div>
                     </div>
 
                     <!-- Multi-Brand Search with Suggestions (Edit Mode) -->
@@ -2483,6 +2497,7 @@ async function submitEditPO(e) {
             expected_delivery_date: deliveryDate || null,
             billing_policy: policy,
             form_of_payment: formOfPayment,
+            category: document.getElementById('edit-po-category')?.value || null,
             notes,
             items: editPOLineItems.map(item => {
                 const prod = editPOCatalog.find(p => p.id === item.product_id);

@@ -4360,6 +4360,78 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.strictEqual(updatedPersistedPricing.custom_price, updatedCustomPrice);
     });
 
+    test('91. Order Categories & Color Coding: Admin can list, create, assign, and auto-assign custom color-coded order categories', async () => {
+        // 1. Fetch categories list & suggested palette colors
+        const listRes = await request(app)
+            .get('/api/order-categories')
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(listRes.status, 200);
+        assert.strictEqual(listRes.body.success, true);
+        assert.ok(Array.isArray(listRes.body.data.categories));
+        assert.ok(Array.isArray(listRes.body.data.suggested_colors));
+        assert.ok(listRes.body.data.suggested_colors.length >= 10);
+
+        // Verify pre-seeded categories (Fragrance & Perfume)
+        const fragranceCat = listRes.body.data.categories.find(c => c.name.toLowerCase() === 'fragrance');
+        const perfumeCat = listRes.body.data.categories.find(c => c.name.toLowerCase() === 'perfume');
+        assert.ok(fragranceCat, 'Fragrance category should be seeded');
+        assert.strictEqual(fragranceCat.color.toLowerCase(), '#ec4899');
+        assert.ok(perfumeCat, 'Perfume category should be seeded');
+        assert.strictEqual(perfumeCat.color.toLowerCase(), '#8b5cf6');
+
+        // 2. Admin creates a new custom category (Soap with #f59e0b)
+        const createCatRes = await request(app)
+            .post('/api/order-categories')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                name: 'Organic Soap',
+                color: '#f59e0b',
+                description: 'Cold-processed soaps and bar cosmetics'
+            });
+        assert.strictEqual(createCatRes.status, 201);
+        assert.strictEqual(createCatRes.body.success, true);
+        const newCat = createCatRes.body.data;
+        assert.strictEqual(newCat.name, 'Organic Soap');
+        assert.strictEqual(newCat.color, '#f59e0b');
+
+        // 3. Assign this category to an order
+        const anyPo = db.prepare("SELECT id FROM purchase_orders ORDER BY created_at DESC LIMIT 1").get();
+        assert.ok(anyPo, 'A purchase order must exist to test category assignment');
+
+        const assignRes = await request(app)
+            .post('/api/order-categories/assign')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                po_ids: [anyPo.id],
+                category: 'Organic Soap'
+            });
+        assert.strictEqual(assignRes.status, 200);
+        assert.strictEqual(assignRes.body.success, true);
+
+        // 4. Retrieve order via GET /api/orders/:id and check category and effective_category_color
+        const poRes = await request(app)
+            .get(`/api/orders/${anyPo.id}`)
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(poRes.status, 200);
+        assert.strictEqual(poRes.body.data.category, 'Organic Soap');
+        assert.strictEqual(poRes.body.data.effective_category_color, '#f59e0b');
+
+        // 5. Test auto-assignment endpoint
+        const autoAssignRes = await request(app)
+            .post('/api/order-categories/auto-assign')
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(autoAssignRes.status, 200);
+        assert.strictEqual(autoAssignRes.body.success, true);
+        assert.ok(autoAssignRes.body.data.assigned_count >= 0);
+
+        // 6. Clean up created category
+        const delRes = await request(app)
+            .delete(`/api/order-categories/${newCat.id}`)
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(delRes.status, 200);
+        assert.strictEqual(delRes.body.success, true);
+    });
+
     after(() => {
         try {
             realtimeSyncService.closeAllClients();

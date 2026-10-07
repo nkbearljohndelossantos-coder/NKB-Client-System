@@ -87,6 +87,16 @@ CREATE TABLE IF NOT EXISTS product_categories (
     created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 
+-- Order Categories with Color Coding
+CREATE TABLE IF NOT EXISTS order_categories (
+    id TEXT PRIMARY KEY,
+    name TEXT UNIQUE NOT NULL,
+    color TEXT NOT NULL DEFAULT '#8b5cf6',
+    description TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+
 -- Client-Specific Product Catalog & Custom Pricing Table
 CREATE TABLE IF NOT EXISTS client_product_prices (
     id TEXT PRIMARY KEY,
@@ -115,6 +125,8 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
     tolerance_percent REAL NOT NULL DEFAULT 10.0,
     billing_policy TEXT NOT NULL DEFAULT 'ACTUAL_DELIVERY' CHECK (billing_policy IN ('ACTUAL_DELIVERY', 'FIXED_PO_BUFFER')),
     status TEXT NOT NULL DEFAULT 'PENDING_APPROVAL' CHECK (status IN ('DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'IN_PRODUCTION', 'PARTIALLY_DELIVERED', 'COMPLETED', 'CANCELLED', 'VOIDED')),
+    category TEXT,
+    category_color TEXT,
     notes TEXT,
     form_of_payment TEXT DEFAULT 'COD / Bank Transfer',
     subtotal REAL NOT NULL DEFAULT 0.0,

@@ -111,13 +111,14 @@ function evaluateOrderRemindersAndAutoPrioritize(database = db) {
  * Supports filtering by client, status, search
  */
 router.get('/', authenticateToken, enforceClientIsolation, (req, res) => {
-    const { status, clientId, search } = req.query;
+    const { status, clientId, search, category } = req.query;
 
     // Automatically evaluate any due SO reminders & auto-prioritize before returning queue
     evaluateOrderRemindersAndAutoPrioritize(db);
 
     let query = `
         SELECT po.*, c.company_name, c.contact_person, c.email as client_email, c.is_vyuceutical_ops,
+               COALESCE(oc.color, po.category_color, '#8b5cf6') as effective_category_color,
                (SELECT COUNT(*) FROM purchase_order_items WHERE po_id = po.id) as items_count,
                (SELECT SUM(target_quantity) FROM purchase_order_items WHERE po_id = po.id) as total_target_quantity,
                (SELECT COUNT(*) FROM job_orders WHERE po_id = po.id) as jo_count,
@@ -128,6 +129,7 @@ router.get('/', authenticateToken, enforceClientIsolation, (req, res) => {
                (SELECT name FROM users WHERE id = po.inventory_confirmed_by) as inventory_confirmed_by_name
         FROM purchase_orders po
         JOIN clients c ON po.client_id = c.id
+        LEFT JOIN order_categories oc ON (po.category IS NOT NULL AND LOWER(po.category) = LOWER(oc.name))
         WHERE 1=1
     `;
     const params = [];
@@ -146,10 +148,15 @@ router.get('/', authenticateToken, enforceClientIsolation, (req, res) => {
         params.push(status);
     }
 
+    if (category) {
+        query += ' AND LOWER(po.category) = LOWER(?)';
+        params.push(category);
+    }
+
     if (search) {
-        query += ' AND (po.po_number LIKE ? OR c.company_name LIKE ? OR po.notes LIKE ?)';
+        query += ' AND (po.po_number LIKE ? OR c.company_name LIKE ? OR po.notes LIKE ? OR po.category LIKE ?)';
         const term = `%${search}%`;
-        params.push(term, term, term);
+        params.push(term, term, term, term);
     }
 
     query += ' ORDER BY po.po_number DESC, po.created_at DESC';
@@ -299,10 +306,12 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
 
     const po = db.prepare(`
         SELECT po.*, c.company_name, c.contact_person, c.email as client_email, c.phone as client_phone, c.address as client_address, c.tin as client_tin, c.is_vyuceutical_ops,
+               COALESCE(oc.color, po.category_color, '#8b5cf6') as effective_category_color,
                u.name as creator_name,
                u2.name as approver_name
         FROM purchase_orders po
         JOIN clients c ON po.client_id = c.id
+        LEFT JOIN order_categories oc ON (po.category IS NOT NULL AND LOWER(po.category) = LOWER(oc.name))
         LEFT JOIN users u ON po.created_by = u.id
         LEFT JOIN users u2 ON po.approved_by = u2.id
         WHERE po.id = ?
@@ -415,7 +424,7 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
  * Create a new Purchase Order
  */
 router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
-    let { client_id, expected_delivery_date, tolerance_percent, billing_policy, notes, form_of_payment, items, tax_percent } = req.body;
+    let { client_id, expected_delivery_date, tolerance_percent, billing_policy, notes, form_of_payment, items, tax_percent, category, category_color } = req.body;
     if (form_of_payment === undefined && req.body.terms !== undefined) {
         form_of_payment = req.body.terms;
     }
@@ -523,14 +532,43 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
         const taxAmount = Math.round(((subtotal * taxRate) / 100) * 100) / 100;
         const grandTotal = Math.round((subtotal + taxAmount) * 100) / 100;
 
+        // Auto-assign category if not explicitly provided
+        let finalCategory = category || null;
+        let finalCategoryColor = category_color || null;
+
+        if (!finalCategory && processedItems.length > 0) {
+            try {
+                const textToScan = processedItems.map(p => (p.itemName || '')).join(' ').toLowerCase();
+                const allCats = db.prepare('SELECT name, color FROM order_categories').all();
+                for (const cat of allCats) {
+                    if (textToScan.includes(cat.name.toLowerCase())) {
+                        finalCategory = cat.name;
+                        finalCategoryColor = cat.color;
+                        break;
+                    }
+                }
+            } catch (catErr) {
+                console.warn('Category auto-detection note:', catErr.message);
+            }
+        }
+
+        if (finalCategory && !finalCategoryColor) {
+            try {
+                const row = db.prepare('SELECT color FROM order_categories WHERE LOWER(name) = LOWER(?)').get(finalCategory);
+                finalCategoryColor = row ? row.color : '#8b5cf6';
+            } catch (e) {
+                finalCategoryColor = '#8b5cf6';
+            }
+        }
+
         // Auto-approve if created by Admin/SuperAdmin/ITAdmin, otherwise PENDING_APPROVAL
         const initialStatus = (req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN' || req.user.role === 'IT_ADMIN') ? 'APPROVED' : 'PENDING_APPROVAL';
         const soNumber = poNumber.replace('PO-', 'SO-');
 
         db.prepare(`
             INSERT INTO purchase_orders
-            (id, po_number, so_number, client_id, po_date, expected_delivery_date, tolerance_percent, billing_policy, status, notes, form_of_payment, subtotal, tax_percent, tax_amount, grand_total, created_by, approved_by, approved_at)
-            VALUES (?, ?, ?, ?, date('now', 'localtime'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (id, po_number, so_number, client_id, po_date, expected_delivery_date, tolerance_percent, billing_policy, status, notes, form_of_payment, category, category_color, subtotal, tax_percent, tax_amount, grand_total, created_by, approved_by, approved_at)
+            VALUES (?, ?, ?, ?, date('now', 'localtime'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
             poId,
             poNumber,
@@ -542,6 +580,8 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
             initialStatus,
             notes || null,
             form_of_payment || 'COD',
+            finalCategory,
+            finalCategoryColor,
             subtotal,
             taxRate,
             taxAmount,
@@ -608,7 +648,7 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
  */
 router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
     const { id } = req.params;
-    let { po_date, expected_delivery_date, tolerance_percent, billing_policy, notes, form_of_payment, items, tax_percent } = req.body;
+    let { po_date, expected_delivery_date, tolerance_percent, billing_policy, notes, form_of_payment, items, tax_percent, category, category_color } = req.body;
     if (form_of_payment === undefined && req.body.terms !== undefined) {
         form_of_payment = req.body.terms;
     }
@@ -794,6 +834,22 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
             }
         }
 
+        let updatedCategory = po.category;
+        let updatedCategoryColor = po.category_color;
+        if (category !== undefined) {
+            updatedCategory = category ? String(category).trim() : null;
+            if (category_color) {
+                updatedCategoryColor = category_color;
+            } else if (updatedCategory) {
+                const found = db.prepare('SELECT color FROM order_categories WHERE LOWER(name) = LOWER(?)').get(updatedCategory);
+                updatedCategoryColor = found ? found.color : '#8b5cf6';
+            } else {
+                updatedCategoryColor = null;
+            }
+        } else if (category_color !== undefined) {
+            updatedCategoryColor = category_color;
+        }
+
         db.prepare(`
             UPDATE purchase_orders
             SET po_date = ?,
@@ -802,6 +858,8 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
                 billing_policy = ?,
                 notes = ?,
                 form_of_payment = ?,
+                category = ?,
+                category_color = ?,
                 subtotal = ?,
                 tax_percent = ?,
                 tax_amount = ?,
@@ -815,6 +873,8 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
             policy,
             notes !== undefined ? (notes || null) : po.notes,
             form_of_payment !== undefined ? (form_of_payment || null) : (po.form_of_payment || 'COD'),
+            updatedCategory,
+            updatedCategoryColor,
             subtotal,
             taxRate,
             taxAmount,

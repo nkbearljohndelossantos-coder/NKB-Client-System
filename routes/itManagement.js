@@ -21,10 +21,11 @@ const TABLE_DEFINITIONS = {
         tableName: 'purchase_orders',
         primaryKey: 'id',
         displayField: 'po_number',
-        searchFields: ['po_number', 'so_number', 'notes', 'status'],
+        searchFields: ['po_number', 'so_number', 'notes', 'status', 'category'],
         editableColumns: [
             'client_id', 'po_number', 'so_number', 'status', 'po_date',
             'expected_delivery_date', 'tolerance_percent', 'billing_policy',
+            'category', 'category_color',
             'subtotal', 'tax_percent', 'tax_amount', 'grand_total',
             'form_of_payment', 'notes', 'accounting_confirmed', 'inventory_confirmed',
             'raw_materials_status', 'formulation_converted'
@@ -234,6 +235,17 @@ const TABLE_DEFINITIONS = {
             LEFT JOIN users u ON api_keys.user_id = u.id
         `,
         selectFields: `api_keys.id, api_keys.name, '••••••••••••••••' AS key_token, '••••••••••••••••' AS key_prefix, '••••••••••••••••' AS key_hash, api_keys.client_id, api_keys.user_id, api_keys.scopes, api_keys.rate_limit_rpm, api_keys.status, api_keys.expires_at, api_keys.created_at, api_keys.updated_at, c.company_name as client_company_name, u.name as created_by_name`
+    },
+    order_categories: {
+        label: 'Order Categories & Colors',
+        icon: '🏷️',
+        tableName: 'order_categories',
+        primaryKey: 'id',
+        displayField: 'name',
+        searchFields: ['name', 'description'],
+        editableColumns: ['name', 'color', 'description'],
+        joins: '',
+        selectFields: 'order_categories.*, (SELECT COUNT(*) FROM purchase_orders WHERE LOWER(category) = LOWER(order_categories.name)) as order_count'
     }
 };
 
@@ -281,6 +293,7 @@ router.get('/lookups', ...authorizeITAdmin, (req, res) => {
         const jobOrders = db.prepare('SELECT id, jo_number, po_id, status FROM job_orders ORDER BY jo_number DESC LIMIT 200').all();
         const batches = db.prepare('SELECT id, batch_number, status FROM production_batches ORDER BY batch_number DESC LIMIT 200').all();
         const users = db.prepare('SELECT id, name, email, role FROM users ORDER BY name ASC').all();
+        const orderCategories = db.prepare('SELECT id, name, color, description FROM order_categories ORDER BY name ASC').all();
 
         return res.json({
             success: true,
@@ -291,6 +304,7 @@ router.get('/lookups', ...authorizeITAdmin, (req, res) => {
                 jobOrders,
                 batches,
                 users,
+                orderCategories,
                 statuses: {
                     purchase_orders: ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'IN_PRODUCTION', 'PARTIALLY_DELIVERED', 'COMPLETED', 'CANCELLED', 'VOIDED'],
                     job_orders: ['PENDING', 'IN_PRODUCTION', 'COMPLETED', 'CANCELLED'],

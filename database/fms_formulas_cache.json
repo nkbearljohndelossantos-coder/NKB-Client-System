@@ -1,6 +1,6 @@
 {
   "success": true,
-  "count": 67,
+  "count": 72,
   "batch_scaling": {
     "batch_size": 100,
     "uom": "kg"
@@ -6369,6 +6369,68 @@
       ]
     },
     {
+      "formula_id": 89,
+      "formula_code": "FORM-2026-0099",
+      "formula_name": "LACOSTE BLACK",
+      "product_category": "Perfume Brand",
+      "active_version": "V1.0",
+      "version_status": "APPROVED",
+      "compounding_code": "CP-1057",
+      "batch_size": 100,
+      "batch_uom": "kg",
+      "total_raw_materials_count": 6,
+      "raw_materials_needed": [
+        {
+          "material_code": "RM-ETHYL-ALC-02",
+          "material_name": "ETHYL ALCOHOL - IND02",
+          "category": "Cosmetic",
+          "required_quantity": 68,
+          "uom": "kg",
+          "supplier": "LOYAL FAMILY"
+        },
+        {
+          "material_code": "RM-PROCOL-HACHI",
+          "material_name": "PROPYLENE GLYCOL (HACHIMORI)",
+          "category": "Cosmetic",
+          "required_quantity": 3,
+          "uom": "kg",
+          "supplier": "HACHIMORI"
+        },
+        {
+          "material_code": "PAR-LB-0001",
+          "material_name": "LACOSTE BLACK (SCENT)",
+          "category": "Cosmetic",
+          "required_quantity": 14,
+          "uom": "kg",
+          "supplier": "KALIOREXI"
+        },
+        {
+          "material_code": "RM-PEG40-01",
+          "material_name": "PEG40 - MEDMULS COH 40",
+          "category": "Cosmetic",
+          "required_quantity": 1,
+          "uom": "kg",
+          "supplier": "REDOLENCE"
+        },
+        {
+          "material_code": "RM-FIXATIVE-01",
+          "material_name": "FIXATIVE (ASTERIA)",
+          "category": "Cosmetic",
+          "required_quantity": 2,
+          "uom": "kg",
+          "supplier": "ASTERIA"
+        },
+        {
+          "material_code": "MAT-WAT-01",
+          "material_name": "DE-IONIZED WATER",
+          "category": "Cosmetic",
+          "required_quantity": 12,
+          "uom": "kg",
+          "supplier": "MAYNILAD"
+        }
+      ]
+    },
+    {
       "formula_id": 71,
       "formula_code": "FORM-2026-0081",
       "formula_name": "LACOSTE WHITE ",
@@ -6613,6 +6675,68 @@
           "required_quantity": 0.5,
           "uom": "kg",
           "supplier": "FW SPA"
+        }
+      ]
+    },
+    {
+      "formula_id": 91,
+      "formula_code": "FORM-2026-0101",
+      "formula_name": "PINK CHIFFON",
+      "product_category": "Perfume Brand",
+      "active_version": "V1.0",
+      "version_status": "APPROVED",
+      "compounding_code": "CP-1062",
+      "batch_size": 100,
+      "batch_uom": "kg",
+      "total_raw_materials_count": 6,
+      "raw_materials_needed": [
+        {
+          "material_code": "RM-ETHYL-ALC-02",
+          "material_name": "ETHYL ALCOHOL - IND02",
+          "category": "Cosmetic",
+          "required_quantity": 68,
+          "uom": "kg",
+          "supplier": "LOYAL FAMILY"
+        },
+        {
+          "material_code": "RM-PROCOL-HACHI",
+          "material_name": "PROPYLENE GLYCOL (HACHIMORI)",
+          "category": "Cosmetic",
+          "required_quantity": 3,
+          "uom": "kg",
+          "supplier": "HACHIMORI"
+        },
+        {
+          "material_code": "PAR-FC-0001",
+          "material_name": "PINK CHIFFON (SCENT)",
+          "category": "Cosmetic",
+          "required_quantity": 14,
+          "uom": "kg",
+          "supplier": "JJJ SHOP"
+        },
+        {
+          "material_code": "RM-PEG40-01",
+          "material_name": "PEG40 - MEDMULS COH 40",
+          "category": "Cosmetic",
+          "required_quantity": 1,
+          "uom": "kg",
+          "supplier": "REDOLENCE"
+        },
+        {
+          "material_code": "RM-FIXATIVE-01",
+          "material_name": "FIXATIVE (ASTERIA)",
+          "category": "Cosmetic",
+          "required_quantity": 2,
+          "uom": "kg",
+          "supplier": "ASTERIA"
+        },
+        {
+          "material_code": "MAT-WAT-01",
+          "material_name": "DE-IONIZED WATER",
+          "category": "Cosmetic",
+          "required_quantity": 12,
+          "uom": "kg",
+          "supplier": "MAYNILAD"
         }
       ]
     },
@@ -7093,6 +7217,60 @@
           "required_quantity": 0.65,
           "uom": "kg",
           "supplier": "CHEMICO"
+        }
+      ]
+    },
+    {
+      "formula_id": 92,
+      "formula_code": "FORM-2026-0102",
+      "formula_name": "SCANDALOUS",
+      "product_category": "Perfume Brand",
+      "active_version": "V1.0",
+      "version_status": "APPROVED",
+      "compounding_code": "CP-1067",
+      "batch_size": 100,
+      "batch_uom": "kg",
+      "total_raw_materials_count": 5,
+      "raw_materials_needed": [
+        {
+          "material_code": "RM-ETHYL-ALC-02",
+          "material_name": "ETHYL ALCOHOL - IND02",
+          "category": "Cosmetic",
+          "required_quantity": 80,
+          "uom": "kg",
+          "supplier": "LOYAL FAMILY"
+        },
+        {
+          "material_code": "RM-PROCOL-HACHI",
+          "material_name": "PROPYLENE GLYCOL (HACHIMORI)",
+          "category": "Cosmetic",
+          "required_quantity": 3,
+          "uom": "kg",
+          "supplier": "HACHIMORI"
+        },
+        {
+          "material_code": "PAR-SLS-0001",
+          "material_name": "SCANDALOUS (SCENT)",
+          "category": "Cosmetic",
+          "required_quantity": 14,
+          "uom": "kg",
+          "supplier": "JJJ SHOP"
+        },
+        {
+          "material_code": "RM-PEG40-01",
+          "material_name": "PEG40 - MEDMULS COH 40",
+          "category": "Cosmetic",
+          "required_quantity": 1,
+          "uom": "kg",
+          "supplier": "REDOLENCE"
+        },
+        {
+          "material_code": "RM-FIXATIVE-01",
+          "material_name": "FIXATIVE (ASTERIA)",
+          "category": "Cosmetic",
+          "required_quantity": 2,
+          "uom": "kg",
+          "supplier": "ASTERIA"
         }
       ]
     },
@@ -7991,6 +8169,130 @@
           "required_quantity": 1,
           "uom": "kg",
           "supplier": "FW SPA"
+        }
+      ]
+    },
+    {
+      "formula_id": 93,
+      "formula_code": "FORM-2026-0103",
+      "formula_name": "VALAYA",
+      "product_category": "Perfume Brand",
+      "active_version": "V1.0",
+      "version_status": "APPROVED",
+      "compounding_code": "CP-1078",
+      "batch_size": 100,
+      "batch_uom": "kg",
+      "total_raw_materials_count": 6,
+      "raw_materials_needed": [
+        {
+          "material_code": "RM-ETHYL-ALC-02",
+          "material_name": "ETHYL ALCOHOL - IND02",
+          "category": "Cosmetic",
+          "required_quantity": 68,
+          "uom": "kg",
+          "supplier": "LOYAL FAMILY"
+        },
+        {
+          "material_code": "RM-PROCOL-HACHI",
+          "material_name": "PROPYLENE GLYCOL (HACHIMORI)",
+          "category": "Cosmetic",
+          "required_quantity": 3,
+          "uom": "kg",
+          "supplier": "HACHIMORI"
+        },
+        {
+          "material_code": "FR-VALAYA-JJJ",
+          "material_name": "VALAYA FRAGRANCE OIL",
+          "category": "Cosmetic",
+          "required_quantity": 14,
+          "uom": "kg",
+          "supplier": "JJJ SHOP"
+        },
+        {
+          "material_code": "RM-PEG40-01",
+          "material_name": "PEG40 - MEDMULS COH 40",
+          "category": "Cosmetic",
+          "required_quantity": 1,
+          "uom": "kg",
+          "supplier": "REDOLENCE"
+        },
+        {
+          "material_code": "RM-FIXATIVE-01",
+          "material_name": "FIXATIVE (ASTERIA)",
+          "category": "Cosmetic",
+          "required_quantity": 2,
+          "uom": "kg",
+          "supplier": "ASTERIA"
+        },
+        {
+          "material_code": "MAT-WAT-01",
+          "material_name": "DE-IONIZED WATER",
+          "category": "Cosmetic",
+          "required_quantity": 12,
+          "uom": "kg",
+          "supplier": "MAYNILAD"
+        }
+      ]
+    },
+    {
+      "formula_id": 94,
+      "formula_code": "FORM-2026-0104",
+      "formula_name": "VALAYA",
+      "product_category": "Perfume No Brand",
+      "active_version": "V1.0",
+      "version_status": "APPROVED",
+      "compounding_code": "CP-1085",
+      "batch_size": 100,
+      "batch_uom": "kg",
+      "total_raw_materials_count": 6,
+      "raw_materials_needed": [
+        {
+          "material_code": "RM-ETHYL-ALC-02",
+          "material_name": "ETHYL ALCOHOL - IND02",
+          "category": "Cosmetic",
+          "required_quantity": 73,
+          "uom": "kg",
+          "supplier": "LOYAL FAMILY"
+        },
+        {
+          "material_code": "RM-PROCOL-HACHI",
+          "material_name": "PROPYLENE GLYCOL (HACHIMORI)",
+          "category": "Cosmetic",
+          "required_quantity": 3,
+          "uom": "kg",
+          "supplier": "HACHIMORI"
+        },
+        {
+          "material_code": "FR-VALAYA-JJJ",
+          "material_name": "VALAYA FRAGRANCE OIL",
+          "category": "Cosmetic",
+          "required_quantity": 9,
+          "uom": "kg",
+          "supplier": "JJJ SHOP"
+        },
+        {
+          "material_code": "RM-PEG40-01",
+          "material_name": "PEG40 - MEDMULS COH 40",
+          "category": "Cosmetic",
+          "required_quantity": 1,
+          "uom": "kg",
+          "supplier": "REDOLENCE"
+        },
+        {
+          "material_code": "RM-FIXATIVE-01",
+          "material_name": "FIXATIVE (ASTERIA)",
+          "category": "Cosmetic",
+          "required_quantity": 2,
+          "uom": "kg",
+          "supplier": "ASTERIA"
+        },
+        {
+          "material_code": "MAT-WAT-01",
+          "material_name": "DE-IONIZED WATER",
+          "category": "Cosmetic",
+          "required_quantity": 12,
+          "uom": "kg",
+          "supplier": "MAYNILAD"
         }
       ]
     },

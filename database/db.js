@@ -85,6 +85,95 @@ function runMigrations(dbInstance, isMysql) {
             dbInstance.exec(`ALTER TABLE payments ADD COLUMN bank_name ${textType};`);
         } catch (_) {}
 
+        // Purchase Orders Category & Color Coding columns
+        try {
+            dbInstance.exec(`ALTER TABLE purchase_orders ADD COLUMN category ${textType};`);
+        } catch (_) {}
+        try {
+            dbInstance.exec(`ALTER TABLE purchase_orders ADD COLUMN category_color ${textType};`);
+        } catch (_) {}
+
+        // Order Categories Table
+        if (isMysql) {
+            try {
+                dbInstance.exec(`
+                    CREATE TABLE IF NOT EXISTS order_categories (
+                        id VARCHAR(36) PRIMARY KEY,
+                        name VARCHAR(100) UNIQUE NOT NULL,
+                        color VARCHAR(20) NOT NULL DEFAULT '#8b5cf6',
+                        description TEXT NULL,
+                        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        INDEX idx_order_cat_name (name)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+                `);
+            } catch (_) {}
+        } else {
+            try {
+                dbInstance.exec(`
+                    CREATE TABLE IF NOT EXISTS order_categories (
+                        id TEXT PRIMARY KEY,
+                        name TEXT UNIQUE NOT NULL,
+                        color TEXT NOT NULL DEFAULT '#8b5cf6',
+                        description TEXT,
+                        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                        updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_order_cat_name ON order_categories(name);
+                `);
+            } catch (_) {}
+        }
+
+        // Seed Default Initial Categories: Fragrance and Perfume
+        try {
+            const defaultCategories = [
+                { id: 'cat-fragrance', name: 'Fragrance', color: '#ec4899', description: 'Fragrance oils, body mists, scented formulations, and aromatic solutions' },
+                { id: 'cat-perfume', name: 'Perfume', color: '#8b5cf6', description: 'Fine perfumery, Eau de Parfum, Cologne, and spray scents' }
+            ];
+            for (const cat of defaultCategories) {
+                if (isMysql) {
+                    dbInstance.exec(`INSERT IGNORE INTO order_categories (id, name, color, description) VALUES ('${cat.id}', '${cat.name}', '${cat.color}', '${cat.description}');`);
+                } else {
+                    dbInstance.prepare(`INSERT OR IGNORE INTO order_categories (id, name, color, description) VALUES (?, ?, ?, ?)`).run(cat.id, cat.name, cat.color, cat.description);
+                }
+            }
+        } catch (_) {}
+
+        // Auto-assign color for all orders of Fragrance and Perfume
+        try {
+            // Find orders containing perfume items
+            const perfumePOs = dbInstance.prepare(`
+                SELECT DISTINCT po.id, po.po_number
+                FROM purchase_orders po
+                JOIN purchase_order_items poi ON poi.po_id = po.id
+                JOIN products p ON poi.product_id = p.id
+                WHERE LOWER(p.category) LIKE '%perfume%'
+                   OR LOWER(p.name) LIKE '%perfume%'
+                   OR LOWER(poi.item_name) LIKE '%perfume%'
+            `).all();
+
+            for (const p of perfumePOs) {
+                dbInstance.prepare(`UPDATE purchase_orders SET category = 'Perfume', category_color = '#8b5cf6' WHERE id = ? AND (category IS NULL OR category = '')`).run(p.id);
+            }
+
+            // Find orders containing fragrance items (that are not already set to perfume)
+            const fragrancePOs = dbInstance.prepare(`
+                SELECT DISTINCT po.id, po.po_number
+                FROM purchase_orders po
+                JOIN purchase_order_items poi ON poi.po_id = po.id
+                JOIN products p ON poi.product_id = p.id
+                WHERE (LOWER(p.category) LIKE '%fragrance%'
+                   OR LOWER(p.name) LIKE '%fragrance%'
+                   OR LOWER(poi.item_name) LIKE '%fragrance%')
+            `).all();
+
+            for (const f of fragrancePOs) {
+                dbInstance.prepare(`UPDATE purchase_orders SET category = 'Fragrance', category_color = '#ec4899' WHERE id = ? AND (category IS NULL OR category = '')`).run(f.id);
+            }
+        } catch (catAssignErr) {
+            console.warn('Initial order category assignment note:', catAssignErr.message);
+        }
+
         // Cheque Payables & COO Integration table
         if (isMysql) {
             try {
