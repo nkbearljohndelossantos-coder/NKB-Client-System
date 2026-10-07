@@ -11,6 +11,12 @@ let pendingGuestOrder = null;
 document.addEventListener('DOMContentLoaded', async () => {
     await NKB.init();
 
+    // Operators are strictly restricted to the operational interface (/admin.html)
+    if (NKB.user && ['PRODUCTION', 'WAREHOUSE', 'QC', 'INVENTORY', 'PURCHASING'].includes(NKB.user.role)) {
+        window.location.replace('/admin.html');
+        return;
+    }
+
     const isGuest = !NKB.user;
     setupGuestModeUI(isGuest);
 

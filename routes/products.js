@@ -119,8 +119,9 @@ router.get('/', optionalAuthenticateToken, (req, res) => {
                        COALESCE(cpp.custom_sku, p.sku) as effective_sku,
                        p.sku as master_sku,
                        COALESCE(cpp.custom_name, p.name) as name,
-                       COALESCE(cpp.custom_name, p.name) as effective_name,
+                        COALESCE(cpp.custom_name, p.name) as effective_name,
                        p.name as master_name,
+                       p.size,
                        p.category, p.description, p.unit,
                        COALESCE(cpp.custom_price, p.default_price) as default_price,
                        p.default_price as base_default_price,
@@ -146,6 +147,7 @@ router.get('/', optionalAuthenticateToken, (req, res) => {
                        COALESCE(cpp.custom_name, p.name) as name,
                        COALESCE(cpp.custom_name, p.name) as effective_name,
                        p.name as master_name,
+                       p.size,
                        p.category, p.description, p.unit,
                        COALESCE(cpp.custom_price, p.default_price) as default_price,
                        p.default_price as base_default_price,
@@ -285,7 +287,7 @@ router.get('/:id', authenticateToken, (req, res) => {
  * Admin/Production/Accounting
  */
 router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'ACCOUNTING', 'SUPER_ADMIN'), (req, res) => {
-    let { sku, name, category, description, unit, default_price, formula_code, shelf_life_months, client_id } = req.body;
+    let { sku, name, size, category, description, unit, default_price, formula_code, shelf_life_months, client_id } = req.body;
 
     if (!name || default_price === undefined || default_price === null || default_price === '') {
         return res.status(400).json({ success: false, error: 'Product Name and Default Price are required.' });
@@ -311,18 +313,25 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'ACCOUNT
         sku = sku.trim().toUpperCase();
     }
 
+    // Auto-extract size if not explicitly provided
+    let finalSize = (size && typeof size === 'string') ? size.trim() : null;
+    if (!finalSize && db.extractProductSize) {
+        finalSize = db.extractProductSize(name);
+    }
+
     const parsedShelfLife = shelf_life_months ? parseInt(shelf_life_months, 10) : 24;
     const id = uuidv4();
 
     try {
         const insertTx = db.transaction(() => {
             db.prepare(`
-                INSERT INTO products (id, sku, name, category, description, unit, default_price, formula_code, shelf_life_months)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO products (id, sku, name, size, category, description, unit, default_price, formula_code, shelf_life_months)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `).run(
                 id,
                 sku,
                 name.trim(),
+                finalSize,
                 category || 'Cosmetics',
                 description || '',
                 unit || 'pcs',
@@ -385,7 +394,7 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'ACCOUNT
  * PUT /api/products/:id
  */
 router.put('/:id', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'ACCOUNTING', 'SUPER_ADMIN'), (req, res) => {
-    const { name, category, description, unit, default_price, formula_code, shelf_life_months, is_active, client_id } = req.body;
+    const { name, size, category, description, unit, default_price, formula_code, shelf_life_months, is_active, client_id } = req.body;
     const { id } = req.params;
 
     const existing = db.prepare('SELECT * FROM products WHERE id = ?').get(id);
@@ -393,10 +402,18 @@ router.put('/:id', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'ACCOU
         return res.status(404).json({ success: false, error: 'Product not found.' });
     }
 
+    let finalSize = existing.size;
+    if (size !== undefined) {
+        finalSize = (size !== null && typeof size === 'string' && size.trim()) ? size.trim() : null;
+    } else if (name && !existing.size && db.extractProductSize) {
+        finalSize = db.extractProductSize(name);
+    }
+
     const updateTx = db.transaction(() => {
         db.prepare(`
             UPDATE products 
             SET name = COALESCE(?, name),
+                size = ?,
                 category = COALESCE(?, category),
                 description = COALESCE(?, description),
                 unit = COALESCE(?, unit),
@@ -408,6 +425,7 @@ router.put('/:id', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'ACCOU
             WHERE id = ?
         `).run(
             name !== undefined ? name.trim() : null,
+            finalSize,
             category !== undefined ? category : null,
             description !== undefined ? description : null,
             unit !== undefined ? unit : null,
@@ -500,6 +518,169 @@ router.delete('/:id', authenticateToken, requireRoles('ADMIN', 'SUPER_ADMIN'), (
         success: true,
         message: `Product "${product.name}" (${product.sku}) has been deleted.`
     });
+});
+
+/**
+ * POST /api/products/import
+ * Batch import/update products from Excel / JSON
+ */
+router.post('/import', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'ACCOUNTING', 'SUPER_ADMIN'), (req, res) => {
+    try {
+        let items = req.body.products || req.body.items || req.body;
+        if (!Array.isArray(items)) {
+            items = [items];
+        }
+
+        if (items.length === 0) {
+            return res.status(400).json({ success: false, error: 'No products provided for import.' });
+        }
+
+        const existingRows = db.prepare('SELECT id, sku, name, size FROM products').all();
+        const existingById = new Map();
+        const existingBySku = new Map();
+        const existingSkusSet = new Set();
+        existingRows.forEach(r => {
+            if (r.id) existingById.set(r.id, r);
+            if (r.sku) {
+                const sUpper = r.sku.toUpperCase().trim();
+                existingBySku.set(sUpper, r);
+                existingSkusSet.add(sUpper);
+            }
+        });
+
+        let createdCount = 0;
+        let updatedCount = 0;
+        const errors = [];
+        const imported = [];
+
+        const importTx = db.transaction(() => {
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                if (!item || typeof item !== 'object') continue;
+
+                // Support various column headers from Excel:
+                const name = (item.name || item['Product Name'] || item['name'] || '').trim();
+                if (!name) {
+                    errors.push({ row: i + 1, error: 'Product name is missing.' });
+                    continue;
+                }
+
+                let id = (item.id || item['ID'] || item['Product ID'] || '').trim();
+                let sku = (item.sku || item['SKU'] || '').trim().toUpperCase();
+                let size = (item.size !== undefined ? item.size : item['Size']);
+                if (size !== undefined && size !== null) {
+                    size = String(size).trim() || null;
+                } else {
+                    size = db.extractProductSize ? db.extractProductSize(name) : null;
+                }
+
+                const category = (item.category || item['Category'] || 'Cosmetics').trim();
+                const description = (item.description || item['Description'] || '').trim();
+                const unit = (item.unit || item['Unit'] || 'pcs').trim();
+                const rawPrice = item.default_price !== undefined ? item.default_price : (item['Default Price'] !== undefined ? item['Default Price'] : (item['Price'] !== undefined ? item['Price'] : 0));
+                const default_price = Math.max(0, Math.round((parseFloat(rawPrice) || 0) * 100) / 100);
+                const formula_code = (item.formula_code || item['Formula Code'] || item['Formula'] || '').trim() || null;
+                const shelf_life_months = parseInt(item.shelf_life_months || item['Shelf Life'] || 24, 10) || 24;
+                const rawStock = item.current_stock !== undefined ? item.current_stock : (item['Current Stock'] !== undefined ? item['Current Stock'] : (item['Stock'] !== undefined ? item['Stock'] : 0));
+                const current_stock = parseInt(rawStock, 10) || 0;
+                const is_active = item.is_active !== undefined ? (Number(item.is_active) === 0 ? 0 : 1) : (String(item['Status'] || '').toUpperCase() === 'INACTIVE' ? 0 : 1);
+
+                let matched = null;
+                if (id && existingById.has(id)) {
+                    matched = existingById.get(id);
+                } else if (sku && existingBySku.has(sku)) {
+                    matched = existingBySku.get(sku);
+                }
+
+                if (matched) {
+                    // Update existing product
+                    db.prepare(`
+                        UPDATE products
+                        SET name = ?,
+                            size = ?,
+                            category = ?,
+                            description = ?,
+                            unit = ?,
+                            default_price = ?,
+                            current_stock = ?,
+                            formula_code = ?,
+                            shelf_life_months = ?,
+                            is_active = ?,
+                            updated_at = datetime('now', 'localtime')
+                        WHERE id = ?
+                    `).run(name, size, category, description, unit, default_price, current_stock, formula_code, shelf_life_months, is_active, matched.id);
+
+                    updatedCount++;
+                    imported.push({ id: matched.id, sku: matched.sku, name, size, action: 'UPDATED' });
+                } else {
+                    // Create new product
+                    const newId = id || uuidv4();
+                    if (!sku) {
+                        sku = generateProductSKU(name, '', existingSkusSet);
+                        existingSkusSet.add(sku);
+                    }
+                    db.prepare(`
+                        INSERT INTO products (id, sku, name, size, category, description, unit, default_price, current_stock, formula_code, shelf_life_months, is_active)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    `).run(newId, sku, name, size, category, description, unit, default_price, current_stock, formula_code, shelf_life_months, is_active);
+
+                    existingById.set(newId, { id: newId, sku, name, size });
+                    existingBySku.set(sku, { id: newId, sku, name, size });
+                    createdCount++;
+                    imported.push({ id: newId, sku, name, size, action: 'CREATED' });
+                }
+            }
+        });
+
+        importTx();
+
+        logAudit({
+            userId: req.user.id,
+            userName: req.user.name,
+            userRole: req.user.role,
+            action: 'IMPORT_PRODUCTS',
+            entityType: 'PRODUCT',
+            entityId: 'batch',
+            details: { createdCount, updatedCount, errorCount: errors.length }
+        });
+
+        return res.json({
+            success: true,
+            message: `Successfully processed ${createdCount + updatedCount} products (${createdCount} created, ${updatedCount} updated).`,
+            createdCount,
+            updatedCount,
+            errorCount: errors.length,
+            errors,
+            data: imported
+        });
+    } catch (err) {
+        console.error('Products import error:', err);
+        return res.status(500).json({ success: false, error: err.message || 'Failed to import products.' });
+    }
+});
+
+/**
+ * GET /api/products/export
+ * Outbound API for exporting full catalog with size
+ */
+router.get('/export', authenticateToken, (req, res) => {
+    try {
+        const products = db.prepare(`
+            SELECT p.id, p.sku, p.name, p.size, p.category, p.description, p.unit,
+                   p.default_price, p.current_stock, p.formula_code, p.shelf_life_months,
+                   p.is_active, p.created_at, p.updated_at
+            FROM products p
+            ORDER BY p.name ASC
+        `).all();
+
+        return res.json({
+            success: true,
+            count: products.length,
+            data: products
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
 });
 
 router.generateProductSKU = generateProductSKU;

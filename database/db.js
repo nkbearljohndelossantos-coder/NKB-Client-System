@@ -10,6 +10,30 @@ const useMysql = dbDriver === 'mysql';
 
 let db;
 
+function extractProductSize(name) {
+    if (!name || typeof name !== 'string') return null;
+    
+    // Remove freebies and promos clauses (don't include the sizes of freebies):
+    // e.g. '(FREE: NIACINAMIDE ... 15ML)', '(W FREE ... 15ml)', 'FREE NIACINAMIDE ... 15ml'
+    let cleaned = name.replace(/\((?:FREE|W\/?\s*FREE|WITH\s+FREE)[^)]*\)/gi, '');
+    cleaned = cleaned.replace(/\b(?:FREE|W\/?\s*FREE|WITH\s+FREE)\b.*$/gi, '');
+
+    // Match size pattern: number followed by unit (ml, l, g, kg, oz, fl oz)
+    // Negative lookbehind ensures we don't accidentally match SPF50 or PA+
+    const sizeRegex = /(?<!SPF\s*|PA\s*|\+)\b(\d+(?:\.\d+)?)\s*(ml|l|g|kg|oz|fl\s*oz)\b/i;
+    const match = cleaned.match(sizeRegex);
+    if (match) {
+        let num = match[1];
+        let unit = match[2].toLowerCase();
+        if (unit === 'l') unit = 'L';
+        else if (unit === 'ml') unit = 'ml';
+        else if (unit === 'g') unit = 'g';
+        else if (unit === 'kg') unit = 'kg';
+        return num + unit;
+    }
+    return null;
+}
+
 function runMigrations(dbInstance, isMysql) {
     try {
         const textType = isMysql ? 'VARCHAR(255)' : 'TEXT';
@@ -160,6 +184,27 @@ function runMigrations(dbInstance, isMysql) {
         try {
             dbInstance.exec(`ALTER TABLE cheque_payables ADD COLUMN import_batch_id ${textType};`);
         } catch (_) {}
+
+        // Products table size column migration
+        try {
+            dbInstance.exec(`ALTER TABLE products ADD COLUMN size ${textType};`);
+        } catch (_) {}
+
+        // Automated Product Size Analysis & Population (ignoring freebie sizes)
+        try {
+            const unparsedProducts = dbInstance.prepare("SELECT id, name FROM products WHERE size IS NULL OR size = ''").all();
+            if (unparsedProducts && unparsedProducts.length > 0) {
+                const updateSizeStmt = dbInstance.prepare("UPDATE products SET size = ? WHERE id = ?");
+                for (const prod of unparsedProducts) {
+                    const detectedSize = extractProductSize(prod.name);
+                    if (detectedSize) {
+                        updateSizeStmt.run(detectedSize, prod.id);
+                    }
+                }
+            }
+        } catch (sizeErr) {
+            console.warn('Product size analysis notice:', sizeErr.message);
+        }
 
         // Bank Accounts table
         if (isMysql) {
@@ -1839,5 +1884,7 @@ if (useMysql) {
     } catch (err) {}
 
 }
+
+db.extractProductSize = extractProductSize;
 
 module.exports = db;

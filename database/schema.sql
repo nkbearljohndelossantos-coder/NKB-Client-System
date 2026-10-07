@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS products (
     id TEXT PRIMARY KEY,
     sku TEXT UNIQUE NOT NULL,
     name TEXT NOT NULL,
+    size TEXT DEFAULT NULL,
     category TEXT NOT NULL DEFAULT 'Cosmetics',
     description TEXT,
     unit TEXT NOT NULL DEFAULT 'pcs',

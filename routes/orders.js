@@ -1742,6 +1742,175 @@ router.post('/save-snip', async (req, res) => {
     }
 });
 
+/**
+ * POST /api/orders/import
+ * Batch import/update purchase orders from Excel / JSON
+ */
+router.post('/import', authenticateToken, requireRoles('ADMIN', 'ACCOUNTING', 'SUPER_ADMIN'), (req, res) => {
+    try {
+        let items = req.body.orders || req.body.items || req.body;
+        if (!Array.isArray(items)) {
+            items = [items];
+        }
+
+        if (items.length === 0) {
+            return res.status(400).json({ success: false, error: 'No orders provided for import.' });
+        }
+
+        const clients = db.prepare('SELECT id, company_name FROM clients').all();
+        const clientByName = new Map();
+        clients.forEach(c => clientByName.set(c.company_name.toLowerCase().trim(), c.id));
+
+        let createdCount = 0;
+        let updatedCount = 0;
+        const errors = [];
+        const imported = [];
+
+        const importTx = db.transaction(() => {
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                if (!item || typeof item !== 'object') continue;
+
+                const po_number = (item.po_number || item['PO Number'] || item['PO No'] || item['poNumber'] || '').trim();
+                const id = (item.id || item['ID'] || item['Order ID'] || '').trim();
+
+                let existing = null;
+                if (id) {
+                    existing = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
+                }
+                if (!existing && po_number) {
+                    existing = db.prepare('SELECT * FROM purchase_orders WHERE po_number = ?').get(po_number);
+                }
+
+                const clientRaw = (item.client_name || item['Client Company'] || item['Client'] || item['Company Name'] || '').trim();
+                let clientId = item.client_id || item['Client ID'];
+                if (!clientId && clientRaw && clientByName.has(clientRaw.toLowerCase())) {
+                    clientId = clientByName.get(clientRaw.toLowerCase());
+                }
+
+                const po_date = (item.po_date || item['Order Date'] || item['PO Date'] || getManilaDate()).trim();
+                const expected_delivery_date = (item.expected_delivery_date || item['Due Date'] || item['Delivery Date'] || po_date).trim();
+                const terms = (item.terms || item['Payment Terms'] || item['Terms'] || 'COD').trim();
+                const form_of_payment = item.form_of_payment || terms;
+                const status = (item.status || item['Status'] || (existing ? existing.status : 'PENDING')).trim().toUpperCase();
+                const notes = (item.notes || item['Notes'] || item['Description'] || (existing ? existing.notes : '')).trim();
+
+                const subtotal = item.subtotal !== undefined ? Number(item.subtotal) : (item['Subtotal'] !== undefined ? Number(item['Subtotal']) : (existing ? existing.subtotal : 0));
+                const tax_amount = item.tax_amount !== undefined ? Number(item.tax_amount) : (item['VAT'] !== undefined ? Number(item['VAT']) : (existing ? existing.tax_amount : 0));
+                const discount_amount = item.discount_amount !== undefined ? Number(item.discount_amount) : (item['Discount'] !== undefined ? Number(item['Discount']) : (existing ? existing.discount_amount : 0));
+                const grand_total = item.grand_total !== undefined ? Number(item.grand_total) : (item['Grand Total'] !== undefined ? Number(item['Grand Total']) : (existing ? existing.grand_total : (subtotal + tax_amount - discount_amount)));
+
+                if (existing) {
+                    // Update existing purchase order
+                    db.prepare(`
+                        UPDATE purchase_orders
+                        SET po_date = COALESCE(?, po_date),
+                            expected_delivery_date = COALESCE(?, expected_delivery_date),
+                            terms = COALESCE(?, terms),
+                            form_of_payment = COALESCE(?, form_of_payment),
+                            status = COALESCE(?, status),
+                            notes = COALESCE(?, notes),
+                            subtotal = ?,
+                            tax_amount = ?,
+                            discount_amount = ?,
+                            grand_total = ?,
+                            updated_at = datetime('now', 'localtime')
+                        WHERE id = ?
+                    `).run(po_date, expected_delivery_date, terms, form_of_payment, status, notes, subtotal, tax_amount, discount_amount, grand_total, existing.id);
+
+                    updatedCount++;
+                    imported.push({ id: existing.id, po_number: existing.po_number, action: 'UPDATED' });
+                } else {
+                    // Create new order
+                    if (!clientId) {
+                        clientId = clients[0]?.id;
+                    }
+                    if (!clientId) {
+                        errors.push({ row: i + 1, error: 'No client found to associate with purchase order.' });
+                        continue;
+                    }
+
+                    const newId = id || uuidv4();
+                    const finalPoNum = po_number || getNextDocumentNumber('PO');
+                    const finalSoNum = finalPoNum.replace('PO-', 'SO-');
+
+                    db.prepare(`
+                        INSERT INTO purchase_orders (
+                            id, client_id, po_number, so_number, po_date, expected_delivery_date,
+                            terms, form_of_payment, status, notes, subtotal, tax_amount, discount_amount, grand_total,
+                            created_by, created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
+                    `).run(
+                        newId, clientId, finalPoNum, finalSoNum, po_date, expected_delivery_date,
+                        terms, form_of_payment, status, notes, subtotal, tax_amount, discount_amount, grand_total,
+                        req.user.id
+                    );
+
+                    createdCount++;
+                    imported.push({ id: newId, po_number: finalPoNum, action: 'CREATED' });
+                }
+            }
+        });
+
+        importTx();
+
+        logAudit({
+            userId: req.user.id,
+            userName: req.user.name,
+            userRole: req.user.role,
+            action: 'IMPORT_PURCHASE_ORDERS',
+            entityType: 'PURCHASE_ORDER',
+            entityId: 'batch',
+            details: { createdCount, updatedCount, errorCount: errors.length }
+        });
+
+        return res.json({
+            success: true,
+            message: `Successfully processed ${createdCount + updatedCount} orders (${createdCount} created, ${updatedCount} updated).`,
+            createdCount,
+            updatedCount,
+            errorCount: errors.length,
+            errors,
+            data: imported
+        });
+    } catch (err) {
+        console.error('Orders import error:', err);
+        return res.status(500).json({ success: false, error: err.message || 'Failed to import orders.' });
+    }
+});
+
+/**
+ * GET /api/orders/export
+ * Outbound API for exporting purchase orders
+ */
+router.get('/export', authenticateToken, (req, res) => {
+    try {
+        const query = `
+            SELECT po.id, po.po_number, po.so_number, c.company_name as client_name,
+                   po.po_date, po.expected_delivery_date, po.terms, po.form_of_payment,
+                   po.status, po.subtotal, po.tax_amount, po.discount_amount, po.grand_total,
+                   (SELECT COALESCE(SUM(amount), 0) FROM payments WHERE po_id = po.id AND is_voided = 0) as payment_made,
+                   po.notes, po.created_at, po.updated_at,
+                   (SELECT GROUP_CONCAT(COALESCE(poi.item_name, p.name) || ' (' || poi.target_quantity || ' ' || poi.unit || ')', '; ')
+                    FROM purchase_order_items poi
+                    LEFT JOIN products p ON poi.product_id = p.id
+                    WHERE poi.po_id = po.id) as items_summary
+            FROM purchase_orders po
+            LEFT JOIN clients c ON po.client_id = c.id
+            ORDER BY po.created_at DESC
+        `;
+        const orders = db.prepare(query).all();
+
+        return res.json({
+            success: true,
+            count: orders.length,
+            data: orders
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 router.evaluateOrderRemindersAndAutoPrioritize = evaluateOrderRemindersAndAutoPrioritize;
 
 module.exports = router;

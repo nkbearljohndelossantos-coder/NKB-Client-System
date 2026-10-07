@@ -53,7 +53,7 @@
                 </div>
 
                 <!-- Client View Link -->
-                <a href="/client.html" class="hidden md:inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 border border-slate-700 transition whitespace-nowrap flex-shrink-0" title="Switch to Client View">
+                <a href="/client.html" id="nav-client-view" class="hidden md:inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 border border-slate-700 transition whitespace-nowrap flex-shrink-0" title="Switch to Client View">
                     <svg class="w-3.5 h-3.5 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                     <span class="hidden xl:inline">Client View</span>
                 </a>
@@ -609,10 +609,22 @@
                         </div>
                         <p class="text-sm text-slate-500">Client orders with approved formulation, pricing, and manufacturing status.</p>
                     </div>
-                    <button onclick="openCreatePOModal()" title="Create Purchase Order (Ctrl+O)" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/30 transition flex items-center gap-2">
-                        <span>➕ Create Purchase Order</span>
-                        <kbd class="hidden md:inline-block px-1.5 py-0.5 text-[10px] bg-indigo-700/80 text-indigo-100 rounded border border-indigo-400/40 font-mono">Ctrl+O</kbd>
-                    </button>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button onclick="exportOrdersToExcel()" class="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm" title="Export Purchase Orders to Excel file">
+                            <span>📊 Export Excel</span>
+                        </button>
+                        <button onclick="downloadOrdersExcelTemplate()" class="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm" title="Download Excel template for PO import/update">
+                            <span>📄 Template</span>
+                        </button>
+                        <button onclick="document.getElementById('excel-import-orders-input').click()" class="px-3.5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm" title="Import / update Purchase Orders from Excel file">
+                            <span>📥 Import Excel</span>
+                        </button>
+                        <input type="file" id="excel-import-orders-input" accept=".xlsx, .xls" class="hidden" onchange="handleOrdersExcelImport(this)">
+                        <button onclick="openCreatePOModal()" title="Create Purchase Order (Ctrl+O)" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/30 transition flex items-center gap-2">
+                            <span>➕ Create Purchase Order</span>
+                            <kbd class="hidden md:inline-block px-1.5 py-0.5 text-[10px] bg-indigo-700/80 text-indigo-100 rounded border border-indigo-400/40 font-mono">Ctrl+O</kbd>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
@@ -1172,10 +1184,22 @@
                         <h2 class="text-2xl font-black text-slate-900">B2B Clients Directory</h2>
                         <p class="text-sm text-slate-500">Manage client accounts, default tolerance %, and billing policies.</p>
                     </div>
-                    <button onclick="openCreateClientModal()" title="Add New Client (Alt+C)" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/30 transition flex items-center gap-2">
-                        <span>➕ Add New Client</span>
-                        <kbd class="hidden md:inline-block px-1.5 py-0.5 text-[10px] bg-indigo-700/80 text-indigo-100 rounded border border-indigo-400/40 font-mono">Alt+C</kbd>
-                    </button>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button onclick="exportClientsToExcel()" class="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm" title="Export Clients Directory to Excel file">
+                            <span>📊 Export Excel</span>
+                        </button>
+                        <button onclick="downloadClientsExcelTemplate()" class="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm" title="Download Excel template for Clients import/update">
+                            <span>📄 Template</span>
+                        </button>
+                        <button onclick="document.getElementById('excel-import-clients-input').click()" class="px-3.5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm" title="Import / update Clients from Excel file">
+                            <span>📥 Import Excel</span>
+                        </button>
+                        <input type="file" id="excel-import-clients-input" accept=".xlsx, .xls" class="hidden" onchange="handleClientsExcelImport(this)">
+                        <button onclick="openCreateClientModal()" title="Add New Client (Alt+C)" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/30 transition flex items-center gap-2">
+                            <span>➕ Add New Client</span>
+                            <kbd class="hidden md:inline-block px-1.5 py-0.5 text-[10px] bg-indigo-700/80 text-indigo-100 rounded border border-indigo-400/40 font-mono">Alt+C</kbd>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
@@ -1208,10 +1232,20 @@
                         <h2 class="text-2xl font-black text-slate-900">Cosmetics Catalog & Formulations</h2>
                         <p class="text-sm text-slate-500">Products, formulations, unit rates, and finished goods inventory.</p>
                     </div>
-                    <div class="flex items-center gap-2">
+                    <div class="flex flex-wrap items-center gap-2">
                         <button onclick="promptAddNewCategory()" class="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm" title="Add a new cosmetic category">
                             <span>🏷️ Add Category</span>
                         </button>
+                        <button onclick="exportProductsToExcel()" class="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm" title="Export products to Excel file">
+                            <span>📊 Export Excel</span>
+                        </button>
+                        <button onclick="downloadProductsExcelTemplate()" class="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm" title="Download Excel template for products import/update">
+                            <span>📄 Template</span>
+                        </button>
+                        <button onclick="document.getElementById('excel-import-products-input').click()" class="px-3.5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm" title="Import / update products from Excel file">
+                            <span>📥 Import Excel</span>
+                        </button>
+                        <input type="file" id="excel-import-products-input" accept=".xlsx, .xls" class="hidden" onchange="handleProductsExcelImport(this)">
                         <button onclick="openCreateProductModal()" title="Add Cosmetic Product (Alt+P)" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/30 transition flex items-center gap-2">
                             <span>➕ Add Cosmetic Product</span>
                             <kbd class="hidden md:inline-block px-1.5 py-0.5 text-[10px] bg-indigo-700/80 text-indigo-100 rounded border border-indigo-400/40 font-mono">Alt+P</kbd>
@@ -1240,6 +1274,7 @@
                                 <tr>
                                     <th class="py-3 px-4">SKU</th>
                                     <th class="py-3 px-4">Product Name</th>
+                                    <th class="py-3 px-4">Size</th>
                                     <th class="py-3 px-4">Category</th>
                                     <th class="py-3 px-4">Client / Brand</th>
                                     <th class="py-3 px-4">Default Unit Price</th>
@@ -1248,7 +1283,7 @@
                                 </tr>
                             </thead>
                             <tbody id="table-products-body" class="divide-y divide-slate-100 font-medium">
-                                <tr><td colspan="7" class="py-6 text-center text-slate-400">Loading products...</td></tr>
+                                <tr><td colspan="8" class="py-6 text-center text-slate-400">Loading products...</td></tr>
                             </tbody>
                         </table>
                     </div>

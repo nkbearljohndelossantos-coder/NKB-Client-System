@@ -679,4 +679,171 @@ router.delete('/:id/pricing/:productId', authenticateToken, requireRoles('ADMIN'
     });
 });
 
+/**
+ * POST /api/clients/import
+ * Batch import/update clients from Excel / JSON
+ */
+router.post('/import', authenticateToken, requireRoles('ADMIN', 'ACCOUNTING', 'SUPER_ADMIN'), (req, res) => {
+    try {
+        let items = req.body.clients || req.body.items || req.body;
+        if (!Array.isArray(items)) {
+            items = [items];
+        }
+
+        if (items.length === 0) {
+            return res.status(400).json({ success: false, error: 'No clients provided for import.' });
+        }
+
+        const existingClients = db.prepare('SELECT id, company_name, email FROM clients').all();
+        const existingById = new Map();
+        const existingByName = new Map();
+        const existingByEmail = new Map();
+        existingClients.forEach(c => {
+            if (c.id) existingById.set(c.id, c);
+            if (c.company_name) existingByName.set(c.company_name.toLowerCase().trim(), c);
+            if (c.email) existingByEmail.set(c.email.toLowerCase().trim(), c);
+        });
+
+        let createdCount = 0;
+        let updatedCount = 0;
+        const errors = [];
+        const imported = [];
+
+        const importTx = db.transaction(() => {
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                if (!item || typeof item !== 'object') continue;
+
+                const company_name = (item.company_name || item['Company Name'] || item['Company'] || '').trim();
+                const contact_person = (item.contact_person || item['Contact Person'] || item['Contact'] || 'Manager').trim();
+                let email = (item.email || item['Email'] || '').trim().toLowerCase();
+                const phone = (item.phone || item['Phone'] || item['Mobile'] || '').trim();
+                const address = (item.address || item['Address'] || 'Phils.').trim() || 'Phils.';
+                const tin = (item.tin || item['TIN'] || '').trim() || null;
+                const default_billing_policy = (item.default_billing_policy || item['Billing Policy'] || 'ACTUAL_DELIVERY').trim();
+                const default_tolerance_percent = parseFloat(item.default_tolerance_percent || item['Tolerance %'] || 10.0) || 10.0;
+                const credit_limit = parseFloat(item.credit_limit || item['Credit Limit'] || 500000.0) || 500000.0;
+                const is_active = item.is_active !== undefined ? (Number(item.is_active) === 0 ? 0 : 1) : (String(item['Status'] || '').toUpperCase() === 'INACTIVE' ? 0 : 1);
+                const is_vyuceutical_ops = (item.is_vyuceutical_ops === 1 || company_name.toLowerCase().includes('vyuceutical')) ? 1 : 0;
+
+                if (!company_name) {
+                    errors.push({ row: i + 1, error: 'Company Name is required.' });
+                    continue;
+                }
+
+                if (!email) {
+                    const safeName = company_name.toLowerCase().replace(/[^a-z0-9]/g, '');
+                    email = `contact@${safeName || 'client'}.ph`;
+                }
+
+                let id = (item.id || item['ID'] || item['Client ID'] || '').trim();
+                let matched = null;
+                if (id && existingById.has(id)) {
+                    matched = existingById.get(id);
+                } else if (existingByName.has(company_name.toLowerCase())) {
+                    matched = existingByName.get(company_name.toLowerCase());
+                } else if (existingByEmail.has(email)) {
+                    matched = existingByEmail.get(email);
+                }
+
+                if (matched) {
+                    // Update existing client
+                    db.prepare(`
+                        UPDATE clients
+                        SET company_name = ?,
+                            contact_person = ?,
+                            email = ?,
+                            phone = ?,
+                            address = ?,
+                            tin = ?,
+                            default_billing_policy = ?,
+                            default_tolerance_percent = ?,
+                            credit_limit = ?,
+                            is_vyuceutical_ops = ?,
+                            is_active = ?,
+                            updated_at = datetime('now', 'localtime')
+                        WHERE id = ?
+                    `).run(
+                        company_name, contact_person, email, phone, address, tin,
+                        default_billing_policy, default_tolerance_percent, credit_limit,
+                        is_vyuceutical_ops, is_active, matched.id
+                    );
+
+                    updatedCount++;
+                    imported.push({ id: matched.id, company_name, email, action: 'UPDATED' });
+                } else {
+                    // Create new client
+                    const newId = id || uuidv4();
+                    db.prepare(`
+                        INSERT INTO clients (
+                            id, company_name, contact_person, email, phone, address, tin,
+                            default_billing_policy, default_tolerance_percent, credit_limit,
+                            is_vyuceutical_ops, is_active, created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
+                    `).run(
+                        newId, company_name, contact_person, email, phone, address, tin,
+                        default_billing_policy, default_tolerance_percent, credit_limit,
+                        is_vyuceutical_ops, is_active
+                    );
+
+                    existingById.set(newId, { id: newId, company_name, email });
+                    existingByName.set(company_name.toLowerCase(), { id: newId, company_name, email });
+                    existingByEmail.set(email, { id: newId, company_name, email });
+                    createdCount++;
+                    imported.push({ id: newId, company_name, email, action: 'CREATED' });
+                }
+            }
+        });
+
+        importTx();
+
+        logAudit({
+            userId: req.user.id,
+            userName: req.user.name,
+            userRole: req.user.role,
+            action: 'IMPORT_CLIENTS',
+            entityType: 'CLIENT',
+            entityId: 'batch',
+            details: { createdCount, updatedCount, errorCount: errors.length }
+        });
+
+        return res.json({
+            success: true,
+            message: `Successfully processed ${createdCount + updatedCount} clients (${createdCount} created, ${updatedCount} updated).`,
+            createdCount,
+            updatedCount,
+            errorCount: errors.length,
+            errors,
+            data: imported
+        });
+    } catch (err) {
+        console.error('Clients import error:', err);
+        return res.status(500).json({ success: false, error: err.message || 'Failed to import clients.' });
+    }
+});
+
+/**
+ * GET /api/clients/export
+ * Outbound API for exporting clients
+ */
+router.get('/export', authenticateToken, requireRoles('ADMIN', 'ACCOUNTING', 'SUPER_ADMIN'), (req, res) => {
+    try {
+        const clients = db.prepare(`
+            SELECT id, company_name, contact_person, email, phone, address, tin,
+                   default_billing_policy, default_tolerance_percent, credit_limit,
+                   is_vyuceutical_ops, is_active, created_at, updated_at
+            FROM clients
+            ORDER BY company_name ASC
+        `).all();
+
+        return res.json({
+            success: true,
+            count: clients.length,
+            data: clients
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 module.exports = router;

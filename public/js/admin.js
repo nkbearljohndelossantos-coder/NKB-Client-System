@@ -241,6 +241,17 @@ function applyRoleBasedUI() {
         if (grp) grp.style.display = '';
     };
 
+    // Operator accounts check: Operators must only see operation interface, hide client view link
+    const isOperator = ['PRODUCTION', 'WAREHOUSE', 'QC', 'INVENTORY', 'PURCHASING'].includes(role);
+    const clientViewLink = document.getElementById('nav-client-view') || document.querySelector('a[href="/client.html"]');
+    if (clientViewLink) {
+        if (isOperator) {
+            clientViewLink.style.display = 'none';
+        } else {
+            clientViewLink.style.display = '';
+        }
+    }
+
     // Rule 1: In ALL accounts EXCEPT Super Admin and Executives (CEO & COO), remove Lab & Formulations and Management
     const isSuperOrExecutive = ['SUPER_ADMIN', 'ADMIN', 'CEO', 'COO'].includes(role);
     if (!isSuperOrExecutive) {
@@ -6360,7 +6371,7 @@ function renderProductsTable(products) {
     if (!tbody) return;
 
     if (!products || products.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-slate-400">No products match your filter criteria.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="py-6 text-center text-slate-400">No products match your filter criteria.</td></tr>`;
         return;
     }
 
@@ -6368,6 +6379,7 @@ function renderProductsTable(products) {
         <tr class="hover:bg-slate-50 transition">
             <td class="py-3 px-4 font-mono font-bold text-indigo-600">${p.sku}</td>
             <td class="py-3 px-4 font-bold text-slate-900">${p.name}</td>
+            <td class="py-3 px-4 font-bold text-slate-700">${p.size ? `<span class="badge bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold">${p.size}</span>` : '<span class="text-slate-400">—</span>'}</td>
             <td class="py-3 px-4"><span class="badge bg-slate-100 text-slate-700">${p.category}</span></td>
             <td class="py-3 px-4">
                 ${p.client_name 
@@ -7085,9 +7097,15 @@ async function openEditProductModal(productId) {
                             </div>
                         </div>
                     </div>
-                    <div>
-                        <label class="block text-slate-600 mb-1">Product Name *</label>
-                        <input type="text" id="edit-prod-name" required value="${prod.name}" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div class="md:col-span-2">
+                            <label class="block text-slate-600 mb-1">Product Name *</label>
+                            <input type="text" id="edit-prod-name" required value="${prod.name}" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold">
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 mb-1">Size (Optional)</label>
+                            <input type="text" id="edit-prod-size" value="${prod.size || ''}" placeholder="e.g. 50g, 120ml" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-indigo-700">
+                        </div>
                     </div>
                     <div>
                         <div class="flex items-center justify-between mb-1">
@@ -7128,6 +7146,7 @@ async function submitEditProduct(e, productId) {
     e.preventDefault();
     const category = document.getElementById('edit-prod-category').value;
     const name = document.getElementById('edit-prod-name').value;
+    const size = document.getElementById('edit-prod-size')?.value?.trim() || null;
     const client_id = document.getElementById('edit-prod-client-id').value || null;
     const default_price = parseFloat(document.getElementById('edit-prod-price').value);
     const unit = document.getElementById('edit-prod-unit').value || 'pcs';
@@ -7137,6 +7156,7 @@ async function submitEditProduct(e, productId) {
         body: JSON.stringify({
             category,
             name,
+            size,
             client_id,
             default_price,
             unit
@@ -10481,9 +10501,15 @@ async function openCreateProductModal(preselectedClientId = null) {
                         </select>
                         <p class="text-[10px] text-slate-400 mt-1">Assigns this product to the client in the Clients Directory & prefixes SKU with client initials.</p>
                     </div>
-                    <div>
-                        <label class="block text-slate-700 font-bold mb-1">Product Commercial Name *</label>
-                        <input type="text" id="prod-name" required oninput="autoGenerateProductSKU()" placeholder="e.g. Vitamin C Brightening Body Lotion 300ml" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 font-bold focus:ring-2 focus:ring-indigo-500">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div class="md:col-span-2">
+                            <label class="block text-slate-700 font-bold mb-1">Product Commercial Name *</label>
+                            <input type="text" id="prod-name" required oninput="autoGenerateProductSKU()" placeholder="e.g. Vitamin C Brightening Body Lotion 300ml" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 font-bold focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-slate-700 font-bold mb-1">Size (Optional)</label>
+                            <input type="text" id="prod-size" placeholder="e.g. 50g, 120ml" class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-slate-900 font-bold focus:ring-2 focus:ring-indigo-500">
+                        </div>
                     </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
@@ -10555,6 +10581,7 @@ async function submitCreateProduct(e) {
     const sku = document.getElementById('prod-sku').value.trim();
     const category = document.getElementById('prod-category').value;
     const name = document.getElementById('prod-name').value.trim();
+    const size = document.getElementById('prod-size')?.value?.trim() || null;
     const clientId = document.getElementById('prod-client-id')?.value || null;
     const price = parseFloat(document.getElementById('prod-price').value);
     const unit = document.getElementById('prod-unit').value || 'pcs';
@@ -10565,6 +10592,7 @@ async function submitCreateProduct(e) {
             sku,
             category,
             name,
+            size,
             client_id: clientId,
             default_price: price,
             unit
@@ -15736,4 +15764,581 @@ window.onPayableCategoryInput = onPayableCategoryInput;
 window.onPayableCategoryFocus = onPayableCategoryFocus;
 window.selectPayableCategory = selectPayableCategory;
 window.renderPayableCategorySuggestions = renderPayableCategorySuggestions;
+
+// =============================================================
+// EXCEL IMPORT & EXPORT: PRODUCTS, ORDERS, CLIENTS
+// =============================================================
+
+// --- 1. PRODUCTS EXCEL ---
+async function exportProductsToExcel() {
+    try {
+        if (typeof XLSX === 'undefined') {
+            NKB.showToast('SheetJS (XLSX) library is still loading. Please retry.', 'error');
+            return;
+        }
+        NKB.showToast('Preparing products for Excel export...', 'info');
+        const res = await NKB.api('/api/products/export');
+        const list = (res.success && res.data) ? res.data : (cachedProducts || []);
+        
+        if (!list || list.length === 0) {
+            NKB.showToast('No products available to export.', 'warning');
+            return;
+        }
+
+        const rows = list.map(p => ({
+            'ID': p.id || '',
+            'SKU': p.sku || '',
+            'Product Name': p.name || '',
+            'Size': p.size || '',
+            'Category': p.category || '',
+            'Description': p.description || '',
+            'Unit': p.unit || 'pcs',
+            'Default Unit Price': Number(p.default_price || 0),
+            'Current Stock': Number(p.current_stock || 0),
+            'Formula Code': p.formula_code || '',
+            'Shelf Life (Months)': Number(p.shelf_life_months || 24),
+            'Is Active (1/0)': p.is_active ? 1 : 0
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(rows);
+        ws['!cols'] = [
+            { wch: 38 }, // ID
+            { wch: 15 }, // SKU
+            { wch: 36 }, // Product Name
+            { wch: 12 }, // Size
+            { wch: 18 }, // Category
+            { wch: 28 }, // Description
+            { wch: 10 }, // Unit
+            { wch: 18 }, // Default Unit Price
+            { wch: 14 }, // Current Stock
+            { wch: 15 }, // Formula Code
+            { wch: 20 }, // Shelf Life (Months)
+            { wch: 14 }  // Is Active
+        ];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Products');
+        const dateStr = NKB.getManilaDate ? NKB.getManilaDate() : new Date().toISOString().split('T')[0];
+        XLSX.writeFile(wb, `NKB_Products_${dateStr}.xlsx`);
+        NKB.showToast(`Exported ${rows.length} products to Excel successfully!`, 'success');
+    } catch (err) {
+        console.error('exportProductsToExcel error:', err);
+        NKB.showToast(`Export failed: ${err.message}`, 'error');
+    }
+}
+window.exportProductsToExcel = exportProductsToExcel;
+
+function downloadProductsExcelTemplate() {
+    try {
+        if (typeof XLSX === 'undefined') {
+            NKB.showToast('SheetJS (XLSX) library is still loading. Please retry.', 'error');
+            return;
+        }
+        const sampleRows = [
+            {
+                'ID': '',
+                'SKU': 'VCB-101',
+                'Product Name': 'Vitamin C Brightening Body Lotion 300ml',
+                'Size': '300ml',
+                'Category': 'Body Care',
+                'Description': 'Brightening daily body lotion',
+                'Unit': 'pcs',
+                'Default Unit Price': 150.00,
+                'Current Stock': 100,
+                'Formula Code': 'LOT-01',
+                'Shelf Life (Months)': 24,
+                'Is Active (1/0)': 1
+            },
+            {
+                'ID': '',
+                'SKU': 'NS-050',
+                'Product Name': 'Niacinamide Glow Serum 50ml',
+                'Size': '50ml',
+                'Category': 'Skin Care',
+                'Description': 'Radiance facial serum',
+                'Unit': 'pcs',
+                'Default Unit Price': 220.00,
+                'Current Stock': 50,
+                'Formula Code': 'SER-05',
+                'Shelf Life (Months)': 24,
+                'Is Active (1/0)': 1
+            }
+        ];
+
+        const ws = XLSX.utils.json_to_sheet(sampleRows);
+        ws['!cols'] = [
+            { wch: 38 }, { wch: 15 }, { wch: 36 }, { wch: 12 }, { wch: 18 },
+            { wch: 28 }, { wch: 10 }, { wch: 18 }, { wch: 14 }, { wch: 15 },
+            { wch: 20 }, { wch: 14 }
+        ];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Template');
+        XLSX.writeFile(wb, 'NKB_Products_Template.xlsx');
+        NKB.showToast('Downloaded Products Excel template!', 'success');
+    } catch (err) {
+        console.error('downloadProductsExcelTemplate error:', err);
+        NKB.showToast(`Template download failed: ${err.message}`, 'error');
+    }
+}
+window.downloadProductsExcelTemplate = downloadProductsExcelTemplate;
+
+async function handleProductsExcelImport(input) {
+    const file = input?.files?.[0];
+    if (!file) return;
+
+    try {
+        if (typeof XLSX === 'undefined') {
+            NKB.showToast('SheetJS (XLSX) library is not ready.', 'error');
+            input.value = '';
+            return;
+        }
+
+        NKB.showToast(`Reading ${file.name}...`, 'info');
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const wb = XLSX.read(data, { type: 'array' });
+                const firstSheetName = wb.SheetNames[0];
+                const worksheet = wb.Sheets[firstSheetName];
+                const rawRows = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+                if (!rawRows || rawRows.length === 0) {
+                    NKB.showToast('The selected Excel file is empty.', 'warning');
+                    input.value = '';
+                    return;
+                }
+
+                const products = rawRows.map(r => ({
+                    id: (r['ID'] || r['id'] || '').toString().trim() || null,
+                    sku: (r['SKU'] || r['sku'] || '').toString().trim() || null,
+                    name: (r['Product Name'] || r['Product'] || r['Name'] || r['name'] || '').toString().trim(),
+                    size: (r['Size'] || r['size'] || '').toString().trim() || null,
+                    category: (r['Category'] || r['category'] || '').toString().trim() || null,
+                    description: (r['Description'] || r['description'] || '').toString().trim() || null,
+                    unit: (r['Unit'] || r['unit'] || 'pcs').toString().trim(),
+                    default_price: parseFloat(r['Default Unit Price'] || r['Price'] || r['default_price'] || r['price'] || 0) || 0,
+                    current_stock: parseInt(r['Current Stock'] || r['current_stock'] || 0, 10) || 0,
+                    formula_code: (r['Formula Code'] || r['formula_code'] || '').toString().trim() || null,
+                    shelf_life_months: parseInt(r['Shelf Life (Months)'] || r['shelf_life_months'] || 24, 10) || 24,
+                    is_active: (r['Is Active (1/0)'] !== undefined && r['Is Active (1/0)'] !== '') ? (r['Is Active (1/0)'] == 1 ? 1 : 0) : (r['is_active'] !== undefined ? (r['is_active'] == 1 ? 1 : 0) : 1)
+                })).filter(r => r.name || r.sku || r.id);
+
+                if (products.length === 0) {
+                    NKB.showToast('No valid product rows found in the Excel file.', 'warning');
+                    input.value = '';
+                    return;
+                }
+
+                NKB.showToast(`Importing ${products.length} products to database...`, 'info');
+                const res = await NKB.api('/api/products/import', {
+                    method: 'POST',
+                    body: JSON.stringify({ products })
+                });
+
+                if (res.success) {
+                    NKB.showToast(res.message || `Processed ${products.length} products.`, 'success');
+                    if (res.errors && res.errors.length > 0) {
+                        console.warn('Import warnings/errors:', res.errors);
+                        NKB.showToast(`${res.errors.length} rows had warnings. See console for details.`, 'warning');
+                    }
+                    await loadInitialData();
+                    loadProducts();
+                } else {
+                    NKB.showToast(res.error || 'Failed to import products.', 'error');
+                }
+            } catch (err) {
+                console.error('handleProductsExcelImport parse error:', err);
+                NKB.showToast(`Import failed: ${err.message}`, 'error');
+            } finally {
+                input.value = '';
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    } catch (err) {
+        console.error('handleProductsExcelImport outer error:', err);
+        NKB.showToast(`Error reading file: ${err.message}`, 'error');
+        input.value = '';
+    }
+}
+window.handleProductsExcelImport = handleProductsExcelImport;
+
+
+// --- 2. PURCHASE ORDERS (PO) EXCEL ---
+async function exportOrdersToExcel() {
+    try {
+        if (typeof XLSX === 'undefined') {
+            NKB.showToast('SheetJS (XLSX) library is still loading. Please retry.', 'error');
+            return;
+        }
+        NKB.showToast('Preparing purchase orders for Excel export...', 'info');
+        const res = await NKB.api('/api/orders/export');
+        const list = (res.success && res.data) ? res.data : (cachedOrders || []);
+
+        if (!list || list.length === 0) {
+            NKB.showToast('No orders available to export.', 'warning');
+            return;
+        }
+
+        const rows = list.map(o => ({
+            'PO ID': o.id || '',
+            'PO Number': o.po_number || '',
+            'SO Number': o.so_number || '',
+            'Client Name': o.client_name || '',
+            'PO Date': o.po_date || '',
+            'Expected Delivery Date': o.expected_delivery_date || '',
+            'Terms': o.terms || 'COD',
+            'Payment Method': o.form_of_payment || 'CHEQUE',
+            'Status': o.status || 'PENDING_APPROVAL',
+            'Subtotal': Number(o.subtotal || 0),
+            'Tax Amount': Number(o.tax_amount || 0),
+            'Discount Amount': Number(o.discount_amount || 0),
+            'Grand Total': Number(o.grand_total || 0),
+            'Payment Made': Number(o.payment_made || 0),
+            'Balance Due': Math.max(0, Number(o.grand_total || 0) - Number(o.payment_made || 0)),
+            'Items Summary': o.items_summary || '',
+            'Notes': o.notes || ''
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(rows);
+        ws['!cols'] = [
+            { wch: 38 }, // PO ID
+            { wch: 18 }, // PO Number
+            { wch: 18 }, // SO Number
+            { wch: 28 }, // Client Name
+            { wch: 14 }, // PO Date
+            { wch: 22 }, // Expected Delivery Date
+            { wch: 12 }, // Terms
+            { wch: 16 }, // Payment Method
+            { wch: 20 }, // Status
+            { wch: 16 }, // Subtotal
+            { wch: 14 }, // Tax Amount
+            { wch: 16 }, // Discount Amount
+            { wch: 16 }, // Grand Total
+            { wch: 16 }, // Payment Made
+            { wch: 16 }, // Balance Due
+            { wch: 40 }, // Items Summary
+            { wch: 30 }  // Notes
+        ];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Purchase Orders');
+        const dateStr = NKB.getManilaDate ? NKB.getManilaDate() : new Date().toISOString().split('T')[0];
+        XLSX.writeFile(wb, `NKB_Purchase_Orders_${dateStr}.xlsx`);
+        NKB.showToast(`Exported ${rows.length} purchase orders to Excel successfully!`, 'success');
+    } catch (err) {
+        console.error('exportOrdersToExcel error:', err);
+        NKB.showToast(`Export failed: ${err.message}`, 'error');
+    }
+}
+window.exportOrdersToExcel = exportOrdersToExcel;
+
+function downloadOrdersExcelTemplate() {
+    try {
+        if (typeof XLSX === 'undefined') {
+            NKB.showToast('SheetJS (XLSX) library is still loading. Please retry.', 'error');
+            return;
+        }
+        const sampleRows = [
+            {
+                'PO ID': '',
+                'PO Number': 'PO-2026-001',
+                'SO Number': 'SO-2026-001',
+                'Client Name': 'Acme Cosmetics Inc.',
+                'PO Date': '2026-10-07',
+                'Expected Delivery Date': '2026-10-21',
+                'Terms': '30_DAYS',
+                'Payment Method': 'CHEQUE',
+                'Status': 'PENDING_APPROVAL',
+                'Subtotal': 150000.00,
+                'Tax Amount': 0.00,
+                'Discount Amount': 0.00,
+                'Grand Total': 150000.00,
+                'Notes': 'Standard bulk replenishment order'
+            }
+        ];
+
+        const ws = XLSX.utils.json_to_sheet(sampleRows);
+        ws['!cols'] = [
+            { wch: 38 }, { wch: 18 }, { wch: 18 }, { wch: 28 }, { wch: 14 },
+            { wch: 22 }, { wch: 12 }, { wch: 16 }, { wch: 20 }, { wch: 16 },
+            { wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 30 }
+        ];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Template');
+        XLSX.writeFile(wb, 'NKB_PO_Template.xlsx');
+        NKB.showToast('Downloaded Purchase Orders Excel template!', 'success');
+    } catch (err) {
+        console.error('downloadOrdersExcelTemplate error:', err);
+        NKB.showToast(`Template download failed: ${err.message}`, 'error');
+    }
+}
+window.downloadOrdersExcelTemplate = downloadOrdersExcelTemplate;
+
+async function handleOrdersExcelImport(input) {
+    const file = input?.files?.[0];
+    if (!file) return;
+
+    try {
+        if (typeof XLSX === 'undefined') {
+            NKB.showToast('SheetJS (XLSX) library is not ready.', 'error');
+            input.value = '';
+            return;
+        }
+
+        NKB.showToast(`Reading ${file.name}...`, 'info');
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const wb = XLSX.read(data, { type: 'array' });
+                const firstSheetName = wb.SheetNames[0];
+                const worksheet = wb.Sheets[firstSheetName];
+                const rawRows = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+                if (!rawRows || rawRows.length === 0) {
+                    NKB.showToast('The selected Excel file is empty.', 'warning');
+                    input.value = '';
+                    return;
+                }
+
+                const orders = rawRows.map(r => ({
+                    id: (r['PO ID'] || r['id'] || '').toString().trim() || null,
+                    po_number: (r['PO Number'] || r['po_number'] || '').toString().trim() || null,
+                    so_number: (r['SO Number'] || r['so_number'] || '').toString().trim() || null,
+                    client_name: (r['Client Name'] || r['Client'] || r['client_name'] || '').toString().trim() || null,
+                    po_date: (r['PO Date'] || r['po_date'] || '').toString().trim() || null,
+                    expected_delivery_date: (r['Expected Delivery Date'] || r['expected_delivery_date'] || '').toString().trim() || null,
+                    terms: (r['Terms'] || r['terms'] || 'COD').toString().trim(),
+                    form_of_payment: (r['Payment Method'] || r['form_of_payment'] || 'CHEQUE').toString().trim(),
+                    status: (r['Status'] || r['status'] || 'PENDING_APPROVAL').toString().trim().toUpperCase(),
+                    subtotal: parseFloat(r['Subtotal'] || r['subtotal'] || 0) || 0,
+                    tax_amount: parseFloat(r['Tax Amount'] || r['tax_amount'] || 0) || 0,
+                    discount_amount: parseFloat(r['Discount Amount'] || r['discount_amount'] || 0) || 0,
+                    grand_total: parseFloat(r['Grand Total'] || r['grand_total'] || 0) || 0,
+                    notes: (r['Notes'] || r['notes'] || '').toString().trim() || null
+                })).filter(r => r.po_number || r.client_name || r.id);
+
+                if (orders.length === 0) {
+                    NKB.showToast('No valid order rows found in the Excel file.', 'warning');
+                    input.value = '';
+                    return;
+                }
+
+                NKB.showToast(`Importing ${orders.length} orders to database...`, 'info');
+                const res = await NKB.api('/api/orders/import', {
+                    method: 'POST',
+                    body: JSON.stringify({ orders })
+                });
+
+                if (res.success) {
+                    NKB.showToast(res.message || `Processed ${orders.length} orders.`, 'success');
+                    if (res.errors && res.errors.length > 0) {
+                        console.warn('Orders import warnings:', res.errors);
+                        NKB.showToast(`${res.errors.length} rows had warnings. See console.`, 'warning');
+                    }
+                    loadOrders();
+                } else {
+                    NKB.showToast(res.error || 'Failed to import orders.', 'error');
+                }
+            } catch (err) {
+                console.error('handleOrdersExcelImport parse error:', err);
+                NKB.showToast(`Import failed: ${err.message}`, 'error');
+            } finally {
+                input.value = '';
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    } catch (err) {
+        console.error('handleOrdersExcelImport outer error:', err);
+        NKB.showToast(`Error reading file: ${err.message}`, 'error');
+        input.value = '';
+    }
+}
+window.handleOrdersExcelImport = handleOrdersExcelImport;
+
+
+// --- 3. B2B CLIENTS EXCEL ---
+async function exportClientsToExcel() {
+    try {
+        if (typeof XLSX === 'undefined') {
+            NKB.showToast('SheetJS (XLSX) library is still loading. Please retry.', 'error');
+            return;
+        }
+        NKB.showToast('Preparing clients directory for Excel export...', 'info');
+        const res = await NKB.api('/api/clients/export');
+        const list = (res.success && res.data) ? res.data : (cachedClients || []);
+
+        if (!list || list.length === 0) {
+            NKB.showToast('No clients available to export.', 'warning');
+            return;
+        }
+
+        const rows = list.map(c => ({
+            'Client ID': c.id || '',
+            'Company Name': c.company_name || '',
+            'Contact Person': c.contact_person || '',
+            'Email': c.email || '',
+            'Phone': c.phone || '',
+            'Address': c.address || '',
+            'TIN': c.tin || '',
+            'Default Billing Policy': c.default_billing_policy || 'DELIVERY_BASED',
+            'Default Tolerance %': Number(c.default_tolerance_percent || 10),
+            'Credit Limit': Number(c.credit_limit || 0),
+            'Vyuceutical Ops (1/0)': c.is_vyuceutical_ops ? 1 : 0,
+            'Is Active (1/0)': c.is_active ? 1 : 0
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(rows);
+        ws['!cols'] = [
+            { wch: 38 }, // Client ID
+            { wch: 30 }, // Company Name
+            { wch: 22 }, // Contact Person
+            { wch: 28 }, // Email
+            { wch: 18 }, // Phone
+            { wch: 36 }, // Address
+            { wch: 18 }, // TIN
+            { wch: 22 }, // Default Billing Policy
+            { wch: 20 }, // Default Tolerance %
+            { wch: 16 }, // Credit Limit
+            { wch: 20 }, // Vyuceutical Ops
+            { wch: 14 }  // Is Active
+        ];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Clients Directory');
+        const dateStr = NKB.getManilaDate ? NKB.getManilaDate() : new Date().toISOString().split('T')[0];
+        XLSX.writeFile(wb, `NKB_Clients_${dateStr}.xlsx`);
+        NKB.showToast(`Exported ${rows.length} clients to Excel successfully!`, 'success');
+    } catch (err) {
+        console.error('exportClientsToExcel error:', err);
+        NKB.showToast(`Export failed: ${err.message}`, 'error');
+    }
+}
+window.exportClientsToExcel = exportClientsToExcel;
+
+function downloadClientsExcelTemplate() {
+    try {
+        if (typeof XLSX === 'undefined') {
+            NKB.showToast('SheetJS (XLSX) library is still loading. Please retry.', 'error');
+            return;
+        }
+        const sampleRows = [
+            {
+                'Client ID': '',
+                'Company Name': 'Acme Cosmetics Inc.',
+                'Contact Person': 'Jane Doe',
+                'Email': 'orders@acmecosmetics.ph',
+                'Phone': '+63 917 123 4567',
+                'Address': 'Bldg 4, Laguna Technopark, Biñan, Laguna',
+                'TIN': '123-456-789-000',
+                'Default Billing Policy': 'DELIVERY_BASED',
+                'Default Tolerance %': 10,
+                'Credit Limit': 500000,
+                'Vyuceutical Ops (1/0)': 0,
+                'Is Active (1/0)': 1
+            }
+        ];
+
+        const ws = XLSX.utils.json_to_sheet(sampleRows);
+        ws['!cols'] = [
+            { wch: 38 }, { wch: 30 }, { wch: 22 }, { wch: 28 }, { wch: 18 },
+            { wch: 36 }, { wch: 18 }, { wch: 22 }, { wch: 20 }, { wch: 16 },
+            { wch: 20 }, { wch: 14 }
+        ];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Template');
+        XLSX.writeFile(wb, 'NKB_Clients_Template.xlsx');
+        NKB.showToast('Downloaded Clients Excel template!', 'success');
+    } catch (err) {
+        console.error('downloadClientsExcelTemplate error:', err);
+        NKB.showToast(`Template download failed: ${err.message}`, 'error');
+    }
+}
+window.downloadClientsExcelTemplate = downloadClientsExcelTemplate;
+
+async function handleClientsExcelImport(input) {
+    const file = input?.files?.[0];
+    if (!file) return;
+
+    try {
+        if (typeof XLSX === 'undefined') {
+            NKB.showToast('SheetJS (XLSX) library is not ready.', 'error');
+            input.value = '';
+            return;
+        }
+
+        NKB.showToast(`Reading ${file.name}...`, 'info');
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const wb = XLSX.read(data, { type: 'array' });
+                const firstSheetName = wb.SheetNames[0];
+                const worksheet = wb.Sheets[firstSheetName];
+                const rawRows = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+                if (!rawRows || rawRows.length === 0) {
+                    NKB.showToast('The selected Excel file is empty.', 'warning');
+                    input.value = '';
+                    return;
+                }
+
+                const clients = rawRows.map(r => ({
+                    id: (r['Client ID'] || r['id'] || '').toString().trim() || null,
+                    company_name: (r['Company Name'] || r['Company'] || r['company_name'] || '').toString().trim(),
+                    contact_person: (r['Contact Person'] || r['Contact'] || r['contact_person'] || '').toString().trim() || null,
+                    email: (r['Email'] || r['email'] || '').toString().trim() || null,
+                    phone: (r['Phone'] || r['phone'] || '').toString().trim() || null,
+                    address: (r['Address'] || r['address'] || '').toString().trim() || null,
+                    tin: (r['TIN'] || r['tin'] || '').toString().trim() || null,
+                    default_billing_policy: (r['Default Billing Policy'] || r['Billing Policy'] || r['default_billing_policy'] || 'DELIVERY_BASED').toString().trim(),
+                    default_tolerance_percent: parseFloat(r['Default Tolerance %'] || r['Tolerance'] || r['default_tolerance_percent'] || 10) || 10,
+                    credit_limit: parseFloat(r['Credit Limit'] || r['credit_limit'] || 0) || 0,
+                    is_vyuceutical_ops: (r['Vyuceutical Ops (1/0)'] !== undefined && r['Vyuceutical Ops (1/0)'] !== '') ? (r['Vyuceutical Ops (1/0)'] == 1 ? 1 : 0) : 0,
+                    is_active: (r['Is Active (1/0)'] !== undefined && r['Is Active (1/0)'] !== '') ? (r['Is Active (1/0)'] == 1 ? 1 : 0) : (r['is_active'] !== undefined ? (r['is_active'] == 1 ? 1 : 0) : 1)
+                })).filter(r => r.company_name || r.email || r.id);
+
+                if (clients.length === 0) {
+                    NKB.showToast('No valid client rows found in the Excel file.', 'warning');
+                    input.value = '';
+                    return;
+                }
+
+                NKB.showToast(`Importing ${clients.length} clients to database...`, 'info');
+                const res = await NKB.api('/api/clients/import', {
+                    method: 'POST',
+                    body: JSON.stringify({ clients })
+                });
+
+                if (res.success) {
+                    NKB.showToast(res.message || `Processed ${clients.length} clients.`, 'success');
+                    if (res.errors && res.errors.length > 0) {
+                        console.warn('Clients import warnings:', res.errors);
+                        NKB.showToast(`${res.errors.length} rows had warnings. See console.`, 'warning');
+                    }
+                    await loadInitialData();
+                    loadClients();
+                } else {
+                    NKB.showToast(res.error || 'Failed to import clients.', 'error');
+                }
+            } catch (err) {
+                console.error('handleClientsExcelImport parse error:', err);
+                NKB.showToast(`Import failed: ${err.message}`, 'error');
+            } finally {
+                input.value = '';
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    } catch (err) {
+        console.error('handleClientsExcelImport outer error:', err);
+        NKB.showToast(`Error reading file: ${err.message}`, 'error');
+        input.value = '';
+    }
+}
+window.handleClientsExcelImport = handleClientsExcelImport;
+
 
