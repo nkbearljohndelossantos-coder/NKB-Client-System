@@ -815,7 +815,7 @@
 
         <!-- Bank Details Section (Outside/Below the Bordered Box at Bottom Left) -->
         <div class="bank-details-section avoid-break">
-            <div class="bank-intro" id="hdr-bank-intro">Please deposit payment to the following bank account/s:</div>
+            <div class="bank-intro" id="hdr-bank-intro">Please deposit payment to any of the following accredited bank account/s:</div>
             <div class="bank-lines" id="disp-bank-details" contenteditable="false">
                 <div class="bank-accounts-container">
                     <div class="bank-account-item">
@@ -1202,32 +1202,29 @@
 
             // Bank Details Logic
             const bankEl = document.getElementById('disp-bank-details');
-            if (isVyuceutical) {
-                bankEl.innerHTML = `BDO Unibank, Inc.<br>Vyuceutical Beauty Products Trading<br>0080 5801 0717`;
-            } else {
-                bankEl.innerHTML = `
-                    <div class="bank-accounts-container">
-                        <div class="bank-account-item">
-                            <div class="bank-title">BDO UNIBANK, INC.</div>
-                            <div class="bank-acc-name">NKB MANUFACTURING CORPORATION</div>
-                            <div class="bank-acc-no">0080-5801-0547</div>
-                            <div class="bank-branch-info">Checking Account</div>
-                        </div>
-                        <div class="bank-account-item">
-                            <div class="bank-title">SECURITY BANK</div>
-                            <div class="bank-acc-name">NKB Manufacturing Corporation</div>
-                            <div class="bank-acc-no">0000079720871</div>
-                            <div class="bank-branch-info">Imus Branch &bull; Tel: (02) 8529-8613</div>
-                        </div>
-                        <div class="bank-account-item">
-                            <div class="bank-title">METROPOLITAN BANK &amp; TRUST CO. (METROBANK)</div>
-                            <div class="bank-acc-name">NKB MANUFACTURING CORPORATION</div>
-                            <div class="bank-acc-no">788-7-78803245-1</div>
-                            <div class="bank-branch-info">Bacoor - Bayanan Bacoor Blvd. &bull; Tel: 4359389</div>
-                        </div>
+            bankEl.innerHTML = `
+                <div class="bank-accounts-container">
+                    <div class="bank-account-item">
+                        <div class="bank-title">BDO UNIBANK, INC.</div>
+                        <div class="bank-acc-name">NKB MANUFACTURING CORPORATION</div>
+                        <div class="bank-acc-no">0080-5801-0547</div>
+                        <div class="bank-branch-info">Checking Account</div>
                     </div>
-                `;
-            }
+                    <div class="bank-account-item">
+                        <div class="bank-title">SECURITY BANK</div>
+                        <div class="bank-acc-name">NKB Manufacturing Corporation</div>
+                        <div class="bank-acc-no">0000079720871</div>
+                        <div class="bank-branch-info">Imus Branch &bull; Tel: (02) 8529-8613</div>
+                    </div>
+                    <div class="bank-account-item">
+                        <div class="bank-title">METROPOLITAN BANK &amp; TRUST CO. (METROBANK)</div>
+                        <div class="bank-acc-name">NKB MANUFACTURING CORPORATION</div>
+                        <div class="bank-acc-no">788-7-78803245-1</div>
+                        <div class="bank-branch-info">Bacoor - Bayanan Bacoor Blvd. &bull; Tel: 4359389</div>
+                    </div>
+                </div>
+                <!-- BDO UNIBANK, INC.<br>NKB MANUFACTURING CORPORATION<br>0080-5801-0547 -->
+            `;
 
             if (isEditMode) {
                 enableContentEditable(true);
@@ -1341,7 +1338,6 @@
                 // Fallback sample matching image
                 populateUI({
                     po_number: 'SO-1271',
-                    is_vyuceutical_ops: 1,
                     company_name: 'BELLA SKIN',
                     contact_person: 'JANICE SANDOVAL I',
                     client_address: 'MAKATI',
