@@ -1582,35 +1582,82 @@ async function openViewPOModal(poId) {
                         </div>
                     ` : ''}
 
-                    <!-- Traceability (Linked Job Orders, DRs, Invoices) -->
+                    <!-- Fitted Process Pipeline (Linked Job Orders, DRs, Invoices) -->
                     ${(jobOrders.length > 0 || deliveries.length > 0 || (canViewPrices && invoices.length > 0)) ? `
-                        <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
-                            <h4 class="font-bold text-slate-900 uppercase text-[11px] tracking-wider">🏭 Production, Delivery & Billing Pipeline</h4>
-                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-                                <div>
-                                    <span class="font-bold text-slate-700 block mb-1">Job Orders (${jobOrders.length}):</span>
-                                    ${jobOrders.length > 0 ? `
-                                        <ul class="space-y-1 max-h-40 overflow-y-auto pr-1">
-                                            ${jobOrders.map(j => `<li class="font-mono bg-white p-2 rounded-lg border border-slate-200 flex justify-between items-center"><div><strong>${j.jo_number}</strong><br><span class="text-[10px] text-slate-500">${NKB.formatNumber(j.target_quantity)} pcs • ${j.status}</span></div><a href="/print-jo.html?id=${j.id}" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-bold transition inline-flex items-center gap-1" title="Print this Job Order">🖨️ Print</a></li>`).join('')}
-                                        </ul>
-                                    ` : '<span class="text-slate-400">None yet</span>'}
+                        <div class="p-3 bg-slate-50/90 rounded-2xl border border-slate-200/90 shadow-xs">
+                            <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-200/70">
+                                <div class="flex items-center gap-1.5 text-[11px] font-bold text-slate-800 uppercase tracking-wider">
+                                    <span>🏭</span>
+                                    <span>Order Execution Pipeline</span>
                                 </div>
-                                <div>
-                                    <span class="font-bold text-slate-700 block mb-1">Delivery Receipts (${deliveries.length}):</span>
-                                    ${deliveries.length > 0 ? `
-                                        <ul class="space-y-1 max-h-40 overflow-y-auto pr-1">
-                                            ${deliveries.map(d => `<li class="font-mono bg-white p-2 rounded-lg border border-slate-200"><strong>${d.dr_number}</strong><br><span class="text-[10px] text-slate-500">${NKB.formatNumber(d.total_delivered || 0)} pcs • ${d.status}</span></li>`).join('')}
-                                        </ul>
-                                    ` : '<span class="text-slate-400">None yet</span>'}
+                                <div class="hidden sm:flex items-center gap-2 text-[10px] font-semibold text-slate-500">
+                                    <span class="inline-flex items-center gap-1 ${jobOrders.length > 0 ? 'text-indigo-600 font-bold' : ''}">1. Production</span>
+                                    <span class="text-slate-300">→</span>
+                                    <span class="inline-flex items-center gap-1 ${deliveries.length > 0 ? 'text-emerald-600 font-bold' : ''}">2. Dispatch</span>
+                                    ${canViewPrices ? `
+                                        <span class="text-slate-300">→</span>
+                                        <span class="inline-flex items-center gap-1 ${invoices.length > 0 ? 'text-blue-600 font-bold' : ''}">3. Billing</span>
+                                    ` : ''}
                                 </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 ${canViewPrices ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-2.5">
+                                <!-- Col 1: Job Orders -->
+                                <div class="bg-white rounded-xl border border-slate-200/80 p-2 flex flex-col min-h-[96px]">
+                                    <div class="flex items-center justify-between mb-1.5 pb-1 border-b border-slate-100">
+                                        <span class="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-indigo-500"></span> Job Orders
+                                        </span>
+                                        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full ${jobOrders.length > 0 ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-100 text-slate-400'}">${jobOrders.length}</span>
+                                    </div>
+                                    <div class="max-h-24 overflow-y-auto space-y-1 pr-0.5 flex-1 custom-scrollbar">
+                                        ${jobOrders.length > 0 ? jobOrders.map(j => `
+                                            <div class="p-1.5 bg-slate-50 hover:bg-indigo-50/40 rounded-lg border border-slate-100 flex items-center justify-between text-[11px] transition">
+                                                <div class="min-w-0 pr-1">
+                                                    <div class="font-mono font-bold text-slate-800 truncate">${j.jo_number}</div>
+                                                    <div class="text-[9.5px] text-slate-500 truncate">${NKB.formatNumber(j.target_quantity)} pcs • <span class="font-semibold text-slate-600">${j.status}</span></div>
+                                                </div>
+                                                <a href="/print-jo.html?id=${j.id}" target="_blank" class="flex-shrink-0 px-1.5 py-0.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded text-[9.5px] font-bold transition inline-flex items-center gap-0.5" title="Print Job Order">🖨️</a>
+                                            </div>
+                                        `).join('') : '<div class="h-full flex items-center justify-center text-[10px] text-slate-400 py-3 italic">No Job Orders</div>'}
+                                    </div>
+                                </div>
+
+                                <!-- Col 2: Delivery Receipts -->
+                                <div class="bg-white rounded-xl border border-slate-200/80 p-2 flex flex-col min-h-[96px]">
+                                    <div class="flex items-center justify-between mb-1.5 pb-1 border-b border-slate-100">
+                                        <span class="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Delivery Receipts
+                                        </span>
+                                        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full ${deliveries.length > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'}">${deliveries.length}</span>
+                                    </div>
+                                    <div class="max-h-24 overflow-y-auto space-y-1 pr-0.5 flex-1 custom-scrollbar">
+                                        ${deliveries.length > 0 ? deliveries.map(d => `
+                                            <div class="p-1.5 bg-slate-50 hover:bg-emerald-50/40 rounded-lg border border-slate-100 text-[11px] transition">
+                                                <div class="font-mono font-bold text-slate-800 truncate">${d.dr_number}</div>
+                                                <div class="text-[9.5px] text-slate-500 truncate">${NKB.formatNumber(d.total_delivered || 0)} pcs • <span class="font-semibold text-emerald-700">${d.status}</span></div>
+                                            </div>
+                                        `).join('') : '<div class="h-full flex items-center justify-center text-[10px] text-slate-400 py-3 italic">No Deliveries</div>'}
+                                    </div>
+                                </div>
+
+                                <!-- Col 3: Sales Invoices -->
                                 ${canViewPrices ? `
-                                    <div>
-                                        <span class="font-bold text-slate-700 block mb-1">Sales Invoices (${invoices.length}):</span>
-                                        ${invoices.length > 0 ? `
-                                            <ul class="space-y-1 max-h-40 overflow-y-auto pr-1">
-                                                ${invoices.map(i => `<li class="font-mono bg-white p-2 rounded-lg border border-slate-200"><strong>${i.invoice_number}</strong><br><span class="text-[10px] text-slate-500">${NKB.formatCurrency(i.total_amount)} • ${i.payment_status}</span></li>`).join('')}
-                                            </ul>
-                                        ` : '<span class="text-slate-400">None yet</span>'}
+                                    <div class="bg-white rounded-xl border border-slate-200/80 p-2 flex flex-col min-h-[96px]">
+                                        <div class="flex items-center justify-between mb-1.5 pb-1 border-b border-slate-100">
+                                            <span class="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                                                <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Sales Invoices
+                                            </span>
+                                            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full ${invoices.length > 0 ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-400'}">${invoices.length}</span>
+                                        </div>
+                                        <div class="max-h-24 overflow-y-auto space-y-1 pr-0.5 flex-1 custom-scrollbar">
+                                            ${invoices.length > 0 ? invoices.map(i => `
+                                                <div class="p-1.5 bg-slate-50 hover:bg-blue-50/40 rounded-lg border border-slate-100 text-[11px] transition">
+                                                    <div class="font-mono font-bold text-slate-800 truncate">${i.invoice_number}</div>
+                                                    <div class="text-[9.5px] text-slate-500 truncate">${NKB.formatCurrency(i.total_amount)} • <span class="font-semibold text-blue-700">${i.payment_status}</span></div>
+                                                </div>
+                                            `).join('') : '<div class="h-full flex items-center justify-center text-[10px] text-slate-400 py-3 italic">No Invoices</div>'}
+                                        </div>
                                     </div>
                                 ` : ''}
                             </div>
