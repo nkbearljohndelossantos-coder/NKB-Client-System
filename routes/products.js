@@ -409,72 +409,104 @@ router.put('/:id', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'ACCOU
         finalSize = db.extractProductSize(name);
     }
 
-    const updateTx = db.transaction(() => {
-        db.prepare(`
-            UPDATE products 
-            SET name = COALESCE(?, name),
-                size = ?,
-                category = COALESCE(?, category),
-                description = COALESCE(?, description),
-                unit = COALESCE(?, unit),
-                default_price = COALESCE(?, default_price),
-                formula_code = COALESCE(?, formula_code),
-                shelf_life_months = COALESCE(?, shelf_life_months),
-                is_active = COALESCE(?, is_active),
-                updated_at = datetime('now', 'localtime')
-            WHERE id = ?
-        `).run(
-            name !== undefined ? name.trim() : null,
-            finalSize,
-            category !== undefined ? category : null,
-            description !== undefined ? description : null,
-            unit !== undefined ? unit : null,
-            default_price !== undefined ? Math.round(parseFloat(default_price) * 100) / 100 : null,
-            formula_code !== undefined ? formula_code : null,
-            shelf_life_months !== undefined ? parseInt(shelf_life_months) : null,
-            is_active !== undefined ? parseInt(is_active) : null,
-            id
-        );
+    try {
+        const updateTx = db.transaction(() => {
+            db.prepare(`
+                UPDATE products 
+                SET name = COALESCE(?, name),
+                    size = ?,
+                    category = COALESCE(?, category),
+                    description = COALESCE(?, description),
+                    unit = COALESCE(?, unit),
+                    default_price = COALESCE(?, default_price),
+                    formula_code = COALESCE(?, formula_code),
+                    shelf_life_months = COALESCE(?, shelf_life_months),
+                    is_active = COALESCE(?, is_active),
+                    updated_at = datetime('now', 'localtime')
+                WHERE id = ?
+            `).run(
+                name !== undefined ? name.trim() : null,
+                finalSize,
+                category !== undefined ? category : null,
+                description !== undefined ? description : null,
+                unit !== undefined ? unit : null,
+                default_price !== undefined ? Math.round(parseFloat(default_price) * 100) / 100 : null,
+                formula_code !== undefined ? formula_code : null,
+                shelf_life_months !== undefined ? parseInt(shelf_life_months) : null,
+                is_active !== undefined ? parseInt(is_active) : null,
+                id
+            );
 
-        if (client_id !== undefined) {
-            if (client_id) {
-                const existingAssoc = db.prepare('SELECT id FROM client_product_prices WHERE product_id = ?').get(id);
-                if (existingAssoc) {
-                    db.prepare('UPDATE client_product_prices SET client_id = ?, custom_name = ?, custom_price = ? WHERE product_id = ?').run(
-                        client_id,
-                        name ? name.trim() : existing.name,
-                        default_price !== undefined ? Math.round(parseFloat(default_price) * 100) / 100 : existing.default_price,
-                        id
-                    );
+            if (client_id !== undefined) {
+                if (client_id) {
+                    const existingForClient = db.prepare('SELECT id FROM client_product_prices WHERE client_id = ? AND product_id = ?').get(client_id, id);
+                    if (existingForClient) {
+                        db.prepare(`
+                            UPDATE client_product_prices
+                            SET custom_name = ?,
+                                custom_price = ?,
+                                is_active = 1,
+                                updated_at = datetime('now', 'localtime')
+                            WHERE id = ?
+                        `).run(
+                            name ? name.trim() : existing.name,
+                            default_price !== undefined ? Math.round(parseFloat(default_price) * 100) / 100 : existing.default_price,
+                            existingForClient.id
+                        );
+                    } else {
+                        const otherAssocs = db.prepare('SELECT id FROM client_product_prices WHERE product_id = ?').all(id);
+                        if (otherAssocs.length === 1) {
+                            db.prepare(`
+                                UPDATE client_product_prices
+                                SET client_id = ?,
+                                    custom_name = ?,
+                                    custom_price = ?,
+                                    is_active = 1,
+                                    updated_at = datetime('now', 'localtime')
+                                WHERE id = ?
+                            `).run(
+                                client_id,
+                                name ? name.trim() : existing.name,
+                                default_price !== undefined ? Math.round(parseFloat(default_price) * 100) / 100 : existing.default_price,
+                                otherAssocs[0].id
+                            );
+                        } else {
+                            db.prepare(`
+                                INSERT INTO client_product_prices (id, client_id, product_id, custom_name, custom_price, custom_sku, custom_formula_code, is_active)
+                                VALUES (?, ?, ?, ?, ?, ?, NULL, 1)
+                            `).run(
+                                uuidv4(),
+                                client_id,
+                                id,
+                                name ? name.trim() : existing.name,
+                                default_price !== undefined ? Math.round(parseFloat(default_price) * 100) / 100 : existing.default_price,
+                                existing.sku
+                            );
+                        }
+                    }
                 } else {
-                    db.prepare(`
-                        INSERT INTO client_product_prices (id, client_id, product_id, custom_name, custom_price, custom_sku, custom_formula_code, is_active)
-                        VALUES (?, ?, ?, ?, ?, ?, NULL, 1)
-                    `).run(
-                        uuidv4(),
-                        client_id,
-                        id,
-                        name ? name.trim() : existing.name,
-                        default_price !== undefined ? Math.round(parseFloat(default_price) * 100) / 100 : existing.default_price,
-                        existing.sku
-                    );
+                    const allAssocs = db.prepare('SELECT id FROM client_product_prices WHERE product_id = ?').all(id);
+                    if (allAssocs.length === 1) {
+                        db.prepare('DELETE FROM client_product_prices WHERE id = ?').run(allAssocs[0].id);
+                    }
                 }
-            } else {
-                db.prepare('DELETE FROM client_product_prices WHERE product_id = ?').run(id);
             }
-        }
-    });
+        });
 
-    updateTx();
+        updateTx();
 
-    const updated = db.prepare(`
-        SELECT p.*,
-               (SELECT c.company_name FROM client_product_prices cpp JOIN clients c ON cpp.client_id = c.id WHERE cpp.product_id = p.id AND cpp.is_active = 1 LIMIT 1) as client_name,
-               (SELECT cpp.client_id FROM client_product_prices cpp WHERE cpp.product_id = p.id AND cpp.is_active = 1 LIMIT 1) as client_id
-        FROM products p WHERE p.id = ?
-    `).get(id);
+        const updated = db.prepare(`
+            SELECT p.*,
+                   (SELECT c.company_name FROM client_product_prices cpp JOIN clients c ON cpp.client_id = c.id WHERE cpp.product_id = p.id AND cpp.is_active = 1 LIMIT 1) as client_name,
+                   (SELECT cpp.client_id FROM client_product_prices cpp WHERE cpp.product_id = p.id AND cpp.is_active = 1 LIMIT 1) as client_id
+            FROM products p WHERE p.id = ?
+        `).get(id);
 
-    return res.json({ success: true, data: updated });
+        return res.json({ success: true, data: updated });
+    } catch (err) {
+        console.error('Update product failed:', err.message);
+        return res.status(500).json({ success: false, error: err.message || 'Failed to update product.' });
+    }
 });
 
 /**
