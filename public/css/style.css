@@ -384,9 +384,11 @@ main section div.bg-white {
     background: #ffffff !important;
     border: 1px solid #e2e8f0 !important;
     border-radius: 1rem !important;
-    padding: 1.25rem !important;
+    padding: 1rem 1.1rem !important;
     box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.03) !important;
     transition: all 0.2s ease !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
 }
 
 .kpi-card:hover {

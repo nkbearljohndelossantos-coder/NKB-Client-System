@@ -547,9 +547,37 @@ async function loadDashboard() {
         NKB.api('/api/reports/yield')
     ]);
 
+    const fitKpiEl = (el) => {
+        if (!el) return;
+        const id = el.id || '';
+        const isMainValue = ['kpi-sold-this-month', 'kpi-expected-delivery-amount', 'kpi-ar-total', 'stat-sales-collected', 'stat-sales-balance', 'stat-expected-delivery-amount'].includes(id);
+        if (!isMainValue) return;
+        el.style.fontSize = '';
+        requestAnimationFrame(() => {
+            if (!el.clientWidth) return;
+            let size = parseFloat(window.getComputedStyle(el).fontSize) || 20;
+            while (el.scrollWidth > el.clientWidth && size > 11) {
+                size -= 0.5;
+                el.style.fontSize = `${size}px`;
+            }
+        });
+    };
+
+    if (!window.__kpiResizeBound) {
+        window.__kpiResizeBound = true;
+        window.addEventListener('resize', () => {
+            ['kpi-sold-this-month', 'kpi-expected-delivery-amount', 'kpi-ar-total', 'stat-sales-collected', 'stat-sales-balance', 'stat-expected-delivery-amount'].forEach(id => {
+                fitKpiEl(document.getElementById(id));
+            });
+        });
+    }
+
     const setElText = (id, text) => {
         const el = document.getElementById(id);
-        if (el) el.textContent = text;
+        if (el) {
+            el.textContent = text;
+            fitKpiEl(el);
+        }
     };
 
     if (kpiRes.success && kpiRes.data) {

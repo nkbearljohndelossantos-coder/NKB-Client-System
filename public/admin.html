@@ -11,7 +11,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/css/tailwind.min.css">
     <script src="/js/chart.umd.min.js"></script>
-    <link rel="stylesheet" href="/css/style.css?v=2.2.0">
+    <link rel="stylesheet" href="/css/style.css?v=2.3.7">
 </head>
 <body class="bg-slate-50 text-slate-800 antialiased min-h-screen flex flex-col">
 
@@ -388,61 +388,61 @@
                 <div id="executive-dashboard-content" class="space-y-6">
                 <!-- KPI Cards Grid -->
                 <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 sm:gap-4">
-                    <div class="kpi-card border-t-4 border-emerald-600 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:shadow-md hover:border-emerald-400 transition" onclick="switchTab('invoices')" title="Click to view Sales Invoices">
-                        <div class="flex items-center justify-between">
-                            <span class="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">Sold This Month</span>
-                            <span class="p-1 sm:p-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-[10px] sm:text-xs font-bold">MTD</span>
+                    <div class="kpi-card min-w-0 overflow-hidden border-t-4 border-emerald-600 bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:shadow-md hover:border-emerald-400 transition" onclick="switchTab('invoices')" title="Click to view Sales Invoices">
+                        <div class="flex items-center justify-between gap-1">
+                            <span class="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider leading-tight">Sold This Month</span>
+                            <span class="p-1 sm:p-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-[10px] sm:text-xs font-bold flex-shrink-0">MTD</span>
                         </div>
-                        <div id="kpi-sold-this-month" class="text-2xl sm:text-3xl font-black text-emerald-600 mt-2">₱0.00</div>
-                        <div id="kpi-sold-mom" class="text-[11px] sm:text-xs text-slate-500 font-semibold mt-1">0 invoices this month</div>
+                        <div id="kpi-sold-this-month" class="text-lg sm:text-xl 2xl:text-2xl font-black text-emerald-600 mt-2 tracking-tight leading-tight whitespace-nowrap">₱0.00</div>
+                        <div id="kpi-sold-mom" class="text-[11px] sm:text-xs text-slate-500 font-semibold mt-1 break-words">0 invoices this month</div>
                     </div>
-                    <div class="kpi-card border-t-4 border-purple-600 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:shadow-md hover:border-purple-400 transition" onclick="switchTab('orders')" title="Total revenue expected to come if all products across active Sales Orders / POs are completely delivered">
-                        <div class="flex items-center justify-between">
-                            <span class="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">Expected If All Delivered</span>
-                            <span class="p-1 sm:p-1.5 rounded-lg bg-purple-50 text-purple-700 text-[10px] sm:text-xs font-bold">PIPELINE</span>
+                    <div class="kpi-card min-w-0 overflow-hidden border-t-4 border-purple-600 bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:shadow-md hover:border-purple-400 transition" onclick="switchTab('orders')" title="Total revenue expected to come if all products across active Sales Orders / POs are completely delivered">
+                        <div class="flex items-center justify-between gap-1">
+                            <span class="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider leading-tight">Expected If All Delivered</span>
+                            <span class="p-1 sm:p-1.5 rounded-lg bg-purple-50 text-purple-700 text-[10px] sm:text-xs font-bold flex-shrink-0">PIPELINE</span>
                         </div>
-                        <div id="kpi-expected-delivery-amount" class="text-2xl sm:text-3xl font-black text-purple-700 mt-2">₱0.00</div>
-                        <div id="kpi-expected-delivery-sub" class="text-[11px] sm:text-xs text-slate-500 font-semibold mt-1">If all products delivered →</div>
+                        <div id="kpi-expected-delivery-amount" class="text-lg sm:text-xl 2xl:text-2xl font-black text-purple-700 mt-2 tracking-tight leading-tight whitespace-nowrap">₱0.00</div>
+                        <div id="kpi-expected-delivery-sub" class="text-[11px] sm:text-xs text-slate-500 font-semibold mt-1 break-words">If all products delivered →</div>
                     </div>
-                    <div class="kpi-card border-t-4 border-indigo-500 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:shadow-md hover:border-indigo-300 transition" onclick="switchTab('orders')" title="Click to view Purchase Orders">
-                        <div class="flex items-center justify-between">
-                            <span class="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">Open Orders (PO)</span>
-                            <span class="p-1 sm:p-1.5 rounded-lg bg-indigo-50 text-indigo-600 text-[10px] sm:text-xs font-bold">PO</span>
+                    <div class="kpi-card min-w-0 overflow-hidden border-t-4 border-indigo-500 bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:shadow-md hover:border-indigo-300 transition" onclick="switchTab('orders')" title="Click to view Purchase Orders">
+                        <div class="flex items-center justify-between gap-1">
+                            <span class="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider leading-tight">Open Orders (PO)</span>
+                            <span class="p-1 sm:p-1.5 rounded-lg bg-indigo-50 text-indigo-600 text-[10px] sm:text-xs font-bold flex-shrink-0">PO</span>
                         </div>
-                        <div id="kpi-open-pos" class="text-2xl sm:text-3xl font-black text-slate-900 mt-2">0</div>
-                        <div id="kpi-open-pos-sub" class="text-[11px] sm:text-xs text-indigo-600 font-semibold mt-1">Active client purchase orders →</div>
+                        <div id="kpi-open-pos" class="text-2xl sm:text-3xl font-black text-slate-900 mt-2 tracking-tight leading-tight">0</div>
+                        <div id="kpi-open-pos-sub" class="text-[11px] sm:text-xs text-indigo-600 font-semibold mt-1 break-words">Active client purchase orders →</div>
                     </div>
-                    <div class="kpi-card border-t-4 border-blue-500 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:shadow-md hover:border-blue-300 transition" onclick="switchTab('production')" title="Click to view Batches & Yield">
-                        <div class="flex items-center justify-between">
-                            <span class="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">In Production</span>
-                            <span class="p-1 sm:p-1.5 rounded-lg bg-blue-50 text-blue-600 text-[10px] sm:text-xs font-bold">BAT</span>
+                    <div class="kpi-card min-w-0 overflow-hidden border-t-4 border-blue-500 bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:shadow-md hover:border-blue-300 transition" onclick="switchTab('production')" title="Click to view Batches & Yield">
+                        <div class="flex items-center justify-between gap-1">
+                            <span class="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider leading-tight">In Production</span>
+                            <span class="p-1 sm:p-1.5 rounded-lg bg-blue-50 text-blue-600 text-[10px] sm:text-xs font-bold flex-shrink-0">BAT</span>
                         </div>
-                        <div id="kpi-active-batches" class="text-2xl sm:text-3xl font-black text-blue-600 mt-2">0</div>
-                        <div id="kpi-pending-approval-batches" class="text-[11px] sm:text-xs text-amber-600 font-semibold mt-1">0 over-tolerance →</div>
+                        <div id="kpi-active-batches" class="text-2xl sm:text-3xl font-black text-blue-600 mt-2 tracking-tight leading-tight">0</div>
+                        <div id="kpi-pending-approval-batches" class="text-[11px] sm:text-xs text-amber-600 font-semibold mt-1 break-words">0 over-tolerance →</div>
                     </div>
-                    <div class="kpi-card border-t-4 border-amber-500 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:shadow-md hover:border-amber-300 transition" onclick="switchTab('deliveries')" title="Click to view ongoing deliveries">
-                        <div class="flex items-center justify-between">
-                            <span class="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">Ongoing Deliveries</span>
-                            <span class="p-1 sm:p-1.5 rounded-lg bg-amber-50 text-amber-600 text-[10px] sm:text-xs font-bold">🚚 DR</span>
+                    <div class="kpi-card min-w-0 overflow-hidden border-t-4 border-amber-500 bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:shadow-md hover:border-amber-300 transition" onclick="switchTab('deliveries')" title="Click to view ongoing deliveries">
+                        <div class="flex items-center justify-between gap-1">
+                            <span class="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider leading-tight">Ongoing Deliveries</span>
+                            <span class="p-1 sm:p-1.5 rounded-lg bg-amber-50 text-amber-600 text-[10px] sm:text-xs font-bold flex-shrink-0">🚚 DR</span>
                         </div>
-                        <div id="kpi-ongoing-deliveries" class="text-2xl sm:text-3xl font-black text-amber-600 mt-2">0</div>
-                        <div class="text-[11px] sm:text-xs text-amber-700 font-semibold mt-1">Dispatched & in-transit →</div>
+                        <div id="kpi-ongoing-deliveries" class="text-2xl sm:text-3xl font-black text-amber-600 mt-2 tracking-tight leading-tight">0</div>
+                        <div class="text-[11px] sm:text-xs text-amber-700 font-semibold mt-1 break-words">Dispatched & in-transit →</div>
                     </div>
-                    <div class="kpi-card border-t-4 border-emerald-500 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:shadow-md hover:border-emerald-300 transition" onclick="switchTab('invoices')" title="Click to view Sales Invoices & Unbilled Deliveries">
-                        <div class="flex items-center justify-between">
-                            <span class="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">Unbilled DRs</span>
-                            <span class="p-1 sm:p-1.5 rounded-lg bg-emerald-50 text-emerald-600 text-[10px] sm:text-xs font-bold">DR</span>
+                    <div class="kpi-card min-w-0 overflow-hidden border-t-4 border-emerald-500 bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:shadow-md hover:border-emerald-300 transition" onclick="switchTab('invoices')" title="Click to view Sales Invoices & Unbilled Deliveries">
+                        <div class="flex items-center justify-between gap-1">
+                            <span class="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider leading-tight">Unbilled DRs</span>
+                            <span class="p-1 sm:p-1.5 rounded-lg bg-emerald-50 text-emerald-600 text-[10px] sm:text-xs font-bold flex-shrink-0">DR</span>
                         </div>
-                        <div id="kpi-unbilled-drs" class="text-2xl sm:text-3xl font-black text-emerald-600 mt-2">0</div>
-                        <div class="text-[11px] sm:text-xs text-slate-500 mt-1">Ready to invoice →</div>
+                        <div id="kpi-unbilled-drs" class="text-2xl sm:text-3xl font-black text-emerald-600 mt-2 tracking-tight leading-tight">0</div>
+                        <div class="text-[11px] sm:text-xs text-slate-500 mt-1 break-words">Ready to invoice →</div>
                     </div>
-                    <div class="kpi-card border-t-4 border-rose-500 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:shadow-md hover:border-rose-300 transition" onclick="switchTab('payments')" title="Click to view Accounts Receivable & Payments">
-                        <div class="flex items-center justify-between">
-                            <span class="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">Total Receivables</span>
-                            <span class="p-1 sm:p-1.5 rounded-lg bg-rose-50 text-rose-600 text-[10px] sm:text-xs font-bold">AR</span>
+                    <div class="kpi-card min-w-0 overflow-hidden border-t-4 border-rose-500 bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:shadow-md hover:border-rose-300 transition" onclick="switchTab('payments')" title="Click to view Accounts Receivable & Payments">
+                        <div class="flex items-center justify-between gap-1">
+                            <span class="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider leading-tight">Total Receivables</span>
+                            <span class="p-1 sm:p-1.5 rounded-lg bg-rose-50 text-rose-600 text-[10px] sm:text-xs font-bold flex-shrink-0">AR</span>
                         </div>
-                        <div id="kpi-ar-total" class="text-2xl sm:text-3xl font-black text-slate-900 mt-2">₱0.00</div>
-                        <div id="kpi-overdue-ar" class="text-[11px] sm:text-xs text-slate-500 mt-1">₱0.00 overdue →</div>
+                        <div id="kpi-ar-total" class="text-lg sm:text-xl 2xl:text-2xl font-black text-slate-900 mt-2 tracking-tight leading-tight whitespace-nowrap">₱0.00</div>
+                        <div id="kpi-overdue-ar" class="text-[11px] sm:text-xs text-slate-500 mt-1 break-words">₱0.00 overdue →</div>
                     </div>
                 </div>
 
@@ -464,30 +464,30 @@
 
                     <!-- 5 Sub-Stat Cards -->
                     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-                        <div class="p-4 rounded-xl bg-slate-50 border border-slate-200/80">
+                        <div class="p-4 rounded-xl bg-slate-50 border border-slate-200/80 min-w-0 overflow-hidden">
                             <div class="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500">Collected Revenue (MTD)</div>
-                            <div id="stat-sales-collected" class="text-xl sm:text-2xl font-black text-emerald-600 mt-1">₱0.00</div>
+                            <div id="stat-sales-collected" class="text-lg sm:text-xl 2xl:text-2xl font-black text-emerald-600 mt-1 tracking-tight leading-tight whitespace-nowrap">₱0.00</div>
                             <div id="stat-sales-collection-rate" class="text-[10px] sm:text-[11px] text-slate-500 mt-0.5 font-medium">0% collection rate</div>
                         </div>
-                        <div class="p-4 rounded-xl bg-slate-50 border border-slate-200/80">
+                        <div class="p-4 rounded-xl bg-slate-50 border border-slate-200/80 min-w-0 overflow-hidden">
                             <div class="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500">Pending Receivables (MTD)</div>
-                            <div id="stat-sales-balance" class="text-xl sm:text-2xl font-black text-amber-600 mt-1">₱0.00</div>
+                            <div id="stat-sales-balance" class="text-lg sm:text-xl 2xl:text-2xl font-black text-amber-600 mt-1 tracking-tight leading-tight whitespace-nowrap">₱0.00</div>
                             <div id="stat-sales-balance-sub" class="text-[10px] sm:text-[11px] text-slate-500 mt-0.5 font-medium">Outstanding this month</div>
                         </div>
-                        <div class="p-4 rounded-xl bg-purple-50/60 border border-purple-200/80">
-                            <div class="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-purple-900 flex items-center justify-between">
+                        <div class="p-4 rounded-xl bg-purple-50/60 border border-purple-200/80 min-w-0 overflow-hidden">
+                            <div class="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-purple-900 flex items-center justify-between gap-1">
                                 <span>Expected If All Delivered</span>
-                                <span class="text-xs">📦</span>
+                                <span class="text-xs flex-shrink-0">📦</span>
                             </div>
-                            <div id="stat-expected-delivery-amount" class="text-xl sm:text-2xl font-black text-purple-700 mt-1">₱0.00</div>
+                            <div id="stat-expected-delivery-amount" class="text-lg sm:text-xl 2xl:text-2xl font-black text-purple-700 mt-1 tracking-tight leading-tight whitespace-nowrap">₱0.00</div>
                             <div id="stat-expected-delivery-sub" class="text-[10px] sm:text-[11px] text-purple-600 mt-0.5 font-medium">100% orders fulfilled value</div>
                         </div>
-                        <div class="p-4 rounded-xl bg-slate-50 border border-slate-200/80">
+                        <div class="p-4 rounded-xl bg-slate-50 border border-slate-200/80 min-w-0 overflow-hidden">
                             <div class="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500">MoM Growth Rate</div>
                             <div id="stat-sales-mom-growth" class="text-xl sm:text-2xl font-black text-indigo-600 mt-1">0%</div>
                             <div id="stat-sales-last-month" class="text-[10px] sm:text-[11px] text-slate-500 mt-0.5 font-medium">vs Last Month (₱0.00)</div>
                         </div>
-                        <div class="p-4 rounded-xl bg-slate-50 border border-slate-200/80">
+                        <div class="p-4 rounded-xl bg-slate-50 border border-slate-200/80 min-w-0 overflow-hidden">
                             <div class="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500">Cosmetics Units Sold</div>
                             <div id="stat-sales-units" class="text-xl sm:text-2xl font-black text-purple-600 mt-1">0 pcs</div>
                             <div id="stat-sales-invoice-count" class="text-[10px] sm:text-[11px] text-slate-500 mt-0.5 font-medium">across 0 invoices</div>
@@ -2321,8 +2321,8 @@
     </div>
 
     <script src="/js/xlsx.full.min.js"></script>
-    <script src="/js/app.js?v=2.3.6"></script>
-    <script src="/js/admin.js?v=2.3.6"></script>
-    <script src="/js/agent-widgets.js?v=2.3.6"></script>
+    <script src="/js/app.js?v=2.3.7"></script>
+    <script src="/js/admin.js?v=2.3.7"></script>
+    <script src="/js/agent-widgets.js?v=2.3.7"></script>
 </body>
 </html>
