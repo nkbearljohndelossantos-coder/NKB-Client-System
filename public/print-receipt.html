@@ -21,15 +21,19 @@
             position: relative;
             overflow: hidden;
         }
-        .receipt-container > * {
+        .receipt-container > *:not(.receipt-watermark) {
             position: relative;
             z-index: 1;
         }
         .receipt-watermark {
             position: absolute !important;
-            top: 50% !important;
-            left: 50% !important;
-            transform: translate(-50%, -50%) !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            transform: none !important;
             pointer-events: none !important;
             user-select: none !important;
             -webkit-user-select: none !important;
@@ -38,7 +42,6 @@
             display: flex !important;
             align-items: center !important;
             justify-content: center !important;
-            width: 100% !important;
         }
         .receipt-watermark img {
             width: 270px;

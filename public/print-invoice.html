@@ -62,16 +62,20 @@
             }
         }
 
-        .print-sheet > * {
+        .print-sheet > *:not(.doc-watermark) {
             position: relative;
             z-index: 1;
         }
 
         .doc-watermark {
             position: absolute !important;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            transform: none !important;
             pointer-events: none;
             user-select: none;
             -webkit-user-select: none;
@@ -80,7 +84,6 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 100%;
         }
 
         .doc-watermark img {

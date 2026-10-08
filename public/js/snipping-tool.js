@@ -322,6 +322,22 @@
                         if (wrap) {
                             wrap.style.transform = 'none';
                         }
+                        clonedDoc.querySelectorAll('.slip-screen-tag').forEach(el => {
+                            el.style.visibility = 'hidden';
+                        });
+                        clonedDoc.querySelectorAll('.slip-watermark, .doc-watermark, .receipt-watermark').forEach(wm => {
+                            wm.style.position = 'absolute';
+                            wm.style.top = '0';
+                            wm.style.left = '0';
+                            wm.style.right = '0';
+                            wm.style.bottom = '0';
+                            wm.style.width = '100%';
+                            wm.style.height = '100%';
+                            wm.style.transform = 'none';
+                            wm.style.display = 'flex';
+                            wm.style.alignItems = 'center';
+                            wm.style.justifyContent = 'center';
+                        });
                     }
                 });
             } finally {
