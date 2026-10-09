@@ -14281,7 +14281,11 @@ async function submitITRecordEdit(event) {
             return;
         }
 
-        NKB.toast('✅ Record updated successfully in database!');
+        if (typeof NKB.showToast === 'function') {
+            NKB.showToast('✅ Record updated successfully in database!', 'success');
+        } else if (typeof NKB.toast === 'function') {
+            NKB.toast('✅ Record updated successfully in database!', 'success');
+        }
         closeITEditModal();
         await fetchAndRenderITRecords();
     } catch (err) {
@@ -14328,7 +14332,12 @@ async function executeQuickPOReassignment() {
             return;
         }
 
-        NKB.toast(`✅ ${res.message || 'Purchase Order client reassigned successfully!'}`);
+        const msg = `✅ ${res.message || 'Purchase Order client reassigned successfully!'}`;
+        if (typeof NKB.showToast === 'function') {
+            NKB.showToast(msg, 'success');
+        } else if (typeof NKB.toast === 'function') {
+            NKB.toast(msg, 'success');
+        }
         await loadITManagement('purchase_orders');
     } catch (err) {
         console.error('Error reassigning PO client:', err);
@@ -14367,7 +14376,12 @@ async function executeQuickStatusOverride() {
             return;
         }
 
-        NKB.toast(`⚡ Status updated to ${newStatus}!`);
+        const msg = `⚡ Status updated to ${newStatus}!`;
+        if (typeof NKB.showToast === 'function') {
+            NKB.showToast(msg, 'success');
+        } else if (typeof NKB.toast === 'function') {
+            NKB.toast(msg, 'success');
+        }
         if (idInput) idInput.value = '';
         if (reasonInput) reasonInput.value = '';
         await fetchAndRenderITRecords();
@@ -14392,7 +14406,11 @@ async function deleteITRecord(table, id) {
             return;
         }
 
-        NKB.toast('🗑️ Record deleted successfully.');
+        if (typeof NKB.showToast === 'function') {
+            NKB.showToast('🗑️ Record deleted successfully.', 'success');
+        } else if (typeof NKB.toast === 'function') {
+            NKB.toast('🗑️ Record deleted successfully.', 'success');
+        }
         await fetchAndRenderITRecords();
     } catch (err) {
         console.error('Error deleting IT record:', err);

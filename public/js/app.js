@@ -108,6 +108,10 @@ const NKB = {
         }, 4000);
     },
 
+    toast: function(message, type = 'info') {
+        return this.showToast(message, type);
+    },
+
     // Currency Formatter (PHP ₱)
     formatCurrency: function(val) {
         if (val === undefined || val === null || isNaN(val)) return '₱0.00';
