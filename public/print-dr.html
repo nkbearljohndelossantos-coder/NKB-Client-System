@@ -266,24 +266,24 @@
         <div class="grid grid-cols-2 gap-4 text-xs">
             <div class="border border-slate-200 rounded p-3 space-y-1">
                 <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Deliver To (Client):</span>
-                <div id="client-company-display" class="font-bold text-sm text-slate-900">-</div>
-                <div id="client-contact-display" class="text-slate-600 font-medium">-</div>
-                <div id="client-address-display" class="text-slate-600 leading-snug">-</div>
-                <div id="client-phone-display" class="text-slate-500 font-mono text-[11px]">-</div>
+                <div id="client-company-display" class="font-black text-sm text-slate-950">-</div>
+                <div id="client-contact-display" class="text-slate-800 font-bold">-</div>
+                <div id="client-address-display" class="text-slate-800 font-bold leading-snug">-</div>
+                <div id="client-phone-display" class="text-slate-800 font-bold font-mono text-[11px]">-</div>
             </div>
             <div class="border border-slate-200 rounded p-3 space-y-1 bg-slate-50/50">
                 <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Dispatch Details:</span>
-                <div>PO Reference: <strong id="po-ref-display" class="text-slate-800 font-mono">-</strong> <span class="text-slate-400 mx-1">•</span> SO Reference: <strong id="so-ref-display" class="text-slate-800 font-mono">-</strong></div>
-                <div>Billing Policy: <strong id="policy-display" class="text-slate-800">-</strong></div>
-                <div>Driver: <strong id="driver-display" class="text-slate-800">-</strong></div>
-                <div>Vehicle Plate: <strong id="plate-display" class="text-slate-800 font-mono">-</strong></div>
+                <div>PO Reference: <strong id="po-ref-display" class="text-slate-900 font-mono font-bold">-</strong> <span class="text-slate-400 mx-1">•</span> SO Reference: <strong id="so-ref-display" class="text-slate-900 font-mono font-bold">-</strong></div>
+                <div>Billing Policy: <strong id="policy-display" class="text-slate-900 font-bold">-</strong></div>
+                <div>Driver: <strong id="driver-display" class="text-slate-900 font-bold">-</strong></div>
+                <div>Vehicle Plate: <strong id="plate-display" class="text-slate-900 font-mono font-bold">-</strong></div>
             </div>
         </div>
 
         <!-- Items Table -->
         <div class="border border-slate-300 rounded overflow-hidden text-xs">
             <table class="w-full text-left border-collapse">
-                <thead class="border-b border-slate-300 bg-slate-50 text-[10px] font-semibold text-slate-600 uppercase tracking-wider">
+                <thead class="border-b border-slate-300 bg-slate-50 text-[10px] font-bold text-slate-900 uppercase tracking-wider">
                     <tr>
                         <th class="py-2 px-2.5">Item & Description</th>
                         <th class="py-2 px-2.5">Batch Number</th>
@@ -293,7 +293,7 @@
                         <th class="py-2 px-2 text-center edit-only no-print" style="width: 28px;">✕</th>
                     </tr>
                 </thead>
-                <tbody id="dr-items-tbody" class="divide-y divide-slate-200 font-normal">
+                <tbody id="dr-items-tbody" class="divide-y divide-slate-200 font-bold text-slate-900">
                     <tr><td colspan="5" class="py-4 text-center text-slate-400">Loading delivery details...</td></tr>
                 </tbody>
             </table>

@@ -339,14 +339,14 @@
 
         .company-address {
             font-size: 7.8pt;
-            font-weight: 400;
+            font-weight: 700;
             color: #000000;
             line-height: 1.35;
         }
 
         .company-tin {
             font-size: 7.8pt;
-            font-weight: 400;
+            font-weight: 700;
             color: #000000;
             line-height: 1.35;
         }
@@ -358,7 +358,7 @@
 
         .doc-title {
             font-size: 12.5pt;
-            font-weight: 700;
+            font-weight: 800;
             text-transform: uppercase;
             text-decoration: underline;
             text-underline-offset: 2px;
@@ -372,29 +372,31 @@
             justify-content: space-between;
             align-items: flex-start;
             font-size: 9pt;
-            font-weight: 400;
+            font-weight: 700;
             line-height: 1.3;
             margin-bottom: 14px;
         }
 
         .meta-customer-col {
             max-width: 60%;
+            font-weight: 700;
         }
 
         .customer-name,
         .customer-address,
         .customer-tin {
-            font-weight: 400;
+            font-weight: 700;
             color: #000000;
         }
 
         .meta-order-col {
             text-align: right;
             min-width: 35%;
+            font-weight: 700;
         }
 
         .order-number {
-            font-weight: 700;
+            font-weight: 800;
             font-size: 9pt;
             color: #000000;
         }
@@ -415,7 +417,7 @@
         }
 
         .items-table th {
-            font-weight: 700;
+            font-weight: 800;
             color: #000000;
             padding: 3px 4px 5px 4px;
             text-align: left;
@@ -437,20 +439,20 @@
             color: #000000;
             line-height: 1.3;
             font-size: 9pt;
-            font-weight: 400;
+            font-weight: 700;
         }
 
         .td-desc {
             padding-right: 14px !important;
             word-break: break-word;
-            font-weight: 400 !important;
+            font-weight: 700 !important;
             font-size: 9pt !important;
             color: #000000 !important;
             line-height: 1.3 !important;
         }
 
         .td-desc .prod-name {
-            font-weight: 400 !important;
+            font-weight: 800 !important;
             color: #000000 !important;
             font-size: 9pt !important;
             letter-spacing: 0;
@@ -461,28 +463,28 @@
         .td-qty {
             text-align: right;
             font-variant-numeric: tabular-nums;
-            font-weight: 400;
+            font-weight: 700;
             color: #000000;
         }
 
         .td-uom {
             text-align: left;
             padding-left: 6px !important;
-            font-weight: 400;
+            font-weight: 700;
             color: #000000;
         }
 
         .td-price {
             text-align: right;
             font-variant-numeric: tabular-nums;
-            font-weight: 400;
+            font-weight: 700;
             color: #000000;
         }
 
         .td-subtotal {
             text-align: right;
             font-variant-numeric: tabular-nums;
-            font-weight: 400;
+            font-weight: 700;
             color: #000000;
         }
 
@@ -525,29 +527,30 @@
 
         .totals-table td {
             padding: 3px 4px;
-            font-weight: 400;
+            font-weight: 700;
+            color: #000000;
         }
 
         .totals-table td.total-label {
             text-align: right;
             width: 50%;
             padding-right: 4px;
-            font-weight: 400;
+            font-weight: 700;
             color: #000000;
         }
 
         .totals-table td.total-val {
             text-align: right;
             font-variant-numeric: tabular-nums;
+            font-weight: 700;
             color: #000000;
         }
 
-        /* Reference: label stays regular, only the amount is bold */
         .totals-table tr.total-row-bold td.total-val {
-            font-weight: 700;
+            font-weight: 800;
         }
         .totals-table tr.total-row-bold td.total-label {
-            font-weight: 400;
+            font-weight: 800;
         }
 
         /* Order Notes / Description Section (Under Products, Above Bank Details) */
@@ -557,10 +560,11 @@
             line-height: 1.35;
             margin-top: 0;
             margin-bottom: 12px;
+            font-weight: 700;
         }
 
         .notes-heading {
-            font-weight: 700;
+            font-weight: 800;
             font-size: 8pt;
             color: #000000;
             margin-bottom: 2px;
@@ -573,6 +577,7 @@
             line-height: 1.35;
             padding: 2px 0;
             min-height: 14px;
+            font-weight: 700;
         }
 
         body.edit-mode-active .notes-body:empty:before {
@@ -601,11 +606,11 @@
         .bank-intro {
             margin-bottom: 6px;
             color: #000000;
-            font-weight: 700;
+            font-weight: 800;
         }
 
         .bank-lines {
-            font-weight: 400;
+            font-weight: 700;
             color: #000000;
             line-height: 1.3;
         }
@@ -625,6 +630,7 @@
             background: #f8fafc;
             font-size: 8pt;
             line-height: 1.35;
+            font-weight: 700;
         }
 
         .bank-account-item .bank-title {
@@ -637,8 +643,9 @@
 
         .bank-account-item .bank-acc-name {
             font-size: 7.5pt;
-            color: #334155;
+            color: #0f172a;
             margin-top: 1px;
+            font-weight: 700;
         }
 
         .bank-account-item .bank-acc-no {
@@ -652,8 +659,9 @@
 
         .bank-account-item .bank-branch-info {
             font-size: 7pt;
-            color: #64748b;
+            color: #1e293b;
             margin-top: 2px;
+            font-weight: 700;
         }
 
         @media (max-width: 640px) {
@@ -682,9 +690,17 @@
                 color: #0f172a !important;
                 text-transform: uppercase !important;
             }
+            .bank-account-item .bank-acc-name {
+                font-weight: 700 !important;
+                color: #0f172a !important;
+            }
             .bank-account-item .bank-acc-no {
                 font-family: 'Courier New', Courier, monospace !important;
                 color: #0284c7 !important;
+            }
+            .bank-account-item .bank-branch-info {
+                font-weight: 700 !important;
+                color: #1e293b !important;
             }
         }
 

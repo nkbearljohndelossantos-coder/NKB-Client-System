@@ -267,16 +267,16 @@
         <div class="grid grid-cols-2 gap-4 text-xs">
             <div class="border border-slate-200 rounded p-3 space-y-1">
                 <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Billed To (Client):</span>
-                <div id="si-client-name" class="font-bold text-sm text-slate-900">-</div>
-                <div id="si-client-contact" class="text-slate-600 font-medium">-</div>
-                <div id="si-client-address" class="text-slate-600 leading-snug">-</div>
-                <div id="si-client-tin" class="text-slate-500 font-mono text-[11px]">TIN: -</div>
+                <div id="si-client-name" class="font-black text-sm text-slate-950">-</div>
+                <div id="si-client-contact" class="text-slate-800 font-bold">-</div>
+                <div id="si-client-address" class="text-slate-800 font-bold leading-snug">-</div>
+                <div id="si-client-tin" class="text-slate-800 font-mono font-bold text-[11px]">TIN: -</div>
             </div>
             <div class="border border-slate-200 rounded p-3 space-y-1 bg-slate-50/50">
                 <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Billing Matching References:</span>
                 <div>Delivery Receipt (DR): <strong id="si-dr-ref" class="text-slate-800 font-mono font-bold">-</strong></div>
-                <div>Delivery Date: <strong id="si-dr-date" class="text-slate-800">-</strong></div>
-                <div>Purchase Order (PO): <strong id="si-po-ref" class="text-slate-800 font-mono">-</strong></div>
+                <div>Delivery Date: <strong id="si-dr-date" class="text-slate-800 font-bold">-</strong></div>
+                <div>Purchase Order (PO): <strong id="si-po-ref" class="text-slate-800 font-mono font-bold">-</strong></div>
                 <div>Billing Policy: <strong id="si-policy-ref" class="text-slate-800 font-bold">-</strong></div>
             </div>
         </div>
@@ -284,7 +284,7 @@
         <!-- Invoiced Items Table -->
         <div class="border border-slate-300 rounded overflow-hidden text-xs">
             <table class="w-full text-left border-collapse">
-                <thead class="border-b border-slate-300 bg-slate-50 text-[10px] font-semibold text-slate-600 uppercase tracking-wider">
+                <thead class="border-b border-slate-300 bg-slate-50 text-[10px] font-bold text-slate-900 uppercase tracking-wider">
                     <tr>
                         <th class="py-2 px-2.5">Item & Description</th>
                         <th class="py-2 px-2.5 text-center">PO Target</th>
@@ -295,7 +295,7 @@
                         <th class="py-2 px-2 text-center edit-only no-print" style="width: 28px;">✕</th>
                     </tr>
                 </thead>
-                <tbody id="si-items-tbody" class="divide-y divide-slate-200 font-normal">
+                <tbody id="si-items-tbody" class="divide-y divide-slate-200 font-bold text-slate-900">
                     <tr><td colspan="6" class="py-4 text-center text-slate-400">Loading invoice line items...</td></tr>
                 </tbody>
             </table>
