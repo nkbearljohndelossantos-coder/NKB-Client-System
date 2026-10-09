@@ -240,7 +240,7 @@ router.get('/', authenticateToken, (req, res) => {
             params.push(term, term, term, term, term);
         }
 
-        query += ' ORDER BY cp.cheque_date DESC, cp.created_at DESC';
+        query += ' ORDER BY cp.created_at DESC, cp.request_number DESC';
 
         const rows = db.prepare(query).all(...params);
 
@@ -608,7 +608,7 @@ router.get('/export-csv', authenticateToken, (req, res) => {
             params.push(term, term, term, term);
         }
 
-        query += ' ORDER BY cp.cheque_date DESC, cp.created_at DESC';
+        query += ' ORDER BY cp.created_at DESC, cp.request_number DESC';
         const rows = db.prepare(query).all(...params);
 
         const escapeCsv = (val) => {
@@ -882,7 +882,7 @@ router.get('/export', authenticateToken, (req, res) => {
         }
 
         const maxLimit = Math.min(2000, Math.max(1, parseInt(limit, 10) || 500));
-        query += ' ORDER BY cp.cheque_date DESC, cp.created_at DESC LIMIT ?';
+        query += ' ORDER BY cp.created_at DESC, cp.request_number DESC LIMIT ?';
         params.push(maxLimit);
 
         const rows = db.prepare(query).all(...params);

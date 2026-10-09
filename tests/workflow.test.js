@@ -2715,6 +2715,20 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.ok(updateRes.body.data.created_at.startsWith('2026-08-20'));
         assert.strictEqual(updateRes.body.data.comments, 'Updated check particulars with batch code');
 
+        // 6. Verify sorting: Cheque payables are sorted by encoded time (created_at DESC)
+        const listPayablesRes = await request(app)
+            .get('/api/cheque-payables')
+            .set('Authorization', `Bearer ${acctToken}`);
+        assert.strictEqual(listPayablesRes.status, 200);
+        const payablesData = listPayablesRes.body.data;
+        if (payablesData && payablesData.length > 1) {
+            for (let i = 0; i < payablesData.length - 1; i++) {
+                const cur = new Date(String(payablesData[i].created_at).replace(' ', 'T')).getTime();
+                const next = new Date(String(payablesData[i + 1].created_at).replace(' ', 'T')).getTime();
+                assert.ok(cur >= next, `Payables must be sorted by encoded time (created_at DESC): ${payablesData[i].created_at} >= ${payablesData[i + 1].created_at}`);
+            }
+        }
+
         // Clean up
         db.prepare('DELETE FROM cheque_payables WHERE id = ?').run(payableId);
     });

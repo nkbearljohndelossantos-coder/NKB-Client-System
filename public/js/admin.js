@@ -3368,6 +3368,12 @@ async function loadPayables() {
         }
 
         cachedPayables = Array.isArray(res.data) ? res.data : [];
+        cachedPayables.sort((a, b) => {
+            const timeA = a.created_at ? new Date(String(a.created_at).replace(' ', 'T')).getTime() : 0;
+            const timeB = b.created_at ? new Date(String(b.created_at).replace(' ', 'T')).getTime() : 0;
+            if (timeB !== timeA) return timeB - timeA;
+            return String(b.request_number || '').localeCompare(String(a.request_number || ''));
+        });
         window.cachedPayables = cachedPayables;
         cachedPayablesSummary = res.summary || {};
         cachedPayablesMeta = {
@@ -3550,9 +3556,10 @@ function renderPayablesRows(payablesList, currentTotal) {
                 </td>
                 <td class="py-3.5 px-4 text-slate-600 whitespace-nowrap">
                     <div class="flex items-center">
-                        <span>${NKB.formatDate(cp.cheque_date)}</span>
+                        <span class="font-bold text-slate-800">${NKB.formatDate(cp.cheque_date)}</span>
                         ${getPdcBadge(cp)}
                     </div>
+                    ${cp.created_at ? `<div class="text-[10px] text-slate-400 font-sans mt-0.5" title="Encoded: ${cp.created_at}">Encoded: ${NKB.formatDateTime(cp.created_at, false)}</div>` : ''}
                 </td>
                 <td class="py-3.5 px-4">
                     <div class="font-bold text-slate-900 leading-tight">${cp.payee_name}</div>
@@ -5835,6 +5842,7 @@ function exportPayablesToExcel() {
             [
                 '#',
                 'Request No.',
+                'Encoded At',
                 'Cheque Date',
                 'Payee / Beneficiary',
                 'Amount (PHP)',
@@ -5856,6 +5864,7 @@ function exportPayablesToExcel() {
             rows.push([
                 idx + 1,
                 cp.request_number || '',
+                cp.created_at || '',
                 cp.cheque_date || '',
                 cp.payee_name || '',
                 parseFloat(cp.amount) || 0,
