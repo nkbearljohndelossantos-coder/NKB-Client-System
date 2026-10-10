@@ -2372,60 +2372,105 @@ function renderBatchesTable(batches) {
 
     tbody.innerHTML = batches.map(b => {
         const formattedDate = b.production_date ? NKB.formatDate(b.production_date) : '—';
+        const targetBatches = b.target_batches || (b.qty_per_batch ? Math.ceil(b.target_quantity / b.qty_per_batch) : 1);
+        const qtyPerBatch = b.qty_per_batch || (targetBatches > 0 ? Math.round(b.target_quantity / targetBatches) : b.target_quantity);
+        const bufferStockQty = b.buffer_stock_qty !== undefined && b.buffer_stock_qty !== null ? Number(b.buffer_stock_qty) : (b.actual_yield > b.target_quantity ? (b.actual_yield - b.target_quantity) : 0);
+
         return `
-            <tr class="hover:bg-slate-50 transition">
-                <td class="py-3 px-4 font-bold text-indigo-600 font-mono">${b.batch_number}</td>
-                <td class="py-3 px-4 whitespace-nowrap">
+            <tr class="hover:bg-slate-50 transition border-b border-slate-100 last:border-b-0">
+                <!-- Batch Number -->
+                <td class="py-3 px-3 font-bold text-indigo-600 font-mono">${b.batch_number}</td>
+
+                <!-- Production Date -->
+                <td class="py-3 px-3 whitespace-nowrap">
                     <span class="px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-950 font-bold font-mono text-[11px]" title="Production Date">
                         📅 ${b.production_date || formattedDate}
                     </span>
                 </td>
-                <td class="py-3 px-4">
+
+                <!-- JO / PO -->
+                <td class="py-3 px-3">
                     <button onclick="openViewPOModal('${b.po_id}')" class="font-bold text-indigo-600 hover:text-indigo-800 hover:underline" title="View Purchase Order Details">
                         ${b.po_number}
                     </button>
                     <div class="text-[11px] text-slate-400 font-medium">JO: ${b.jo_number}</div>
                 </td>
-                <td class="py-3 px-4">
-                    <div class="font-semibold text-slate-800">${b.product_name}</div>
-                    ${b.compounding_operator || b.bottling_lead || b.qc_inspector ? `
-                        <div class="text-[10px] text-slate-400 flex flex-wrap gap-1 mt-0.5">
-                            ${b.compounding_operator ? `<span class="bg-amber-50 text-amber-800 px-1.5 py-0.5 rounded" title="Compounding Operator">🥣 ${b.compounding_operator}</span>` : ''}
-                            ${b.bottling_lead ? `<span class="bg-indigo-50 text-indigo-800 px-1.5 py-0.5 rounded" title="Bottling Line Lead">🧴 ${b.bottling_lead}</span>` : ''}
-                            ${b.qc_inspector ? `<span class="bg-emerald-50 text-emerald-800 px-1.5 py-0.5 rounded" title="QC Inspector">🔬 ${b.qc_inspector}</span>` : ''}
-                        </div>
-                    ` : ''}
+
+                <!-- Product -->
+                <td class="py-3 px-3 min-w-[180px]">
+                    <div class="font-bold text-slate-900">${b.product_name}</div>
+                    ${b.sku ? `<div class="text-[10px] text-slate-400 font-mono">SKU: ${b.sku}</div>` : ''}
                 </td>
-                <td class="py-3 px-4 font-bold text-slate-700">${NKB.formatNumber(b.target_quantity)} pcs</td>
-                <td class="py-3 px-4 font-extrabold text-indigo-700">${b.actual_yield > 0 ? NKB.formatNumber(b.actual_yield) + ' pcs' : '<span class="text-slate-400 italic">In progress</span>'}</td>
-                <td class="py-3 px-4">${b.actual_yield > 0 ? NKB.renderVarianceBadge(b.variance_quantity, b.variance_percent) : '-'}</td>
-                <td class="py-3 px-4 text-slate-500">${NKB.formatDate(b.expiry_date)}</td>
-                <td class="py-3 px-4">${NKB.renderStatusBadge(b.status)}</td>
-                <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+
+                <!-- Target Qty -->
+                <td class="py-3 px-3 font-bold text-slate-800 text-right whitespace-nowrap font-mono">${NKB.formatNumber(b.target_quantity)} pcs</td>
+
+                <!-- Target Batches & Qty Per Batch -->
+                <td class="py-3 px-3 text-center whitespace-nowrap">
+                    <div class="inline-flex flex-col items-center p-1.5 rounded-xl bg-purple-50/80 border border-purple-200">
+                        <span class="text-xs font-black text-purple-950">${targetBatches} ${targetBatches === 1 ? 'Batch' : 'Batches'}</span>
+                        <span class="text-[10px] font-bold text-purple-700">@ ${NKB.formatNumber(qtyPerBatch)} pcs/batch</span>
+                    </div>
+                </td>
+
+                <!-- Operators -->
+                <td class="py-3 px-3 text-xs">
+                    <div class="space-y-0.5 min-w-[130px]">
+                        ${b.compounding_operator ? `<div class="text-[10.5px] font-medium text-slate-700 truncate" title="Compounding: ${b.compounding_operator}"><span class="font-bold text-amber-700">🥣</span> ${b.compounding_operator}</div>` : ''}
+                        ${b.bottling_lead ? `<div class="text-[10.5px] font-medium text-slate-700 truncate" title="Bottling: ${b.bottling_lead}"><span class="font-bold text-indigo-700">🧴</span> ${b.bottling_lead}</div>` : ''}
+                        ${b.qc_inspector ? `<div class="text-[10.5px] font-medium text-slate-700 truncate" title="QC: ${b.qc_inspector}"><span class="font-bold text-emerald-700">🔬</span> ${b.qc_inspector}</div>` : ''}
+                        ${(!b.compounding_operator && !b.bottling_lead && !b.qc_inspector) ? '<span class="text-slate-400 italic text-[11px]">Unassigned</span>' : ''}
+                    </div>
+                </td>
+
+                <!-- Actual Made / Yield -->
+                <td class="py-3 px-3 font-black text-right whitespace-nowrap font-mono text-emerald-800">
+                    ${b.actual_yield > 0 ? `
+                        <div class="text-sm font-black text-emerald-700">${NKB.formatNumber(b.actual_yield)} pcs</div>
+                        <div class="text-[10px] font-bold text-slate-500">${NKB.renderVarianceBadge(b.variance_quantity, b.variance_percent)}</div>
+                    ` : '<span class="text-slate-400 italic text-xs">In production</span>'}
+                </td>
+
+                <!-- Buffer Stocks -->
+                <td class="py-3 px-3 text-center whitespace-nowrap">
+                    ${bufferStockQty > 0 ? `
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-purple-100 text-purple-800 border border-purple-300 inline-flex items-center gap-1 shadow-2xs" title="Reserved for Client Buffer Stocks">
+                            <span>🛡️</span> +${NKB.formatNumber(bufferStockQty)} pcs
+                        </span>
+                    ` : `
+                        <span class="text-slate-400 text-xs font-mono font-medium">0 pcs</span>
+                    `}
+                </td>
+
+                <!-- Status -->
+                <td class="py-3 px-3 whitespace-nowrap">${NKB.renderStatusBadge(b.status)}</td>
+
+                <!-- Actions -->
+                <td class="py-3 px-3 text-right space-x-1 whitespace-nowrap">
                     <!-- 1-Click Batch Sales Order Print Shortcut -->
-                    <a href="/print-po.html?id=${b.po_id}&title=SALES%20ORDER&batch_id=${b.id}" target="_blank" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1 shadow-sm" title="Print Sales Order (1-Click Shortcut)">
-                        <span>🖨️ Sales Order</span>
+                    <a href="/print-po.html?id=${b.po_id}&title=SALES%20ORDER&batch_id=${b.id}" target="_blank" class="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1 shadow-xs" title="Print Sales Order">
+                        <span>🖨️ SO</span>
                     </a>
                     <!-- Batch Label Print Shortcut matching LABELING Excel -->
-                    <a href="/print-batch-label.html?batch_id=${b.id}" target="_blank" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-xs font-bold transition inline-flex items-center gap-1 shadow-sm" title="Print Manufacturing Box Labels">
-                        <span>🏷️ Batch Label</span>
+                    <a href="/print-batch-label.html?batch_id=${b.id}" target="_blank" class="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-xs font-bold transition inline-flex items-center gap-1 shadow-xs" title="Print Box Labels">
+                        <span>🏷️ Label</span>
                     </a>
-                    <button onclick="openViewPOModal('${b.po_id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-block" title="View Purchase Order Details">
-                        👁️ View PO
+                    <button onclick="openViewPOModal('${b.po_id}')" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-block" title="View Purchase Order Details">
+                        👁️ PO
                     </button>
                     ${b.status === 'MIXING' || b.status === 'BOTTLING' || b.status === 'PLANNED' ? `
                         <button onclick="openLogYieldModal('${b.id}', '${b.batch_number}', ${b.target_quantity}, ${b.tolerance_percent})" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition">
-                            📝 Log Yield
+                            📝 Yield
                         </button>
                     ` : ''}
                     ${b.status === 'EXCEPTION_REQUIRES_APPROVAL' ? `
                         <button onclick="openApproveOverrunModal('${b.id}', '${b.batch_number}', ${b.target_quantity}, ${b.actual_yield}, ${b.tolerance_percent})" class="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition animate-bounce">
-                            ⚠️ Approve Overrun
+                            ⚠️ Overrun
                         </button>
                     ` : ''}
                     ${b.status === 'APPROVED_FOR_DISPATCH' || b.status === 'QC_PASSED' ? `
                         <button onclick="openCreateDRModal('${b.po_number}', '${b.jo_number}', '${b.id}', '${b.batch_number}', ${b.actual_yield}, '${b.product_name}', '${b.client_id}')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition">
-                            🚚 Dispatch / DR
+                            🚚 Deliver
                         </button>
                     ` : ''}
                 </td>
@@ -8161,6 +8206,7 @@ async function openCreateAllBatchesModal(clientId, poId, companyName) {
 
     const itemsRowsHtml = clientJOs.map((jo, idx) => {
         const hasBatch = jo.batch_count > 0;
+        const targetQty = jo.target_quantity || 0;
         return `
         <tr class="hover:bg-slate-50 transition border-b border-slate-100 last:border-b-0 batch-launch-item" data-jo-id="${jo.id}">
             <td class="py-2.5 px-3 font-mono font-bold text-indigo-600">${jo.jo_number}</td>
@@ -8169,14 +8215,23 @@ async function openCreateAllBatchesModal(clientId, poId, companyName) {
                 ${jo.sku ? `<div class="text-[10px] text-slate-400 font-mono">SKU: ${jo.sku}</div>` : ''}
             </td>
             <td class="py-2.5 px-3">
-                <input type="text" value="${jo.formula_code || 'FORM-2026-V1'}" class="batch-item-formula w-28 px-2 py-1 text-xs border rounded-lg bg-slate-50 font-mono text-slate-700">
+                <input type="text" value="${jo.formula_code || 'FORM-2026-V1'}" class="batch-item-formula w-24 px-2 py-1 text-xs border rounded-lg bg-slate-50 font-mono text-slate-700">
             </td>
             <td class="py-2.5 px-3 font-mono text-right">
-                <span class="font-bold text-slate-700">${NKB.formatNumber(jo.target_quantity)} pcs</span>
-                <input type="hidden" class="batch-item-qty" value="${jo.target_quantity}">
+                <span class="font-bold text-slate-700">${NKB.formatNumber(targetQty)}</span>
+                <input type="hidden" class="batch-item-qty" value="${targetQty}">
             </td>
-            <td class="py-2.5 px-3 text-right">
-                <input type="number" min="1" value="${jo.target_quantity}" required class="batch-item-actual-yield w-24 px-2 py-1 text-xs border rounded-lg bg-emerald-50 border-emerald-300 font-bold text-emerald-900 text-right" title="Enter actual manufactured units">
+            <td class="py-2.5 px-2 text-center">
+                <input type="number" min="1" value="1" oninput="onBulkBatchSplitChanged(this, 'batches', ${targetQty})" class="batch-item-target-batches w-14 px-2 py-1 text-xs border border-indigo-200 rounded-lg bg-indigo-50/50 font-mono font-bold text-indigo-900 text-center" title="Target Batches">
+            </td>
+            <td class="py-2.5 px-2 text-right">
+                <input type="number" min="1" value="${targetQty}" oninput="onBulkBatchSplitChanged(this, 'qty', ${targetQty})" class="batch-item-qty-per-batch w-20 px-2 py-1 text-xs border border-indigo-200 rounded-lg bg-indigo-50/50 font-mono font-bold text-indigo-900 text-right" title="Qty. Per Batch">
+            </td>
+            <td class="py-2.5 px-2 text-right">
+                <input type="number" min="1" value="${targetQty}" oninput="onBulkActualYieldChanged(this, ${targetQty})" required class="batch-item-actual-yield w-20 px-2 py-1 text-xs border rounded-lg bg-emerald-50 border-emerald-300 font-bold text-emerald-900 text-right" title="Enter actual manufactured units">
+            </td>
+            <td class="py-2.5 px-2 text-right">
+                <input type="number" min="0" value="0" class="batch-item-buffer-stock w-16 px-2 py-1 text-xs border border-purple-200 rounded-lg bg-purple-50/50 font-bold text-purple-900 text-right" title="Buffer stocks reserve (excess or dedicated stock)">
             </td>
             <td class="py-2.5 px-3 text-center whitespace-nowrap">
                 ${hasBatch ? `
@@ -8195,7 +8250,7 @@ async function openCreateAllBatchesModal(clientId, poId, companyName) {
 
     root.innerHTML = `
         <div class="fixed inset-0 modal-backdrop flex items-start justify-center p-3 sm:p-6 z-50 overflow-y-auto">
-            <div class="bg-white rounded-3xl max-w-3xl w-full p-5 sm:p-7 shadow-2xl space-y-5 my-auto max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-3.5rem)] flex flex-col">
+            <div class="bg-white rounded-3xl max-w-4xl w-full p-5 sm:p-7 shadow-2xl space-y-5 my-auto max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-3.5rem)] flex flex-col">
                 <!-- Header -->
                 <div class="flex justify-between items-center border-b border-slate-100 pb-3 flex-shrink-0">
                     <div>
@@ -8205,7 +8260,7 @@ async function openCreateAllBatchesModal(clientId, poId, companyName) {
                         </div>
                         <p class="text-xs text-slate-500 mt-0.5">
                             Client: <strong class="text-indigo-600">${clientCompName}</strong> • SO: <strong class="font-mono text-slate-800">${clientSO}</strong> • PO: <strong class="font-mono text-slate-800">${primaryPoNum}</strong>
-                            <br><span class="text-slate-400">Products are physically manufactured in cleanroom. Enter confirmed actual yield to issue batch numbers and QC release before delivering.</span>
+                            <br><span class="text-slate-400">Products are physically manufactured in cleanroom. Configure target batches, qty per batch, actual yield, and buffer stocks before QC approval.</span>
                         </p>
                     </div>
                     <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-xl px-2">&times;</button>
@@ -8274,7 +8329,10 @@ async function openCreateAllBatchesModal(clientId, poId, companyName) {
                                         <th class="py-2.5 px-3">Product Name & SKU</th>
                                         <th class="py-2.5 px-3">Formula Code</th>
                                         <th class="py-2.5 px-3 text-right">Target Qty</th>
-                                        <th class="py-2.5 px-3 text-right">Actual Qty Made (Yield) *</th>
+                                        <th class="py-2.5 px-2 text-center" title="Target Batches Count">Target Batches</th>
+                                        <th class="py-2.5 px-2 text-right" title="Target Units per Batch">Qty. / Batch</th>
+                                        <th class="py-2.5 px-2 text-right">Actual Made *</th>
+                                        <th class="py-2.5 px-2 text-right">Buffer Stocks</th>
                                         <th class="py-2.5 px-3 text-center">Batch Status</th>
                                     </tr>
                                 </thead>
@@ -8300,6 +8358,40 @@ async function openCreateAllBatchesModal(clientId, poId, companyName) {
     `;
 }
 
+function onBulkBatchSplitChanged(el, source, targetQty) {
+    const row = el.closest('tr');
+    if (!row) return;
+    const batchesInput = row.querySelector('.batch-item-target-batches');
+    const qtyInput = row.querySelector('.batch-item-qty-per-batch');
+    if (!batchesInput || !qtyInput) return;
+
+    if (source === 'batches') {
+        const numBatches = parseInt(batchesInput.value) || 1;
+        if (numBatches > 0) {
+            qtyInput.value = Math.round(targetQty / numBatches);
+        }
+    } else {
+        const perBatch = parseInt(qtyInput.value) || targetQty;
+        if (perBatch > 0) {
+            batchesInput.value = Math.ceil(targetQty / perBatch);
+        }
+    }
+}
+window.onBulkBatchSplitChanged = onBulkBatchSplitChanged;
+
+function onBulkActualYieldChanged(el, targetQty) {
+    const row = el.closest('tr');
+    if (!row) return;
+    const yieldInput = row.querySelector('.batch-item-actual-yield');
+    const bufferInput = row.querySelector('.batch-item-buffer-stock');
+    if (!yieldInput || !bufferInput) return;
+
+    const actual = parseInt(yieldInput.value) || 0;
+    const excess = actual > targetQty ? (actual - targetQty) : 0;
+    bufferInput.value = excess;
+}
+window.onBulkActualYieldChanged = onBulkActualYieldChanged;
+
 async function submitCreateAllBatches(e, clientId, poId, companyName) {
     e.preventDefault();
     const btn = document.getElementById('btn-submit-all-batches');
@@ -8317,13 +8409,19 @@ async function submitCreateAllBatches(e, clientId, poId, companyName) {
     document.querySelectorAll('.batch-launch-item').forEach(el => {
         const joId = el.dataset.joId;
         const qty = parseInt(el.querySelector('.batch-item-qty')?.value || '0');
+        const targetBatches = parseInt(el.querySelector('.batch-item-target-batches')?.value || '1');
+        const qtyPerBatch = parseInt(el.querySelector('.batch-item-qty-per-batch')?.value || qty || '0');
         const actualYield = parseInt(el.querySelector('.batch-item-actual-yield')?.value || qty || '0');
+        const bufferStockQty = parseInt(el.querySelector('.batch-item-buffer-stock')?.value || '0');
         const formula = el.querySelector('.batch-item-formula')?.value || '';
         if (joId && qty > 0) {
             items.push({
                 jo_id: joId,
                 target_quantity: qty,
+                target_batches: targetBatches,
+                qty_per_batch: qtyPerBatch,
                 actual_yield: actualYield,
+                buffer_stock_qty: bufferStockQty,
                 formula_code: formula
             });
         }
@@ -8359,6 +8457,99 @@ async function submitCreateAllBatches(e, clientId, poId, companyName) {
     }
 }
 
+// -------------------------------------------------------------
+// SELECT JOB ORDER FOR BATCH MODAL (TRIGGERED FROM BATCHES VIEW)
+// -------------------------------------------------------------
+async function openSelectJOForBatchModal() {
+    const root = document.getElementById('modals-root');
+    let jos = [];
+    try {
+        const res = await NKB.api('/api/job-orders');
+        if (res.success && res.data) jos = res.data;
+    } catch (_) {}
+
+    if (jos.length === 0 && typeof cachedJobOrders !== 'undefined' && cachedJobOrders) {
+        jos = cachedJobOrders;
+    }
+
+    if (jos.length === 0) {
+        NKB.showToast('No Job Orders available to batch.', 'warning');
+        return;
+    }
+
+    // Filter or list JOs
+    const joRows = jos.slice(0, 30).map(jo => {
+        const hasBatch = (jo.batch_count || 0) > 0;
+        const joSafeName = (jo.product_name || '').replace(/'/g, "\\'");
+        return `
+            <tr class="hover:bg-purple-50/50 transition border-b border-slate-100 last:border-b-0">
+                <td class="py-2.5 px-3 font-mono font-bold text-indigo-700">${jo.jo_number}</td>
+                <td class="py-2.5 px-3">
+                    <div class="font-bold text-slate-800">${jo.product_name}</div>
+                    <div class="text-[10.5px] text-slate-400 font-mono">${jo.po_number || ''} • ${jo.company_name || 'Client'}</div>
+                </td>
+                <td class="py-2.5 px-3 font-mono text-right font-bold text-slate-800">${NKB.formatNumber(jo.target_quantity)} pcs</td>
+                <td class="py-2.5 px-3 text-center">
+                    ${hasBatch ? `
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 font-mono">
+                            ${jo.latest_batch_number || 'Batched'} (${jo.batch_count})
+                        </span>
+                    ` : `
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                            Ready to Batch
+                        </span>
+                    `}
+                </td>
+                <td class="py-2.5 px-3 text-right">
+                    <button type="button" onclick="closeModal(); openCreateBatchModal('${jo.id}', '${jo.jo_number}', ${jo.target_quantity}, '${joSafeName}')" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold text-xs shadow-xs transition">
+                        Select & Record Box
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    root.innerHTML = `
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50 overflow-y-auto">
+            <div class="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-4 my-auto max-h-[90vh] flex flex-col">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-3 flex-shrink-0">
+                    <div>
+                        <h3 class="text-lg font-black text-slate-900 flex items-center gap-2">
+                            <span>📦</span><span>Select Job Order for Batching</span>
+                        </h3>
+                        <p class="text-xs text-slate-500">Pick a Job Order to configure batch boxes, target batches, and buffer stocks.</p>
+                    </div>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-xl px-2">&times;</button>
+                </div>
+
+                <div class="flex-1 overflow-y-auto border border-slate-200 rounded-2xl shadow-xs">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-100 text-slate-700 font-bold uppercase text-[10px] sticky top-0">
+                            <tr>
+                                <th class="py-2.5 px-3">JO Number</th>
+                                <th class="py-2.5 px-3">Product & Client</th>
+                                <th class="py-2.5 px-3 text-right">Target Qty</th>
+                                <th class="py-2.5 px-3 text-center">Batch Status</th>
+                                <th class="py-2.5 px-3 text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            ${joRows}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="flex justify-end pt-2 flex-shrink-0">
+                    <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+window.openSelectJOForBatchModal = openSelectJOForBatchModal;
+
 window.openCreateAllBatchesModal = openCreateAllBatchesModal;
 window.submitCreateAllBatches = submitCreateAllBatches;
 
@@ -8381,81 +8572,135 @@ async function openCreateBatchModal(joId, joNumber, targetQty, productName) {
         }
     } catch (_) {}
 
+    // Default target batches (1) and qty per batch (targetQty)
+    const defaultBatches = 1;
+    const defaultQtyPerBatch = targetQty;
+
     root.innerHTML = `
-        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
-            <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50 overflow-y-auto">
+            <div class="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl space-y-4 my-auto max-h-[95vh] overflow-y-auto">
                 <div class="flex justify-between items-center border-b border-slate-100 pb-3">
                     <div>
-                        <h3 class="text-lg font-bold text-slate-900">⚗️ Batching & Quality Inspection (Product Made)</h3>
+                        <h3 class="text-lg font-black text-slate-900 flex items-center gap-2">
+                            <span>⚗️</span><span>Batch Execution & Yield Logger</span>
+                        </h3>
                         <p class="text-xs text-slate-500">JO Reference: <strong>${joNumber}</strong></p>
                     </div>
-                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-xl px-1">&times;</button>
                 </div>
                 <form onsubmit="submitCreateBatch(event, '${joId}')" class="space-y-4 text-xs font-semibold">
-                    <div class="p-3 bg-slate-50 rounded-xl text-slate-600 space-y-1">
-                        <div>Product: <strong class="text-slate-900">${productName}</strong></div>
+                    <div class="p-3 bg-slate-50 rounded-2xl text-slate-700 flex items-center justify-between">
+                        <div>
+                            <span class="text-[11px] text-slate-400 uppercase tracking-wider block font-bold">Product</span>
+                            <strong class="text-slate-900 text-sm">${productName}</strong>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-[11px] text-slate-400 uppercase tracking-wider block font-bold">Order Target</span>
+                            <strong class="text-indigo-700 font-mono text-sm">${NKB.formatNumber(targetQty)} pcs</strong>
+                        </div>
                     </div>
 
                     <!-- Julian Calendar Batch Code -->
-                    <div class="p-3 bg-purple-50/70 border border-purple-200 rounded-xl space-y-1.5">
+                    <div class="p-3.5 bg-purple-50/70 border border-purple-200 rounded-2xl space-y-1.5">
                         <div class="flex justify-between items-center">
                             <label class="block text-purple-900 font-bold text-xs">🏷️ Batch Code (Julian Pattern) *</label>
-                            <span class="text-[10px] text-purple-700 font-bold">[Abbr][YY]-[JulianDay]</span>
+                            <span class="text-[10px] text-purple-700 font-bold font-mono">[Abbr][YY]-[JulianDay]</span>
                         </div>
-                        <input type="text" id="batch-custom-number" value="${suggestedBatchCode}" required class="w-full px-3 py-2 border border-purple-300 rounded-xl bg-white font-mono font-black text-purple-950 text-xs shadow-xs" placeholder="e.g. HCP26-255">
-                        <p class="text-[10px] text-purple-600 font-normal">Auto-generated from product abbreviation, year 26, and Julian calendar day. Suffix -1 is applied for excess batches.</p>
+                        <input type="text" id="batch-custom-number" value="${suggestedBatchCode}" required class="w-full px-3 py-2 border border-purple-300 rounded-xl bg-white font-mono font-black text-purple-950 text-xs shadow-xs focus:ring-2 focus:ring-purple-400" placeholder="e.g. HCP26-255">
+                        <p class="text-[10.5px] text-purple-700 font-normal">Auto-generated Julian batch number. Suffix -1 is automatically applied for excess batches.</p>
                     </div>
 
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-slate-600 mb-1">Target Batch Qty (pcs)</label>
-                            <input type="number" id="batch-target-qty" value="${targetQty}" min="1" required readonly class="w-full px-3 py-2 border rounded-xl bg-slate-100 font-bold text-slate-600 cursor-not-allowed">
+                    <!-- Actual Box for Batches -->
+                    <div class="p-4 bg-gradient-to-br from-indigo-50/80 to-purple-50/80 border-2 border-indigo-200 rounded-2xl space-y-3 shadow-xs">
+                        <div class="flex items-center justify-between border-b border-indigo-100 pb-2">
+                            <div class="flex items-center gap-2">
+                                <span class="text-base">📦</span>
+                                <span class="text-xs font-black uppercase tracking-wider text-indigo-950">Batching Box Specification</span>
+                            </div>
+                            <span class="text-[10px] font-bold text-indigo-700 bg-white px-2 py-0.5 rounded-full border border-indigo-200">Production Split</span>
                         </div>
-                        <div>
-                            <label class="block text-slate-600 mb-1">Actual Qty Made / Yield (pcs) *</label>
-                            <input type="number" id="batch-actual-yield" value="${targetQty}" min="1" required class="w-full px-3 py-2 border rounded-xl bg-emerald-50 border-emerald-300 font-bold text-emerald-900" placeholder="Actual units produced">
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-slate-600 mb-1">🥣 Compounding Chemist / Operator *</label>
-                            <select id="batch-compounding-operator" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-medium text-slate-900">
-                                ${compoundingStaff.map(e => `
-                                    <option value="${e.name}" ${e.department === 'Compounding' ? 'selected' : ''}>${e.name} (${e.department})</option>
-                                `).join('')}
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-slate-600 mb-1">🧴 Bottling & Packaging Lead *</label>
-                            <select id="batch-bottling-lead" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-medium text-slate-900">
-                                ${bottlingStaff.map((e, idx) => `
-                                    <option value="${e.name}" ${idx === 0 ? 'selected' : ''}>${e.name} [${e.employee_id}]</option>
-                                `).join('')}
-                            </select>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                                <label class="block text-slate-700 mb-1">Target Qty (pcs)</label>
+                                <input type="number" id="batch-target-qty" value="${targetQty}" min="1" required readonly class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-100/90 font-mono font-bold text-slate-700 cursor-not-allowed">
+                            </div>
+                            <div>
+                                <label class="block text-slate-700 mb-1">Target Batches *</label>
+                                <input type="number" id="batch-target-batches" oninput="onBatchSplitChanged('batches', ${targetQty})" value="${defaultBatches}" min="1" required class="w-full px-3 py-2 border border-indigo-300 rounded-xl bg-white font-mono font-black text-indigo-950 shadow-xs focus:ring-2 focus:ring-indigo-400" placeholder="e.g. 1">
+                            </div>
+                            <div>
+                                <label class="block text-slate-700 mb-1">Qty. Per Batch (pcs) *</label>
+                                <input type="number" id="batch-qty-per-batch" oninput="onBatchSplitChanged('qty', ${targetQty})" value="${defaultQtyPerBatch}" min="1" required class="w-full px-3 py-2 border border-indigo-300 rounded-xl bg-white font-mono font-black text-indigo-950 shadow-xs focus:ring-2 focus:ring-indigo-400" placeholder="e.g. 5000">
+                            </div>
                         </div>
                     </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-slate-600 mb-1">🔬 Quality Control (QC) Inspector *</label>
-                            <select id="batch-qc-inspector" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-medium text-slate-900">
-                                ${qcStaff.map((e, idx) => `
-                                    <option value="${e.name}" ${idx === 0 ? 'selected' : ''}>${e.name} (${e.department})</option>
-                                `).join('')}
-                            </select>
+
+                    <!-- Cleanroom Operators -->
+                    <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2.5">
+                        <span class="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                            <span>👨‍🔬</span><span>Assigned Operators & Cleanroom Lead</span>
+                        </span>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-slate-600 mb-1">🥣 Compounding Chemist / Operator *</label>
+                                <select id="batch-compounding-operator" required class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white font-medium text-slate-900 text-xs">
+                                    ${compoundingStaff.map(e => `
+                                        <option value="${e.name}" ${e.department === 'Compounding' ? 'selected' : ''}>${e.name} (${e.department})</option>
+                                    `).join('')}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-slate-600 mb-1">🧴 Bottling & Packaging Lead *</label>
+                                <select id="batch-bottling-lead" required class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white font-medium text-slate-900 text-xs">
+                                    ${bottlingStaff.map((e, idx) => `
+                                        <option value="${e.name}" ${idx === 0 ? 'selected' : ''}>${e.name} [${e.employee_id}]</option>
+                                    `).join('')}
+                                </select>
+                            </div>
                         </div>
-                        <div>
-                            <label class="block text-slate-600 mb-1">🏭 Line / Cleanroom Assignment</label>
-                            <select id="batch-line-assignment" class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-medium text-slate-900">
-                                <option value="Cleanroom Line 1 (Alpha)">Cleanroom Line 1 (Alpha)</option>
-                                <option value="Cleanroom Line 2 (Beta)">Cleanroom Line 2 (Beta)</option>
-                                <option value="High-Speed Bottling Line 3">High-Speed Bottling Line 3</option>
-                                <option value="Compounding Kettle Area A">Compounding Kettle Area A</option>
-                            </select>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-slate-600 mb-1">🔬 Quality Control (QC) Inspector *</label>
+                                <select id="batch-qc-inspector" required class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white font-medium text-slate-900 text-xs">
+                                    ${qcStaff.map((e, idx) => `
+                                        <option value="${e.name}" ${idx === 0 ? 'selected' : ''}>${e.name} (${e.department})</option>
+                                    `).join('')}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-slate-600 mb-1">🏭 Cleanroom Line Assignment</label>
+                                <select id="batch-line-assignment" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white font-medium text-slate-900 text-xs">
+                                    <option value="Cleanroom Line 1 (Alpha)">Cleanroom Line 1 (Alpha)</option>
+                                    <option value="Cleanroom Line 2 (Beta)">Cleanroom Line 2 (Beta)</option>
+                                    <option value="High-Speed Bottling Line 3">High-Speed Bottling Line 3</option>
+                                    <option value="Compounding Kettle Area A">Compounding Kettle Area A</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
+
+                    <!-- Output & Buffer Stocks Calculation -->
+                    <div class="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-2xl space-y-2.5">
+                        <span class="text-xs font-black uppercase tracking-wider text-emerald-950 flex items-center gap-1.5">
+                            <span>⚖️</span><span>Production Output & Buffer Stocks Reserve</span>
+                        </span>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-emerald-900 font-bold mb-1">Actual Made / Yield (pcs) *</label>
+                                <input type="number" id="batch-actual-yield" oninput="onActualYieldChanged(${targetQty})" value="${targetQty}" min="1" required class="w-full px-3 py-2 border border-emerald-300 rounded-xl bg-white font-mono font-black text-emerald-950 text-xs shadow-xs focus:ring-2 focus:ring-emerald-400" placeholder="Actual units produced">
+                            </div>
+                            <div>
+                                <label class="block text-purple-900 font-bold mb-1">For Buffer Stocks (pcs)</label>
+                                <input type="number" id="batch-buffer-stock-qty" value="0" min="0" class="w-full px-3 py-2 border border-purple-300 rounded-xl bg-white font-mono font-black text-purple-950 text-xs shadow-xs focus:ring-2 focus:ring-purple-400" placeholder="Units for stock reserve">
+                            </div>
+                        </div>
+                        <p class="text-[10.5px] text-emerald-800 font-medium">Excess units above target are automatically calculated for client buffer stocks reserve.</p>
+                    </div>
+
                     <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
                         <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold">Cancel</button>
-                        <button type="submit" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold shadow-md shadow-purple-600/30">🚀 Complete Batch (Ready for Delivery)</button>
+                        <button type="submit" class="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-xs shadow-md shadow-purple-600/30">🚀 Complete Batching (Ready for Delivery)</button>
                     </div>
                 </form>
             </div>
@@ -8463,11 +8708,44 @@ async function openCreateBatchModal(joId, joNumber, targetQty, productName) {
     `;
 }
 
+function onBatchSplitChanged(source, targetQty) {
+    const batchesInput = document.getElementById('batch-target-batches');
+    const qtyInput = document.getElementById('batch-qty-per-batch');
+    if (!batchesInput || !qtyInput) return;
+
+    if (source === 'batches') {
+        const numBatches = parseInt(batchesInput.value) || 1;
+        if (numBatches > 0) {
+            qtyInput.value = Math.round(targetQty / numBatches);
+        }
+    } else {
+        const perBatch = parseInt(qtyInput.value) || targetQty;
+        if (perBatch > 0) {
+            batchesInput.value = Math.ceil(targetQty / perBatch);
+        }
+    }
+}
+window.onBatchSplitChanged = onBatchSplitChanged;
+
+function onActualYieldChanged(targetQty) {
+    const yieldInput = document.getElementById('batch-actual-yield');
+    const bufferInput = document.getElementById('batch-buffer-stock-qty');
+    if (!yieldInput || !bufferInput) return;
+
+    const actual = parseInt(yieldInput.value) || 0;
+    const excess = actual > targetQty ? (actual - targetQty) : 0;
+    bufferInput.value = excess;
+}
+window.onActualYieldChanged = onActualYieldChanged;
+
 async function submitCreateBatch(e, joId) {
     e.preventDefault();
     const batchCustomNumber = document.getElementById('batch-custom-number')?.value?.trim() || '';
     const targetQty = parseInt(document.getElementById('batch-target-qty').value);
+    const targetBatches = parseInt(document.getElementById('batch-target-batches')?.value || '1');
+    const qtyPerBatch = parseInt(document.getElementById('batch-qty-per-batch')?.value || targetQty);
     const actualYield = parseInt(document.getElementById('batch-actual-yield')?.value || targetQty);
+    const bufferStockQty = parseInt(document.getElementById('batch-buffer-stock-qty')?.value || '0');
     const compoundingOperator = document.getElementById('batch-compounding-operator')?.value || '';
     const bottlingLead = document.getElementById('batch-bottling-lead')?.value || '';
     const qcInspector = document.getElementById('batch-qc-inspector')?.value || '';
@@ -8479,7 +8757,10 @@ async function submitCreateBatch(e, joId) {
             jo_id: joId,
             batch_number: batchCustomNumber,
             target_quantity: targetQty,
+            target_batches: targetBatches,
+            qty_per_batch: qtyPerBatch,
             actual_yield: actualYield,
+            buffer_stock_qty: bufferStockQty,
             compounding_operator: compoundingOperator,
             bottling_lead: bottlingLead,
             qc_inspector: qcInspector,

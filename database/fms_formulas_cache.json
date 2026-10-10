@@ -1,11 +1,73 @@
 {
   "success": true,
-  "count": 72,
+  "count": 80,
   "batch_scaling": {
     "batch_size": 100,
     "uom": "kg"
   },
   "data": [
+    {
+      "formula_id": 97,
+      "formula_code": "FORM-2026-0107",
+      "formula_name": "ARIANA GRANDE CLOUD",
+      "product_category": "Perfume Brand",
+      "active_version": "V1.0",
+      "version_status": "APPROVED",
+      "compounding_code": "CP-1132",
+      "batch_size": 100,
+      "batch_uom": "kg",
+      "total_raw_materials_count": 6,
+      "raw_materials_needed": [
+        {
+          "material_code": "RM-ETHYL-ALC-02",
+          "material_name": "ETHYL ALCOHOL - IND02",
+          "category": "Cosmetic",
+          "required_quantity": 68,
+          "uom": "kg",
+          "supplier": "LOYAL FAMILY"
+        },
+        {
+          "material_code": "RM-PROCOL-HACHI",
+          "material_name": "PROPYLENE GLYCOL (HACHIMORI)",
+          "category": "Cosmetic",
+          "required_quantity": 3,
+          "uom": "kg",
+          "supplier": "HACHIMORI"
+        },
+        {
+          "material_code": "FRG-AGC-002",
+          "material_name": "ARIANA GRANDE CLOUD ",
+          "category": "Cosmetic",
+          "required_quantity": 14,
+          "uom": "kg",
+          "supplier": "KALIOREXI"
+        },
+        {
+          "material_code": "RM-PEG40-01",
+          "material_name": "PEG40 - MEDMULS COH 40",
+          "category": "Cosmetic",
+          "required_quantity": 1,
+          "uom": "kg",
+          "supplier": "REDOLENCE"
+        },
+        {
+          "material_code": "RM-FIXATIVE-01",
+          "material_name": "FIXATIVE (ASTERIA)",
+          "category": "Cosmetic",
+          "required_quantity": 2,
+          "uom": "kg",
+          "supplier": "ASTERIA"
+        },
+        {
+          "material_code": "MAT-WAT-01",
+          "material_name": "DE-IONIZED WATER",
+          "category": "Cosmetic",
+          "required_quantity": 12,
+          "uom": "kg",
+          "supplier": "MAYNILAD"
+        }
+      ]
+    },
     {
       "formula_id": 78,
       "formula_code": "FORM-2026-0088",
@@ -2687,7 +2749,7 @@
     {
       "formula_id": 7,
       "formula_code": "FORM-2026-0017",
-      "formula_name": "BELLASKIN ROSE PDRN CREAM 1.2",
+      "formula_name": "BELLASKIN ROSE PDRN CREAM 1.2 (10g)",
       "product_category": "Cosmetic",
       "active_version": "V2.0",
       "version_status": "APPROVED",
@@ -3003,9 +3065,9 @@
       "formula_code": "FORM-2026-0098",
       "formula_name": "BIOESSENCE SLIMMING CREAM 2.1",
       "product_category": "Cosmetic",
-      "active_version": "V1.0",
+      "active_version": "V2.0",
       "version_status": "APPROVED",
-      "compounding_code": "CP-1052",
+      "compounding_code": "CP-1111",
       "batch_size": 100,
       "batch_uom": "kg",
       "total_raw_materials_count": 14,
@@ -3019,12 +3081,12 @@
           "supplier": "MAYNILAD"
         },
         {
-          "material_code": "RM-TRET-01",
-          "material_name": "\tTRETINOIN (QUAD)",
+          "material_code": "RM-AEV525-01",
+          "material_name": "AEVUM 525",
           "category": "Cosmetic",
           "required_quantity": 0.6,
           "uom": "kg",
-          "supplier": "QUAD"
+          "supplier": "CHEMICO"
         },
         {
           "material_code": "RM-PROCOL-01",
@@ -3299,6 +3361,68 @@
       ]
     },
     {
+      "formula_id": 95,
+      "formula_code": "FORM-2026-0105",
+      "formula_name": "BVLGARI AQUA",
+      "product_category": "Perfume Brand",
+      "active_version": "V1.0",
+      "version_status": "APPROVED",
+      "compounding_code": "CP-1102",
+      "batch_size": 100,
+      "batch_uom": "kg",
+      "total_raw_materials_count": 6,
+      "raw_materials_needed": [
+        {
+          "material_code": "RM-ETHYL-ALC-02",
+          "material_name": "ETHYL ALCOHOL - IND02",
+          "category": "Cosmetic",
+          "required_quantity": 68,
+          "uom": "kg",
+          "supplier": "LOYAL FAMILY"
+        },
+        {
+          "material_code": "RM-PROCOL-HACHI",
+          "material_name": "PROPYLENE GLYCOL (HACHIMORI)",
+          "category": "Cosmetic",
+          "required_quantity": 3,
+          "uom": "kg",
+          "supplier": "HACHIMORI"
+        },
+        {
+          "material_code": "PAR-BR-0001",
+          "material_name": "BVLGARI AQUA (SCENT)",
+          "category": "Cosmetic",
+          "required_quantity": 14,
+          "uom": "kg",
+          "supplier": "KALIOREXI"
+        },
+        {
+          "material_code": "RM-PEG40-01",
+          "material_name": "PEG40 - MEDMULS COH 40",
+          "category": "Cosmetic",
+          "required_quantity": 1,
+          "uom": "kg",
+          "supplier": "REDOLENCE"
+        },
+        {
+          "material_code": "RM-FIXATIVE-01",
+          "material_name": "FIXATIVE (ASTERIA)",
+          "category": "Cosmetic",
+          "required_quantity": 2,
+          "uom": "kg",
+          "supplier": "ASTERIA"
+        },
+        {
+          "material_code": "MAT-WAT-01",
+          "material_name": "DE-IONIZED WATER",
+          "category": "Cosmetic",
+          "required_quantity": 12,
+          "uom": "kg",
+          "supplier": "MAYNILAD"
+        }
+      ]
+    },
+    {
       "formula_id": 50,
       "formula_code": "FORM-2026-0060",
       "formula_name": "CEZ LOVER INTIMATE PINK CLEANSER 1.0",
@@ -3405,6 +3529,68 @@
           "required_quantity": 1,
           "uom": "kg",
           "supplier": "FW SPA"
+        }
+      ]
+    },
+    {
+      "formula_id": 98,
+      "formula_code": "FORM-2026-0108",
+      "formula_name": "CK ETERNITY",
+      "product_category": "Perfume Brand",
+      "active_version": "V1.0",
+      "version_status": "APPROVED",
+      "compounding_code": "CP-1149",
+      "batch_size": 100,
+      "batch_uom": "kg",
+      "total_raw_materials_count": 6,
+      "raw_materials_needed": [
+        {
+          "material_code": "RM-ETHYL-ALC-02",
+          "material_name": "ETHYL ALCOHOL - IND02",
+          "category": "Cosmetic",
+          "required_quantity": 68,
+          "uom": "kg",
+          "supplier": "LOYAL FAMILY"
+        },
+        {
+          "material_code": "RM-PROCOL-HACHI",
+          "material_name": "PROPYLENE GLYCOL (HACHIMORI)",
+          "category": "Cosmetic",
+          "required_quantity": 3,
+          "uom": "kg",
+          "supplier": "HACHIMORI"
+        },
+        {
+          "material_code": "FRG-CE-003",
+          "material_name": "CK ETERNITY",
+          "category": "Cosmetic",
+          "required_quantity": 14,
+          "uom": "kg",
+          "supplier": "KALIOREXI"
+        },
+        {
+          "material_code": "RM-PEG40-01",
+          "material_name": "PEG40 - MEDMULS COH 40",
+          "category": "Cosmetic",
+          "required_quantity": 1,
+          "uom": "kg",
+          "supplier": "REDOLENCE"
+        },
+        {
+          "material_code": "RM-FIXATIVE-01",
+          "material_name": "FIXATIVE (ASTERIA)",
+          "category": "Cosmetic",
+          "required_quantity": 2,
+          "uom": "kg",
+          "supplier": "ASTERIA"
+        },
+        {
+          "material_code": "MAT-WAT-01",
+          "material_name": "DE-IONIZED WATER",
+          "category": "Cosmetic",
+          "required_quantity": 12,
+          "uom": "kg",
+          "supplier": "MAYNILAD"
         }
       ]
     },
@@ -4268,7 +4454,7 @@
           "category": "Cosmetic",
           "required_quantity": 0.1,
           "uom": "kg",
-          "supplier": "FW SPA"
+          "supplier": "QUAD"
         },
         {
           "material_code": "RM-ELEM100-QUAD-01",
@@ -4922,7 +5108,7 @@
           "category": "Cosmetic",
           "required_quantity": 0.1,
           "uom": "kg",
-          "supplier": "FW SPA"
+          "supplier": "QUAD"
         },
         {
           "material_code": "RM-ISCA-PEG-01",
@@ -5190,7 +5376,7 @@
           "category": "Cosmetic",
           "required_quantity": 0.1,
           "uom": "kg",
-          "supplier": "FW SPA"
+          "supplier": "QUAD"
         },
         {
           "material_code": "RM-COCONUT",
@@ -5268,7 +5454,7 @@
           "category": "Cosmetic",
           "required_quantity": 0.02,
           "uom": "kg",
-          "supplier": "FW SPA"
+          "supplier": "QUAD"
         },
         {
           "material_code": "RM-KOJIC-DIPALM",
@@ -5946,7 +6132,7 @@
           "category": "Cosmetic",
           "required_quantity": 0.1,
           "uom": "kg",
-          "supplier": "FW SPA"
+          "supplier": "QUAD"
         },
         {
           "material_code": "RM-ELEM100-QUAD-01",
@@ -6223,6 +6409,100 @@
           "required_quantity": 0.1,
           "uom": "kg",
           "supplier": "CHEMICO"
+        }
+      ]
+    },
+    {
+      "formula_id": 102,
+      "formula_code": "FORM-2026-0112",
+      "formula_name": "KALUCA SNAIL WHITENING (MILKYWAY) BAR SOAP 80G 1.1 (12KG)",
+      "product_category": "Cosmetic",
+      "active_version": "V1.0",
+      "version_status": "APPROVED",
+      "compounding_code": "CP-1196",
+      "batch_size": 100,
+      "batch_uom": "kg",
+      "total_raw_materials_count": 10,
+      "raw_materials_needed": [
+        {
+          "material_code": "RM-COCONUT",
+          "material_name": "COCONUT OIL",
+          "category": "Cosmetic",
+          "required_quantity": 25,
+          "uom": "kg",
+          "supplier": "GOLDEN PEE-WEE"
+        },
+        {
+          "material_code": "RM-BHT-SOLN",
+          "material_name": "BHT 10% SOLUTION",
+          "category": "Cosmetic",
+          "required_quantity": 1,
+          "uom": "kg",
+          "supplier": "GOLDEN PEE-WEE"
+        },
+        {
+          "material_code": "RM-PALM",
+          "material_name": "PALM OIL",
+          "category": "Cosmetic",
+          "required_quantity": 33.7,
+          "uom": "kg",
+          "supplier": "GOLDEN PEE-WEE"
+        },
+        {
+          "material_code": "RM-POLYMAX90",
+          "material_name": "POLYMAX 90M (INCI:PEG-90M) FORMULAB",
+          "category": "Cosmetic",
+          "required_quantity": 0.1,
+          "uom": "kg",
+          "supplier": "FORMULAB"
+        },
+        {
+          "material_code": "RM-GLYCE-01",
+          "material_name": "GLYCERIN (CHEMREZ)",
+          "category": "Cosmetic",
+          "required_quantity": 5,
+          "uom": "kg",
+          "supplier": "CHEMREZ"
+        },
+        {
+          "material_code": "RM-LYE-SOLUTION",
+          "material_name": "LYE SOLUTION",
+          "category": "Cosmetic",
+          "required_quantity": 32.6,
+          "uom": "kg",
+          "supplier": "GOLDEN PEE-WEE"
+        },
+        {
+          "material_code": "RM-MERQUAT3330",
+          "material_name": "MERQUAT PLUS 3330 POLYMER",
+          "category": "Cosmetic",
+          "required_quantity": 0.4,
+          "uom": "kg",
+          "supplier": "CHEMICO"
+        },
+        {
+          "material_code": "RM-PROCOL-01",
+          "material_name": "PROPYLENE GLYCOL (TRANSWORLD)",
+          "category": "Cosmetic",
+          "required_quantity": 1.4,
+          "uom": "kg",
+          "supplier": "TRANSWORLD"
+        },
+        {
+          "material_code": "FR-MILKYWAY-01",
+          "material_name": "MILKYWAY SCENT",
+          "category": "Cosmetic",
+          "required_quantity": 0.76,
+          "uom": "kg",
+          "supplier": "ENVIRONMENTAL"
+        },
+        {
+          "material_code": "RM-ANATASE-01",
+          "material_name": "TiO2 (TITANIUM ANATASE)",
+          "category": "Cosmetic",
+          "required_quantity": 0.04,
+          "uom": "kg",
+          "supplier": "QUAD"
         }
       ]
     },
@@ -7275,6 +7555,68 @@
       ]
     },
     {
+      "formula_id": 96,
+      "formula_code": "FORM-2026-0106",
+      "formula_name": "SELENA GOMEZ",
+      "product_category": "Perfume Brand",
+      "active_version": "V2.0",
+      "version_status": "APPROVED",
+      "compounding_code": "CP-1137",
+      "batch_size": 100,
+      "batch_uom": "kg",
+      "total_raw_materials_count": 6,
+      "raw_materials_needed": [
+        {
+          "material_code": "RM-ETHYL-ALC-02",
+          "material_name": "ETHYL ALCOHOL - IND02",
+          "category": "Cosmetic",
+          "required_quantity": 68,
+          "uom": "kg",
+          "supplier": "LOYAL FAMILY"
+        },
+        {
+          "material_code": "RM-PROCOL-HACHI",
+          "material_name": "PROPYLENE GLYCOL (HACHIMORI)",
+          "category": "Cosmetic",
+          "required_quantity": 3,
+          "uom": "kg",
+          "supplier": "HACHIMORI"
+        },
+        {
+          "material_code": "FRG-SG-001",
+          "material_name": "SELENA GOMEZ",
+          "category": "Cosmetic",
+          "required_quantity": 14,
+          "uom": "kg",
+          "supplier": "JJJ SHOP"
+        },
+        {
+          "material_code": "RM-PEG40-01",
+          "material_name": "PEG40 - MEDMULS COH 40",
+          "category": "Cosmetic",
+          "required_quantity": 1,
+          "uom": "kg",
+          "supplier": "REDOLENCE"
+        },
+        {
+          "material_code": "RM-FIXATIVE-01",
+          "material_name": "FIXATIVE (ASTERIA)",
+          "category": "Cosmetic",
+          "required_quantity": 2,
+          "uom": "kg",
+          "supplier": "ASTERIA"
+        },
+        {
+          "material_code": "MAT-WAT-01",
+          "material_name": "DE-IONIZED WATER",
+          "category": "Cosmetic",
+          "required_quantity": 12,
+          "uom": "kg",
+          "supplier": "MAYNILAD"
+        }
+      ]
+    },
+    {
       "formula_id": 48,
       "formula_code": "FORM-2026-0058",
       "formula_name": "SKEENCARE HIGH END PEELING CHARCOAL SOAP 70g 2.1 11KG",
@@ -7766,7 +8108,7 @@
           "category": "Cosmetic",
           "required_quantity": 0.1,
           "uom": "kg",
-          "supplier": "FW SPA"
+          "supplier": "QUAD"
         },
         {
           "material_code": "RM-ISCA-PEG-01",
@@ -8239,9 +8581,9 @@
       "formula_code": "FORM-2026-0104",
       "formula_name": "VALAYA",
       "product_category": "Perfume No Brand",
-      "active_version": "V1.0",
+      "active_version": "V2.0",
       "version_status": "APPROVED",
-      "compounding_code": "CP-1085",
+      "compounding_code": "CP-1183",
       "batch_size": 100,
       "batch_uom": "kg",
       "total_raw_materials_count": 6,
@@ -8269,6 +8611,192 @@
           "required_quantity": 9,
           "uom": "kg",
           "supplier": "JJJ SHOP"
+        },
+        {
+          "material_code": "RM-PEG40-01",
+          "material_name": "PEG40 - MEDMULS COH 40",
+          "category": "Cosmetic",
+          "required_quantity": 1,
+          "uom": "kg",
+          "supplier": "REDOLENCE"
+        },
+        {
+          "material_code": "RM-FIXATIVE-01",
+          "material_name": "FIXATIVE (ASTERIA)",
+          "category": "Cosmetic",
+          "required_quantity": 2,
+          "uom": "kg",
+          "supplier": "ASTERIA"
+        },
+        {
+          "material_code": "MAT-WAT-01",
+          "material_name": "DE-IONIZED WATER",
+          "category": "Cosmetic",
+          "required_quantity": 12,
+          "uom": "kg",
+          "supplier": "MAYNILAD"
+        }
+      ]
+    },
+    {
+      "formula_id": 99,
+      "formula_code": "FORM-2026-0109",
+      "formula_name": "VANILLA LACE",
+      "product_category": "Perfume Brand",
+      "active_version": "V1.0",
+      "version_status": "APPROVED",
+      "compounding_code": "CP-1157",
+      "batch_size": 100,
+      "batch_uom": "kg",
+      "total_raw_materials_count": 6,
+      "raw_materials_needed": [
+        {
+          "material_code": "RM-ETHYL-ALC-02",
+          "material_name": "ETHYL ALCOHOL - IND02",
+          "category": "Cosmetic",
+          "required_quantity": 68,
+          "uom": "kg",
+          "supplier": "LOYAL FAMILY"
+        },
+        {
+          "material_code": "RM-PROCOL-HACHI",
+          "material_name": "PROPYLENE GLYCOL (HACHIMORI)",
+          "category": "Cosmetic",
+          "required_quantity": 3,
+          "uom": "kg",
+          "supplier": "HACHIMORI"
+        },
+        {
+          "material_code": "PAR-VL-0001",
+          "material_name": "VANILLA LACE NEW IMPROVED (SCENT)",
+          "category": "Cosmetic",
+          "required_quantity": 14,
+          "uom": "kg",
+          "supplier": "KALIOREXI"
+        },
+        {
+          "material_code": "RM-PEG40-01",
+          "material_name": "PEG40 - MEDMULS COH 40",
+          "category": "Cosmetic",
+          "required_quantity": 1,
+          "uom": "kg",
+          "supplier": "REDOLENCE"
+        },
+        {
+          "material_code": "RM-FIXATIVE-01",
+          "material_name": "FIXATIVE (ASTERIA)",
+          "category": "Cosmetic",
+          "required_quantity": 2,
+          "uom": "kg",
+          "supplier": "ASTERIA"
+        },
+        {
+          "material_code": "MAT-WAT-01",
+          "material_name": "DE-IONIZED WATER",
+          "category": "Cosmetic",
+          "required_quantity": 12,
+          "uom": "kg",
+          "supplier": "MAYNILAD"
+        }
+      ]
+    },
+    {
+      "formula_id": 100,
+      "formula_code": "FORM-2026-0110",
+      "formula_name": "VERSACE EROS",
+      "product_category": "Perfume Brand",
+      "active_version": "V1.0",
+      "version_status": "APPROVED",
+      "compounding_code": "CP-1165",
+      "batch_size": 100,
+      "batch_uom": "kg",
+      "total_raw_materials_count": 6,
+      "raw_materials_needed": [
+        {
+          "material_code": "RM-ETHYL-ALC-02",
+          "material_name": "ETHYL ALCOHOL - IND02",
+          "category": "Cosmetic",
+          "required_quantity": 68,
+          "uom": "kg",
+          "supplier": "LOYAL FAMILY"
+        },
+        {
+          "material_code": "RM-PROCOL-HACHI",
+          "material_name": "PROPYLENE GLYCOL (HACHIMORI)",
+          "category": "Cosmetic",
+          "required_quantity": 3,
+          "uom": "kg",
+          "supplier": "HACHIMORI"
+        },
+        {
+          "material_code": "FRG-VE-004",
+          "material_name": "VERSACE EROS",
+          "category": "Cosmetic",
+          "required_quantity": 14,
+          "uom": "kg",
+          "supplier": "KALIOREXI"
+        },
+        {
+          "material_code": "RM-PEG40-01",
+          "material_name": "PEG40 - MEDMULS COH 40",
+          "category": "Cosmetic",
+          "required_quantity": 1,
+          "uom": "kg",
+          "supplier": "REDOLENCE"
+        },
+        {
+          "material_code": "RM-FIXATIVE-01",
+          "material_name": "FIXATIVE (ASTERIA)",
+          "category": "Cosmetic",
+          "required_quantity": 2,
+          "uom": "kg",
+          "supplier": "ASTERIA"
+        },
+        {
+          "material_code": "MAT-WAT-01",
+          "material_name": "DE-IONIZED WATER",
+          "category": "Cosmetic",
+          "required_quantity": 12,
+          "uom": "kg",
+          "supplier": "MAYNILAD"
+        }
+      ]
+    },
+    {
+      "formula_id": 101,
+      "formula_code": "FORM-2026-0111",
+      "formula_name": "VERSACE EROS",
+      "product_category": "Perfume No Brand",
+      "active_version": "V1.0",
+      "version_status": "APPROVED",
+      "compounding_code": "CP-1170",
+      "batch_size": 100,
+      "batch_uom": "kg",
+      "total_raw_materials_count": 6,
+      "raw_materials_needed": [
+        {
+          "material_code": "RM-ETHYL-ALC-02",
+          "material_name": "ETHYL ALCOHOL - IND02",
+          "category": "Cosmetic",
+          "required_quantity": 73,
+          "uom": "kg",
+          "supplier": "LOYAL FAMILY"
+        },
+        {
+          "material_code": "RM-PROCOL-HACHI",
+          "material_name": "PROPYLENE GLYCOL (HACHIMORI)",
+          "category": "Cosmetic",
+          "required_quantity": 3,
+          "uom": "kg",
+          "supplier": "HACHIMORI"
+        },
+        {
+          "material_code": "FRG-VE-004",
+          "material_name": "VERSACE EROS",
+          "category": "Cosmetic",
+          "required_quantity": 9,
+          "uom": "kg",
+          "supplier": "KALIOREXI"
         },
         {
           "material_code": "RM-PEG40-01",

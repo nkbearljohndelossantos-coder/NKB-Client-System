@@ -162,6 +162,10 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
         items,
         jo_id,
         target_quantity,
+        target_batches,
+        qty_per_batch,
+        actual_yield,
+        buffer_stock_qty,
         formula_code,
         production_date,
         expiry_date,
@@ -190,6 +194,9 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
                 const spec = itemMap.get(j.id);
                 if (spec && spec.target_quantity) j.target_quantity = parseInt(spec.target_quantity);
                 if (spec && spec.actual_yield !== undefined) j.actual_yield = parseInt(spec.actual_yield);
+                if (spec && spec.target_batches !== undefined) j.target_batches = parseInt(spec.target_batches) || null;
+                if (spec && spec.qty_per_batch !== undefined) j.qty_per_batch = parseInt(spec.qty_per_batch) || null;
+                if (spec && spec.buffer_stock_qty !== undefined) j.buffer_stock_qty = parseInt(spec.buffer_stock_qty) || 0;
                 if (spec && spec.formula_code) j.custom_formula_code = spec.formula_code;
             });
         } else if (jo_ids && Array.isArray(jo_ids) && jo_ids.length > 0) {
@@ -280,10 +287,14 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
                     isException = true;
                 }
 
+                const targetBatchesVal = jo.target_batches || (jo.qty_per_batch ? Math.ceil(targetQty / jo.qty_per_batch) : 1);
+                const qtyPerBatchVal = jo.qty_per_batch || (targetBatchesVal > 0 ? Math.round(targetQty / targetBatchesVal) : targetQty);
+                const bufferStockQtyVal = jo.buffer_stock_qty !== undefined ? parseInt(jo.buffer_stock_qty) : (actualYield > targetQty ? (actualYield - targetQty) : 0);
+
                 db.prepare(`
                     INSERT INTO production_batches
-                    (id, batch_number, jo_id, product_id, formula_code, production_date, expiry_date, target_quantity, actual_yield, variance_quantity, variance_percent, status, compounding_operator, bottling_lead, qc_inspector, line_assignment, qc_passed_by, qc_passed_at, created_by)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (id, batch_number, jo_id, product_id, formula_code, production_date, expiry_date, target_quantity, actual_yield, variance_quantity, variance_percent, status, compounding_operator, bottling_lead, qc_inspector, line_assignment, target_batches, qty_per_batch, buffer_stock_qty, qc_passed_by, qc_passed_at, created_by)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 `).run(
                     batchId,
                     batchNumber,
@@ -301,6 +312,9 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
                     bottling_lead || null,
                     qc_inspector || null,
                     line_assignment || 'Cleanroom Line 1 (Alpha)',
+                    targetBatchesVal,
+                    qtyPerBatchVal,
+                    bufferStockQtyVal,
                     !isException ? req.user.id : null,
                     !isException ? getManilaDateTime() : null,
                     req.user.id
@@ -432,10 +446,14 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
         isException = true;
     }
 
+    const targetBatchesVal = req.body.target_batches ? parseInt(req.body.target_batches) : (req.body.qty_per_batch ? Math.ceil(targetQty / parseInt(req.body.qty_per_batch)) : 1);
+    const qtyPerBatchVal = req.body.qty_per_batch ? parseInt(req.body.qty_per_batch) : (targetBatchesVal > 0 ? Math.round(targetQty / targetBatchesVal) : targetQty);
+    const bufferStockQtyVal = req.body.buffer_stock_qty !== undefined ? parseInt(req.body.buffer_stock_qty) : (actualYield > targetQty ? (actualYield - targetQty) : 0);
+
     db.prepare(`
         INSERT INTO production_batches
-        (id, batch_number, jo_id, product_id, formula_code, production_date, expiry_date, target_quantity, actual_yield, variance_quantity, variance_percent, status, compounding_operator, bottling_lead, qc_inspector, line_assignment, qc_passed_by, qc_passed_at, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (id, batch_number, jo_id, product_id, formula_code, production_date, expiry_date, target_quantity, actual_yield, variance_quantity, variance_percent, status, compounding_operator, bottling_lead, qc_inspector, line_assignment, target_batches, qty_per_batch, buffer_stock_qty, qc_passed_by, qc_passed_at, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
         batchId,
         batchNumber,
@@ -453,6 +471,9 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
         bottling_lead || null,
         qc_inspector || null,
         line_assignment || 'Line 1 (Alpha)',
+        targetBatchesVal,
+        qtyPerBatchVal,
+        bufferStockQtyVal,
         !isException ? req.user.id : null,
         !isException ? getManilaDateTime() : null,
         req.user.id

@@ -46,6 +46,15 @@ function runMigrations(dbInstance, isMysql) {
             } catch (_) {}
         }
         try {
+            dbInstance.exec(`ALTER TABLE production_batches ADD COLUMN qty_per_batch ${intType} DEFAULT NULL;`);
+        } catch (_) {}
+        try {
+            dbInstance.exec(`ALTER TABLE production_batches ADD COLUMN target_batches ${intType} DEFAULT NULL;`);
+        } catch (_) {}
+        try {
+            dbInstance.exec(`ALTER TABLE production_batches ADD COLUMN buffer_stock_qty ${intType} DEFAULT 0;`);
+        } catch (_) {}
+        try {
             dbInstance.exec(`ALTER TABLE purchase_orders ADD COLUMN so_number ${textType};`);
         } catch (_) {}
         try {
