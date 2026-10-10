@@ -132,6 +132,26 @@
 
         <!-- Controls Box -->
         <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-xs space-y-3 font-semibold text-slate-700">
+            <!-- Layout Presets Bar -->
+            <div class="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+                <div class="flex items-center gap-2">
+                    <span class="text-xs font-black text-slate-800 uppercase tracking-wide">📐 Label Layout:</span>
+                    <select id="cfg-layout-preset" onchange="applyLayoutPreset(this.value)" class="px-3 py-1 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800">
+                        <option value="standard" selected>Standard (Default Packaging Box)</option>
+                        <option value="compact">Compact / Small Box (Minimal Fields)</option>
+                        <option value="detailed">Detailed Cleanroom / QC Extended</option>
+                    </select>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="promptAddCustomField()" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition">
+                        + Add Custom Field
+                    </button>
+                    <button type="button" onclick="resetToStandardLayout()" class="px-2.5 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold transition">
+                        Reset Standard
+                    </button>
+                </div>
+            </div>
+
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
                     <label class="block text-slate-500 text-[11px] font-bold mb-1">DATE :</label>
@@ -173,8 +193,18 @@
                     <input type="text" id="cfg-checked-by" oninput="regenerateLabels()" placeholder="Inspector Name" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-bold">
                 </div>
             </div>
+
+            <!-- Custom Fields Container (Editable) -->
+            <div id="custom-fields-panel" class="hidden p-2.5 bg-indigo-50/50 border border-indigo-100 rounded-xl space-y-2">
+                <div class="text-[11px] font-bold text-indigo-900 flex justify-between items-center">
+                    <span>✨ Extra Custom Product / Client Fields:</span>
+                    <span class="text-[10px] text-slate-500 font-normal">Included on every printed box label</span>
+                </div>
+                <div id="custom-fields-list" class="space-y-1.5"></div>
+            </div>
+
             <div class="text-[10px] text-slate-500 pt-1 flex items-center justify-between">
-                <span>💡 Layout matching <strong>LABELING(AutoRecovered)</strong> Excel template. Click any text directly on the labels to make individual custom edits.</span>
+                <span>💡 <strong>Standard default layout is active</strong>. Click any label title or value below to edit live, or use custom fields to adapt to client-specific requirements.</span>
                 <span id="label-counter-badge" class="font-bold text-indigo-700">5 Labels Ready</span>
             </div>
         </div>
@@ -191,6 +221,8 @@
     <script src="/js/app.js?v=2.2.6"></script>
     <script>
         let currentBatch = null;
+        let activeCustomFields = []; // [{ title: 'MFG DATE:', val: '2026-10-10' }]
+        let activePreset = 'standard';
 
         function getParam(param) {
             return new URLSearchParams(window.location.search).get(param) || '';
@@ -252,6 +284,79 @@
             regenerateLabels();
         }
 
+        function applyLayoutPreset(preset) {
+            activePreset = preset;
+            if (preset === 'compact') {
+                // Keep only essential fields, remove extra weights if needed
+            } else if (preset === 'detailed') {
+                if (!activeCustomFields.some(f => f.title === 'LINE:')) {
+                    activeCustomFields.push({ title: 'LINE:', val: currentBatch?.line_assignment || 'Line 1 (Alpha)' });
+                }
+                if (!activeCustomFields.some(f => f.title === 'EXPIRY:')) {
+                    const d = new Date();
+                    d.setFullYear(d.getFullYear() + 2);
+                    activeCustomFields.push({ title: 'EXPIRY:', val: d.toISOString().split('T')[0] });
+                }
+                renderCustomFieldsPanel();
+            }
+            regenerateLabels();
+        }
+
+        function promptAddCustomField() {
+            const title = prompt('Enter field title (e.g. STORAGE TEMP, SHIFT, COLOR):');
+            if (!title) return;
+            const val = prompt(`Enter default value for "${title}":`) || '';
+            activeCustomFields.push({
+                title: title.trim().toUpperCase().endsWith(':') ? title.trim().toUpperCase() : title.trim().toUpperCase() + ':',
+                val: val.trim()
+            });
+            renderCustomFieldsPanel();
+            regenerateLabels();
+        }
+
+        function removeCustomField(idx) {
+            activeCustomFields.splice(idx, 1);
+            renderCustomFieldsPanel();
+            regenerateLabels();
+        }
+
+        function updateCustomField(idx, prop, val) {
+            if (activeCustomFields[idx]) {
+                activeCustomFields[idx][prop] = val;
+                regenerateLabels();
+            }
+        }
+
+        function renderCustomFieldsPanel() {
+            const panel = document.getElementById('custom-fields-panel');
+            const list = document.getElementById('custom-fields-list');
+            if (!panel || !list) return;
+
+            if (activeCustomFields.length === 0) {
+                panel.classList.add('hidden');
+                list.innerHTML = '';
+                return;
+            }
+
+            panel.classList.remove('hidden');
+            list.innerHTML = activeCustomFields.map((f, i) => `
+                <div class="flex items-center gap-2 bg-white p-1.5 rounded-lg border border-indigo-200">
+                    <input type="text" value="${f.title}" oninput="updateCustomField(${i}, 'title', this.value)" class="w-36 px-2 py-0.5 border border-slate-300 rounded font-bold uppercase text-[11px]">
+                    <input type="text" value="${f.val}" oninput="updateCustomField(${i}, 'val', this.value)" class="flex-1 px-2 py-0.5 border border-slate-300 rounded text-[11px]" placeholder="Value">
+                    <button type="button" onclick="removeCustomField(${i})" class="text-rose-600 hover:text-rose-800 font-bold px-2 text-xs" title="Remove">&times;</button>
+                </div>
+            `).join('');
+        }
+
+        function resetToStandardLayout() {
+            activePreset = 'standard';
+            const sel = document.getElementById('cfg-layout-preset');
+            if (sel) sel.value = 'standard';
+            activeCustomFields = [];
+            renderCustomFieldsPanel();
+            regenerateLabels();
+        }
+
         function regenerateLabels() {
             const dateVal = document.getElementById('cfg-date').value;
             const itemVal = document.getElementById('cfg-item').value || 'PRODUCT ITEM';
@@ -265,51 +370,92 @@
 
             const grid = document.getElementById('labels-grid');
             const badge = document.getElementById('label-counter-badge');
-            if (badge) badge.textContent = `${boxCount} Labels Ready`;
+            if (badge) badge.textContent = `${boxCount} Labels Ready (${activePreset.toUpperCase()})`;
+
+            let customFieldsHtml = '';
+            if (activeCustomFields.length > 0) {
+                customFieldsHtml = activeCustomFields.map(cf => `
+                    <div class="label-field-row">
+                        <span class="label-field-title" contenteditable="true">${cf.title}</span>
+                        <span class="label-field-val" contenteditable="true">${cf.val || '&nbsp;'}</span>
+                    </div>
+                `).join('');
+            }
 
             let html = '';
             for (let i = 1; i <= boxCount; i++) {
                 const boxStr = `${i} OF ${boxCount}`;
-                html += `
-                    <div class="label-card">
-                        <div class="label-field-row">
-                            <span class="label-field-title">DATE :</span>
-                            <span class="label-field-val" contenteditable="true">${dateVal}</span>
+
+                if (activePreset === 'compact') {
+                    html += `
+                        <div class="label-card">
+                            <div class="label-field-row">
+                                <span class="label-field-title">ITEM:</span>
+                                <span class="label-field-val" contenteditable="true">${itemVal}</span>
+                            </div>
+                            <div class="label-field-row">
+                                <span class="label-field-title">BATCH:</span>
+                                <span class="label-field-val font-mono" contenteditable="true">${batchVal}</span>
+                            </div>
+                            <div class="label-field-row">
+                                <span class="label-field-title">PO #:</span>
+                                <span class="label-field-val font-mono" contenteditable="true">${poVal}</span>
+                            </div>
+                            <div class="label-field-row">
+                                <span class="label-field-title">BOX:</span>
+                                <span class="label-field-val font-mono" contenteditable="true">${boxStr}</span>
+                            </div>
+                            <div class="label-field-row">
+                                <span class="label-field-title">QTY:</span>
+                                <span class="label-field-val font-mono" contenteditable="true">${qtyVal}</span>
+                            </div>
+                            ${customFieldsHtml}
                         </div>
-                        <div class="label-field-row">
-                            <span class="label-field-title">ITEM:</span>
-                            <span class="label-field-val" contenteditable="true">${itemVal}</span>
+                    `;
+                } else {
+                    // Standard / Detailed Default Layout
+                    html += `
+                        <div class="label-card">
+                            <div class="label-field-row">
+                                <span class="label-field-title" contenteditable="true">DATE :</span>
+                                <span class="label-field-val" contenteditable="true">${dateVal}</span>
+                            </div>
+                            <div class="label-field-row">
+                                <span class="label-field-title" contenteditable="true">ITEM:</span>
+                                <span class="label-field-val" contenteditable="true">${itemVal}</span>
+                            </div>
+                            <div class="label-field-row">
+                                <span class="label-field-title" contenteditable="true">ML/GRAMS:</span>
+                                <span class="label-field-val" contenteditable="true">${sizeVal}</span>
+                            </div>
+                            <div class="label-field-row">
+                                <span class="label-field-title" contenteditable="true">BATCH CODE:</span>
+                                <span class="label-field-val font-mono" contenteditable="true">${batchVal}</span>
+                            </div>
+                            <div class="label-field-row">
+                                <span class="label-field-title" contenteditable="true">PO #:</span>
+                                <span class="label-field-val font-mono" contenteditable="true">${poVal}</span>
+                            </div>
+                            <div class="label-field-row">
+                                <span class="label-field-title" contenteditable="true">BOX : &nbsp; OF</span>
+                                <span class="label-field-val font-mono" contenteditable="true">${boxStr}</span>
+                            </div>
+                            <div class="label-field-row">
+                                <span class="label-field-title" contenteditable="true">QTY.</span>
+                                <span class="label-field-val font-mono" contenteditable="true">${qtyVal}</span>
+                            </div>
+                            <div class="label-field-row">
+                                <span class="label-field-title" contenteditable="true">NET WT:</span>
+                                <span class="label-field-val" contenteditable="true">${netWtVal || '&nbsp;'}</span>
+                            </div>
+                            <div class="label-field-row">
+                                <span class="label-field-title" contenteditable="true">CHECKED BY:</span>
+                                <span class="label-field-val" contenteditable="true">${checkedByVal || '&nbsp;'}</span>
+                            </div>
+                            ${customFieldsHtml}
                         </div>
-                        <div class="label-field-row">
-                            <span class="label-field-title">ML/GRAMS:</span>
-                            <span class="label-field-val" contenteditable="true">${sizeVal}</span>
-                        </div>
-                        <div class="label-field-row">
-                            <span class="label-field-title">BATCH CODE:</span>
-                            <span class="label-field-val font-mono" contenteditable="true">${batchVal}</span>
-                        </div>
-                        <div class="label-field-row">
-                            <span class="label-field-title">PO #:</span>
-                            <span class="label-field-val font-mono" contenteditable="true">${poVal}</span>
-                        </div>
-                        <div class="label-field-row">
-                            <span class="label-field-title">BOX : &nbsp; OF</span>
-                            <span class="label-field-val font-mono" contenteditable="true">${boxStr}</span>
-                        </div>
-                        <div class="label-field-row">
-                            <span class="label-field-title">QTY.</span>
-                            <span class="label-field-val font-mono" contenteditable="true">${qtyVal}</span>
-                        </div>
-                        <div class="label-field-row">
-                            <span class="label-field-title">NET WT:</span>
-                            <span class="label-field-val" contenteditable="true">${netWtVal || '&nbsp;'}</span>
-                        </div>
-                        <div class="label-field-row">
-                            <span class="label-field-title">CHECKED BY:</span>
-                            <span class="label-field-val" contenteditable="true">${checkedByVal || '&nbsp;'}</span>
-                        </div>
-                    </div>
-                `;
+                    `;
+                }
             }
 
             grid.innerHTML = html;
