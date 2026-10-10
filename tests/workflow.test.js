@@ -1373,6 +1373,7 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.ok(printPoHtml.includes('beforeprint'), 'print-po.html must have beforeprint event listener');
         assert.ok(printJoHtml.includes('beforeprint'), 'print-jo.html must have beforeprint event listener');
         assert.ok(printDrHtml.includes('beforeprint'), 'print-dr.html must have beforeprint event listener');
+        assert.ok(printDrHtml.includes("const unit = (item.unit || item.uom || 'pcs').trim()"), 'print-dr.html must define unit in renderDrRows');
         assert.ok(printInvoiceHtml.includes('beforeprint'), 'print-invoice.html must have beforeprint event listener');
 
         // Clean up test records

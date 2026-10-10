@@ -386,6 +386,7 @@
             tbody.innerHTML = items.map(item => {
                 const delivered = parseFloat(item.delivered_quantity) || 0;
                 totalQty += delivered;
+                const unit = (item.unit || item.uom || 'pcs').trim();
                 const target = item.po_target_quantity ? parseFloat(item.po_target_quantity) : null;
                 const isPartial = target && delivered < target;
                 const progressText = isPartial ? `<div class="text-[9.5px] text-slate-500 font-sans font-normal mt-0.5">(Initial: ${NKB.formatNumber(delivered)} / ${NKB.formatNumber(target)})</div>` : '';
