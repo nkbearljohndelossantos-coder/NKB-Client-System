@@ -183,6 +183,13 @@
                                 <span class="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-extrabold border border-amber-500/30">COO</span>
                             </div>
                         </button>
+                        <button onclick="switchTab('buffer')" id="tab-btn-buffer" class="sidebar-btn w-full flex items-center justify-between px-3 py-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 transition" title="Client Buffer Stock Reserve">
+                            <div class="flex items-center gap-3">
+                                <svg class="w-4 h-4 flex-shrink-0 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                                <span>Buffer Stocks</span>
+                            </div>
+                            <span class="text-[9px] bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded font-extrabold border border-purple-500/30">STOCK</span>
+                        </button>
                     </div>
                 </div>
 
@@ -848,6 +855,49 @@
                             </thead>
                             <tbody id="table-deliveries-body" class="divide-y divide-slate-100 font-medium">
                                 <tr><td colspan="9" class="py-6 text-center text-slate-400">Loading delivery receipts...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB: CLIENT BUFFER STOCKS -->
+            <section id="view-buffer" class="space-y-6 hidden">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-2xl font-black text-slate-900">🛡️ Client Buffer Stocks Inventory</h2>
+                        <p class="text-sm text-slate-500">Reserved inventory from FIXED_PO_BUFFER policies and dedicated Buffer Stock POs.</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="openCreatePOModal({ is_buffer_stock: true })" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-md shadow-purple-600/30">
+                            <span>🛡️</span> New PO for Buffer Stocks
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                        <span class="text-xs font-bold text-slate-600 uppercase tracking-wider">Client Stock Reserve Directory</span>
+                        <button onclick="loadBufferStock()" class="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition flex items-center gap-1">
+                            <span>🔄</span> Refresh
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[10px] tracking-wider">
+                                <tr>
+                                    <th class="py-3 px-4">Client</th>
+                                    <th class="py-3 px-4">Product / SKU</th>
+                                    <th class="py-3 px-4">Source PO & Batch</th>
+                                    <th class="py-3 px-4">Initial Reserved</th>
+                                    <th class="py-3 px-4">Released</th>
+                                    <th class="py-3 px-4">Remaining</th>
+                                    <th class="py-3 px-4">Status</th>
+                                    <th class="py-3 px-4 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-buffer-body" class="divide-y divide-slate-100">
+                                <tr><td colspan="8" class="py-6 text-center text-slate-400">Loading buffer inventory...</td></tr>
                             </tbody>
                         </table>
                     </div>

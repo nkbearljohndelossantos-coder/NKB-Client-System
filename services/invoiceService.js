@@ -12,7 +12,7 @@ function createInvoiceFromDR({ drId, createdBy, userId, userRole, userName, note
     // 1. Fetch DR and associated PO, Client, and Items
     const dr = db.prepare(`
         SELECT dr.*, 
-               po.po_number, po.billing_policy, po.tolerance_percent,
+               po.po_number, po.billing_policy, po.tolerance_percent, po.is_buffer_stock,
                c.company_name, c.email as client_email, c.address as client_address
         FROM delivery_receipts dr
         JOIN purchase_orders po ON dr.po_id = po.id
@@ -95,7 +95,38 @@ function createInvoiceFromDR({ drId, createdBy, userId, userRole, userName, note
             let isOverrun = 0;
             let overrunQty = 0;
 
-            if (dr.billing_policy === 'ACTUAL_DELIVERY') {
+            if (dr.is_buffer_stock === 1) {
+                // Dedicated Buffer Stock PO: Bill and reserve into Client Buffer Stock
+                billableQty = acceptedQty;
+                const bufferId = uuidv4();
+                db.prepare(`
+                    INSERT INTO client_buffer_stock
+                    (id, client_id, product_id, source_batch_id, source_po_id, source_dr_id, initial_quantity, quantity_remaining, expiry_date, status, notes)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'AVAILABLE', ?)
+                `).run(
+                    bufferId,
+                    dr.client_id,
+                    item.product_id,
+                    item.batch_id,
+                    dr.po_id,
+                    dr.id,
+                    acceptedQty,
+                    acceptedQty,
+                    item.expiry_date || null,
+                    `Stocked from Dedicated Buffer Stock PO ${dr.po_number}, DR ${dr.dr_number}.`
+                );
+
+                recordMovement({
+                    productId: item.product_id,
+                    batchId: item.batch_id,
+                    movementType: 'BUFFER_RESERVATION',
+                    quantity: -acceptedQty,
+                    referenceType: 'BUFFER',
+                    referenceId: bufferId,
+                    notes: `Buffer stock reserved for client ${dr.company_name} (${acceptedQty} pcs)`,
+                    createdBy: userId
+                });
+            } else if (dr.billing_policy === 'ACTUAL_DELIVERY') {
                 // CORE BUSINESS RULE: Bill actual accepted delivery
                 billableQty = acceptedQty;
                 if (acceptedQty > poQty) {

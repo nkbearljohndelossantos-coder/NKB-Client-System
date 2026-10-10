@@ -424,9 +424,15 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
  * Create a new Purchase Order
  */
 router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
-    let { client_id, expected_delivery_date, tolerance_percent, billing_policy, notes, form_of_payment, items, tax_percent, category, category_color } = req.body;
+    let { client_id, expected_delivery_date, tolerance_percent, billing_policy, notes, form_of_payment, items, tax_percent, category, category_color, is_buffer_stock } = req.body;
     if (form_of_payment === undefined && req.body.terms !== undefined) {
         form_of_payment = req.body.terms;
+    }
+
+    const isBufferStock = (is_buffer_stock === true || is_buffer_stock === 1 || is_buffer_stock === '1' || is_buffer_stock === 'true') ? 1 : 0;
+    if (isBufferStock) {
+        if (!billing_policy) billing_policy = 'FIXED_PO_BUFFER';
+        if (!category) category = 'Buffer Stocks';
     }
 
     if (req.user.role === 'CLIENT') {
@@ -567,8 +573,8 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
 
         db.prepare(`
             INSERT INTO purchase_orders
-            (id, po_number, so_number, client_id, po_date, expected_delivery_date, tolerance_percent, billing_policy, status, notes, form_of_payment, category, category_color, subtotal, tax_percent, tax_amount, grand_total, created_by, approved_by, approved_at)
-            VALUES (?, ?, ?, ?, date('now', 'localtime'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (id, po_number, so_number, client_id, po_date, expected_delivery_date, tolerance_percent, billing_policy, status, notes, form_of_payment, category, category_color, subtotal, tax_percent, tax_amount, grand_total, is_buffer_stock, created_by, approved_by, approved_at)
+            VALUES (?, ?, ?, ?, date('now', 'localtime'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
             poId,
             poNumber,
@@ -586,6 +592,7 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
             taxRate,
             taxAmount,
             grandTotal,
+            isBufferStock,
             req.user.id,
             initialStatus === 'APPROVED' ? req.user.id : null,
             initialStatus === 'APPROVED' ? getManilaDateTime() : null
@@ -648,7 +655,7 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
  */
 router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
     const { id } = req.params;
-    let { po_date, expected_delivery_date, tolerance_percent, billing_policy, notes, form_of_payment, items, tax_percent, category, category_color } = req.body;
+    let { po_date, expected_delivery_date, tolerance_percent, billing_policy, notes, form_of_payment, items, tax_percent, category, category_color, is_buffer_stock } = req.body;
     if (form_of_payment === undefined && req.body.terms !== undefined) {
         form_of_payment = req.body.terms;
     }
@@ -850,6 +857,8 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
             updatedCategoryColor = category_color;
         }
 
+        const newIsBufferStock = is_buffer_stock !== undefined ? ((is_buffer_stock === true || is_buffer_stock === 1 || is_buffer_stock === '1' || is_buffer_stock === 'true') ? 1 : 0) : (po.is_buffer_stock || 0);
+
         db.prepare(`
             UPDATE purchase_orders
             SET po_date = ?,
@@ -864,6 +873,7 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
                 tax_percent = ?,
                 tax_amount = ?,
                 grand_total = ?,
+                is_buffer_stock = ?,
                 updated_at = datetime('now', 'localtime')
             WHERE id = ?
         `).run(
@@ -879,6 +889,7 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
             taxRate,
             taxAmount,
             grandTotal,
+            newIsBufferStock,
             id
         );
 

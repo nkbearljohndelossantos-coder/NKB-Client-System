@@ -4,6 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 const db = require('../database/db');
 const { authenticateToken, requireRoles } = require('../middleware/auth');
 const { getNextDocumentNumber } = require('../services/documentNumberService');
+const { generateJulianBatchCode, deriveProductAbbreviation, getJulianDay } = require('../services/batchCodeService');
 const { recordMovement } = require('../services/inventoryService');
 const { logAudit } = require('../services/auditService');
 const { getManilaDate, getManilaDateTime } = require('../helpers/timezone');
@@ -116,6 +117,39 @@ router.get('/batches/:id', authenticateToken, (req, res) => {
 });
 
 /**
+ * GET /api/production/next-batch-code
+ * Auto-generate next Julian batch code: [Abbr][YY]-[JulianDay] or with excess suffix (-1, -2, ...)
+ */
+router.get('/next-batch-code', authenticateToken, (req, res) => {
+    const { product_id, jo_id, date } = req.query;
+    let targetProductId = product_id;
+    if (!targetProductId && jo_id) {
+        const jo = db.prepare('SELECT product_id FROM job_orders WHERE id = ?').get(jo_id);
+        if (jo) targetProductId = jo.product_id;
+    }
+    if (!targetProductId) {
+        return res.status(400).json({ success: false, error: 'Product ID or JO ID required.' });
+    }
+    const product = db.prepare('SELECT id, name, sku, batch_code_template FROM products WHERE id = ?').get(targetProductId);
+    if (!product) {
+        return res.status(404).json({ success: false, error: 'Product not found.' });
+    }
+    const batchDate = date || getManilaDate();
+    const batchCode = generateJulianBatchCode(product, batchDate);
+    const abbr = deriveProductAbbreviation(product);
+    const julianDay = getJulianDay(batchDate);
+    return res.json({
+        success: true,
+        data: {
+            batch_code: batchCode,
+            abbreviation: abbr,
+            julian_day: julianDay,
+            product_name: product.name
+        }
+    });
+});
+
+/**
  * POST /api/production/batches
  * Create a new production batch
  */
@@ -219,7 +253,9 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
         const tx = db.transaction(() => {
             for (const jo of itemsToCreate) {
                 const batchId = uuidv4();
-                const batchNumber = getNextDocumentNumber('BAT');
+                const batchNumber = (jo.custom_batch_number || req.body.batch_number)
+                    ? (jo.custom_batch_number || req.body.batch_number).trim()
+                    : generateJulianBatchCode(jo.product_id, production_date || getManilaDate());
 
                 let expDate = expiry_date;
                 if (!expDate) {
@@ -367,7 +403,9 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
     }
 
     const batchId = uuidv4();
-    const batchNumber = getNextDocumentNumber('BAT');
+    const batchNumber = (req.body.batch_number && req.body.batch_number.trim())
+        ? req.body.batch_number.trim()
+        : generateJulianBatchCode(jo.product_id, production_date || getManilaDate());
 
     // Calculate expiry date if not provided
     let expDate = expiry_date;

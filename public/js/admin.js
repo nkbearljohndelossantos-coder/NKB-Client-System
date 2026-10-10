@@ -506,7 +506,7 @@ function switchTab(tabId) {
     else if (tabId === 'invoices') loadInvoices();
     else if (tabId === 'payments') loadPayments();
     else if (tabId === 'payables') loadPayables();
-    else if (tabId === 'buffer') switchTab('orders');
+    else if (tabId === 'buffer') loadBufferStock();
     else if (tabId === 'clients') loadClients();
     else if (tabId === 'products') loadProducts();
     else if (tabId === 'formulations') loadFormulations();
@@ -900,7 +900,12 @@ async function loadOrders() {
                         <button type="button" onclick="openViewPOModal('${po.id}')" class="font-mono font-black text-indigo-600 hover:text-indigo-800 hover:underline text-left block text-sm tracking-tight" title="Click to view full PO details">
                             ${po.po_number}
                         </button>
-                        ${po.category ? `
+                        ${(po.is_buffer_stock === 1 || po.billing_policy === 'FIXED_PO_BUFFER') ? `
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-300 inline-flex items-center gap-1 shadow-2xs" title="Manufactured for Client Buffer Stock Reserve">
+                                <span>🛡️</span> Buffer Stock
+                            </span>
+                        ` : ''}
+                        ${po.category && po.category !== 'Buffer Stocks' ? `
                             <span class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border shadow-2xs inline-flex items-center gap-1" style="background-color: ${po.effective_category_color || po.category_color || '#8b5cf6'}18; color: ${po.effective_category_color || po.category_color || '#8b5cf6'}; border-color: ${po.effective_category_color || po.category_color || '#8b5cf6'}40;" title="Category: ${po.category}">
                                 <span class="w-1.5 h-1.5 rounded-full" style="background-color: ${po.effective_category_color || po.category_color || '#8b5cf6'}"></span>${po.category}
                             </span>
@@ -2400,6 +2405,10 @@ function renderBatchesTable(batches) {
                     <!-- 1-Click Batch Sales Order Print Shortcut -->
                     <a href="/print-po.html?id=${b.po_id}&title=SALES%20ORDER&batch_id=${b.id}" target="_blank" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1 shadow-sm" title="Print Sales Order (1-Click Shortcut)">
                         <span>🖨️ Sales Order</span>
+                    </a>
+                    <!-- Batch Label Print Shortcut matching LABELING Excel -->
+                    <a href="/print-batch-label.html?batch_id=${b.id}" target="_blank" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-xs font-bold transition inline-flex items-center gap-1 shadow-sm" title="Print Manufacturing Box Labels">
+                        <span>🏷️ Batch Label</span>
                     </a>
                     <button onclick="openViewPOModal('${b.po_id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-block" title="View Purchase Order Details">
                         👁️ View PO
@@ -7278,19 +7287,21 @@ let adminPOLineItems = [];
 let adminPOCatalog = [];
 let adminPORawCatalog = [];
 
-async function openCreatePOModal() {
+async function openCreatePOModal(options = {}) {
     const root = document.getElementById('modals-root');
     adminPOLineItems = [];
     adminPORawCatalog = cachedProducts.slice();
     adminPOCatalog = cachedProducts.slice();
+
+    const isBufferStockInitial = !!(options && options.is_buffer_stock);
 
     root.innerHTML = `
         <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50 overflow-y-auto">
             <div class="bg-white rounded-2xl max-w-4xl w-full p-6 sm:p-7 shadow-2xl space-y-4 max-h-[92vh] flex flex-col my-auto">
                 <div class="flex justify-between items-center border-b border-slate-100 pb-3 flex-shrink-0">
                     <div>
-                        <h3 class="text-lg font-bold text-slate-900">Create Multi-Item Purchase Order (PO)</h3>
-                        <p class="text-xs text-slate-500">Order multiple cosmetic products with client-specific pricing</p>
+                        <h3 class="text-lg font-bold text-slate-900">${isBufferStockInitial ? '🛡️ Create Buffer Stock Purchase Order' : 'Create Multi-Item Purchase Order (PO)'}</h3>
+                        <p class="text-xs text-slate-500">${isBufferStockInitial ? 'Manufacture inventory specifically for client buffer stock reserve' : 'Order multiple cosmetic products with client-specific pricing'}</p>
                     </div>
                     <button onclick="closeModal()" title="Close (Esc)" class="text-slate-400 hover:text-slate-600 font-bold text-lg flex items-center gap-1.5">
                         <kbd class="text-[10px] font-mono text-slate-400 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded font-normal">Esc</kbd>
@@ -7328,11 +7339,23 @@ async function openCreatePOModal() {
                             <label class="block text-slate-500 font-medium text-xs mb-1.5 uppercase tracking-wider">Order Category</label>
                             <select id="create-po-category" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white font-normal text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
                                 <option value="">Auto-Detect from Items</option>
-                                ${(window.cachedOrderCategories || []).map(cat => `<option value="${cat.name}">${cat.name}</option>`).join('')}
+                                ${(window.cachedOrderCategories || []).map(cat => `<option value="${cat.name}" ${isBufferStockInitial && cat.name === 'Buffer Stocks' ? 'selected' : ''}>${cat.name}</option>`).join('')}
                             </select>
                         </div>
-                        <!-- Hidden Billing Policy (defaults to ACTUAL_DELIVERY) -->
-                        <input type="hidden" id="po-billing-policy" value="ACTUAL_DELIVERY">
+                    </div>
+
+                    <!-- Buffer Stock Checkbox & Billing Policy Selector -->
+                    <div class="p-3 bg-purple-50/70 border border-purple-200 rounded-xl flex items-center justify-between gap-3">
+                        <label class="flex items-center gap-2.5 cursor-pointer select-none">
+                            <input type="checkbox" id="create-po-is-buffer-stock" ${isBufferStockInitial ? 'checked' : ''} onchange="onBufferStockToggle(this.checked)" class="w-4 h-4 text-purple-600 rounded border-purple-300 focus:ring-purple-500">
+                            <div>
+                                <span class="text-xs font-bold text-purple-950 flex items-center gap-1.5">
+                                    <span>🛡️</span> Purchase Order for Client Buffer Stocks
+                                </span>
+                                <span class="text-[11px] text-purple-700 block">Manufacture to hold stock in reserve; automatically routes to Client Buffer Stock inventory upon DR acceptance.</span>
+                            </div>
+                        </label>
+                        <input type="hidden" id="po-billing-policy" value="${isBufferStockInitial ? 'FIXED_PO_BUFFER' : 'ACTUAL_DELIVERY'}">
                     </div>
 
                     <!-- Multi-Brand Search with Suggestions -->
@@ -7451,10 +7474,23 @@ async function openCreatePOModal() {
                 </form>
             </div>
         </div>
-    `;
-
     await onAdminPOClientChanged();
 }
+
+function onBufferStockToggle(checked) {
+    const policyInput = document.getElementById('po-billing-policy');
+    const catSelect = document.getElementById('create-po-category');
+    if (policyInput) {
+        policyInput.value = checked ? 'FIXED_PO_BUFFER' : 'ACTUAL_DELIVERY';
+    }
+    if (checked && catSelect) {
+        const hasBufferOption = Array.from(catSelect.options).some(o => o.value === 'Buffer Stocks');
+        if (hasBufferOption) {
+            catSelect.value = 'Buffer Stocks';
+        }
+    }
+}
+window.onBufferStockToggle = onBufferStockToggle;
 
 let poHighlightedSuggestionIdx = -1;
 
@@ -7883,14 +7919,16 @@ async function submitCreatePO(e) {
     }
 
     try {
+        const isBufferStock = document.getElementById('create-po-is-buffer-stock')?.checked ? 1 : 0;
         const res = await NKB.api('/api/orders', {
             method: 'POST',
             body: JSON.stringify({
                 client_id: clientId,
                 tolerance_percent: tolerance,
                 billing_policy: policy,
+                is_buffer_stock: isBufferStock,
                 form_of_payment: formOfPayment,
-                category: document.getElementById('create-po-category')?.value || undefined,
+                category: document.getElementById('create-po-category')?.value || (isBufferStock ? 'Buffer Stocks' : undefined),
                 notes,
                 items: adminPOLineItems.map(item => {
                     const prod = adminPOCatalog.find(p => p.id === item.product_id);
@@ -8335,6 +8373,14 @@ async function openCreateBatchModal(joId, joNumber, targetQty, productName) {
     const bottlingStaff = employees.filter(e => e.department === 'Production');
     const qcStaff = employees.filter(e => e.department === 'QC' || e.department === 'Regulatory');
 
+    let suggestedBatchCode = '';
+    try {
+        const codeRes = await NKB.api(`/api/production/next-batch-code?jo_id=${joId}`);
+        if (codeRes && codeRes.success && codeRes.data) {
+            suggestedBatchCode = codeRes.data.batch_code || '';
+        }
+    } catch (_) {}
+
     root.innerHTML = `
         <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50">
             <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
@@ -8349,6 +8395,17 @@ async function openCreateBatchModal(joId, joNumber, targetQty, productName) {
                     <div class="p-3 bg-slate-50 rounded-xl text-slate-600 space-y-1">
                         <div>Product: <strong class="text-slate-900">${productName}</strong></div>
                     </div>
+
+                    <!-- Julian Calendar Batch Code -->
+                    <div class="p-3 bg-purple-50/70 border border-purple-200 rounded-xl space-y-1.5">
+                        <div class="flex justify-between items-center">
+                            <label class="block text-purple-900 font-bold text-xs">🏷️ Batch Code (Julian Pattern) *</label>
+                            <span class="text-[10px] text-purple-700 font-bold">[Abbr][YY]-[JulianDay]</span>
+                        </div>
+                        <input type="text" id="batch-custom-number" value="${suggestedBatchCode}" required class="w-full px-3 py-2 border border-purple-300 rounded-xl bg-white font-mono font-black text-purple-950 text-xs shadow-xs" placeholder="e.g. HCP26-255">
+                        <p class="text-[10px] text-purple-600 font-normal">Auto-generated from product abbreviation, year 26, and Julian calendar day. Suffix -1 is applied for excess batches.</p>
+                    </div>
+
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                             <label class="block text-slate-600 mb-1">Target Batch Qty (pcs)</label>
@@ -8408,6 +8465,7 @@ async function openCreateBatchModal(joId, joNumber, targetQty, productName) {
 
 async function submitCreateBatch(e, joId) {
     e.preventDefault();
+    const batchCustomNumber = document.getElementById('batch-custom-number')?.value?.trim() || '';
     const targetQty = parseInt(document.getElementById('batch-target-qty').value);
     const actualYield = parseInt(document.getElementById('batch-actual-yield')?.value || targetQty);
     const compoundingOperator = document.getElementById('batch-compounding-operator')?.value || '';
@@ -8419,6 +8477,7 @@ async function submitCreateBatch(e, joId) {
         method: 'POST',
         body: JSON.stringify({
             jo_id: joId,
+            batch_number: batchCustomNumber,
             target_quantity: targetQty,
             actual_yield: actualYield,
             compounding_operator: compoundingOperator,
@@ -9166,7 +9225,7 @@ async function openViewDRModal(drId) {
                                         <th class="py-2.5 px-3 min-w-[160px]">Delivery Progress</th>
                                         <th class="py-2.5 px-3 text-right">Accepted</th>
                                         <th class="py-2.5 px-3 text-right">Rejected</th>
-                                        <th class="py-2.5 px-3 text-right">Unit Price</th>
+                                        <th class="py-2.5 px-3 text-center">Unit</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-slate-100">
@@ -9188,7 +9247,7 @@ async function openViewDRModal(drId) {
                                             </td>
                                             <td class="py-2.5 px-3 text-right font-extrabold text-emerald-700">${it.accepted_quantity > 0 ? NKB.formatNumber(it.accepted_quantity) + ' pcs' : '—'}</td>
                                             <td class="py-2.5 px-3 text-right font-bold text-rose-600">${it.rejected_quantity > 0 ? NKB.formatNumber(it.rejected_quantity) + ' pcs' : '0'}</td>
-                                            <td class="py-2.5 px-3 text-right text-slate-600">${NKB.formatCurrency(it.unit_price)}</td>
+                                            <td class="py-2.5 px-3 text-center font-bold text-slate-700 uppercase">${(it.unit || 'pcs').toUpperCase()}</td>
                                         </tr>
                                     `}).join('')}
                                 </tbody>
@@ -15085,11 +15144,15 @@ function renderProductionSalesOrderBoard() {
                             <button onclick="updateOrderProductionSchedule('${po.id}', { move_direction: 'UP' })" title="Move Up in Queue" class="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-bold cursor-pointer">↑</button>
                             <button onclick="updateOrderProductionSchedule('${po.id}', { move_direction: 'DOWN' })" title="Move Down in Queue" class="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-bold cursor-pointer">↓</button>
                         </div>
-                        <div>
                             <div class="flex items-center gap-1.5 flex-wrap">
                                 <button onclick="openViewPOModal('${po.id}')" class="font-black text-indigo-600 hover:underline text-xs cursor-pointer block leading-tight text-left">${soNum}</button>
-                                ${po.category ? `
-                                    <span class="px-1.5 py-0.2 rounded-full text-[9px] font-black uppercase tracking-wider border shadow-2xs inline-flex items-center gap-1" style="background-color: ${po.effective_category_color || po.category_color || '#8b5cf6'}18; color: ${po.effective_category_color || po.category_color || '#8b5cf6'}; border-color: ${po.effective_category_color || po.category_color || '#8b5cf6'}40;" title="Category: ${po.category}">
+                                ${(po.is_buffer_stock === 1 || po.billing_policy === 'FIXED_PO_BUFFER') ? `
+                                    <span class="px-1.5 py-0.2 rounded-full text-[9px] font-black uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-300 inline-flex items-center gap-1 shadow-2xs" title="Manufactured for Client Buffer Stock Reserve">
+                                        <span>🛡️</span> Buffer
+                                    </span>
+                                ` : ''}
+                                ${po.category && po.category !== 'Buffer Stocks' ? `
+                                    <span class="px-1.5 py-0.2 rounded-full text-[9px] font-black uppercase tracking-wider border shadow-2xs inline-flex items-center gap-1" style="background-color: ${po.effective_category_color || po.category_color || '#8b5cf6'}18; color: ${po.effective_category_color || po.category_color || '#8b5cf6'}40;" title="Category: ${po.category}">
                                         <span class="w-1.5 h-1.5 rounded-full" style="background-color: ${po.effective_category_color || po.category_color || '#8b5cf6'}"></span>${po.category}
                                     </span>
                                 ` : ''}

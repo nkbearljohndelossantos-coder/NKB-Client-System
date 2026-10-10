@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Production Batch Labels - NKB MANUFACTURING CORPORATION</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="stylesheet" href="/css/tailwind.min.css">
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        @page {
+            size: A4 portrait;
+            margin: 8mm;
+        }
+        @media print {
+            html, body {
+                width: 210mm !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: #ffffff !important;
+                font-family: Arial, Helvetica, sans-serif !important;
+                color: #000000 !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            .no-print { display: none !important; }
+            .print-sheet {
+                width: 100% !important;
+                max-width: 100% !important;
+                margin: 0 auto !important;
+                padding: 0 !important;
+                box-shadow: none !important;
+                border: none !important;
+            }
+            .label-card {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+            }
+        }
+        @media screen {
+            body {
+                background-color: #f1f5f9;
+                padding: 24px 12px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                font-family: Arial, Helvetica, sans-serif;
+            }
+            .print-sheet {
+                width: 210mm;
+                min-height: 297mm;
+                padding: 10mm;
+                background: #ffffff;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+                border: 1px solid #cbd5e1;
+                box-sizing: border-box;
+            }
+        }
+
+        .label-card {
+            border: 2px solid #000000;
+            background: #ffffff;
+            padding: 10px 14px;
+            font-size: 11.5px;
+            line-height: 1.4;
+            box-sizing: border-box;
+            color: #000000;
+        }
+
+        .label-field-row {
+            display: flex;
+            align-items: baseline;
+            margin-bottom: 5px;
+            border-bottom: 1px dotted #94a3b8;
+            padding-bottom: 2px;
+        }
+        .label-field-row:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .label-field-title {
+            width: 110px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 11px;
+            color: #000000;
+            flex-shrink: 0;
+        }
+
+        .label-field-val {
+            flex: 1;
+            font-weight: 800;
+            font-size: 12px;
+            color: #000000;
+            word-break: break-word;
+        }
+
+        .label-card [contenteditable="true"]:hover {
+            background-color: #f0fdf4;
+            outline: 1px dashed #22c55e;
+        }
+        .label-card [contenteditable="true"]:focus {
+            background-color: #ffffff;
+            outline: 2px solid #16a34a;
+        }
+    </style>
+</head>
+<body class="text-slate-900 antialiased font-sans">
+
+    <!-- Top Action & Config Bar (Hidden on Print) -->
+    <div class="w-full max-w-[210mm] mb-4 space-y-3 no-print">
+        <div class="flex justify-between items-center bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm">
+            <div class="flex items-center gap-2">
+                <a href="javascript:window.history.back()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg text-xs font-bold text-slate-700 transition">
+                    ← Back to Batching
+                </a>
+                <span class="text-xs font-bold text-slate-500">|</span>
+                <span class="text-xs font-black text-slate-800">🏷️ Batch Manufacturing Box Label Generator</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <button type="button" onclick="regenerateLabels()" class="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 rounded-lg text-xs font-bold transition">
+                    🔄 Regenerate Labels
+                </button>
+                <button onclick="window.print()" class="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-black shadow transition flex items-center gap-1.5">
+                    <span>🖨️ Print Labels (A4)</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Controls Box -->
+        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-xs space-y-3 font-semibold text-slate-700">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                    <label class="block text-slate-500 text-[11px] font-bold mb-1">DATE :</label>
+                    <input type="date" id="cfg-date" onchange="regenerateLabels()" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-bold">
+                </div>
+                <div>
+                    <label class="block text-slate-500 text-[11px] font-bold mb-1">ITEM (Product Name):</label>
+                    <input type="text" id="cfg-item" oninput="regenerateLabels()" placeholder="e.g. HCI - PEKAS CREAM" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-bold">
+                </div>
+                <div>
+                    <label class="block text-slate-500 text-[11px] font-bold mb-1">ML / GRAMS:</label>
+                    <input type="text" id="cfg-size" oninput="regenerateLabels()" placeholder="e.g. 50G, 100ML" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-bold">
+                </div>
+                <div>
+                    <label class="block text-slate-500 text-[11px] font-bold mb-1">BATCH CODE :</label>
+                    <input type="text" id="cfg-batch" oninput="regenerateLabels()" placeholder="e.g. HCP26-255" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-bold font-mono">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-1">
+                <div>
+                    <label class="block text-slate-500 text-[11px] font-bold mb-1">PO # :</label>
+                    <input type="text" id="cfg-po" oninput="regenerateLabels()" placeholder="e.g. HCI-062-2026" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-bold font-mono">
+                </div>
+                <div>
+                    <label class="block text-slate-500 text-[11px] font-bold mb-1">TOTAL BOXES :</label>
+                    <input type="number" id="cfg-box-count" min="1" max="200" value="5" oninput="regenerateLabels()" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-bold">
+                </div>
+                <div>
+                    <label class="block text-slate-500 text-[11px] font-bold mb-1">QTY PER BOX :</label>
+                    <input type="number" id="cfg-qty" min="1" value="100" oninput="regenerateLabels()" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-bold">
+                </div>
+                <div>
+                    <label class="block text-slate-500 text-[11px] font-bold mb-1">NET WT :</label>
+                    <input type="text" id="cfg-net-wt" oninput="regenerateLabels()" placeholder="e.g. 12.5KG" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-bold">
+                </div>
+                <div>
+                    <label class="block text-slate-500 text-[11px] font-bold mb-1">CHECKED BY :</label>
+                    <input type="text" id="cfg-checked-by" oninput="regenerateLabels()" placeholder="Inspector Name" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-bold">
+                </div>
+            </div>
+            <div class="text-[10px] text-slate-500 pt-1 flex items-center justify-between">
+                <span>💡 Layout matching <strong>LABELING(AutoRecovered)</strong> Excel template. Click any text directly on the labels to make individual custom edits.</span>
+                <span id="label-counter-badge" class="font-bold text-indigo-700">5 Labels Ready</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Printable A4 Sheet -->
+    <div class="print-sheet" id="labels-container">
+        <!-- Labels grid (2 per row matching Excel format) -->
+        <div class="grid grid-cols-2 gap-4" id="labels-grid">
+            <div class="col-span-2 text-center py-10 font-bold text-slate-400">Loading batch details...</div>
+        </div>
+    </div>
+
+    <script src="/js/app.js?v=2.2.6"></script>
+    <script>
+        let currentBatch = null;
+
+        function getParam(param) {
+            return new URLSearchParams(window.location.search).get(param) || '';
+        }
+
+        async function initBatchLabel() {
+            await NKB.init();
+
+            const batchId = getParam('batch_id');
+            const batchNum = getParam('batch_number');
+            const productName = getParam('product_name');
+            const poNum = getParam('po_number');
+            const qty = parseInt(getParam('qty')) || 100;
+
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('cfg-date').value = today;
+
+            if (batchId) {
+                try {
+                    const res = await NKB.api('/api/production/batches/' + batchId);
+                    if (res.success && res.data) {
+                        currentBatch = res.data;
+                        populateFromBatch(currentBatch);
+                        return;
+                    }
+                } catch (e) {
+                    console.warn('Could not load batch by ID', e);
+                }
+            }
+
+            // Fallback: Populate from URL params or defaults
+            document.getElementById('cfg-item').value = productName || 'HCI - PEKAS CREAM';
+            document.getElementById('cfg-batch').value = batchNum || 'HCP26-255';
+            document.getElementById('cfg-po').value = poNum || 'HCI-062-2026';
+            document.getElementById('cfg-size').value = '50G';
+            document.getElementById('cfg-qty').value = qty;
+            document.getElementById('cfg-box-count').value = 5;
+            document.getElementById('cfg-net-wt').value = '';
+            document.getElementById('cfg-checked-by').value = 'QC Inspection Lead';
+
+            regenerateLabels();
+        }
+
+        function populateFromBatch(b) {
+            document.getElementById('cfg-date').value = b.production_date ? b.production_date.split('T')[0] : new Date().toISOString().split('T')[0];
+            document.getElementById('cfg-item').value = b.product_name || '';
+            document.getElementById('cfg-batch').value = b.batch_number || '';
+            document.getElementById('cfg-po').value = b.po_number || '';
+            document.getElementById('cfg-size').value = b.size || '50G';
+
+            const totalQty = b.actual_yield > 0 ? b.actual_yield : (b.target_quantity || 100);
+            const boxCount = Math.max(1, Math.ceil(totalQty / 100));
+            document.getElementById('cfg-box-count').value = boxCount;
+            document.getElementById('cfg-qty').value = Math.ceil(totalQty / boxCount);
+
+            document.getElementById('cfg-checked-by').value = b.qc_inspector || b.compounding_operator || b.bottling_lead || 'QC Lead';
+            document.getElementById('cfg-net-wt').value = '';
+
+            regenerateLabels();
+        }
+
+        function regenerateLabels() {
+            const dateVal = document.getElementById('cfg-date').value;
+            const itemVal = document.getElementById('cfg-item').value || 'PRODUCT ITEM';
+            const sizeVal = document.getElementById('cfg-size').value || '50G';
+            const batchVal = document.getElementById('cfg-batch').value || 'BATCH-001';
+            const poVal = document.getElementById('cfg-po').value || 'PO-001';
+            const boxCount = Math.max(1, parseInt(document.getElementById('cfg-box-count').value) || 1);
+            const qtyVal = parseInt(document.getElementById('cfg-qty').value) || 100;
+            const netWtVal = document.getElementById('cfg-net-wt').value || '';
+            const checkedByVal = document.getElementById('cfg-checked-by').value || '';
+
+            const grid = document.getElementById('labels-grid');
+            const badge = document.getElementById('label-counter-badge');
+            if (badge) badge.textContent = `${boxCount} Labels Ready`;
+
+            let html = '';
+            for (let i = 1; i <= boxCount; i++) {
+                const boxStr = `${i} OF ${boxCount}`;
+                html += `
+                    <div class="label-card">
+                        <div class="label-field-row">
+                            <span class="label-field-title">DATE :</span>
+                            <span class="label-field-val" contenteditable="true">${dateVal}</span>
+                        </div>
+                        <div class="label-field-row">
+                            <span class="label-field-title">ITEM:</span>
+                            <span class="label-field-val" contenteditable="true">${itemVal}</span>
+                        </div>
+                        <div class="label-field-row">
+                            <span class="label-field-title">ML/GRAMS:</span>
+                            <span class="label-field-val" contenteditable="true">${sizeVal}</span>
+                        </div>
+                        <div class="label-field-row">
+                            <span class="label-field-title">BATCH CODE:</span>
+                            <span class="label-field-val font-mono" contenteditable="true">${batchVal}</span>
+                        </div>
+                        <div class="label-field-row">
+                            <span class="label-field-title">PO #:</span>
+                            <span class="label-field-val font-mono" contenteditable="true">${poVal}</span>
+                        </div>
+                        <div class="label-field-row">
+                            <span class="label-field-title">BOX : &nbsp; OF</span>
+                            <span class="label-field-val font-mono" contenteditable="true">${boxStr}</span>
+                        </div>
+                        <div class="label-field-row">
+                            <span class="label-field-title">QTY.</span>
+                            <span class="label-field-val font-mono" contenteditable="true">${qtyVal}</span>
+                        </div>
+                        <div class="label-field-row">
+                            <span class="label-field-title">NET WT:</span>
+                            <span class="label-field-val" contenteditable="true">${netWtVal || '&nbsp;'}</span>
+                        </div>
+                        <div class="label-field-row">
+                            <span class="label-field-title">CHECKED BY:</span>
+                            <span class="label-field-val" contenteditable="true">${checkedByVal || '&nbsp;'}</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            grid.innerHTML = html;
+        }
+
+        document.addEventListener('DOMContentLoaded', initBatchLabel);
+    </script>
+</body>
+</html>

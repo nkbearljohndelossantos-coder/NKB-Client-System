@@ -246,87 +246,117 @@
             <img src="/images/nkb-logo.png" alt="NKB Watermark">
         </div>
 
-        <!-- Header -->
-        <div class="flex justify-between items-start border-b border-slate-300 pb-3">
+        <!-- Header matching Excel: NKB MANUFACTURING CORPORATION -->
+        <div class="flex justify-between items-start border-b-2 border-slate-900 pb-3">
             <div>
-                <h1 id="dr-company-name-hdr" class="text-xl font-extrabold text-slate-900 tracking-tight">NKB MANUFACTURING CORPORATION</h1>
-                <p class="text-[11px] text-slate-500 font-medium">Cosmetics & Personal Care Formulation Laboratory</p>
-                <p id="dr-tin-hdr" class="text-[10px] text-slate-500">TIN: 686-950-421-00000 · FDA Certified Facility</p>
-                <p id="dr-address-hdr" class="text-[10px] text-slate-500">Blk 4, Lot 5, Twig st., Sampaguita Village, Mambog II, Bacoor City, Cavite</p>
-                <p id="dr-contact-hdr" class="text-[10px] text-slate-500">Contact: (046) 885-0923 · Email: dispatch@nkbmanufacturing.com</p>
+                <h1 id="dr-company-name-hdr" class="text-xl font-black text-slate-950 tracking-tight">NKB MANUFACTURING CORPORATION</h1>
+                <p class="text-[11px] text-slate-800 font-bold">Blk 4 Lot 5 Twig St. Sampaguita Village,</p>
+                <p id="dr-address-hdr" class="text-[11px] text-slate-800 font-bold">Mambog II, Bacoor City, Cavite 4102</p>
+                <p class="text-[11px] text-slate-800 font-bold">Tel No.: (046) 885 - 0923</p>
+                <p id="dr-contact-hdr" class="text-[11px] text-slate-800 font-bold">Mobile No.: (+639) 939 - 534 - 8888</p>
             </div>
-            <div class="text-right space-y-0.5">
-                <h2 class="text-lg font-bold tracking-wider text-slate-900 uppercase">DELIVERY RECEIPT</h2>
-                <div id="dr-number-display" class="text-sm font-bold text-slate-800 font-mono">DR-XXXX-XXXXXX</div>
-                <div class="text-[11px] text-slate-500">Date: <span id="dr-date-display" class="font-semibold text-slate-800">-</span></div>
-            </div>
-        </div>
-
-        <!-- Client & PO Reference Info Grid -->
-        <div class="grid grid-cols-2 gap-4 text-xs">
-            <div class="border border-slate-200 rounded p-3 space-y-1">
-                <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Deliver To (Client):</span>
-                <div id="client-company-display" class="font-black text-sm text-slate-950">-</div>
-                <div id="client-contact-display" class="text-slate-800 font-bold">-</div>
-                <div id="client-address-display" class="text-slate-800 font-bold leading-snug">-</div>
-                <div id="client-phone-display" class="text-slate-800 font-bold font-mono text-[11px]">-</div>
-            </div>
-            <div class="border border-slate-200 rounded p-3 space-y-1 bg-slate-50/50">
-                <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Dispatch Details:</span>
-                <div>PO Reference: <strong id="po-ref-display" class="text-slate-900 font-mono font-bold">-</strong> <span class="text-slate-400 mx-1">•</span> SO Reference: <strong id="so-ref-display" class="text-slate-900 font-mono font-bold">-</strong></div>
-                <div>Billing Policy: <strong id="policy-display" class="text-slate-900 font-bold">-</strong></div>
-                <div>Driver: <strong id="driver-display" class="text-slate-900 font-bold">-</strong></div>
-                <div>Vehicle Plate: <strong id="plate-display" class="text-slate-900 font-mono font-bold">-</strong></div>
+            <div class="text-right space-y-1">
+                <h2 class="text-xl font-black tracking-wider text-slate-950 uppercase">DELIVERY RECEIPT</h2>
+                <div class="text-xs font-black text-slate-950">DR No.: <span id="dr-number-display" class="font-mono">DR-XXXX-XXXXXX</span></div>
+                <div class="text-xs font-black text-slate-950">Date: <span id="dr-date-display">-</span></div>
+                <div class="text-xs font-black text-slate-950">PO NO.: <span id="po-ref-display" class="font-mono">-</span></div>
+                <div class="text-[11px] font-bold text-slate-700">SO NO.: <span id="so-ref-display" class="font-mono">-</span></div>
             </div>
         </div>
 
-        <!-- Items Table -->
-        <div class="border border-slate-300 rounded overflow-hidden text-xs">
+        <!-- Bill To & Dispatch Grid -->
+        <div class="border-2 border-slate-900 rounded-lg p-3 text-xs bg-white font-black text-slate-950">
+            <div class="flex justify-between items-start">
+                <div class="space-y-0.5">
+                    <span class="text-[11px] text-slate-600 font-black uppercase tracking-wider block">Bill To:</span>
+                    <div id="client-company-display" class="font-black text-sm text-slate-950">-</div>
+                    <div id="client-address-display" class="text-slate-900 font-bold leading-snug">-</div>
+                    <div id="client-contact-display" class="text-slate-800 font-bold">-</div>
+                    <div id="client-phone-display" class="text-slate-800 font-bold font-mono text-[11px]">-</div>
+                </div>
+                <div class="text-right space-y-1 text-slate-900 text-xs">
+                    <div>Billing Policy: <strong id="policy-display" class="font-black">-</strong></div>
+                    <div>Driver: <strong id="driver-display" class="font-black">-</strong></div>
+                    <div>Vehicle Plate: <strong id="plate-display" class="font-mono font-black">-</strong></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Items Table: CODE (Batch Number), DESCRIPTION, UNIT, QTY, REMARKS (Price & Total Price removed) -->
+        <div class="border-2 border-slate-900 rounded-lg overflow-hidden text-xs">
             <table class="w-full text-left border-collapse">
-                <thead class="border-b border-slate-300 bg-slate-50 text-[10px] font-bold text-slate-900 uppercase tracking-wider">
+                <thead class="border-b-2 border-slate-900 bg-slate-100 text-[11px] font-black text-slate-950 uppercase tracking-wider">
                     <tr>
-                        <th class="py-2 px-2.5">Item & Description</th>
-                        <th class="py-2 px-2.5">Batch Number</th>
-                        <th class="py-2 px-2.5">Mfg / Exp Date</th>
-                        <th class="py-2 px-2.5 text-right">Delivered Quantity</th>
-                        <th class="py-2 px-2.5 text-right">Accepted Qty</th>
+                        <th class="py-2.5 px-3 border-r border-slate-400" style="width: 24%;">CODE</th>
+                        <th class="py-2.5 px-3 border-r border-slate-400">DESCRIPTION</th>
+                        <th class="py-2.5 px-3 text-center border-r border-slate-400" style="width: 12%;">UNIT</th>
+                        <th class="py-2.5 px-3 text-right border-r border-slate-400" style="width: 14%;">QTY</th>
+                        <th class="py-2.5 px-3 text-left" style="width: 22%;">REMARKS</th>
                         <th class="py-2 px-2 text-center edit-only no-print" style="width: 28px;">✕</th>
                     </tr>
                 </thead>
-                <tbody id="dr-items-tbody" class="divide-y divide-slate-200 font-bold text-slate-900">
-                    <tr><td colspan="5" class="py-4 text-center text-slate-400">Loading delivery details...</td></tr>
+                <tbody id="dr-items-tbody" class="divide-y divide-slate-300 font-black text-slate-950">
+                    <tr><td colspan="5" class="py-4 text-center font-bold text-slate-400">Loading delivery details...</td></tr>
                 </tbody>
+                <tfoot class="border-t-2 border-slate-900 bg-slate-50 font-black text-slate-950">
+                    <tr>
+                        <td colspan="2" class="py-2 px-3 border-r border-slate-400 text-slate-950">
+                            <span id="dr-note-display" class="font-black text-xs cell-editable" contenteditable="false">NOTE: Delivery Dispatch</span>
+                        </td>
+                        <td class="py-2 px-3 text-right font-black uppercase border-r border-slate-400 text-xs">TOTAL QTY:</td>
+                        <td class="py-2 px-3 text-right font-mono font-black text-sm text-slate-950 border-r border-slate-400" id="dr-total-units">0</td>
+                        <td class="py-2 px-3 font-bold text-slate-700 text-[11px]">Completed Units</td>
+                        <td class="edit-only no-print"></td>
+                    </tr>
+                </tfoot>
             </table>
         </div>
-
-        <!-- Total Count -->
-        <div class="flex justify-end text-xs font-semibold space-x-4 pr-2 avoid-break">
-            <span class="text-slate-600">Total Units Dispatched:</span>
-            <span id="dr-total-units" class="text-sm font-bold text-slate-900 font-mono">0 pcs</span>
+        <div class="edit-only no-print">
+            <button type="button" class="btn-add-item-row" onclick="addNewDrRow()">+ Add Line Item</button>
         </div>
 
-        <!-- Signatures & Acceptance Block -->
-        <div class="grid grid-cols-2 gap-8 pt-4 border-t border-slate-300 text-xs avoid-break">
-            <div class="space-y-3">
-                <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Dispatched By (Warehouse / Production Lead):</span>
-                <div class="border-b border-slate-400 pb-1 mt-6">
-                    <div class="font-bold text-slate-800">Warehouse & Logistics Team</div>
-                    <div id="dr-dispatched-company" class="text-[10px] text-slate-500">NKB MANUFACTURING CORPORATION</div>
+        <!-- 4-Column Signatures Block matching Excel Sheet (PREPARED BY, QC APPROVED, DELIVERED BY, RECEIVED BY) -->
+        <div class="grid grid-cols-4 gap-4 pt-4 border-t-2 border-slate-900 text-xs avoid-break font-black text-slate-950">
+            <div class="space-y-2">
+                <span class="text-[10px] font-black uppercase tracking-wider block">PREPARED BY:</span>
+                <div class="border-b-2 border-slate-900 pb-1 mt-6">
+                    <div id="dr-prepared-by-display" class="font-black text-slate-950 text-xs">Ronaldo Prudencio</div>
+                    <div id="dr-dispatched-company" class="text-[10px] text-slate-700 font-bold">Logistics & Warehouse Lead</div>
                 </div>
             </div>
 
-            <div class="space-y-3">
-                <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Received & Accepted By (Client Signatory):</span>
-                <div id="signature-display-box" class="min-h-[50px] border-b border-slate-400 pb-1 flex flex-col justify-end">
-                    <div id="signer-name-display" class="font-bold text-slate-800 text-xs">_________________________</div>
-                    <div id="signer-title-display" class="text-[10px] text-slate-500">Authorized Representative / Date</div>
+            <div class="space-y-2">
+                <span class="text-[10px] font-black uppercase tracking-wider block">QC APPROVED:</span>
+                <div class="border-b-2 border-slate-900 pb-1 mt-6">
+                    <div id="dr-qc-approved-display" class="font-black text-slate-950 text-xs">Quality Assurance</div>
+                    <div class="text-[10px] text-slate-700 font-bold">QC Inspector / Lead</div>
+                </div>
+            </div>
+
+            <div class="space-y-2">
+                <span class="text-[10px] font-black uppercase tracking-wider block">DELIVERED BY:</span>
+                <div class="border-b-2 border-slate-900 pb-1 mt-6">
+                    <div id="driver-display-sign" class="font-black text-slate-950 text-xs">Driver's Name</div>
+                    <div id="plate-display-sign" class="text-[10px] text-slate-700 font-bold font-mono">Plate: NKB-8899</div>
+                </div>
+            </div>
+
+            <div class="space-y-2">
+                <span class="text-[10px] font-black uppercase tracking-wider block">RECEIVED BY:</span>
+                <div id="signature-display-box" class="min-h-[44px] border-b-2 border-slate-900 pb-1 flex flex-col justify-end">
+                    <div id="signer-name-display" class="font-black text-slate-950 text-xs">Customer Printed Name & Signature</div>
+                    <div id="signer-title-display" class="text-[10px] text-slate-700 font-bold">Authorized Signatory / Date</div>
+                </div>
+                <div class="text-[10px] text-slate-800 font-bold space-y-0.5 pt-1">
+                    <div>Time Received: <span class="font-mono">___________</span></div>
+                    <div>Contact Number: <span class="font-mono">___________</span></div>
                 </div>
             </div>
         </div>
 
         <!-- Footer / Legal Terms -->
-        <div class="text-[9px] text-slate-400 border-t border-slate-200 pt-2 leading-relaxed avoid-break">
-            * Note: This Delivery Receipt serves as the official proof of delivery. In accordance with the agreed Manufacturing Over-run Policy (±10%), the accepted count above constitutes the binding billing quantity for the final Sales Invoice.
+        <div class="text-[9px] text-slate-500 font-bold border-t border-slate-300 pt-2 leading-relaxed avoid-break">
+            * Note: This Delivery Receipt serves as official proof of product delivery. In accordance with agreed Over-run / Buffer policies, accepted count constitutes binding quantity.
         </div>
     </div>
 
@@ -360,11 +390,12 @@
         function enableDrContentEditable(editable) {
             const val = editable ? 'true' : 'false';
             const ids = [
-                'dr-company-name-hdr', 'dr-tin-hdr', 'dr-address-hdr', 'dr-contact-hdr',
+                'dr-company-name-hdr', 'dr-address-hdr', 'dr-contact-hdr',
                 'dr-number-display', 'dr-date-display',
                 'client-company-display', 'client-contact-display', 'client-address-display', 'client-phone-display',
                 'po-ref-display', 'policy-display', 'driver-display', 'plate-display',
-                'signer-name-display', 'signer-title-display', 'dr-dispatched-company'
+                'dr-prepared-by-display', 'dr-qc-approved-display', 'driver-display-sign', 'plate-display-sign',
+                'signer-name-display', 'signer-title-display', 'dr-dispatched-company', 'dr-note-display'
             ];
             ids.forEach(id => {
                 const el = document.getElementById(id);
@@ -380,29 +411,25 @@
             let totalQty = 0;
             const tbody = document.getElementById('dr-items-tbody');
             if (!items || items.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="py-4 text-center text-slate-400">No items listed.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" class="py-4 text-center font-bold text-slate-400">No items listed.</td></tr>';
                 return;
             }
             tbody.innerHTML = items.map(item => {
                 const delivered = parseFloat(item.delivered_quantity) || 0;
                 totalQty += delivered;
-                const unit = (item.unit || item.uom || 'pcs').trim();
-                const target = item.po_target_quantity ? parseFloat(item.po_target_quantity) : null;
-                const isPartial = target && delivered < target;
-                const progressText = isPartial ? `<div class="text-[9.5px] text-slate-500 font-sans font-normal mt-0.5">(Initial: ${NKB.formatNumber(delivered)} / ${NKB.formatNumber(target)})</div>` : '';
+                const unit = (item.unit || item.uom || 'PC').toUpperCase().trim();
+                const code = item.batch_number || item.code || '-';
+                const remarks = item.remarks || item.notes || '-';
                 return `
-                    <tr class="dr-row">
-                        <td class="py-2 px-2.5 cell-editable" contenteditable="${isDrEditMode ? 'true' : 'false'}">
-                            <div class="font-black text-slate-950 text-xs dr-prod-name">${item.product_name || '-'}</div>
-                            <div class="text-[10px] text-slate-700 font-mono font-bold dr-prod-sku">SKU: ${item.sku || '-'}</div>
+                    <tr class="dr-row border-b border-slate-300">
+                        <td class="py-2.5 px-3 font-mono font-black text-slate-950 text-xs border-r border-slate-300 cell-editable dr-prod-batch" contenteditable="${isDrEditMode ? 'true' : 'false'}">${code}</td>
+                        <td class="py-2.5 px-3 font-black text-slate-950 text-xs border-r border-slate-300 cell-editable dr-prod-name" contenteditable="${isDrEditMode ? 'true' : 'false'}">
+                            <div>${item.product_name || '-'}</div>
+                            ${item.sku ? `<div class="text-[9.5px] text-slate-700 font-mono font-bold">SKU: ${item.sku}</div>` : ''}
                         </td>
-                        <td class="py-2 px-2.5 font-mono font-semibold text-slate-700 text-xs cell-editable dr-prod-batch" contenteditable="${isDrEditMode ? 'true' : 'false'}">${item.batch_number || '-'}</td>
-                        <td class="py-2 px-2.5 text-slate-600 text-xs cell-editable dr-prod-dates" contenteditable="${isDrEditMode ? 'true' : 'false'}">${NKB.formatDate(item.production_date)} / ${NKB.formatDate(item.expiry_date)}</td>
-                        <td class="py-2 px-2.5 text-right font-semibold text-slate-900 font-mono text-xs cell-editable dr-delivered-qty" contenteditable="${isDrEditMode ? 'true' : 'false'}" onblur="recalculateDrTotals()">
-                            <div>${NKB.formatNumber(delivered)} ${unit}</div>
-                            ${progressText}
-                        </td>
-                        <td class="py-2 px-2.5 text-right font-bold text-slate-900 font-mono text-xs cell-editable dr-accepted-qty" contenteditable="${isDrEditMode ? 'true' : 'false'}">${item.accepted_quantity > 0 ? NKB.formatNumber(item.accepted_quantity) + ' ' + unit : '-'}</td>
+                        <td class="py-2.5 px-3 text-center font-black text-slate-950 text-xs uppercase border-r border-slate-300 cell-editable dr-prod-unit" contenteditable="${isDrEditMode ? 'true' : 'false'}">${unit}</td>
+                        <td class="py-2.5 px-3 text-right font-mono font-black text-slate-950 text-xs border-r border-slate-300 cell-editable dr-delivered-qty" contenteditable="${isDrEditMode ? 'true' : 'false'}" onblur="recalculateDrTotals()">${NKB.formatNumber(delivered)}</td>
+                        <td class="py-2.5 px-3 font-black text-slate-900 text-xs cell-editable dr-remarks" contenteditable="${isDrEditMode ? 'true' : 'false'}">${remarks}</td>
                         <td class="py-2 px-2 text-center edit-only no-print">
                             <button type="button" class="row-del-btn" onclick="deleteDrRow(this)">✕</button>
                         </td>
@@ -410,7 +437,7 @@
                 `;
             }).join('');
 
-            document.getElementById('dr-total-units').textContent = `${NKB.formatNumber(totalQty)} pcs`;
+            document.getElementById('dr-total-units').textContent = `${NKB.formatNumber(totalQty)}`;
         }
 
         function recalculateDrTotals() {
@@ -423,22 +450,22 @@
                     total += val;
                 }
             });
-            document.getElementById('dr-total-units').textContent = `${NKB.formatNumber(total)} pcs`;
+            document.getElementById('dr-total-units').textContent = `${NKB.formatNumber(total)}`;
         }
 
         function addNewDrRow() {
             const tbody = document.getElementById('dr-items-tbody');
             const tr = document.createElement('tr');
-            tr.className = 'dr-row';
+            tr.className = 'dr-row border-b border-slate-300';
             tr.innerHTML = `
-                <td class="py-2 px-2.5 cell-editable" contenteditable="true">
-                    <div class="font-black text-slate-950 text-xs dr-prod-name">NEW PRODUCT NAME</div>
-                    <div class="text-[10px] text-slate-700 font-mono font-bold dr-prod-sku">SKU: NKB-NEW</div>
+                <td class="py-2.5 px-3 font-mono font-black text-slate-950 text-xs border-r border-slate-300 cell-editable dr-prod-batch" contenteditable="true">BATCH-001</td>
+                <td class="py-2.5 px-3 font-black text-slate-950 text-xs border-r border-slate-300 cell-editable dr-prod-name" contenteditable="true">
+                    <div>NEW PRODUCT NAME</div>
+                    <div class="text-[9.5px] text-slate-700 font-mono font-bold">SKU: NKB-NEW</div>
                 </td>
-                <td class="py-2 px-2.5 font-mono font-semibold text-slate-700 text-xs cell-editable dr-prod-batch" contenteditable="true">BATCH-001</td>
-                <td class="py-2 px-2.5 text-slate-600 text-xs cell-editable dr-prod-dates" contenteditable="true">09/15/2026 / 09/15/2028</td>
-                <td class="py-2 px-2.5 text-right font-semibold text-slate-900 font-mono text-xs cell-editable dr-delivered-qty" contenteditable="true" onblur="recalculateDrTotals()">100 pcs</td>
-                <td class="py-2 px-2.5 text-right font-bold text-slate-900 font-mono text-xs cell-editable dr-accepted-qty" contenteditable="true">100 pcs</td>
+                <td class="py-2.5 px-3 text-center font-black text-slate-950 text-xs uppercase border-r border-slate-300 cell-editable dr-prod-unit" contenteditable="true">PC</td>
+                <td class="py-2.5 px-3 text-right font-mono font-black text-slate-950 text-xs border-r border-slate-300 cell-editable dr-delivered-qty" contenteditable="true" onblur="recalculateDrTotals()">100</td>
+                <td class="py-2.5 px-3 font-black text-slate-900 text-xs cell-editable dr-remarks" contenteditable="true">-</td>
                 <td class="py-2 px-2 text-center edit-only no-print">
                     <button type="button" class="row-del-btn" onclick="deleteDrRow(this)">✕</button>
                 </td>
@@ -497,6 +524,14 @@
             document.getElementById('policy-display').textContent = dr.billing_policy;
             document.getElementById('driver-display').textContent = dr.driver_name || 'In-house Logistics';
             document.getElementById('plate-display').textContent = dr.vehicle_plate || 'NKB-8899';
+            const driverSign = document.getElementById('driver-display-sign');
+            if (driverSign) driverSign.textContent = dr.driver_name || 'In-house Logistics';
+            const plateSign = document.getElementById('plate-display-sign');
+            if (plateSign) plateSign.textContent = 'Plate: ' + (dr.vehicle_plate || 'NKB-8899');
+            if (dr.notes) {
+                const noteEl = document.getElementById('dr-note-display');
+                if (noteEl) noteEl.textContent = 'NOTE: ' + dr.notes;
+            }
 
             renderDrRows(dr.items);
 
