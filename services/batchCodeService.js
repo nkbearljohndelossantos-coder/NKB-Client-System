@@ -73,7 +73,7 @@ function generateJulianBatchCode(productIdOrObj, productionDate = new Date()) {
     if (typeof productIdOrObj === 'object' && productIdOrObj !== null) {
         product = productIdOrObj;
     } else if (productIdOrObj) {
-        product = db.prepare('SELECT id, name, sku, batch_code_template FROM products WHERE id = ?').get(productIdOrObj);
+        product = db.prepare('SELECT * FROM products WHERE id = ?').get(productIdOrObj);
     }
 
     const d = productionDate ? new Date(productionDate) : new Date();

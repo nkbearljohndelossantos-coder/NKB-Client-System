@@ -130,7 +130,7 @@ router.get('/next-batch-code', authenticateToken, (req, res) => {
     if (!targetProductId) {
         return res.status(400).json({ success: false, error: 'Product ID or JO ID required.' });
     }
-    const product = db.prepare('SELECT id, name, sku, batch_code_template FROM products WHERE id = ?').get(targetProductId);
+    const product = db.prepare('SELECT * FROM products WHERE id = ?').get(targetProductId);
     if (!product) {
         return res.status(404).json({ success: false, error: 'Product not found.' });
     }

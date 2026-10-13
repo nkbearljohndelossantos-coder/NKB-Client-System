@@ -4084,14 +4084,8 @@ function checkPayableOverdraft(overrideAmount = null) {
         });
     }
 
-    if (amount > 0 && balance > 0 && amount > balance) {
-        warnBox.classList.remove('hidden');
-        if (warnText) {
-            warnText.textContent = `Warning: Cheque amount (${NKB.formatCurrency(amount)}) exceeds available funds in ${bankSelect.value} (${NKB.formatCurrency(balance)})! You may still submit, but account will overdraft unless funded.`;
-        }
-    } else {
-        warnBox.classList.add('hidden');
-    }
+    // Cheque amount limits removed - keep warning hidden
+    warnBox.classList.add('hidden');
 }
 
 function onPayableCompanyChange(elOrVal) {
@@ -10234,7 +10228,7 @@ function openRecordPaymentModal(invoiceId, invoiceNumber, balanceDue, clientName
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                             <label class="block text-slate-600 mb-1">Payment Amount (₱) *</label>
-                            <input type="number" id="pay-amount" step="0.01" min="0.01" max="${Number(balanceDue).toFixed(2)}" value="${Number(balanceDue).toFixed(2)}" inputmode="decimal" onblur="if(this.value && !isNaN(this.value)) this.value = parseFloat(this.value).toFixed(2)" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-emerald-800 focus:bg-white focus:ring-2 focus:ring-emerald-500">
+                            <input type="number" id="pay-amount" step="0.01" min="0.01" value="${Number(balanceDue).toFixed(2)}" inputmode="decimal" onblur="if(this.value && !isNaN(this.value)) this.value = parseFloat(this.value).toFixed(2)" required class="w-full px-3 py-2 border rounded-xl bg-slate-50 font-bold text-emerald-800 focus:bg-white focus:ring-2 focus:ring-emerald-500">
                         </div>
                         <div>
                             <label class="block text-slate-600 mb-1">Payment Date</label>

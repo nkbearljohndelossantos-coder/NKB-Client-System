@@ -27,7 +27,7 @@ const TABLE_DEFINITIONS = {
             'expected_delivery_date', 'tolerance_percent', 'billing_policy',
             'category', 'category_color',
             'subtotal', 'tax_percent', 'tax_amount', 'grand_total',
-            'form_of_payment', 'notes', 'accounting_confirmed', 'inventory_confirmed',
+            'form_of_payment', 'payment_made', 'notes', 'accounting_confirmed', 'inventory_confirmed',
             'raw_materials_status', 'formulation_converted'
         ],
         joins: `

@@ -210,9 +210,6 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
         return res.status(400).json({ success: false, error: 'This invoice has already been fully paid.' });
     }
 
-    if (payAmount > invoice.balance_due + 0.01) { // 1 cent threshold
-        return res.status(400).json({ success: false, error: `Payment amount (₱${payAmount.toFixed(2)}) exceeds balance due (₱${invoice.balance_due.toFixed(2)}).` });
-    }
 
     const finalReferenceNumber = (reference_number && String(reference_number).trim()) ? String(reference_number).trim() : 'N/A';
     const finalNotes = (notes && String(notes).trim()) ? String(notes).trim() : null;

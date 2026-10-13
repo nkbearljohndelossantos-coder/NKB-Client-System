@@ -250,7 +250,7 @@
                 </div>
             `;
             try {
-                const res = await fetchApi('/api/v1/payables?limit=100');
+                const res = await fetchApi('/api/v1/payables?limit=1000');
                 if (res.success && res.data) {
                     payablesList = res.data;
                     updateMetrics();

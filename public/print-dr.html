@@ -417,7 +417,7 @@
             tbody.innerHTML = items.map(item => {
                 const delivered = parseFloat(item.delivered_quantity) || 0;
                 totalQty += delivered;
-                const unit = (item.unit || item.uom || 'PC').toUpperCase().trim();
+                const unit = (item.unit || item.uom || 'pcs').trim();
                 const code = item.batch_number || item.code || '-';
                 const remarks = item.remarks || item.notes || '-';
                 return `
@@ -427,7 +427,7 @@
                             <div>${item.product_name || '-'}</div>
                             ${item.sku ? `<div class="text-[9.5px] text-slate-700 font-mono font-bold">SKU: ${item.sku}</div>` : ''}
                         </td>
-                        <td class="py-2.5 px-3 text-center font-black text-slate-950 text-xs uppercase border-r border-slate-300 cell-editable dr-prod-unit" contenteditable="${isDrEditMode ? 'true' : 'false'}">${unit}</td>
+                        <td class="py-2.5 px-3 text-center font-black text-slate-950 text-xs uppercase border-r border-slate-300 cell-editable dr-prod-unit" contenteditable="${isDrEditMode ? 'true' : 'false'}">${unit.toUpperCase()}</td>
                         <td class="py-2.5 px-3 text-right font-mono font-black text-slate-950 text-xs border-r border-slate-300 cell-editable dr-delivered-qty" contenteditable="${isDrEditMode ? 'true' : 'false'}" onblur="recalculateDrTotals()">${NKB.formatNumber(delivered)}</td>
                         <td class="py-2.5 px-3 font-black text-slate-900 text-xs cell-editable dr-remarks" contenteditable="${isDrEditMode ? 'true' : 'false'}">${remarks}</td>
                         <td class="py-2 px-2 text-center edit-only no-print">

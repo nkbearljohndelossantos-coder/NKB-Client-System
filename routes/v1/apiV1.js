@@ -780,7 +780,7 @@ router.get('/inventory', requireScope('inventory:read'), (req, res) => {
 router.get('/payables', requireScope('payables:read'), (req, res) => {
     try {
         const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-        const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+        const limit = Math.min(10000, Math.max(1, parseInt(req.query.limit, 10) || 100));
         const offset = (page - 1) * limit;
         const status = (req.query.status || '').trim();
         const category = (req.query.category || '').trim();

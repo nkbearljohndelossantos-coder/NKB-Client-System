@@ -283,9 +283,12 @@ function runMigrations(dbInstance, isMysql) {
             dbInstance.exec(`ALTER TABLE cheque_payables ADD COLUMN import_batch_id ${textType};`);
         } catch (_) {}
 
-        // Products table size column migration
+        // Products table size and batch_code_template column migration
         try {
             dbInstance.exec(`ALTER TABLE products ADD COLUMN size ${textType};`);
+        } catch (_) {}
+        try {
+            dbInstance.exec(`ALTER TABLE products ADD COLUMN batch_code_template ${textType};`);
         } catch (_) {}
 
         // Automated Product Size Analysis & Population (ignoring freebie sizes)
