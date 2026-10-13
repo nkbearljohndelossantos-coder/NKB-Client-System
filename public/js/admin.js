@@ -926,7 +926,19 @@ async function loadOrders() {
                     </div>
                 </td>
                 <td class="py-3.5 px-4 font-black text-slate-950 whitespace-nowrap font-mono border-y border-slate-200/90">${NKB.formatNumber(po.total_target_quantity)} pcs</td>
-                <td class="py-3.5 px-4 font-extrabold text-slate-900 whitespace-nowrap font-mono border-y border-slate-200/90">${canViewPrices && po.grand_total !== null && po.grand_total !== undefined ? NKB.formatCurrency(po.grand_total) : '—'}</td>
+                <td class="py-3.5 px-4 whitespace-nowrap font-mono border-y border-slate-200/90">
+                    ${canViewPrices && po.grand_total !== null && po.grand_total !== undefined ? `
+                        <div class="font-extrabold text-slate-900">${NKB.formatCurrency(po.grand_total)}</div>
+                        ${(Number(po.payment_made || po.paid_amount || 0) > 0) ? `
+                            <div class="text-[10.5px] font-bold text-emerald-700 flex items-center gap-1 mt-0.5">
+                                <span>Paid:</span> <span>${NKB.formatCurrency(po.payment_made || po.paid_amount || 0)}</span>
+                            </div>
+                            <div class="text-[10px] font-extrabold text-indigo-700 mt-0.5">
+                                <span>Bal:</span> <span>${NKB.formatCurrency(Math.max(0, (po.grand_total || 0) - (po.payment_made || po.paid_amount || 0)))}</span>
+                            </div>
+                        ` : ''}
+                    ` : '—'}
+                </td>
                 <td class="py-3.5 px-4 whitespace-nowrap border-y border-slate-200/90">
                     <div>${NKB.renderStatusBadge(po.status)}</div>
                     ${po.accounting_confirmed === 1 ? `

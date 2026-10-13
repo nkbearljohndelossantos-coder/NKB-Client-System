@@ -1308,9 +1308,11 @@
                 const notesVal = (document.getElementById('disp-po-notes')?.textContent || '').trim();
                 const termsVal = (document.getElementById('meta-doc-terms')?.textContent || '').trim();
                 const dueDateVal = (document.getElementById('meta-doc-due-date')?.textContent || '').trim();
+                const paymentMadeVal = parseCleanNumber(document.getElementById('disp-payment-made')?.textContent || 0);
 
                 const payload = {
-                    notes: notesVal
+                    notes: notesVal,
+                    payment_made: paymentMadeVal
                 };
                 if (termsVal) {
                     payload.terms = termsVal;

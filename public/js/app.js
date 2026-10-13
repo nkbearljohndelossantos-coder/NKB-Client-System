@@ -1574,7 +1574,7 @@ async function openViewPOModal(poId) {
                     ${canViewPrices ? `
                         <!-- Financial Breakdown -->
                         <div class="flex justify-end">
-                            <div class="w-72 p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 font-semibold">
+                            <div class="w-80 p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 font-semibold">
                                 <div class="flex justify-between text-slate-600">
                                     <span>Subtotal:</span>
                                     <span class="font-bold text-slate-900 font-mono">${NKB.formatCurrency(po.subtotal)}</span>
@@ -1583,10 +1583,20 @@ async function openViewPOModal(poId) {
                                     <span>Tax (${po.tax_percent || 0}%):</span>
                                     <span class="font-bold text-slate-900 font-mono">${NKB.formatCurrency(po.tax_amount || 0)}</span>
                                 </div>
-                                <div class="flex justify-between text-base font-extrabold text-indigo-950 pt-2 border-t border-slate-200">
-                                    <span>Grand Total:</span>
-                                    <span class="font-mono text-indigo-700 font-black">${NKB.formatCurrency(po.grand_total)}</span>
+                                <div class="flex justify-between text-base font-extrabold text-slate-900 pt-2 border-t border-slate-200">
+                                    <span>Total Bill:</span>
+                                    <span class="font-mono text-slate-900 font-black">${NKB.formatCurrency(po.grand_total)}</span>
                                 </div>
+                                ${(Number(po.payment_made || po.paid_amount || 0) > 0) ? `
+                                    <div class="flex justify-between text-sm font-bold text-emerald-700">
+                                        <span>Less: Payment Made:</span>
+                                        <span class="font-mono font-black text-emerald-700">- ${NKB.formatCurrency(po.payment_made || po.paid_amount || 0)}</span>
+                                    </div>
+                                    <div class="flex justify-between text-base font-black text-indigo-950 pt-2 border-t-2 border-indigo-200 bg-indigo-50/70 p-2.5 rounded-xl">
+                                        <span>Total Balance Due:</span>
+                                        <span class="font-mono text-indigo-700 font-black">${NKB.formatCurrency(Math.max(0, (po.grand_total || 0) - (po.payment_made || po.paid_amount || 0)))}</span>
+                                    </div>
+                                ` : ''}
                             </div>
                         </div>
                     ` : ''}
@@ -2100,9 +2110,30 @@ async function openEditPOModal(poId) {
 
                     <!-- Summary & Totals -->
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-slate-50/70 rounded-2xl border border-slate-200/80 mt-3">
-                        <div>
-                            <label class="block text-xs font-medium text-slate-500 mb-1.5 uppercase tracking-wider">Special Notes / Description (Appears on Printed Order)</label>
-                            <textarea id="edit-po-notes" rows="2" placeholder="Special formulation notes, packaging variants, delivery instructions..." class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white text-xs text-slate-700 font-normal focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">${po.notes || ''}</textarea>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-500 mb-1.5 uppercase tracking-wider">Special Notes / Description (Appears on Printed Order)</label>
+                                <textarea id="edit-po-notes" rows="2" placeholder="Special formulation notes, packaging variants, delivery instructions..." class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white text-xs text-slate-700 font-normal focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">${po.notes || ''}</textarea>
+                            </div>
+                            <!-- Payment Made / Deposit Input -->
+                            <div class="p-3 bg-white rounded-xl border border-indigo-100 shadow-2xs space-y-1.5">
+                                <label class="block text-[11px] font-bold text-indigo-950 uppercase tracking-wider">
+                                    💰 Payment Made / Deposit (₱)
+                                </label>
+                                <div class="relative">
+                                    <span class="absolute left-3 top-2 text-slate-400 font-mono text-xs font-bold">₱</span>
+                                    <input type="number" 
+                                           id="edit-po-payment-made" 
+                                           step="0.01" 
+                                           min="0" 
+                                           value="${Number(po.payment_made || po.paid_amount || 0).toFixed(2)}" 
+                                           oninput="recalculateEditPOTotals()" 
+                                           class="w-full pl-7 pr-3 py-1.5 border border-indigo-200 rounded-lg text-xs font-bold font-mono text-emerald-700 bg-emerald-50/30 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-2xs" 
+                                           placeholder="0.00" 
+                                           title="Payment Made or Deposit to deduct from the order total bill">
+                                </div>
+                                <p class="text-[10px] text-slate-400">Enter advance payment, downpayment, or check collection to lessen the total bill of this PO.</p>
+                            </div>
                         </div>
                         <div class="space-y-2 text-right flex flex-col justify-center">
                             <div class="text-xs text-slate-500 font-normal flex justify-between sm:justify-end gap-3">
@@ -2114,8 +2145,16 @@ async function openEditPOModal(poId) {
                                 <strong id="edit-po-total-qty" class="text-slate-700 font-medium font-mono">0 pcs</strong>
                             </div>
                             <div class="pt-2 border-t border-slate-200 flex justify-between sm:justify-end items-baseline gap-3">
-                                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Grand Total:</span>
-                                <span id="edit-po-grand-total" class="text-xl font-bold text-indigo-600 font-mono tracking-tight">₱0.00</span>
+                                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Order Bill (Total):</span>
+                                <span id="edit-po-grand-total" class="text-lg font-bold text-slate-800 font-mono tracking-tight">₱0.00</span>
+                            </div>
+                            <div class="flex justify-between sm:justify-end items-baseline gap-3 text-emerald-700">
+                                <span class="text-xs font-semibold uppercase tracking-wider text-emerald-600">Less: Payment Made:</span>
+                                <span id="edit-po-disp-payment-made" class="text-sm font-bold font-mono tracking-tight">₱0.00</span>
+                            </div>
+                            <div class="pt-1.5 border-t-2 border-indigo-100 flex justify-between sm:justify-end items-baseline gap-3">
+                                <span class="text-xs font-black uppercase tracking-wider text-indigo-900">Total Balance Due:</span>
+                                <span id="edit-po-balance-due" class="text-xl font-black text-indigo-600 font-mono tracking-tight">₱0.00</span>
                             </div>
                         </div>
                     </div>
@@ -2465,7 +2504,37 @@ function updateEditPOLineItem(index, field, value) {
     if (elTotalQty) elTotalQty.textContent = `${NKB.formatNumber(totalQty)} pcs`;
     const elGrandTotal = document.getElementById('edit-po-grand-total');
     if (elGrandTotal) elGrandTotal.textContent = NKB.formatCurrency(grandTotal);
+
+    recalculateEditPOTotals(grandTotal);
 }
+
+function recalculateEditPOTotals(currentGrandTotal) {
+    let grandTotal = currentGrandTotal;
+    if (grandTotal === undefined || grandTotal === null) {
+        grandTotal = 0;
+        editPOLineItems.forEach(item => {
+            grandTotal += (item.target_quantity || 0) * (item.unit_price || 0);
+        });
+    }
+
+    const paymentInput = document.getElementById('edit-po-payment-made');
+    const paymentMade = paymentInput ? (Math.max(0, parseFloat(paymentInput.value) || 0)) : 0;
+    const balanceDue = Math.max(0, grandTotal - paymentMade);
+
+    const dispPaymentEl = document.getElementById('edit-po-disp-payment-made');
+    if (dispPaymentEl) dispPaymentEl.textContent = NKB.formatCurrency(paymentMade);
+
+    const balanceEl = document.getElementById('edit-po-balance-due');
+    if (balanceEl) {
+        balanceEl.textContent = NKB.formatCurrency(balanceDue);
+        if (balanceDue === 0 && grandTotal > 0) {
+            balanceEl.className = 'text-xl font-black text-emerald-600 font-mono tracking-tight';
+        } else {
+            balanceEl.className = 'text-xl font-black text-indigo-600 font-mono tracking-tight';
+        }
+    }
+}
+window.recalculateEditPOTotals = recalculateEditPOTotals;
 
 async function submitEditPO(e) {
     e.preventDefault();
@@ -2493,6 +2562,8 @@ async function submitEditPO(e) {
         formOfPayment = customInput ? (customInput.value.trim() || 'COD') : 'COD';
     }
     const notes = document.getElementById('edit-po-notes').value;
+    const paymentMadeInput = document.getElementById('edit-po-payment-made');
+    const paymentMade = paymentMadeInput ? Math.max(0, parseFloat(paymentMadeInput.value) || 0) : 0;
 
     const res = await NKB.api(`/api/orders/${editingPOId}`, {
         method: 'PUT',
@@ -2503,6 +2574,7 @@ async function submitEditPO(e) {
             form_of_payment: formOfPayment,
             category: document.getElementById('edit-po-category')?.value || null,
             notes,
+            payment_made: paymentMade,
             items: editPOLineItems.map(item => {
                 const prod = editPOCatalog.find(p => p.id === item.product_id);
                 return {

@@ -389,9 +389,12 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
         SELECT * FROM sales_invoices WHERE po_id = ? ORDER BY created_at ASC
     `).all(id);
 
-    const totalPaid = invoices.reduce((sum, inv) => sum + (parseFloat(inv.paid_amount) || 0), 0);
+    const invoicePaid = invoices.reduce((sum, inv) => sum + (parseFloat(inv.paid_amount) || 0), 0);
+    const directPoPayment = parseFloat(po.payment_made) || 0;
+    const totalPaid = Math.max(directPoPayment, invoicePaid);
     po.payment_made = totalPaid;
     po.paid_amount = totalPaid;
+    po.total_balance = Math.max(0, (parseFloat(po.grand_total) || 0) - totalPaid);
 
     const canSeePrices = canViewOrderPrices(req.user.role);
     if (!canSeePrices) {
@@ -655,7 +658,7 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
  */
 router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
     const { id } = req.params;
-    let { po_date, expected_delivery_date, tolerance_percent, billing_policy, notes, form_of_payment, items, tax_percent, category, category_color, is_buffer_stock } = req.body;
+    let { po_date, expected_delivery_date, tolerance_percent, billing_policy, notes, form_of_payment, items, tax_percent, category, category_color, is_buffer_stock, payment_made } = req.body;
     if (form_of_payment === undefined && req.body.terms !== undefined) {
         form_of_payment = req.body.terms;
     }
@@ -858,6 +861,9 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
         }
 
         const newIsBufferStock = is_buffer_stock !== undefined ? ((is_buffer_stock === true || is_buffer_stock === 1 || is_buffer_stock === '1' || is_buffer_stock === 'true') ? 1 : 0) : (po.is_buffer_stock || 0);
+        const newPaymentMade = (payment_made !== undefined && payment_made !== null && !isNaN(parseFloat(payment_made)))
+            ? Math.max(0, parseFloat(payment_made))
+            : (po.payment_made !== undefined && po.payment_made !== null ? parseFloat(po.payment_made) : 0.0);
 
         db.prepare(`
             UPDATE purchase_orders
@@ -874,6 +880,7 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
                 tax_amount = ?,
                 grand_total = ?,
                 is_buffer_stock = ?,
+                payment_made = ?,
                 updated_at = datetime('now', 'localtime')
             WHERE id = ?
         `).run(
@@ -890,6 +897,7 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
             taxAmount,
             grandTotal,
             newIsBufferStock,
+            newPaymentMade,
             id
         );
 

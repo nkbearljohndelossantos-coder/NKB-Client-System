@@ -188,7 +188,17 @@ async function loadClientDashboard() {
                         </div>
                     ` : ''}
                 </td>
-                <td class="py-3.5 px-4 font-extrabold text-slate-900 whitespace-nowrap font-mono border-y border-slate-200/90">${NKB.formatCurrency(po.grand_total)}</td>
+                <td class="py-3.5 px-4 whitespace-nowrap font-mono border-y border-slate-200/90">
+                    <div class="font-extrabold text-slate-900">${NKB.formatCurrency(po.grand_total)}</div>
+                    ${(Number(po.payment_made || po.paid_amount || 0) > 0) ? `
+                        <div class="text-[10.5px] font-bold text-emerald-700 flex items-center gap-1 mt-0.5">
+                            <span>Paid:</span> <span>${NKB.formatCurrency(po.payment_made || po.paid_amount || 0)}</span>
+                        </div>
+                        <div class="text-[10px] font-extrabold text-indigo-700 mt-0.5">
+                            <span>Bal:</span> <span>${NKB.formatCurrency(Math.max(0, (po.grand_total || 0) - (po.payment_made || po.paid_amount || 0)))}</span>
+                        </div>
+                    ` : ''}
+                </td>
                 <td class="py-3.5 px-4 whitespace-nowrap border-y border-slate-200/90">${NKB.renderStatusBadge(po.status)}</td>
                 <td class="py-3.5 px-4 text-right space-x-1.5 whitespace-nowrap rounded-r-2xl border-y border-r border-slate-200/90">
                     <button onclick="openViewPOModal('${po.id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition inline-flex items-center gap-1" title="View Full Order Info">

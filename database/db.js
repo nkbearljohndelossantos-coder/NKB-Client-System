@@ -1518,6 +1518,7 @@ function runMigrations(dbInstance, isMysql) {
         try { dbInstance.exec(`ALTER TABLE purchase_orders ADD COLUMN reminder_triggered ${intType} DEFAULT 0;`); } catch (_) {}
         try { dbInstance.exec(`ALTER TABLE purchase_orders ADD COLUMN reminder_dismissed ${intType} DEFAULT 0;`); } catch (_) {}
         try { dbInstance.exec(`ALTER TABLE purchase_orders ADD COLUMN is_buffer_stock ${intType} DEFAULT 0;`); } catch (_) {}
+        try { dbInstance.exec(`ALTER TABLE purchase_orders ADD COLUMN payment_made ${realType} DEFAULT 0.0;`); } catch (_) {}
 
         // Warehouse Raw Materials Inventory Table
         try {
