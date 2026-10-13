@@ -375,7 +375,8 @@ function runMigrations(dbInstance, isMysql) {
                 { id: 'ba-bdo-new-yra', bank_name: 'BDO: New Yra Enterprises - 0036-8801-3196', account_number: '0036-8801-3196', account_name: 'New Yra Enterprises', account_type: 'Checking', balance: 600000.00 },
                 { id: 'ba-bdo-vyu', bank_name: 'BDO: Vyuceutical - 0080-5801-0717', account_number: '0080-5801-0717', account_name: 'Vyuceutical OPC', account_type: 'Checking', balance: 550000.00 },
                 { id: 'ba-sec-nkb-mfg', bank_name: 'Security Bank: NKB Manufacturing Corporation - 0000079720871', account_number: '0000079720871', account_name: 'NKB Manufacturing Corporation', account_type: 'Checking', balance: 500000.00 },
-                { id: 'ba-mb-nkb-mfg', bank_name: 'Metrobank: NKB Manufacturing Corporation - 788-7-78803245-1', account_number: '788-7-78803245-1', account_name: 'NKB MANUFACTURING CORPORATION', account_type: 'Checking', balance: 750000.00 }
+                { id: 'ba-mb-nkb-mfg', bank_name: 'Metrobank: NKB Manufacturing Corporation - 788-7-78803245-1', account_number: '788-7-78803245-1', account_name: 'NKB MANUFACTURING CORPORATION', account_type: 'Checking', balance: 750000.00 },
+                { id: 'ba-mb-kath-norvin', bank_name: "METROBANK - SAVINGS - MA'AM KATH/SIR NORVIN - 007-788-01272-8", account_number: '007-788-01272-8', account_name: "MA'AM KATH/SIR NORVIN", account_type: 'Savings', balance: 500000.00 }
             ];
 
             // Update legacy placeholder account numbers if present
@@ -396,6 +397,21 @@ function runMigrations(dbInstance, isMysql) {
                     insertStmt.run(b.id, b.bank_name, b.account_number, b.account_name, b.account_type, b.balance);
                 }
             }
+
+            // Ensure METROBANK - SAVINGS - MA'AM KATH/SIR NORVIN is registered
+            try {
+                const kathCheck = dbInstance.prepare("SELECT id FROM bank_accounts WHERE account_number = '007-788-01272-8'").get();
+                if (!kathCheck) {
+                    insertStmt.run(
+                        'ba-mb-kath-norvin',
+                        "METROBANK - SAVINGS - MA'AM KATH/SIR NORVIN - 007-788-01272-8",
+                        '007-788-01272-8',
+                        "MA'AM KATH/SIR NORVIN",
+                        'Savings',
+                        500000.00
+                    );
+                }
+            } catch (_) {}
         } catch (_) {}
 
         // Payable Companies Table

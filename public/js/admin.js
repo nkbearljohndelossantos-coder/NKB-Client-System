@@ -4061,8 +4061,8 @@ const DEFAULT_PAYABLE_BANKS_LIST = [
     { id: 'ba-bdo-nkb-cpt', name: 'BDO: NKB Cosmetic Products Trading - 0105-4800-3245', bank_name: 'BDO: NKB Cosmetic Products Trading - 0105-4800-3245', account_name: 'NKB Cosmetic Products Trading', account_number: '0105-4800-3245', balance: 700000 },
     { id: 'ba-bdo-new-yra', name: 'BDO: New Yra Enterprises - 0036-8801-3196', bank_name: 'BDO: New Yra Enterprises - 0036-8801-3196', account_name: 'New Yra Enterprises', account_number: '0036-8801-3196', balance: 600000 },
     { id: 'ba-bdo-vyu', name: 'BDO: Vyuceutical - 0080-5801-0717', bank_name: 'BDO: Vyuceutical - 0080-5801-0717', account_name: 'Vyuceutical OPC', account_number: '0080-5801-0717', balance: 550000 },
-    { id: 'ba-sec-nkb-mfg', name: 'Security Bank: NKB Manufacturing Corporation - 0000079720871', bank_name: 'Security Bank: NKB Manufacturing Corporation - 0000079720871', account_name: 'NKB Manufacturing Corporation', account_number: '0000079720871', balance: 500000 },
-    { id: 'ba-mb-nkb-mfg', name: 'Metrobank: NKB Manufacturing Corporation - 788-7-78803245-1', bank_name: 'Metrobank: NKB Manufacturing Corporation - 788-7-78803245-1', account_name: 'NKB MANUFACTURING CORPORATION', account_number: '788-7-78803245-1', balance: 750000 }
+    { id: 'ba-mb-nkb-mfg', name: 'Metrobank: NKB Manufacturing Corporation - 788-7-78803245-1', bank_name: 'Metrobank: NKB Manufacturing Corporation - 788-7-78803245-1', account_name: 'NKB MANUFACTURING CORPORATION', account_number: '788-7-78803245-1', balance: 750000 },
+    { id: 'ba-mb-kath-norvin', name: "METROBANK - SAVINGS - MA'AM KATH/SIR NORVIN - 007-788-01272-8", bank_name: "METROBANK - SAVINGS - MA'AM KATH/SIR NORVIN - 007-788-01272-8", account_name: "MA'AM KATH/SIR NORVIN", account_number: '007-788-01272-8', balance: 500000 }
 ];
 
 function checkPayableOverdraft(overrideAmount = null) {
@@ -4859,14 +4859,14 @@ function onPayableBankChange(selectEl) {
     const bankAccountInput = document.getElementById('req-payable-bank-acct');
     
     const bankObj = (cachedBankAccounts && cachedBankAccounts.length > 0)
-        ? cachedBankAccounts.find(b => b.bank_name === selectedBankName || b.name === selectedBankName)
-        : (cachedPayablesMeta?.banks || []).find(b => b.name === selectedBankName || b.bank_name === selectedBankName);
+        ? cachedBankAccounts.find(b => b.bank_name === selectedBankName || b.name === selectedBankName || (b.account_number && selectedBankName.includes(b.account_number)))
+        : (cachedPayablesMeta?.banks || []).find(b => b.name === selectedBankName || b.bank_name === selectedBankName || (b.account_number && selectedBankName.includes(b.account_number)));
 
     if (bankAccountInput) {
         if (bankObj && bankObj.account_number) {
             bankAccountInput.value = bankObj.account_number;
         } else {
-            const match = selectedBankName.match(/\d{4}-\d{4}-\d{4}/);
+            const match = selectedBankName.match(/\d[\d-]{6,}\d/);
             bankAccountInput.value = match ? match[0] : '';
         }
     }

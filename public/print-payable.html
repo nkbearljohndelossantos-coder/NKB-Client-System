@@ -321,7 +321,12 @@
                 document.getElementById('v-date-issued').textContent = formatDate(cp.cheque_date || cp.created_at);
                 document.getElementById('v-payee').textContent = cp.payee_name || '—';
                 document.getElementById('v-bank').textContent = cp.bank_name || '—';
-                document.getElementById('v-bank-acc').textContent = cp.bank_account_number || '—';
+                let displayBankAcc = cp.bank_account_number;
+                if (!displayBankAcc && cp.bank_name) {
+                    const m = cp.bank_name.match(/\d[\d-]{6,}\d/);
+                    if (m) displayBankAcc = m[0];
+                }
+                document.getElementById('v-bank-acc').textContent = displayBankAcc || '—';
                 document.getElementById('v-cheque-no').textContent = cp.cheque_number || 'Pending Check Release';
                 document.getElementById('v-invoice-ref').textContent = cp.invoice_number || cp.invoice_reference || '—';
                 document.getElementById('v-terms').textContent = cp.terms || '—';
