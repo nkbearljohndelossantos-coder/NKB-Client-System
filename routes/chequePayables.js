@@ -1080,6 +1080,9 @@ router.post('/', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER_A
             if (bankAcc) {
                 linkedBankId = bankAcc.id;
                 availableBankBalance = bankAcc.current_balance;
+                if (numAmount > bankAcc.current_balance) {
+                    isOverdrawnWarning = true;
+                }
             }
         } catch (_) {}
 
@@ -1172,11 +1175,11 @@ router.post('/', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER_A
 
         return res.status(201).json({
             success: true,
-            message: `Cheque payable request ${requestNumber} for ${finalPayee} (₱${numAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}) has been submitted and sent to the COO API for confirmation.`,
+            message: `Cheque payable request ${requestNumber} for ${finalPayee} (₱${numAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}) has been submitted and sent to the COO API for confirmation.${isOverdrawnWarning ? ` ⚠️ Note: Cheque amount exceeds available liquid balance in ${bank_name} (₱${Number(availableBankBalance).toFixed(2)}).` : ''}`,
             data: {
                 ...createdRecord,
                 available_balance: availableBankBalance,
-                is_overdrawn_warning: false
+                is_overdrawn_warning: isOverdrawnWarning
             }
         });
     } catch (err) {

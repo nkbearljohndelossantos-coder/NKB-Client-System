@@ -1315,6 +1315,7 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
             assert.strictEqual(resSingle.body.data.items[0].unit_price, null, `${op.name} must receive null unit_price`);
             assert.strictEqual(resSingle.body.data.items[0].subtotal, null, `${op.name} must receive null line subtotal`);
             assert.deepStrictEqual(resSingle.body.data.invoices, [], `${op.name} must not receive invoices`);
+            assert.ok('size' in resSingle.body.data.items[0], `${op.name} order item must have size property`);
 
             // GET /api/orders list
             const resList = await request(app)
@@ -1364,6 +1365,9 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         const totalBalancePos = printPoHtml.indexOf('id="disp-total-balance"');
         assert.ok(discountPos !== -1 && paymentMadePos !== -1 && discountPos < paymentMadePos, 'Payment Made must be under Discount in totals table');
         assert.ok(paymentMadePos < totalBalancePos, 'Total Balance must be after Payment Made in totals table');
+        assert.ok(printPoHtml.includes('th-size'), 'print-po.html must include Size column header');
+        assert.ok(printPoHtml.includes('td-size'), 'print-po.html must include Size column cell');
+        assert.ok(printPoHtml.includes('>Size<'), 'print-po.html must display Size in column header');
 
         // Print header & footer suppression (@page margin: 0 and beforeprint title clearing)
         assert.ok(printPoHtml.includes('margin: 0'), 'print-po.html must have margin: 0 on @page to suppress browser headers');

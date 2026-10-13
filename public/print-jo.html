@@ -1451,6 +1451,24 @@
             });
         }
 
+        function extractProductSize(name) {
+            if (!name || typeof name !== 'string') return '';
+            let cleaned = name.replace(/\((?:FREE|W\/?\s*FREE|WITH\s+FREE)[^)]*\)/gi, '');
+            cleaned = cleaned.replace(/\b(?:FREE|W\/?\s*FREE|WITH\s+FREE)\b.*$/gi, '');
+            const match = cleaned.match(/(?<!SPF\s*|PA\s*|\+)\b(\d+(?:\.\d+)?)\s*(ml|l|g|kg|oz|fl\s*oz|pcs?)\b/i);
+            if (match) {
+                let num = match[1];
+                let unit = match[2].toLowerCase();
+                if (unit === 'l') unit = 'L';
+                else if (unit === 'ml') unit = 'ml';
+                else if (unit === 'g') unit = 'g';
+                else if (unit === 'kg') unit = 'kg';
+                else if (unit.startsWith('fl')) unit = 'fl oz';
+                return num + unit;
+            }
+            return '';
+        }
+
         function generateSlipContent(client, docTitle, pageItems = null, pageIndex = 1, totalPages = 1, clientIdx = 0) {
             const isVyuceutical = client.is_vyuceutical_ops === 1 || (client.company_name && client.company_name.toLowerCase().includes('vyuceutical'));
             const clientContactName = client.contact_person || client.company_name || 'Client Contact';
@@ -1501,6 +1519,7 @@
             const itemsRows = items.map(item => {
                 const name = item.product_name || item.name || '-';
                 const sku = item.sku ? `SKU: ${item.sku}` : '';
+                const itemSize = (item.size || extractProductSize(name) || '').trim();
                 const qty = formatQty(item.target_quantity || item.quantity || 0);
                 const rawUom = (item.unit || 'PC').toUpperCase().trim();
                 const uom = (rawUom === 'PCS' || rawUom === 'PIECE' || rawUom === 'PIECES') ? 'PC' : rawUom;
@@ -1509,6 +1528,7 @@
                     <tr class="item-row">
                         <td class="td-desc cell-editable">
                             <span class="product-name-txt">${escapeHtml(name)}</span>
+                            ${itemSize ? `<span class="product-size-txt" style="font-weight: 800; color: #000000; margin-left: 5px;">[${escapeHtml(itemSize)}]</span>` : ''}
                             ${sku ? `<span class="product-sku-txt">(${escapeHtml(sku)})</span>` : ''}
                         </td>
                         <td class="td-qty cell-editable">${escapeHtml(qty)}</td>

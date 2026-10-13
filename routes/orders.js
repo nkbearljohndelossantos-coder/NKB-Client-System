@@ -165,7 +165,7 @@ router.get('/', authenticateToken, enforceClientIsolation, (req, res) => {
     // Attach ordered products separately to each PO
     for (const po of orders) {
         po.items = db.prepare(`
-            SELECT poi.*, COALESCE(poi.item_name, p.name) as product_name, p.sku, p.unit, p.category, p.formula_code, p.shelf_life_months,
+            SELECT poi.*, COALESCE(poi.item_name, p.name) as product_name, p.sku, p.unit, COALESCE(p.size, '') as size, p.category, p.formula_code, p.shelf_life_months,
                    (
                        SELECT COALESCE(SUM(di.delivered_quantity), 0)
                        FROM delivery_items di
@@ -331,6 +331,7 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
                COALESCE(poi.item_name, cpp.custom_name, p.name) as product_name, 
                COALESCE(cpp.custom_sku, p.sku) as sku, 
                p.unit, 
+               COALESCE(p.size, '') as size,
                p.category, 
                COALESCE(cpp.custom_formula_code, p.formula_code) as formula_code, 
                p.shelf_life_months,
@@ -644,7 +645,14 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
     try {
         const result = createOrderTx();
         const createdPO = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(result.poId);
-        const orderItems = db.prepare('SELECT * FROM purchase_order_items WHERE po_id = ?').all(result.poId);
+        const orderItems = db.prepare(`
+            SELECT poi.*, 
+                   COALESCE(poi.item_name, p.name) as product_name, 
+                   p.sku, p.unit, COALESCE(p.size, '') as size, p.category
+            FROM purchase_order_items poi
+            LEFT JOIN products p ON poi.product_id = p.id
+            WHERE poi.po_id = ?
+        `).all(result.poId);
         const totalTargetQty = orderItems.reduce((acc, it) => acc + (it.target_quantity || 0), 0);
         return res.status(201).json({ success: true, data: { ...createdPO, items: orderItems, total_target_quantity: totalTargetQty } });
     } catch (err) {
@@ -926,7 +934,14 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
     try {
         const result = updateOrderTx();
         const updatedPO = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
-        const orderItems = db.prepare('SELECT * FROM purchase_order_items WHERE po_id = ?').all(id);
+        const orderItems = db.prepare(`
+            SELECT poi.*, 
+                   COALESCE(poi.item_name, p.name) as product_name, 
+                   p.sku, p.unit, COALESCE(p.size, '') as size, p.category
+            FROM purchase_order_items poi
+            LEFT JOIN products p ON poi.product_id = p.id
+            WHERE poi.po_id = ?
+        `).all(id);
         const totalTargetQty = orderItems.reduce((acc, it) => acc + (it.target_quantity || 0), 0);
 
         const canSeePrices = canViewOrderPrices(req.user.role);

@@ -426,7 +426,8 @@
             letter-spacing: 0;
         }
 
-        .items-table th.th-desc { width: 48%; }
+        .items-table th.th-desc { width: 38%; }
+        .items-table th.th-size { width: 10%; text-align: center; }
         .items-table th.th-qty { width: 11%; text-align: right; }
         .items-table th.th-uom { width: 7%; text-align: left; padding-left: 6px; }
         .items-table th.th-price { width: 17%; text-align: right; }
@@ -440,6 +441,13 @@
             line-height: 1.3;
             font-size: 9pt;
             font-weight: 700;
+        }
+
+        .td-size {
+            text-align: center;
+            font-weight: 700;
+            color: #000000;
+            white-space: nowrap;
         }
 
         .td-desc {
@@ -814,6 +822,7 @@
                 <thead>
                     <tr>
                         <th class="th-desc">Description</th>
+                        <th class="th-size">Size</th>
                         <th class="th-qty">Quantity</th>
                         <th class="th-uom">UOM</th>
                         <th class="th-price">Price</th>
@@ -822,7 +831,7 @@
                     </tr>
                 </thead>
                 <tbody id="po-items-tbody">
-                    <tr><td colspan="5" style="text-align: center; color: #888; padding: 20px;">Loading order details...</td></tr>
+                    <tr><td colspan="6" style="text-align: center; color: #888; padding: 20px;">Loading order details...</td></tr>
                 </tbody>
             </table>
 
@@ -1082,11 +1091,30 @@
             if (lbl) lbl.textContent = hasPayment ? 'Total Balance' : 'Total';
         }
 
+        function extractSizeFromText(name) {
+            if (!name || typeof name !== 'string') return '';
+            let cleaned = name.replace(/\((?:FREE|W\/?\s*FREE|WITH\s+FREE)[^)]*\)/gi, '');
+            cleaned = cleaned.replace(/\b(?:FREE|W\/?\s*FREE|WITH\s+FREE)\b.*$/gi, '');
+            const match = cleaned.match(/(?<!SPF\s*|PA\s*|\+)\b(\d+(?:\.\d+)?)\s*(ml|l|g|kg|oz|fl\s*oz|pcs?)\b/i);
+            if (match) {
+                let num = match[1];
+                let unit = match[2].toLowerCase();
+                if (unit === 'l') unit = 'L';
+                else if (unit === 'ml') unit = 'ml';
+                else if (unit === 'g') unit = 'g';
+                else if (unit === 'kg') unit = 'kg';
+                else if (unit.startsWith('fl')) unit = 'fl oz';
+                return num + unit;
+            }
+            return '';
+        }
+
         function addNewItemRow() {
             const tbody = document.getElementById('po-items-tbody');
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td class="td-desc cell-editable" contenteditable="${isEditMode ? 'true' : 'false'}"><div class="prod-name">NEW ITEM DESCRIPTION</div></td>
+                <td class="td-size cell-editable" contenteditable="${isEditMode ? 'true' : 'false'}">—</td>
                 <td class="td-qty cell-editable" contenteditable="${isEditMode ? 'true' : 'false'}" onblur="onRowInput(this.parentElement)">1.00</td>
                 <td class="td-uom cell-editable" contenteditable="${isEditMode ? 'true' : 'false'}">PC</td>
                 <td class="td-price cell-editable" contenteditable="${isEditMode ? 'true' : 'false'}" onblur="onRowInput(this.parentElement)">0.00</td>
@@ -1164,11 +1192,12 @@
             let calculatedSubtotal = 0;
 
             if (items.length === 0) {
-                itemsHtml = `<tr><td colspan="5" style="text-align: center; color: #888; padding: 16px;">No items in this order</td></tr>`;
+                itemsHtml = `<tr><td colspan="6" style="text-align: center; color: #888; padding: 16px;">No items in this order</td></tr>`;
             } else {
                 itemsHtml = items.map(item => {
                     const desc = item.product_name || item.name || '-';
                     const itemNote = (item.notes || '').trim();
+                    const itemSize = (item.size || extractSizeFromText(desc) || '—').trim();
                     const qty = item.target_quantity || item.quantity || 0;
                     const rawUnit = (item.unit || 'PC').toUpperCase().trim();
                     const uom = (rawUnit === 'PCS' || rawUnit === 'PIECE' || rawUnit === 'PIECES') ? 'PC' : rawUnit;
@@ -1182,6 +1211,7 @@
                                 <div class="prod-name">${escapeHtml(desc)}</div>
                                 ${itemNote ? `<div style="font-size: 8pt; color: #374151; font-style: italic; margin-top: 1px; font-weight: 600;">Note: ${escapeHtml(itemNote)}</div>` : ''}
                             </td>
+                            <td class="td-size cell-editable" contenteditable="false">${escapeHtml(itemSize)}</td>
                             <td class="td-qty cell-editable" contenteditable="false" onblur="onRowInput(this.parentElement)">${formatNumber2(qty)}</td>
                             <td class="td-uom cell-editable" contenteditable="false">${escapeHtml(uom)}</td>
                             <td class="td-price cell-editable" contenteditable="false" onblur="onRowInput(this.parentElement)">${formatNumber2(price)}</td>
@@ -1407,12 +1437,12 @@
                     payment_made: 0.00,
                     grand_total: 1330.00,
                     items: [
-                        { product_name: 'BELLA SKIN - THE SKIN VITAMIN 24K GOLD SERUM W/ PDRN 30ml', target_quantity: 2, unit: 'PC', unit_price: 85.00, subtotal: 170.00 },
-                        { product_name: 'BELLA SKIN - ROSE PDRN CREAM 50g', target_quantity: 2, unit: 'PC', unit_price: 140.00, subtotal: 280.00 },
-                        { product_name: 'BELLA SKIN - MAINTENANCE TONER 120ml', target_quantity: 2, unit: 'PC', unit_price: 95.00, subtotal: 190.00 },
-                        { product_name: 'BELLA SKIN - RETINOL CREAM 50g', target_quantity: 2, unit: 'PC', unit_price: 160.00, subtotal: 320.00 },
-                        { product_name: 'BELLA SKIN - NIACINAMIDE JEJU ALOE ALOE 15ml', target_quantity: 2, unit: 'PC', unit_price: 60.00, subtotal: 120.00 },
-                        { product_name: 'BELLA SKIN - PERFECT TINT SUNSCREEN 50g', target_quantity: 2, unit: 'PC', unit_price: 125.00, subtotal: 250.00 }
+                        { product_name: 'BELLA SKIN - THE SKIN VITAMIN 24K GOLD SERUM W/ PDRN 30ml', size: '30ml', target_quantity: 2, unit: 'PC', unit_price: 85.00, subtotal: 170.00 },
+                        { product_name: 'BELLA SKIN - ROSE PDRN CREAM 50g', size: '50g', target_quantity: 2, unit: 'PC', unit_price: 140.00, subtotal: 280.00 },
+                        { product_name: 'BELLA SKIN - MAINTENANCE TONER 120ml', size: '120ml', target_quantity: 2, unit: 'PC', unit_price: 95.00, subtotal: 190.00 },
+                        { product_name: 'BELLA SKIN - RETINOL CREAM 50g', size: '50g', target_quantity: 2, unit: 'PC', unit_price: 160.00, subtotal: 320.00 },
+                        { product_name: 'BELLA SKIN - NIACINAMIDE JEJU ALOE ALOE 15ml', size: '15ml', target_quantity: 2, unit: 'PC', unit_price: 60.00, subtotal: 120.00 },
+                        { product_name: 'BELLA SKIN - PERFECT TINT SUNSCREEN 50g', size: '50g', target_quantity: 2, unit: 'PC', unit_price: 125.00, subtotal: 250.00 }
                     ]
                 });
                 return;
