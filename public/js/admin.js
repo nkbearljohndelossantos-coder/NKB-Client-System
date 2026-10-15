@@ -3422,10 +3422,57 @@ async function loadBankBalances() {
         }).join('');
     } catch (err) {
         console.error('loadBankBalances failed:', err);
+async function syncFmsPayables() {
+    const btn = document.getElementById('btn-sync-fms-payables');
+    const icon = document.getElementById('btn-sync-fms-payables-icon');
+    const text = document.getElementById('btn-sync-fms-payables-text');
+    if (btn) btn.disabled = true;
+    if (icon) icon.className = "inline-block animate-spin";
+    if (text) text.textContent = "Syncing with FMS...";
+    NKB.showToast('Connecting to FMS Payables Hub (fms.nkbmanufacturing.com)...', 'info');
+
+    try {
+        const res = await NKB.api('/api/cheque-payables/sync-fms', { method: 'POST' });
+        if (res.success) {
+            const data = res.data || {};
+            const updated = data.updatedCount || 0;
+            const imported = data.importedCount || 0;
+            const pushed = data.pushedCount || 0;
+            const src = data.source || 'FMS';
+            NKB.showToast(`✅ Synced with FMS (${src})! Updated: ${updated}, Imported: ${imported}, Pushed: ${pushed}`, 'success');
+            await loadPayables();
+        } else {
+            NKB.showToast(res.error || res.message || 'Failed to sync payables with FMS.', 'error');
+        }
+    } catch (err) {
+        console.error('Error syncing FMS payables:', err);
+        NKB.showToast('Error communicating with FMS Payables Hub.', 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+        if (icon) {
+            icon.className = "";
+            icon.textContent = "🔄";
+        }
+        if (text) text.textContent = "Sync with FMS";
     }
 }
+window.syncFmsPayables = syncFmsPayables;
 
 async function loadPayables() {
+    // Check FMS connection status asynchronously
+    NKB.api('/api/cheque-payables/fms-status').then(statusRes => {
+        const badge = document.getElementById('fms-payables-status-badge');
+        if (badge && statusRes.success && statusRes.data) {
+            const isLive = statusRes.data.source === 'LIVE_API';
+            badge.className = isLive 
+                ? 'px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 inline-flex items-center gap-1'
+                : 'px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-100 text-blue-800 border border-blue-300 inline-flex items-center gap-1';
+            badge.innerHTML = `
+                <span class="w-1.5 h-1.5 rounded-full ${isLive ? 'bg-emerald-600 animate-pulse' : 'bg-blue-600'}"></span>
+                <span>${isLive ? 'FMS Live Synced' : 'FMS Sync Ready'} (${statusRes.data.total_fms_payables || 0})</span>
+            `;
+        }
+    }).catch(() => {});
     try {
         const res = await NKB.api('/api/cheque-payables');
         if (!res.success) {

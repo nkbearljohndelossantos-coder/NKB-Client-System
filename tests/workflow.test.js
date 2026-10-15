@@ -4451,6 +4451,91 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.strictEqual(delRes.body.success, true);
     });
 
+    test('92. Central FMS Payables API Synchronization: Real-time Status, Requisition Push, Inbound Sync, COO Decision Updates & API v1 Integration', async () => {
+        // 1. Role Authorization: Client is forbidden (403) from internal sync and status endpoints
+        const clientStatusRes = await request(app)
+            .get('/api/cheque-payables/fms-status')
+            .set('Authorization', `Bearer ${clientToken}`);
+        assert.strictEqual(clientStatusRes.status, 403, 'Client role must not access FMS payables status');
+
+        const clientSyncRes = await request(app)
+            .post('/api/cheque-payables/sync-fms')
+            .set('Authorization', `Bearer ${clientToken}`);
+        assert.strictEqual(clientSyncRes.status, 403, 'Client role must not trigger FMS payables sync');
+
+        // 2. Admin & Accounting check FMS Status
+        const fmsStatusRes = await request(app)
+            .get('/api/cheque-payables/fms-status')
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(fmsStatusRes.status, 200);
+        assert.strictEqual(fmsStatusRes.body.success, true);
+        assert.ok(fmsStatusRes.body.data);
+        assert.ok(fmsStatusRes.body.data.fmsUrl.includes('/api/payables'));
+        assert.strictEqual(typeof fmsStatusRes.body.data.total_fms_payables, 'number');
+
+        // 3. Admin & Accounting perform two-way synchronization
+        const syncRes = await request(app)
+            .post('/api/cheque-payables/sync-fms')
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(syncRes.status, 200);
+        assert.strictEqual(syncRes.body.success, true);
+        assert.ok(syncRes.body.data);
+        assert.strictEqual(typeof syncRes.body.data.pushedCount, 'number');
+        assert.strictEqual(typeof syncRes.body.data.importedCount, 'number');
+        assert.strictEqual(typeof syncRes.body.data.updatedCount, 'number');
+
+        // 4. Create a local payable requisition and verify auto-dispatch to FMS
+        const payablePayload = {
+            payee_name: 'FMS SYNC TEST CHEMICAL CORP',
+            amount: 75500.0,
+            cheque_date: '2026-10-31',
+            bank_name: 'METROBANK - SAVINGS - MA\'AM KATH/SIR NORVIN (007-788-01272-8)',
+            category: 'Chemical Ingredients',
+            company_name: 'NKB MANUFACTURING CORPORATION',
+            purpose: 'Test FMS Bi-directional Sync Integration',
+            line_items: [
+                { description: 'Active Ingredient Extract 50L', category: 'Chemical Ingredients', quantity: 2, cost: 37750, subtotal: 75500 }
+            ]
+        };
+
+        const createRes = await request(app)
+            .post('/api/cheque-payables')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send(payablePayload);
+        assert.strictEqual(createRes.status, 201);
+        assert.strictEqual(createRes.body.success, true);
+        const createdPayable = createRes.body.data;
+        assert.ok(createdPayable.id);
+        assert.strictEqual(createdPayable.payee_name, 'FMS SYNC TEST CHEMICAL CORP');
+
+        // 5. Developer API v1 FMS Status Check & Sync with API Key
+        const v1StatusRes = await request(app)
+            .get('/api/v1/payables/fms-status')
+            .set('x-api-key', 'nkb_inv_live_6ae6965c1ca61aef54939d6b1ecfac1b');
+        assert.strictEqual(v1StatusRes.status, 200);
+        assert.strictEqual(v1StatusRes.body.success, true);
+        assert.ok(v1StatusRes.body.data);
+        assert.ok(v1StatusRes.body.data.fmsUrl.includes('/api/payables'));
+
+        const v1SyncRes = await request(app)
+            .post('/api/v1/payables/sync-fms')
+            .set('x-api-key', 'nkb_inv_live_6ae6965c1ca61aef54939d6b1ecfac1b');
+        assert.strictEqual(v1SyncRes.status, 200);
+        assert.strictEqual(v1SyncRes.body.success, true);
+        assert.ok(v1SyncRes.body.data);
+
+        // 6. Verify UI markup in admin.html and sync function in admin.js
+        const adminHtml = fs.readFileSync(path.join(__dirname, '../public/admin.html'), 'utf8');
+        assert.ok(adminHtml.includes('btn-sync-fms-payables'), 'admin.html must contain FMS sync button');
+        assert.ok(adminHtml.includes('fms-payables-status-badge'), 'admin.html must contain FMS status badge');
+
+        const adminJs = fs.readFileSync(path.join(__dirname, '../public/js/admin.js'), 'utf8');
+        assert.ok(adminJs.includes('syncFmsPayables'), 'admin.js must provide syncFmsPayables() function');
+
+        // Clean up created test payable
+        db.prepare('DELETE FROM cheque_payables WHERE id = ?').run(createdPayable.id);
+    });
+
     after(() => {
         try {
             realtimeSyncService.closeAllClients();

@@ -12,6 +12,13 @@ const { getNextDocumentNumber } = require('../services/documentNumberService');
 const { logAudit } = require('../services/auditService');
 const { saveAttachment } = require('../services/attachmentService');
 const { getManilaDate, getManilaDateTime } = require('../helpers/timezone');
+const {
+    fetchFmsPayables,
+    sendPayableToFms,
+    syncPayablesWithFms,
+    checkFmsPayablesStatus,
+    FMS_PAYABLES_API_URL
+} = require('../services/fmsPayablesService');
 
 const LIVE_API_KEY = process.env.INVENTORY_API_KEY || 'nkb_inv_live_6ae6965c1ca61aef54939d6b1ecfac1b';
 
@@ -165,6 +172,11 @@ const DEFAULT_VENDORS = [
  * Dispatch async webhook notification to external COO API if configured
  */
 async function dispatchCooWebhook(payableRecord) {
+    // Automatically synchronize with FMS Payables Hub
+    try {
+        await sendPayableToFms(payableRecord);
+    } catch (_) {}
+
     const webhookUrl = process.env.COO_WEBHOOK_URL;
     if (!webhookUrl) return;
 
@@ -192,6 +204,39 @@ async function dispatchCooWebhook(payableRecord) {
         console.warn('COO webhook dispatch notice (external site may be offline):', err.message);
     }
 }
+
+/**
+ * GET /api/cheque-payables/fms-status
+ * Check live connection to FMS Payables Hub
+ */
+router.get('/fms-status', authenticateToken, requireRoles('SUPER_ADMIN', 'ADMIN', 'IT_ADMIN', 'CEO', 'ACCOUNTING'), async (req, res) => {
+    try {
+        const status = await checkFmsPayablesStatus();
+        return res.json({
+            success: true,
+            data: status
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/cheque-payables/sync-fms
+ * Trigger live bidirectional sync with FMS Payables Hub
+ */
+router.post('/sync-fms', authenticateToken, requireRoles('SUPER_ADMIN', 'ADMIN', 'IT_ADMIN', 'CEO', 'ACCOUNTING'), async (req, res) => {
+    try {
+        const result = await syncPayablesWithFms(db);
+        return res.json({
+            success: result.success,
+            message: result.message,
+            data: result
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
 
 /**
  * GET /api/cheque-payables
@@ -1377,6 +1422,9 @@ router.put('/:id', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER
                 amount: numAmount
             }
         });
+
+        // Synchronize update with FMS
+        sendPayableToFms(updated).catch(() => {});
 
         return res.json({ success: true, message: 'Cheque payable record updated successfully.', data: updated });
     } catch (err) {

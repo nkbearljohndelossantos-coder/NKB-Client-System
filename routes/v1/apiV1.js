@@ -13,6 +13,13 @@ const { getOrderMaterialBreakdown } = require('../../services/formulationService
 const { logAudit } = require('../../services/auditService');
 const { saveAttachment } = require('../../services/attachmentService');
 const { sendOutboundPayload } = require('../../services/outboundSyncService');
+const {
+    fetchFmsPayables,
+    sendPayableToFms,
+    syncPayablesWithFms,
+    checkFmsPayablesStatus,
+    FMS_PAYABLES_API_URL
+} = require('../../services/fmsPayablesService');
 
 // All v1 endpoints (except openapi.json and ping) require a valid API key
 router.use((req, res, next) => {
@@ -847,6 +854,39 @@ router.get('/payables', requireScope('payables:read'), (req, res) => {
 });
 
 /**
+ * GET /api/v1/payables/fms-status
+ * Check live connection to FMS Payables Hub
+ */
+router.get('/payables/fms-status', requireScope('payables:read'), async (req, res) => {
+    try {
+        const status = await checkFmsPayablesStatus();
+        return res.json({
+            success: true,
+            data: status
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/v1/payables/sync-fms
+ * Trigger live bidirectional sync with FMS Payables Hub
+ */
+router.post('/payables/sync-fms', requireScope('payables:write'), async (req, res) => {
+    try {
+        const result = await syncPayablesWithFms(db);
+        return res.json({
+            success: result.success,
+            message: result.message,
+            data: result
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
  * GET /api/v1/payables/export
  * Outbound API: Export cheque payables (including imported records) in JSON or CSV
  */
@@ -1378,6 +1418,9 @@ router.post('/payables', requireScope('payables:write'), (req, res) => {
 
         const created = db.prepare('SELECT * FROM cheque_payables WHERE id = ?').get(id);
 
+        // Synchronize with central FMS Payables API
+        sendPayableToFms(created).catch(() => {});
+
         return res.status(201).json({
             success: true,
             message: `Cheque payable request ${requestNumber} created successfully.`,
@@ -1478,6 +1521,9 @@ router.put('/payables/:id', requireScope(['payables:write', 'data:receive']), (r
         );
 
         const updated = db.prepare('SELECT * FROM cheque_payables WHERE id = ?').get(item.id);
+
+        // Synchronize update with central FMS Payables API
+        sendPayableToFms(updated).catch(() => {});
 
         logAudit({
             userId: req.apiKey.userId || 'system',

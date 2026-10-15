@@ -1082,6 +1082,10 @@
                         <div class="flex items-center gap-2">
                             <h2 class="text-2xl font-black text-slate-900">Cheque Payables & COO Approvals</h2>
                             <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 border border-amber-300">Live API Integrated</span>
+                            <span id="fms-payables-status-badge" class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 inline-flex items-center gap-1" title="Connected to FMS Payables Hub (fms.nkbmanufacturing.com/api/payables)">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                                <span>FMS Live Sync</span>
+                            </span>
                         </div>
                         <p class="text-sm text-slate-500">Accountant cheque requisitions, designated bank accounts, expense classification, and COO approval audit trail.</p>
                         <div class="mt-1 flex items-center gap-2 text-[11px] text-slate-500 font-mono">
@@ -1094,6 +1098,10 @@
                         </div>
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
+                        <button onclick="syncFmsPayables()" id="btn-sync-fms-payables" class="px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition inline-flex items-center gap-1.5 cursor-pointer" title="Bidirectional live synchronization with FMS Central Payables Hub (fms.nkbmanufacturing.com/api/payables)">
+                            <span id="btn-sync-fms-payables-icon">🔄</span>
+                            <span id="btn-sync-fms-payables-text">Sync with FMS</span>
+                        </button>
                         <button onclick="loadPayables()" class="px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 shadow-sm transition inline-flex items-center gap-1.5 cursor-pointer">
                             <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                             <span>Refresh</span>
