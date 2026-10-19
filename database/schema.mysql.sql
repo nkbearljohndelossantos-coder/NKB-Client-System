@@ -730,7 +730,33 @@ CREATE TABLE IF NOT EXISTS raw_materials_inventory (
     INDEX idx_rmi_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 38. Insert Initial Root Super Admin Account (Password: Admin123!)
+-- 38. Delivery Receipts Historical Archive (From Excel: DELIVERY RECEIPTS AS OF August 2026 Updated.xlsx)
+CREATE TABLE IF NOT EXISTS delivery_receipts_archive (
+    id VARCHAR(100) PRIMARY KEY,
+    dr_number_int INT DEFAULT 0,
+    dr_number VARCHAR(100) NOT NULL,
+    sheet_name VARCHAR(255) NULL,
+    po_number VARCHAR(100) NULL,
+    so_number VARCHAR(100) NULL,
+    delivery_date VARCHAR(50) NULL,
+    bill_to VARCHAR(255) NULL,
+    total_quantity DECIMAL(14,2) DEFAULT 0.00,
+    note TEXT NULL,
+    prepared_by VARCHAR(100) NULL,
+    qc_approved VARCHAR(100) NULL,
+    delivered_by VARCHAR(100) NULL,
+    received_by VARCHAR(100) NULL,
+    line_items LONGTEXT NULL,
+    status VARCHAR(50) DEFAULT 'COMPLETED',
+    source VARCHAR(50) DEFAULT 'EXCEL_AUGUST_2026',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_dra_dr_num_int (dr_number_int),
+    INDEX idx_dra_date (delivery_date),
+    INDEX idx_dra_bill_to (bill_to)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 39. Insert Initial Root Super Admin Account (Password: Admin123!)
 INSERT INTO users (id, name, email, password_hash, plain_password, role, is_active) VALUES
 ('a0000000-0000-0000-0000-000000000001', 'Executive Admin', 'admin@nkbmanufacturing.com', '$2b$10$jny3GQXy8GwL8vkYVtV4EeTH2QDo8tfg6hJO/vbpG3Xrwakfqgx2G', 'Admin123!', 'SUPER_ADMIN', 1)
 ON DUPLICATE KEY UPDATE email = VALUES(email), password_hash = VALUES(password_hash), plain_password = VALUES(plain_password), updated_at = CURRENT_TIMESTAMP;

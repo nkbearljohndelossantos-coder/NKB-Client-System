@@ -1611,6 +1611,14 @@ function runMigrations(dbInstance, isMysql) {
             console.warn('JLS perfumes catalog init note:', jlsErr.message);
         }
 
+        try {
+            // Seed / sync Delivery Receipts Archive from DELIVERY RECEIPTS AS OF August 2026 Updated.xlsx (DR457 to DR1)
+            const { seedDeliveryReceiptsArchive } = require('./seed-dr-archive');
+            seedDeliveryReceiptsArchive(dbInstance);
+        } catch (drArchiveErr) {
+            console.warn('Delivery receipts archive init note:', drArchiveErr.message);
+        }
+
         // Idempotent migration: Shift historical UTC timestamps in SQLite to Philippine Time (Asia/Manila, UTC+8)
         if (!isMysql) {
             try {

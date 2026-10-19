@@ -88,6 +88,206 @@ router.get('/', authenticateToken, enforceClientIsolation, (req, res) => {
     return res.json({ success: true, data: deliveries });
 });
 
+
+/**
+ * GET /api/deliveries/archive/summary
+ * Aggregate statistics of archived Delivery Receipts (Total DRs, Total Units, Client counts)
+ */
+router.get('/archive/summary', authenticateToken, (req, res) => {
+    try {
+        const totalDRs = db.prepare('SELECT COUNT(*) as c FROM delivery_receipts_archive').get()?.c || 0;
+        const totalUnits = db.prepare('SELECT SUM(total_quantity) as q FROM delivery_receipts_archive').get()?.q || 0;
+        const maxDr = db.prepare('SELECT MAX(dr_number_int) as m FROM delivery_receipts_archive').get()?.m || 0;
+        const minDr = db.prepare('SELECT MIN(dr_number_int) as m FROM delivery_receipts_archive WHERE dr_number_int > 0').get()?.m || 0;
+        const topClients = db.prepare('SELECT bill_to, COUNT(*) as dr_count, SUM(total_quantity) as total_units FROM delivery_receipts_archive GROUP BY bill_to ORDER BY dr_count DESC LIMIT 10').all();
+        const topClient = topClients.length > 0 ? topClients[0] : null;
+
+        return res.json({
+            success: true,
+            data: {
+                totalDRs,
+                total_drs: totalDRs,
+                totalUnits,
+                total_units: totalUnits,
+                range: `DR${maxDr} to DR${minDr}`,
+                maxDr,
+                minDr,
+                topClients,
+                top_client: topClient
+            }
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * GET /api/deliveries/archive
+ * List delivery receipts archive sorted latest to oldest (DR457 to DR1)
+ */
+router.get('/archive', authenticateToken, (req, res) => {
+    try {
+        const { search, billTo, limit = 500, offset = 0 } = req.query;
+        let query = 'SELECT * FROM delivery_receipts_archive WHERE 1=1';
+        const params = [];
+
+        if (search) {
+            query += ' AND (dr_number LIKE ? OR po_number LIKE ? OR so_number LIKE ? OR bill_to LIKE ? OR sheet_name LIKE ? OR line_items LIKE ?)';
+            const term = `%${search}%`;
+            params.push(term, term, term, term, term, term);
+        }
+
+        if (billTo) {
+            query += ' AND bill_to = ?';
+            params.push(billTo);
+        }
+
+        query += ' ORDER BY dr_number_int DESC, delivery_date DESC, id DESC';
+        query += ' LIMIT ? OFFSET ?';
+        params.push(parseInt(limit, 10), parseInt(offset, 10));
+
+        const rows = db.prepare(query).all(...params);
+
+        // Parse line_items JSON
+        const data = rows.map(r => {
+            let items = [];
+            try {
+                items = JSON.parse(r.line_items || '[]');
+            } catch (_) {}
+            return {
+                ...r,
+                items,
+                items_count: items.length
+            };
+        });
+
+        const total = db.prepare('SELECT COUNT(*) as c FROM delivery_receipts_archive').get()?.c || 0;
+
+        return res.json({
+            success: true,
+            total,
+            count: data.length,
+            data,
+            drs: data
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/deliveries/archive
+ * Create / Fill up a new Delivery Receipt in the Archive / Master Log
+ */
+router.post('/archive', authenticateToken, (req, res) => {
+    try {
+        const {
+            dr_number,
+            po_number,
+            so_number,
+            delivery_date,
+            bill_to,
+            note,
+            prepared_by,
+            qc_approved,
+            delivered_by,
+            received_by,
+            items
+        } = req.body;
+
+        if (!dr_number || !dr_number.trim()) {
+            return res.status(400).json({ success: false, error: 'DR Number is required (e.g. DR458).' });
+        }
+        if (!bill_to || !bill_to.trim()) {
+            return res.status(400).json({ success: false, error: 'Bill To / Client name is required.' });
+        }
+
+        let drInt = 0;
+        const match = dr_number.match(/DR\s*0*(\d+)/i);
+        if (match) {
+            drInt = parseInt(match[1], 10);
+        } else {
+            // Auto-increment highest
+            const maxRow = db.prepare('SELECT MAX(dr_number_int) as m FROM delivery_receipts_archive').get();
+            drInt = (maxRow?.m || 457) + 1;
+        }
+
+        const cleanItems = Array.isArray(items) ? items.filter(it => it.description && String(it.description).trim() !== '').map(it => ({
+            code: String(it.code || '').trim(),
+            description: String(it.description || '').trim(),
+            unit: String(it.unit || 'PC').trim().toUpperCase(),
+            qty: parseFloat(it.qty) || 0,
+            price: it.price === '' || it.price === undefined ? 'N/A' : it.price,
+            total: it.total === '' || it.total === undefined ? 'N/A' : it.total,
+            remarks: String(it.remarks || '').trim()
+        })) : [];
+
+        const totalQty = cleanItems.reduce((s, it) => s + (it.qty || 0), 0);
+        const id = `dr-manual-${drInt}-${Date.now()}`;
+        const sheetName = `DR${drInt} ${String(cleanItems[0]?.description || bill_to).slice(0, 20)}`;
+
+        db.prepare(`
+            INSERT INTO delivery_receipts_archive (
+                id, dr_number_int, dr_number, sheet_name, po_number, so_number,
+                delivery_date, bill_to, total_quantity, note,
+                prepared_by, qc_approved, delivered_by, received_by,
+                line_items, status, source, created_at, updated_at
+            ) VALUES (
+                ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?,
+                ?, ?, ?, ?,
+                ?, 'COMPLETED', 'MANUAL_ENTRY', datetime('now', 'localtime'), datetime('now', 'localtime')
+            )
+        `).run(
+            id,
+            drInt,
+            dr_number.trim(),
+            sheetName,
+            (po_number || '').trim(),
+            (so_number || '').trim(),
+            delivery_date || new Date().toISOString().slice(0, 10),
+            bill_to.trim(),
+            totalQty,
+            (note || '').trim(),
+            (prepared_by || 'Ronaldo Prudencio').trim(),
+            (qc_approved || 'Quality Assurance').trim(),
+            (delivered_by || "Driver's Name").trim(),
+            (received_by || 'Customer').trim(),
+            JSON.stringify(cleanItems)
+        );
+
+        const created = db.prepare('SELECT * FROM delivery_receipts_archive WHERE id = ?').get(id);
+        created.items = cleanItems;
+
+        return res.status(201).json({
+            success: true,
+            message: `Delivery Receipt ${dr_number} created successfully.`,
+            data: created
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * DELETE /api/deliveries/archive/:id
+ * Delete a specific record from the archive
+ */
+router.delete('/archive/:id', authenticateToken, (req, res) => {
+    try {
+        const { id } = req.params;
+        const exists = db.prepare('SELECT id, dr_number FROM delivery_receipts_archive WHERE id = ?').get(id);
+        if (!exists) {
+            return res.status(404).json({ success: false, error: 'Archive record not found.' });
+        }
+        db.prepare('DELETE FROM delivery_receipts_archive WHERE id = ?').run(id);
+        return res.json({ success: true, message: `Archived DR ${exists.dr_number} deleted.` });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+
 /**
  * GET /api/deliveries/:id
  */
@@ -110,6 +310,54 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
     `).get(id);
 
     if (!dr) {
+        // Fallback: Check in delivery_receipts_archive
+        const archiveRow = db.prepare('SELECT * FROM delivery_receipts_archive WHERE id = ? OR dr_number = ?').get(id, id);
+        if (archiveRow) {
+            let parsedItems = [];
+            try {
+                parsedItems = JSON.parse(archiveRow.line_items || '[]');
+            } catch (_) {}
+
+            const formattedItems = parsedItems.map((it, idx) => ({
+                id: `arch-item-${idx}`,
+                dr_id: archiveRow.id,
+                batch_number: it.code || 'N/A',
+                sku: it.code || 'N/A',
+                product_name: it.description || 'Product',
+                unit: it.unit || 'PC',
+                delivered_quantity: it.qty || 0,
+                unit_price: it.price === 'N/A' ? 0 : (parseFloat(it.price) || 0),
+                subtotal: it.total === 'N/A' ? 0 : (parseFloat(it.total) || 0),
+                remarks: it.remarks || ''
+            }));
+
+            return res.json({
+                success: true,
+                data: {
+                    id: archiveRow.id,
+                    dr_number: archiveRow.dr_number,
+                    delivery_date: archiveRow.delivery_date,
+                    company_name: archiveRow.bill_to,
+                    client_address: 'Philippines',
+                    client_phone: '-',
+                    po_number: archiveRow.po_number || '-',
+                    so_number: archiveRow.so_number || '-',
+                    billing_policy: 'ACTUAL_DELIVERY',
+                    driver_name: archiveRow.delivered_by || 'Logistics Driver',
+                    vehicle_plate: 'NKB-LOGISTICS',
+                    notes: archiveRow.note || '',
+                    prepared_by: archiveRow.prepared_by,
+                    qc_approved: archiveRow.qc_approved,
+                    received_by: archiveRow.received_by,
+                    status: archiveRow.status || 'COMPLETED',
+                    source: archiveRow.source,
+                    items: formattedItems,
+                    acceptance: null,
+                    returns: []
+                }
+            });
+        }
+
         return res.status(404).json({ success: false, error: 'Delivery Receipt not found.' });
     }
 

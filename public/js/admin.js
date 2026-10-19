@@ -2499,6 +2499,9 @@ window.renderBatchesTable = renderBatchesTable;
 // 5. DELIVERIES / DR
 // -------------------------------------------------------------
 async function loadDeliveries() {
+    if (document.getElementById('table-archive-deliveries-body')) {
+        loadArchiveDRs();
+    }
     const res = await NKB.api('/api/deliveries');
     const tbody = document.getElementById('table-deliveries-body');
 
@@ -2624,6 +2627,530 @@ async function loadDeliveries() {
         tbody.innerHTML = `<tr><td colspan="9" class="py-6 text-center text-slate-400">No deliveries found.</td></tr>`;
     }
 }
+
+// -------------------------------------------------------------
+// 5.1 DELIVERY RECEIPTS ARCHIVE (AUGUST 2026 UPDATED - DR457 TO DR1)
+// -------------------------------------------------------------
+let cachedArchiveDRs = [];
+let cachedArchiveSummary = null;
+let currentDrViewMode = 'archive';
+let archiveSearchDebounceTimer = null;
+
+function switchDrViewMode(mode) {
+    currentDrViewMode = mode;
+    const btnArchive = document.getElementById('btn-dr-tab-archive');
+    const btnActive = document.getElementById('btn-dr-tab-active');
+    const subviewArchive = document.getElementById('dr-subview-archive');
+    const subviewActive = document.getElementById('dr-subview-active');
+
+    if (mode === 'archive') {
+        if (btnArchive) {
+            btnArchive.className = 'px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-indigo-600 text-white shadow-sm';
+        }
+        if (btnActive) {
+            btnActive.className = 'px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-white text-slate-600 hover:text-slate-900 border border-slate-200';
+        }
+        if (subviewArchive) subviewArchive.classList.remove('hidden');
+        if (subviewActive) subviewActive.classList.add('hidden');
+        loadArchiveDRs();
+    } else {
+        if (btnArchive) {
+            btnArchive.className = 'px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-white text-slate-600 hover:text-slate-900 border border-slate-200';
+        }
+        if (btnActive) {
+            btnActive.className = 'px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-indigo-600 text-white shadow-sm';
+        }
+        if (subviewArchive) subviewArchive.classList.add('hidden');
+        if (subviewActive) subviewActive.classList.remove('hidden');
+        loadDeliveries();
+    }
+}
+
+function onDrArchiveSearchInput() {
+    clearTimeout(archiveSearchDebounceTimer);
+    archiveSearchDebounceTimer = setTimeout(() => {
+        loadArchiveDRs();
+    }, 300);
+}
+
+async function loadArchiveDRs() {
+    const tbody = document.getElementById('table-archive-deliveries-body');
+    if (!tbody) return;
+
+    // Load summary KPIs if elements exist
+    try {
+        const summaryRes = await NKB.api('/api/deliveries/archive/summary');
+        if (summaryRes.success && summaryRes.data) {
+            const sum = summaryRes.data;
+            const elTotalDrs = document.getElementById('dr-stat-total-drs');
+            const elTotalUnits = document.getElementById('dr-stat-total-units');
+            const elTopClient = document.getElementById('dr-stat-top-client');
+            const elTopClientSub = document.getElementById('dr-stat-top-client-sub');
+            const elBadge = document.getElementById('dr-archive-count-badge');
+
+            if (elTotalDrs) elTotalDrs.textContent = `${sum.total_drs} Receipts`;
+            if (elTotalUnits) elTotalUnits.textContent = `${NKB.formatNumber(sum.total_units)} pcs`;
+            if (elTopClient && sum.top_client) elTopClient.textContent = sum.top_client.bill_to;
+            if (elTopClientSub && sum.top_client) elTopClientSub.textContent = `${sum.top_client.dr_count} DRs fulfilled`;
+            if (elBadge) elBadge.textContent = sum.total_drs;
+        }
+    } catch (e) {
+        console.warn('Could not load archive summary:', e);
+    }
+
+    const searchInput = document.getElementById('dr-archive-search-input');
+    const clientFilter = document.getElementById('dr-archive-client-filter');
+
+    const search = searchInput ? searchInput.value.trim() : '';
+    const billTo = clientFilter ? clientFilter.value.trim() : '';
+
+    const queryParams = new URLSearchParams({ limit: '1000' });
+    if (search) queryParams.set('search', search);
+    if (billTo) queryParams.set('billTo', billTo);
+
+    try {
+        const res = await NKB.api(`/api/deliveries/archive?${queryParams.toString()}`);
+        const drsList = res.drs || res.data?.drs || (Array.isArray(res.data) ? res.data : []);
+        if (res.success && drsList) {
+            cachedArchiveDRs = drsList;
+            window.cachedArchiveDRs = cachedArchiveDRs;
+
+            // Populate client filter dropdown & fillup datalist if not already populated
+            if (clientFilter && clientFilter.options.length <= 1) {
+                const uniqueClients = [...new Set(cachedArchiveDRs.map(d => d.bill_to).filter(Boolean))].sort();
+                uniqueClients.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c;
+                    opt.textContent = c;
+                    clientFilter.appendChild(opt);
+                });
+                clientFilter.options[0].textContent = `All Clients (${uniqueClients.length})`;
+
+                const dataList = document.getElementById('dr-fillup-clients-list');
+                if (dataList) {
+                    dataList.innerHTML = uniqueClients.map(c => `<option value="${c}">`).join('');
+                }
+            }
+
+            const infoEl = document.getElementById('dr-archive-pagination-info');
+            if (infoEl) {
+                infoEl.textContent = `Showing ${cachedArchiveDRs.length} records arranged latest to oldest (DR457 to DR1)`;
+            }
+
+            if (cachedArchiveDRs.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" class="py-8 text-center text-slate-400 font-semibold">No delivery receipts found matching your criteria.</td></tr>`;
+                return;
+            }
+
+            const userRole = NKB.user?.role;
+            const canManage = ['ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'CEO'].includes(userRole);
+
+            tbody.innerHTML = cachedArchiveDRs.map(dr => {
+                let items = [];
+                try {
+                    items = typeof dr.items === 'string' ? JSON.parse(dr.items) : (dr.items || []);
+                } catch (e) {
+                    items = [];
+                }
+
+                // Render items preview
+                let itemsHtml = '';
+                if (items.length === 0) {
+                    itemsHtml = '<span class="text-slate-400 italic">No line items recorded</span>';
+                } else {
+                    const firstTwo = items.slice(0, 2);
+                    const remaining = items.slice(2);
+                    const renderItem = it => `
+                        <div class="flex items-center gap-1.5 text-[11px] leading-tight">
+                            ${it.code ? `<span class="font-mono text-[10px] text-slate-400 font-bold shrink-0">${it.code}</span>` : ''}
+                            <span class="font-bold text-slate-800 truncate" title="${it.description || ''}">${it.description || it.product_name || '-'}</span>
+                            <span class="font-mono font-bold text-indigo-600 shrink-0">(${NKB.formatNumber(it.qty || 0)} ${it.unit || 'pcs'})</span>
+                        </div>
+                    `;
+
+                    itemsHtml = `
+                        <div class="space-y-1">
+                            ${firstTwo.map(renderItem).join('')}
+                            ${remaining.length > 0 ? `
+                                <details class="text-[10px] text-indigo-600 font-bold cursor-pointer group">
+                                    <summary class="hover:underline flex items-center gap-1 list-none">
+                                        <span class="text-[9px] bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded text-indigo-700 font-mono">+ ${remaining.length} more item(s)</span>
+                                    </summary>
+                                    <div class="mt-1 space-y-1 pl-2 border-l-2 border-indigo-200">
+                                        ${remaining.map(renderItem).join('')}
+                                    </div>
+                                </details>
+                            ` : ''}
+                        </div>
+                    `;
+                }
+
+                // Client badge styling
+                const billTo = dr.bill_to || 'Unknown Client';
+                const isHerChoice = billTo.toUpperCase().includes('HER CHOICE');
+                const isVyuceutical = billTo.toUpperCase().includes('VYUCEUTICAL');
+
+                return `
+                <tr class="hover:bg-indigo-50/30 transition">
+                    <td class="py-3 px-4 font-bold">
+                        <span class="inline-flex items-center px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-200 font-mono font-black text-indigo-700 text-xs shadow-2xs">
+                            ${dr.dr_number}
+                        </span>
+                    </td>
+                    <td class="py-3 px-4 text-slate-600 whitespace-nowrap font-medium text-xs">
+                        ${NKB.formatDate(dr.delivery_date)}
+                    </td>
+                    <td class="py-3 px-4">
+                        <div class="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                            ${isHerChoice ? '<span class="text-rose-500 text-xs shrink-0" title="Her Choice International Consignee">🌸</span>' : ''}
+                            ${isVyuceutical ? '<span class="text-purple-600 text-xs shrink-0" title="Vyuceutical OPC">💜</span>' : ''}
+                            <span>${billTo}</span>
+                        </div>
+                        ${dr.note ? `<div class="text-[10px] text-slate-500 font-semibold italic mt-0.5">Note: ${dr.note}</div>` : ''}
+                    </td>
+                    <td class="py-3 px-4 whitespace-nowrap text-xs">
+                        ${dr.po_number ? `<div class="font-mono font-bold text-slate-700">${dr.po_number}</div>` : ''}
+                        ${dr.so_number ? `<div class="font-mono text-[10px] text-slate-500 font-semibold">SO: ${dr.so_number}</div>` : ''}
+                        ${!dr.po_number && !dr.so_number ? '<span class="text-slate-300">-</span>' : ''}
+                    </td>
+                    <td class="py-3 px-4 min-w-[260px]">
+                        ${itemsHtml}
+                    </td>
+                    <td class="py-3 px-4 text-right whitespace-nowrap">
+                        <div class="font-mono font-black text-slate-900 text-sm">${NKB.formatNumber(dr.total_quantity)}</div>
+                        <div class="text-[10px] text-slate-400 font-bold uppercase">pcs</div>
+                    </td>
+                    <td class="py-3 px-4 text-[10px] text-slate-600 space-y-0.5 whitespace-nowrap">
+                        <div><span class="font-bold text-slate-400">Prep:</span> ${dr.prepared_by || 'Ronaldo Prudencio'}</div>
+                        <div><span class="font-bold text-slate-400">QC:</span> ${dr.qc_approved || 'Quality Assurance'}</div>
+                        <div><span class="font-bold text-slate-400">Del:</span> ${dr.delivered_by || "Driver's Name"}</div>
+                    </td>
+                    <td class="py-3 px-4 text-right whitespace-nowrap">
+                        <div class="inline-flex items-center gap-1.5 justify-end">
+                            <a href="/print-dr.html?id=${dr.id}" target="_blank" class="px-2.5 py-1.5 bg-slate-100 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 rounded-xl font-bold transition flex items-center gap-1 border border-slate-200 hover:border-indigo-300 cursor-pointer text-xs" title="View & Print Official Delivery Receipt">
+                                <span>🖨️</span><span>Print</span>
+                            </a>
+                            ${canManage ? `
+                                <button onclick="deleteArchiveDR('${dr.id}', '${dr.dr_number}')" class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition cursor-pointer" title="Delete DR Record">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                </button>
+                            ` : ''}
+                        </div>
+                    </td>
+                </tr>
+                `;
+            }).join('');
+        } else {
+            tbody.innerHTML = `<tr><td colspan="8" class="py-8 text-center text-rose-500 font-semibold">Failed to load archive DR records.</td></tr>`;
+        }
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="8" class="py-8 text-center text-rose-500 font-semibold">${err.message}</td></tr>`;
+    }
+}
+
+function openFillUpArchiveDRModal() {
+    const modal = document.getElementById('modal-fillup-archive-dr');
+    if (!modal) return;
+
+    // Auto-calculate next DR number
+    let nextDrNumber = 'DR458';
+    if (Array.isArray(cachedArchiveDRs) && cachedArchiveDRs.length > 0) {
+        const maxInt = Math.max(...cachedArchiveDRs.map(d => d.dr_number_int || 0));
+        if (maxInt > 0) {
+            nextDrNumber = `DR${maxInt + 1}`;
+        }
+    }
+
+    const numInput = document.getElementById('dr-fillup-number');
+    if (numInput) numInput.value = nextDrNumber;
+
+    const dateInput = document.getElementById('dr-fillup-date');
+    if (dateInput) {
+        const today = new Date().toISOString().split('T')[0];
+        dateInput.value = today;
+    }
+
+    const billToInput = document.getElementById('dr-fillup-billto');
+    if (billToInput) billToInput.value = '';
+
+    const poInput = document.getElementById('dr-fillup-pono');
+    if (poInput) poInput.value = '';
+
+    const soInput = document.getElementById('dr-fillup-sono');
+    if (soInput) soInput.value = '';
+
+    const noteInput = document.getElementById('dr-fillup-note');
+    if (noteInput) noteInput.value = '';
+
+    // Reset default signatories
+    const prepInput = document.getElementById('dr-fillup-prepby');
+    if (prepInput) prepInput.value = NKB.user?.full_name || 'Ronaldo Prudencio';
+
+    const qcInput = document.getElementById('dr-fillup-qcapp');
+    if (qcInput) qcInput.value = 'Quality Assurance';
+
+    const delInput = document.getElementById('dr-fillup-delby');
+    if (delInput) delInput.value = "Driver's Name";
+
+    const recInput = document.getElementById('dr-fillup-recby');
+    if (recInput) recInput.value = 'Customer Representative';
+
+    // Clear items and add 1 empty row
+    const tbody = document.getElementById('dr-fillup-items-tbody');
+    if (tbody) {
+        tbody.innerHTML = '';
+        addFillUpItemRow();
+    }
+
+    modal.classList.remove('hidden');
+}
+
+function closeFillUpArchiveDRModal() {
+    const modal = document.getElementById('modal-fillup-archive-dr');
+    if (modal) modal.classList.add('hidden');
+}
+
+function addFillUpItemRow(initial = {}) {
+    const tbody = document.getElementById('dr-fillup-items-tbody');
+    if (!tbody) return;
+    const tr = document.createElement('tr');
+    tr.className = 'dr-fillup-item-row hover:bg-slate-50/80 transition';
+    tr.innerHTML = `
+        <td class="p-2">
+            <input type="text" class="w-full p-1.5 text-xs font-mono font-bold border border-slate-300 rounded-lg bg-white item-code" placeholder="Code / Batch" value="${initial.code || ''}">
+        </td>
+        <td class="p-2">
+            <input type="text" required class="w-full p-1.5 text-xs font-bold border border-slate-300 rounded-lg bg-white item-desc uppercase" placeholder="Product Description *" value="${initial.description || ''}">
+        </td>
+        <td class="p-2">
+            <input type="text" class="w-full p-1.5 text-xs font-bold text-center border border-slate-300 rounded-lg bg-white item-unit uppercase" placeholder="PCS" value="${initial.unit || 'PCS'}">
+        </td>
+        <td class="p-2">
+            <input type="number" step="any" min="0" required class="w-full p-1.5 text-xs font-mono font-bold text-right border border-slate-300 rounded-lg bg-white item-qty" placeholder="0" value="${initial.qty !== undefined ? initial.qty : ''}" oninput="calculateFillUpTotals()">
+        </td>
+        <td class="p-2">
+            <input type="number" step="any" min="0" class="w-full p-1.5 text-xs font-mono text-right border border-slate-300 rounded-lg bg-white item-price" placeholder="0.00" value="${initial.price !== undefined ? initial.price : ''}" oninput="calculateFillUpTotals()">
+        </td>
+        <td class="p-2">
+            <input type="text" readonly class="w-full p-1.5 text-xs font-mono font-bold text-right border border-slate-200 rounded-lg bg-slate-50 text-slate-700 item-total" placeholder="0.00" value="${initial.total !== undefined ? initial.total : '0.00'}">
+        </td>
+        <td class="p-2">
+            <input type="text" class="w-full p-1.5 text-xs border border-slate-300 rounded-lg bg-white item-remarks" placeholder="Batch / Remarks" value="${initial.remarks || ''}">
+        </td>
+        <td class="p-2 text-center">
+            <button type="button" onclick="deleteFillUpItemRow(this)" class="p-1 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition cursor-pointer" title="Remove line item">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+            </button>
+        </td>
+    `;
+    tbody.appendChild(tr);
+    calculateFillUpTotals();
+}
+
+function deleteFillUpItemRow(btn) {
+    const tr = btn.closest('tr');
+    const tbody = document.getElementById('dr-fillup-items-tbody');
+    if (tbody && tbody.querySelectorAll('tr').length <= 1) {
+        NKB.showToast('At least one item row is required.', 'warning');
+        return;
+    }
+    if (tr) {
+        tr.remove();
+        calculateFillUpTotals();
+    }
+}
+
+function calculateFillUpTotals() {
+    let totalQty = 0;
+    const rows = document.querySelectorAll('#dr-fillup-items-tbody tr');
+    rows.forEach(tr => {
+        const qtyEl = tr.querySelector('.item-qty');
+        const priceEl = tr.querySelector('.item-price');
+        const totalEl = tr.querySelector('.item-total');
+
+        const qty = parseFloat(qtyEl?.value) || 0;
+        const price = parseFloat(priceEl?.value) || 0;
+        totalQty += qty;
+
+        if (totalEl) {
+            const lineTotal = qty * price;
+            totalEl.value = lineTotal > 0 ? lineTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
+        }
+    });
+
+    const totalQtyDisplay = document.getElementById('dr-fillup-total-qty');
+    if (totalQtyDisplay) {
+        totalQtyDisplay.textContent = NKB.formatNumber(totalQty);
+    }
+}
+
+async function submitFillUpArchiveDR(event) {
+    if (event) event.preventDefault();
+    const drNumber = document.getElementById('dr-fillup-number')?.value?.trim();
+    const deliveryDate = document.getElementById('dr-fillup-date')?.value?.trim();
+    const billTo = document.getElementById('dr-fillup-billto')?.value?.trim();
+    const poNumber = document.getElementById('dr-fillup-pono')?.value?.trim() || null;
+    const soNumber = document.getElementById('dr-fillup-sono')?.value?.trim() || null;
+    const note = document.getElementById('dr-fillup-note')?.value?.trim() || null;
+    const prepBy = document.getElementById('dr-fillup-prepby')?.value?.trim() || 'Ronaldo Prudencio';
+    const qcApp = document.getElementById('dr-fillup-qcapp')?.value?.trim() || 'Quality Assurance';
+    const delBy = document.getElementById('dr-fillup-delby')?.value?.trim() || "Driver's Name";
+    const recBy = document.getElementById('dr-fillup-recby')?.value?.trim() || 'Customer Representative';
+
+    if (!drNumber) {
+        NKB.showToast('DR Number is required', 'error');
+        return;
+    }
+    if (!deliveryDate) {
+        NKB.showToast('Delivery Date is required', 'error');
+        return;
+    }
+    if (!billTo) {
+        NKB.showToast('Bill To / Client Name is required', 'error');
+        return;
+    }
+
+    const items = [];
+    const rows = document.querySelectorAll('#dr-fillup-items-tbody tr');
+    rows.forEach(tr => {
+        const code = tr.querySelector('.item-code')?.value?.trim() || '';
+        const description = tr.querySelector('.item-desc')?.value?.trim() || '';
+        const unit = tr.querySelector('.item-unit')?.value?.trim() || 'PCS';
+        const qty = parseFloat(tr.querySelector('.item-qty')?.value) || 0;
+        const price = parseFloat(tr.querySelector('.item-price')?.value) || 0;
+        const remarks = tr.querySelector('.item-remarks')?.value?.trim() || '';
+
+        if (description && qty > 0) {
+            items.push({
+                code,
+                description,
+                unit,
+                qty,
+                price,
+                total: qty * price,
+                remarks
+            });
+        }
+    });
+
+    if (items.length === 0) {
+        NKB.showToast('Please add at least one line item with description and quantity > 0', 'error');
+        return;
+    }
+
+    const payload = {
+        dr_number: drNumber,
+        delivery_date: deliveryDate,
+        bill_to: billTo,
+        po_number: poNumber,
+        so_number: soNumber,
+        note: note,
+        prepared_by: prepBy,
+        qc_approved: qcApp,
+        delivered_by: delBy,
+        received_by: recBy,
+        items: items
+    };
+
+    try {
+        const res = await NKB.api('/api/deliveries/archive', 'POST', payload);
+        if (res.success) {
+            NKB.showToast(`🎉 Delivery Receipt ${drNumber} saved to master archive!`, 'success');
+            closeFillUpArchiveDRModal();
+            await loadArchiveDRs();
+            if (res.data?.id) {
+                const wantPrint = confirm(`Delivery Receipt ${drNumber} successfully saved!\n\nWould you like to open the official printable receipt now?`);
+                if (wantPrint) {
+                    window.open(`/print-dr.html?id=${res.data.id}`, '_blank');
+                }
+            }
+        } else {
+            NKB.showToast(res.error || 'Failed to save delivery receipt', 'error');
+        }
+    } catch (err) {
+        NKB.showToast(err.message, 'error');
+    }
+}
+
+async function deleteArchiveDR(id, drNumber) {
+    if (!confirm(`Are you sure you want to delete delivery receipt ${drNumber} from the master archive?`)) return;
+    try {
+        const res = await NKB.api(`/api/deliveries/archive/${id}`, 'DELETE');
+        if (res.success) {
+            NKB.showToast(`Delivery Receipt ${drNumber} deleted.`, 'success');
+            loadArchiveDRs();
+        } else {
+            NKB.showToast(res.error || 'Failed to delete DR', 'error');
+        }
+    } catch (err) {
+        NKB.showToast(err.message, 'error');
+    }
+}
+
+function exportArchiveDRsToExcel() {
+    if (typeof XLSX === 'undefined') {
+        NKB.showToast('SheetJS (XLSX) library is still loading. Please retry.', 'error');
+        return;
+    }
+
+    const list = cachedArchiveDRs && cachedArchiveDRs.length > 0 ? cachedArchiveDRs : [];
+    if (list.length === 0) {
+        NKB.showToast('No delivery receipts available to export.', 'warning');
+        return;
+    }
+
+    NKB.showToast(`Exporting ${list.length} delivery receipts to Excel...`, 'info');
+
+    try {
+        const rows = [];
+        list.forEach(dr => {
+            let itemsStr = '';
+            try {
+                const items = typeof dr.items === 'string' ? JSON.parse(dr.items) : (dr.items || []);
+                itemsStr = items.map(it => `${it.qty || 0} ${it.unit || 'pcs'} - ${it.description || it.product_name || ''}`).join('; ');
+            } catch (e) {
+                itemsStr = '';
+            }
+
+            rows.push({
+                'DR No.': dr.dr_number,
+                'Date': dr.delivery_date,
+                'Bill To / Client': dr.bill_to,
+                'PO No.': dr.po_number || '',
+                'SO No.': dr.so_number || '',
+                'Dispatched Items': itemsStr,
+                'Total Qty': dr.total_quantity || 0,
+                'Note': dr.note || '',
+                'Prepared By': dr.prepared_by || '',
+                'QC Approved': dr.qc_approved || '',
+                'Delivered By': dr.delivered_by || '',
+                'Received By': dr.received_by || ''
+            });
+        });
+
+        const ws = XLSX.utils.json_to_sheet(rows);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Delivery Receipts');
+
+        const now = new Date().toISOString().split('T')[0];
+        XLSX.writeFile(wb, `NKB_DELIVERY_RECEIPTS_MASTER_LOG_${now}.xlsx`);
+        NKB.showToast(`Exported ${rows.length} DRs to Excel successfully!`, 'success');
+    } catch (err) {
+        NKB.showToast(`Export failed: ${err.message}`, 'error');
+    }
+}
+
+window.switchDrViewMode = switchDrViewMode;
+window.loadArchiveDRs = loadArchiveDRs;
+window.onDrArchiveSearchInput = onDrArchiveSearchInput;
+window.openFillUpArchiveDRModal = openFillUpArchiveDRModal;
+window.closeFillUpArchiveDRModal = closeFillUpArchiveDRModal;
+window.addFillUpItemRow = addFillUpItemRow;
+window.deleteFillUpItemRow = deleteFillUpItemRow;
+window.calculateFillUpTotals = calculateFillUpTotals;
+window.submitFillUpArchiveDR = submitFillUpArchiveDR;
+window.deleteArchiveDR = deleteArchiveDR;
+window.exportArchiveDRsToExcel = exportArchiveDRsToExcel;
 
 // -------------------------------------------------------------
 // 6. SALES INVOICES
@@ -3422,6 +3949,9 @@ async function loadBankBalances() {
         }).join('');
     } catch (err) {
         console.error('loadBankBalances failed:', err);
+    }
+}
+
 async function syncFmsPayables() {
     const btn = document.getElementById('btn-sync-fms-payables');
     const icon = document.getElementById('btn-sync-fms-payables-icon');
@@ -7572,6 +8102,7 @@ async function openCreatePOModal(options = {}) {
                 </form>
             </div>
         </div>
+    `;
     await onAdminPOClientChanged();
 }
 

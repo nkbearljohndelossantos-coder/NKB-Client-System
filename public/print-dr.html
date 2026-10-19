@@ -532,6 +532,22 @@
                 const noteEl = document.getElementById('dr-note-display');
                 if (noteEl) noteEl.textContent = 'NOTE: ' + dr.notes;
             }
+            if (dr.prepared_by) {
+                const el = document.getElementById('dr-prepared-by-display');
+                if (el) el.textContent = dr.prepared_by;
+            }
+            if (dr.qc_approved) {
+                const el = document.getElementById('dr-qc-approved-display');
+                if (el) el.textContent = dr.qc_approved;
+            }
+            if (dr.delivered_by) {
+                const el = document.getElementById('driver-display-sign');
+                if (el) el.textContent = dr.delivered_by;
+            }
+            if (dr.received_by) {
+                const el = document.getElementById('signer-name-display');
+                if (el) el.textContent = dr.received_by;
+            }
 
             renderDrRows(dr.items);
 

@@ -4536,6 +4536,126 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         db.prepare('DELETE FROM cheque_payables WHERE id = ?').run(createdPayable.id);
     });
 
+    test('38. Delivery Receipts August 2026 Archive (DR457 to DR1), Summary, Fill Up Form & Printable Fallback', async () => {
+        // 1. Verify summary endpoint
+        const summaryRes = await request(app)
+            .get('/api/deliveries/archive/summary')
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(summaryRes.status, 200);
+        assert.strictEqual(summaryRes.body.success, true);
+        const summary = summaryRes.body.data;
+        assert.ok(summary.total_drs >= 480, 'Must have at least 480 archived DRs');
+        assert.ok(summary.total_units > 800000, 'Total units must exceed 800,000 pcs');
+        assert.ok(summary.top_client && summary.top_client.bill_to.includes('HER CHOICE'), 'Top client should be Her Choice');
+
+        // 2. Verify list endpoint ordered latest to oldest (DR457 to DR1)
+        const listRes = await request(app)
+            .get('/api/deliveries/archive?limit=500')
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(listRes.status, 200);
+        assert.strictEqual(listRes.body.success, true);
+        const drs = listRes.body.drs || listRes.body.data;
+        assert.ok(drs.length >= 480, 'Must retrieve all archived DRs');
+        assert.strictEqual(drs[0].dr_number_int, 457, 'First DR integer must strictly be 457');
+        assert.ok(drs[0].dr_number.includes('DR457'), 'First DR must be DR457');
+        assert.strictEqual(drs[drs.length - 1].dr_number_int, 1, 'Last DR integer must strictly be 1');
+        assert.ok(drs[drs.length - 1].dr_number.includes('DR1') || drs[drs.length - 1].dr_number.includes('DR01'), 'Last DR must be DR1');
+
+        // Verify descending order
+        for (let i = 0; i < drs.length - 1; i++) {
+            assert.ok(
+                drs[i].dr_number_int >= drs[i + 1].dr_number_int,
+                `Ordering violation at index ${i}: ${drs[i].dr_number} should be >= ${drs[i + 1].dr_number}`
+            );
+        }
+
+        // 3. Test search filter
+        const searchRes = await request(app)
+            .get('/api/deliveries/archive?search=DR457')
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(searchRes.status, 200);
+        const searchDrs = searchRes.body.drs || searchRes.body.data;
+        assert.ok(searchDrs[0].dr_number.includes('DR457'));
+
+        // 4. Test Fill Up Form submission (POST /api/deliveries/archive)
+        const newDrPayload = {
+            dr_number: 'DR458',
+            delivery_date: '2026-08-30',
+            bill_to: 'TEST BEAUTY CORP',
+            po_number: 'PO-TEST-458',
+            so_number: 'SO-TEST-458',
+            note: '5 BOXES',
+            prepared_by: 'Ronaldo Prudencio',
+            qc_approved: 'QA Lead Inspector',
+            delivered_by: 'Driver Bob',
+            received_by: 'Alice Consignee',
+            items: [
+                {
+                    code: 'TB-01',
+                    description: 'TEST BEAUTY ESSENTIAL SERUM 30ML',
+                    unit: 'PCS',
+                    qty: 500,
+                    price: 150,
+                    total: 75000,
+                    remarks: 'BATCH 2026-TEST'
+                }
+            ]
+        };
+
+        const createRes = await request(app)
+            .post('/api/deliveries/archive')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send(newDrPayload);
+        assert.strictEqual(createRes.status, 201);
+        assert.strictEqual(createRes.body.success, true);
+        const createdDr = createRes.body.data;
+        assert.strictEqual(createdDr.dr_number, 'DR458');
+        assert.strictEqual(createdDr.dr_number_int, 458);
+        assert.strictEqual(createdDr.total_quantity, 500);
+
+        // Verify that DR458 now appears at the very top of the list!
+        const updatedListRes = await request(app)
+            .get('/api/deliveries/archive?limit=10')
+            .set('Authorization', `Bearer ${adminToken}`);
+        const updatedDrs = updatedListRes.body.drs || updatedListRes.body.data;
+        assert.strictEqual(updatedDrs[0].dr_number, 'DR458', 'Newly created DR458 must be at the very top');
+
+        // 5. Test Printable Fallback endpoint (GET /api/deliveries/:id)
+        const printRes = await request(app)
+            .get(`/api/deliveries/${createdDr.id}`)
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(printRes.status, 200);
+        assert.strictEqual(printRes.body.success, true);
+        assert.strictEqual(printRes.body.data.dr_number, 'DR458');
+        assert.strictEqual(printRes.body.data.prepared_by, 'Ronaldo Prudencio');
+        assert.strictEqual(printRes.body.data.qc_approved, 'QA Lead Inspector');
+        assert.strictEqual(printRes.body.data.items.length, 1);
+        assert.strictEqual(printRes.body.data.items[0].delivered_quantity, 500);
+
+        // 6. Test DR Number resolution in /api/deliveries/:id
+        const printByNumRes = await request(app)
+            .get('/api/deliveries/DR458')
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(printByNumRes.status, 200);
+        assert.strictEqual(printByNumRes.body.data.dr_number, 'DR458');
+
+        // Clean up created test record
+        const delRes = await request(app)
+            .delete(`/api/deliveries/archive/${createdDr.id}`)
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(delRes.status, 200);
+
+        // Verify UI files contain the new elements
+        const adminHtml = fs.readFileSync(path.join(__dirname, '../public/admin.html'), 'utf8');
+        assert.ok(adminHtml.includes('modal-fillup-archive-dr'), 'admin.html must contain modal-fillup-archive-dr');
+        assert.ok(adminHtml.includes('table-archive-deliveries-body'), 'admin.html must contain table-archive-deliveries-body');
+
+        const adminJs = fs.readFileSync(path.join(__dirname, '../public/js/admin.js'), 'utf8');
+        assert.ok(adminJs.includes('loadArchiveDRs'), 'admin.js must provide loadArchiveDRs');
+        assert.ok(adminJs.includes('openFillUpArchiveDRModal'), 'admin.js must provide openFillUpArchiveDRModal');
+        assert.ok(adminJs.includes('exportArchiveDRsToExcel'), 'admin.js must provide exportArchiveDRsToExcel');
+    });
+
     after(() => {
         try {
             realtimeSyncService.closeAllClients();

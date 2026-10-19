@@ -802,7 +802,35 @@ CREATE INDEX IF NOT EXISTS idx_rmi_code ON raw_materials_inventory(material_code
 CREATE INDEX IF NOT EXISTS idx_rmi_category ON raw_materials_inventory(category);
 CREATE INDEX IF NOT EXISTS idx_rmi_status ON raw_materials_inventory(status);
 
+-- Delivery Receipts Historical Archive (From Excel: DELIVERY RECEIPTS AS OF August 2026 Updated.xlsx)
+CREATE TABLE IF NOT EXISTS delivery_receipts_archive (
+    id TEXT PRIMARY KEY,
+    dr_number_int INTEGER DEFAULT 0,
+    dr_number TEXT NOT NULL,
+    sheet_name TEXT,
+    po_number TEXT,
+    so_number TEXT,
+    delivery_date TEXT,
+    bill_to TEXT,
+    total_quantity REAL DEFAULT 0,
+    note TEXT,
+    prepared_by TEXT,
+    qc_approved TEXT,
+    delivered_by TEXT,
+    received_by TEXT,
+    line_items TEXT,
+    status TEXT DEFAULT 'COMPLETED',
+    source TEXT DEFAULT 'EXCEL_AUGUST_2026',
+    created_at TEXT DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_dra_dr_num_int ON delivery_receipts_archive(dr_number_int DESC);
+CREATE INDEX IF NOT EXISTS idx_dra_date ON delivery_receipts_archive(delivery_date DESC);
+CREATE INDEX IF NOT EXISTS idx_dra_bill_to ON delivery_receipts_archive(bill_to);
+
 -- Initial Executive Super Admin Account (Email: admin@nkbmanufacturing.com | Password: Admin123!)
 INSERT OR REPLACE INTO users (id, name, email, password_hash, plain_password, role, is_active) VALUES
 ('a0000000-0000-0000-0000-000000000001', 'Executive Admin', 'admin@nkbmanufacturing.com', '$2b$10$jny3GQXy8GwL8vkYVtV4EeTH2QDo8tfg6hJO/vbpG3Xrwakfqgx2G', 'Admin123!', 'SUPER_ADMIN', 1);
+
 

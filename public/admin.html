@@ -831,36 +831,138 @@
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
                         <h2 class="text-2xl font-black text-slate-900">Delivery Receipts (DR) & Dispatch</h2>
-                        <p class="text-sm text-slate-500">Generate dispatch receipts and monitor digital client acceptance.</p>
+                        <p class="text-sm text-slate-500">Monitor active dispatch receipts, digital acceptance, and the complete Master Archive Report (DR457 to DR1).</p>
                     </div>
                     <div class="flex items-center gap-2">
-                        <button onclick="openSelectBatchForDRModal()" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-600/30 transition flex items-center gap-2">
+                        <button onclick="openFillUpArchiveDRModal()" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/30 transition flex items-center gap-2 cursor-pointer">
+                            <span>📝</span>
+                            <span>Fill Up Delivery Receipt</span>
+                        </button>
+                        <button onclick="openSelectBatchForDRModal()" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-600/30 transition flex items-center gap-2 cursor-pointer">
                             <span>🚚</span>
-                            <span>Create Delivery Receipt</span>
+                            <span>Dispatch from Batch</span>
                         </button>
                     </div>
                 </div>
 
-                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left text-xs">
-                            <thead class="bg-slate-50 border-y border-slate-200 text-slate-600 font-bold uppercase tracking-wider">
-                                <tr>
-                                    <th class="py-3 px-4">DR Number</th>
-                                    <th class="py-3 px-4">Date</th>
-                                    <th class="py-3 px-4">Client</th>
-                                    <th class="py-3 px-4">PO / SO Ref</th>
-                                    <th class="py-3 px-4 min-w-[220px]">Delivery Progress</th>
-                                    <th class="py-3 px-4">Accepted</th>
-                                    <th class="py-3 px-4">Rejected</th>
-                                    <th class="py-3 px-4">Status</th>
-                                    <th class="py-3 px-4 text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="table-deliveries-body" class="divide-y divide-slate-100 font-medium">
-                                <tr><td colspan="9" class="py-6 text-center text-slate-400">Loading delivery receipts...</td></tr>
-                            </tbody>
-                        </table>
+                <!-- Sub-Navigation Toggle between Live DRs and Master Archive Report -->
+                <div class="flex items-center justify-between border-b border-slate-200 pb-2">
+                    <div class="flex items-center gap-2">
+                        <button type="button" id="btn-dr-tab-archive" onclick="switchDrViewMode('archive')" class="px-4 py-2 rounded-xl text-xs font-extrabold transition bg-indigo-600 text-white shadow-md shadow-indigo-600/20 flex items-center gap-2 cursor-pointer">
+                            <span>📑</span>
+                            <span>Master DR Report (DR457 to DR1)</span>
+                            <span id="badge-dr-archive-count" class="px-2 py-0.5 rounded-full bg-white/20 text-white text-[10px] font-black">480</span>
+                        </button>
+                        <button type="button" id="btn-dr-tab-active" onclick="switchDrViewMode('active')" class="px-4 py-2 rounded-xl text-xs font-bold transition text-slate-600 hover:bg-slate-100 flex items-center gap-2 cursor-pointer">
+                            <span>🚚</span>
+                            <span>Active Production Dispatches</span>
+                            <span id="badge-dr-active-count" class="px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 text-[10px] font-black">4</span>
+                        </button>
+                    </div>
+                    <div class="text-xs text-slate-500 font-bold hidden sm:block">
+                        <span>Source: </span><span class="font-mono text-slate-700">DELIVERY RECEIPTS AS OF August 2026 Updated.xlsx</span>
+                    </div>
+                </div>
+
+                <!-- SUB-VIEW 1: MASTER DR REPORT (DR457 TO DR1) -->
+                <div id="dr-subview-archive" class="space-y-4">
+                    <!-- Statistics KPI Cards -->
+                    <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                        <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+                            <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Total Archived DRs</span>
+                            <div class="text-2xl font-black text-indigo-700 mt-1" id="dr-stat-total-count">480</div>
+                            <div class="text-[11px] text-slate-500 font-semibold mt-0.5">DR 457 to DR 1 (Sorted Latest)</div>
+                        </div>
+                        <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+                            <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Total Dispatched Units</span>
+                            <div class="text-2xl font-black text-emerald-700 mt-1" id="dr-stat-total-units">898,182 pcs</div>
+                            <div class="text-[11px] text-slate-500 font-semibold mt-0.5">Across all client consignments</div>
+                        </div>
+                        <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+                            <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Top Client Consignee</span>
+                            <div class="text-sm font-black text-slate-900 mt-1 truncate" id="dr-stat-top-client">HER CHOICE INTERNATIONAL</div>
+                            <div class="text-[11px] text-indigo-600 font-bold mt-0.5" id="dr-stat-top-client-sub">335 DRs fulfilled</div>
+                        </div>
+                        <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-col justify-between">
+                            <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Quick Actions</span>
+                            <div class="flex items-center gap-2 mt-1">
+                                <button onclick="openFillUpArchiveDRModal()" class="flex-1 py-1.5 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer">
+                                    <span>➕ New DR</span>
+                                </button>
+                                <button onclick="exportArchiveDRsToExcel()" class="flex-1 py-1.5 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer">
+                                    <span>📊 Export</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Filter Bar -->
+                    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col md:flex-row items-center justify-between gap-3">
+                        <div class="relative w-full md:w-96">
+                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">🔍</span>
+                            <input type="text" id="dr-archive-search-input" oninput="onDrArchiveSearchInput()" placeholder="Search DR # (e.g. DR457), PO #, Client, Product..." class="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <div class="flex items-center gap-2 w-full md:w-auto">
+                            <select id="dr-archive-client-filter" onchange="loadArchiveDRs()" class="py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:bg-white focus:outline-none text-slate-700">
+                                <option value="">All Clients (59)</option>
+                            </select>
+                            <button onclick="loadArchiveDRs()" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer">
+                                <span>🔄</span> Refresh
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Master Table -->
+                    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                        <div class="overflow-x-auto max-h-[700px] overflow-y-auto">
+                            <table class="w-full text-left text-xs border-collapse">
+                                <thead class="bg-slate-100 text-slate-700 font-black uppercase text-[11px] sticky top-0 border-b border-slate-200 z-10 shadow-sm">
+                                    <tr>
+                                        <th class="py-3 px-4" style="width: 110px;">DR No.</th>
+                                        <th class="py-3 px-4" style="width: 100px;">Date</th>
+                                        <th class="py-3 px-4 min-w-[200px]">Client / Bill To</th>
+                                        <th class="py-3 px-4" style="width: 140px;">PO / SO Ref</th>
+                                        <th class="py-3 px-4 min-w-[280px]">Dispatched Items & Quantities</th>
+                                        <th class="py-3 px-4 text-right" style="width: 120px;">Total Qty</th>
+                                        <th class="py-3 px-4 min-w-[140px]">Signatories</th>
+                                        <th class="py-3 px-4 text-right" style="width: 140px;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="table-archive-deliveries-body" class="divide-y divide-slate-100 font-medium">
+                                    <tr><td colspan="8" class="py-8 text-center text-slate-400">Loading master delivery receipts archive...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 font-bold">
+                            <span id="dr-archive-pagination-info">Showing all records arranged latest to oldest (DR457 to DR1)</span>
+                            <span class="text-[11px] text-slate-400 font-mono">Archive Synchronized • August 2026</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SUB-VIEW 2: ACTIVE PRODUCTION DELIVERIES -->
+                <div id="dr-subview-active" class="space-y-4 hidden">
+                    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-50 border-y border-slate-200 text-slate-600 font-bold uppercase tracking-wider">
+                                    <tr>
+                                        <th class="py-3 px-4">DR Number</th>
+                                        <th class="py-3 px-4">Date</th>
+                                        <th class="py-3 px-4">Client</th>
+                                        <th class="py-3 px-4">PO / SO Ref</th>
+                                        <th class="py-3 px-4 min-w-[220px]">Delivery Progress</th>
+                                        <th class="py-3 px-4">Accepted</th>
+                                        <th class="py-3 px-4">Rejected</th>
+                                        <th class="py-3 px-4">Status</th>
+                                        <th class="py-3 px-4 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="table-deliveries-body" class="divide-y divide-slate-100 font-medium">
+                                    <tr><td colspan="9" class="py-6 text-center text-slate-400">Loading delivery receipts...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -2377,6 +2479,152 @@
                     <button type="submit" form="form-order-category" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 transition flex items-center gap-1.5 cursor-pointer">
                         <span>💾 Save Category</span>
                     </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- FILL UP DELIVERY RECEIPT MODAL (OFFICIAL EXCEL FORMAT) -->
+        <div id="modal-fillup-archive-dr" class="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+            <div class="bg-white w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-150">
+                <!-- Header -->
+                <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+                    <div class="flex items-center gap-3">
+                        <span class="text-2xl">📋</span>
+                        <div>
+                            <h3 class="font-bold text-base text-white">Fill Up Delivery Receipt (DR)</h3>
+                            <div class="text-xs text-slate-400">Official NKB Manufacturing Delivery Receipt Format • August 2026 Updated</div>
+                        </div>
+                    </div>
+                    <button type="button" onclick="closeFillUpArchiveDRModal()" class="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition cursor-pointer">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+
+                <!-- Form Body -->
+                <form id="form-fillup-archive-dr" onsubmit="submitFillUpArchiveDR(event)" class="p-6 space-y-5 overflow-y-auto text-xs flex-1">
+                    <!-- Header Info Banner -->
+                    <div class="p-3 bg-indigo-50 border border-indigo-200 rounded-xl flex items-center justify-between text-indigo-900">
+                        <div class="flex items-center gap-2">
+                            <span class="text-base">🏭</span>
+                            <span class="font-bold">NKB MANUFACTURING CORPORATION</span>
+                            <span class="text-indigo-400">|</span>
+                            <span class="text-indigo-700 text-[11px]">Blk 4 Lot 5 Twig St. Sampaguita Village, Mambog II, Bacoor City, Cavite</span>
+                        </div>
+                        <span class="text-[11px] font-mono font-bold bg-white px-2.5 py-1 rounded-md border border-indigo-200 text-indigo-800">DR Template Log</span>
+                    </div>
+
+                    <!-- Top Grid: DR No, Date, Bill To, PO Ref -->
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-700 mb-1">DR Number *</label>
+                            <input type="text" id="dr-fillup-number" required placeholder="e.g. DR458" class="w-full text-xs p-2.5 font-mono font-extrabold border border-indigo-300 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500 text-indigo-700 uppercase">
+                            <span class="text-[10px] text-slate-400 mt-0.5 block">Auto-suggested latest DR</span>
+                        </div>
+
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-700 mb-1">Date *</label>
+                            <input type="date" id="dr-fillup-date" required class="w-full text-xs p-2.5 font-bold border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500 text-slate-800">
+                            <span class="text-[10px] text-slate-400 mt-0.5 block">Dispatch delivery date</span>
+                        </div>
+
+                        <div class="md:col-span-2">
+                            <label class="block text-[11px] font-bold text-slate-700 mb-1">Bill To / Client Name *</label>
+                            <input type="text" id="dr-fillup-billto" list="dr-fillup-clients-list" required placeholder="e.g. HER CHOICE INTERNATIONAL, JLS, BSE..." class="w-full text-xs p-2.5 font-bold border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500 text-slate-900 uppercase">
+                            <datalist id="dr-fillup-clients-list"></datalist>
+                            <span class="text-[10px] text-slate-400 mt-0.5 block">Select existing client or type new</span>
+                        </div>
+
+                        <div class="md:col-span-2">
+                            <label class="block text-[11px] font-bold text-slate-700 mb-1">PO Number / Reference</label>
+                            <input type="text" id="dr-fillup-pono" placeholder="e.g. PO# 1024 / SO# 402 or PO 0826" class="w-full text-xs p-2.5 font-medium border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500 text-slate-800">
+                        </div>
+
+                        <div class="md:col-span-2">
+                            <label class="block text-[11px] font-bold text-slate-700 mb-1">SO Number (Optional)</label>
+                            <input type="text" id="dr-fillup-sono" placeholder="e.g. SO# 501" class="w-full text-xs p-2.5 font-medium border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500 text-slate-800">
+                        </div>
+                    </div>
+
+                    <!-- Items Table Section -->
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h4 class="font-bold text-slate-900 text-xs uppercase tracking-wider">Dispatched Line Items</h4>
+                                <p class="text-[11px] text-slate-500">Items matching the official DELIVERY RECEIPTS format</p>
+                            </div>
+                            <button type="button" onclick="addFillUpItemRow()" class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer">
+                                <span>➕ Add Item Row</span>
+                            </button>
+                        </div>
+
+                        <div class="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+                            <table class="w-full text-left text-xs border-collapse">
+                                <thead class="bg-slate-100 text-slate-700 font-black uppercase text-[10px] border-b border-slate-200">
+                                    <tr>
+                                        <th class="py-2.5 px-3" style="width: 130px;">Code / Batch</th>
+                                        <th class="py-2.5 px-3">Description *</th>
+                                        <th class="py-2.5 px-3" style="width: 90px;">Unit</th>
+                                        <th class="py-2.5 px-3 text-right" style="width: 100px;">Qty *</th>
+                                        <th class="py-2.5 px-3 text-right" style="width: 90px;">Price</th>
+                                        <th class="py-2.5 px-3 text-right" style="width: 100px;">Total</th>
+                                        <th class="py-2.5 px-3" style="width: 130px;">Remarks</th>
+                                        <th class="py-2.5 px-2 text-center" style="width: 40px;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="dr-fillup-items-tbody" class="divide-y divide-slate-100 font-medium">
+                                    <!-- Populated dynamically -->
+                                </tbody>
+                                <tfoot class="bg-slate-50 border-t border-slate-200 font-black text-slate-800">
+                                    <tr>
+                                        <td colspan="3" class="py-2 px-3 text-right text-xs">Total Quantity:</td>
+                                        <td class="py-2 px-3 text-right font-mono text-sm text-indigo-700 font-black" id="dr-fillup-total-qty">0</td>
+                                        <td colspan="4" class="py-2 px-3 text-slate-500 text-[11px]">Units calculated</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Notes & Instructions -->
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-700 mb-1">Notes / Packaging Details (e.g. 14 BOXES, FRAGILE)</label>
+                        <input type="text" id="dr-fillup-note" placeholder="e.g. 14 BOXES / 3 BUNDLES" class="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500 text-slate-800">
+                    </div>
+
+                    <!-- 4 Signatories matching Excel Sheet -->
+                    <div class="border-t border-slate-200 pt-4">
+                        <h4 class="font-bold text-slate-900 text-xs uppercase tracking-wider mb-3">4 Signatories (Official Receipt Protocol)</h4>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                            <div>
+                                <label class="block text-[10px] font-black uppercase text-slate-500 mb-1">1. Prepared By</label>
+                                <input type="text" id="dr-fillup-prepby" value="Ronaldo Prudencio" required class="w-full text-xs p-2 border border-slate-300 rounded-lg bg-white font-bold text-slate-800">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-black uppercase text-slate-500 mb-1">2. QC Approved</label>
+                                <input type="text" id="dr-fillup-qcapp" value="Quality Assurance" required class="w-full text-xs p-2 border border-slate-300 rounded-lg bg-white font-bold text-slate-800">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-black uppercase text-slate-500 mb-1">3. Delivered By</label>
+                                <input type="text" id="dr-fillup-delby" value="Driver's Name" required class="w-full text-xs p-2 border border-slate-300 rounded-lg bg-white font-bold text-slate-800">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-black uppercase text-slate-500 mb-1">4. Received By</label>
+                                <input type="text" id="dr-fillup-recby" value="Customer Representative" required class="w-full text-xs p-2 border border-slate-300 rounded-lg bg-white font-bold text-slate-800">
+                            </div>
+                        </div>
+                    </div>
+                </form>
+
+                <!-- Footer -->
+                <div class="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+                    <button type="button" onclick="closeFillUpArchiveDRModal()" class="px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 transition cursor-pointer">
+                        Cancel
+                    </button>
+                    <div class="flex items-center gap-2">
+                        <button type="submit" form="form-fillup-archive-dr" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 transition flex items-center gap-1.5 cursor-pointer">
+                            <span>💾 Save to Master DR Log</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
