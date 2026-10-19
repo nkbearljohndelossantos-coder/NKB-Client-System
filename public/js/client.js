@@ -361,8 +361,11 @@ function renderClientCart() {
                     <td class="py-2.5 px-2 font-extrabold text-indigo-900 font-mono">
                         ${NKB.formatCurrency(lineSubtotal)}
                     </td>
-                    <td class="py-2.5 px-2 text-center">
-                        <button type="button" onclick="removeFromClientCart(${idx})" class="p-1 hover:bg-rose-50 text-rose-500 hover:text-rose-700 rounded transition" title="Remove item">
+                    <td class="py-2.5 px-2 text-center whitespace-nowrap">
+                        <button type="button" onclick="duplicateClientCartItem(${idx})" class="p-1 hover:bg-indigo-50 text-indigo-600 hover:text-indigo-800 rounded transition font-bold mr-1" title="Add another line for this product">
+                            ➕
+                        </button>
+                        <button type="button" onclick="removeFromClientCart(${idx})" class="p-1 hover:bg-rose-50 text-rose-500 hover:text-rose-700 rounded transition font-bold" title="Remove item">
                             ✖
                         </button>
                     </td>
@@ -376,6 +379,21 @@ function renderClientCart() {
     if (grandTotalEl) grandTotalEl.textContent = NKB.formatCurrency(grandTotal);
 }
 
+function duplicateClientCartItem(index) {
+    if (!clientCartItems[index]) return;
+    const item = clientCartItems[index];
+    clientCartItems.push({
+        product_id: item.product_id,
+        name: item.name,
+        sku: item.sku,
+        unit_price: item.unit_price,
+        target_quantity: item.target_quantity
+    });
+    renderClientCart();
+    NKB.showToast(`Added another line item for ${item.name}!`, 'success');
+}
+window.duplicateClientCartItem = duplicateClientCartItem;
+
 async function submitClientPO(e) {
     e.preventDefault();
     if (clientCartItems.length === 0) {
@@ -386,10 +404,12 @@ async function submitClientPO(e) {
     const policy = document.querySelector('input[name="client_billing_policy"]:checked')?.value || 'ACTUAL_DELIVERY';
     const notes = document.getElementById('client-order-notes')?.value || '';
     const customerPoNumber = document.getElementById('client-customer-po-number')?.value?.trim() || undefined;
+    const deliveryDate = document.getElementById('client-delivery-date')?.value?.trim() || undefined;
 
     const orderPayload = {
         billing_policy: policy,
         customer_po_number: customerPoNumber,
+        expected_delivery_date: deliveryDate,
         notes,
         items: clientCartItems.map(item => ({
             product_id: item.product_id,
@@ -795,7 +815,10 @@ async function loadClientOrders() {
             return `
             <tr class="bg-white hover:bg-slate-50/90 transition shadow-xs rounded-2xl group ${isVoided ? 'opacity-60 bg-rose-50/20' : ''}">
                 <td class="py-3.5 px-4 whitespace-nowrap rounded-l-2xl border-y border-l border-slate-200/90 border-l-4 ${statusBorderColor}">
-                    <div class="text-[11px] text-slate-500 font-semibold leading-none mb-1">${NKB.formatDate(po.po_date)}</div>
+                    <div class="text-[11px] text-slate-500 font-semibold leading-none mb-1">
+                        <span>${NKB.formatDate(po.po_date)}</span>
+                        ${po.expected_delivery_date ? `<span class="text-[10px] text-emerald-700 font-bold ml-1.5" title="Delivery Date">· 🚚 Due: ${NKB.formatDate(po.expected_delivery_date)}</span>` : ''}
+                    </div>
                     <button type="button" onclick="openViewPOModal('${po.id}')" class="font-mono font-black text-indigo-600 hover:text-indigo-800 hover:underline text-left block text-sm tracking-tight" title="Click to view full PO details">
                         ${po.po_number}
                     </button>

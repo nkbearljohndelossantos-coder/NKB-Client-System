@@ -802,7 +802,12 @@
         }
 
         .items-table thead th.th-desc {
-            width: 64%;
+            width: 48%;
+        }
+
+        .items-table thead th.th-size {
+            width: 16%;
+            text-align: center;
         }
 
         .items-table thead th.th-qty {
@@ -823,6 +828,13 @@
             line-height: 1.3;
             border-bottom: 0.5px solid #cbd5e1;
             font-weight: 700;
+        }
+
+        .items-table tbody td.td-size {
+            text-align: center;
+            font-weight: 700;
+            color: #000000;
+            white-space: nowrap;
         }
 
         .items-table tbody tr:last-child td {
@@ -1376,6 +1388,7 @@
                 <td class="td-desc cell-editable">
                     <span class="product-name-txt" contenteditable="true">NEW PRODUCT</span>
                 </td>
+                <td class="td-size cell-editable" contenteditable="true" style="text-align: center; font-weight: 700;">—</td>
                 <td class="td-qty cell-editable" contenteditable="true">1.00</td>
                 <td class="td-uom cell-editable" contenteditable="true">PC</td>
                 <td class="edit-only no-print" style="text-align: center; vertical-align: middle;">
@@ -1477,7 +1490,7 @@
                 : (client.company_name || client.client_name || 'JLS SKIN ESSENTIALS OPC');
             const customerAddress = (client.client_address || client.address || '').trim() || 'Phils.';
             const docDate = formatDateMMDDYYYY(client.po_date || client.scheduled_start_date || client.created_at || new Date());
-            const dueDate = formatDateMMDDYYYY(client.expected_delivery_date || client.scheduled_end_date || client.po_date || client.created_at || new Date());
+            const dueDate = client.expected_delivery_date ? formatDateMMDDYYYY(client.expected_delivery_date) : (client.scheduled_end_date ? formatDateMMDDYYYY(client.scheduled_end_date) : '—');
             const remarks = client.notes || client.po_notes || '';
             
             const rawDocNo = (docTitle === 'SALES ORDER')
@@ -1528,9 +1541,9 @@
                     <tr class="item-row">
                         <td class="td-desc cell-editable">
                             <span class="product-name-txt">${escapeHtml(name)}</span>
-                            ${itemSize ? `<span class="product-size-txt" style="font-weight: 800; color: #000000; margin-left: 5px;">[${escapeHtml(itemSize)}]</span>` : ''}
                             ${sku ? `<span class="product-sku-txt">(${escapeHtml(sku)})</span>` : ''}
                         </td>
+                        <td class="td-size cell-editable">${escapeHtml(itemSize || '—')}</td>
                         <td class="td-qty cell-editable">${escapeHtml(qty)}</td>
                         <td class="td-uom cell-editable">${escapeHtml(uom)}</td>
                         <td class="edit-only no-print" style="text-align: center; vertical-align: middle;">
@@ -1570,7 +1583,7 @@
                                 <div class="doc-no doc-no-display" data-client-idx="${clientIdx}" data-raw-no="${escapeHtml(rawDocNo)}">${escapeHtml(formattedDocNo)}</div>
                                 ${client.customer_po_number ? `<div class="meta-line">Customer PO #: <strong>${escapeHtml(client.customer_po_number)}</strong></div>` : ''}
                                 <div class="meta-line">Date: <span class="doc-date-display">${escapeHtml(docDate)}</span></div>
-                                <div class="meta-line">Due Date: <span class="doc-duedate-display">${escapeHtml(dueDate)}</span></div>
+                                <div class="meta-line">Delivery Date: <span class="doc-duedate-display">${escapeHtml(dueDate)}</span></div>
                             </div>
                         </div>
                     </div>
@@ -1581,13 +1594,14 @@
                             <thead>
                                 <tr>
                                     <th class="th-desc">Description</th>
+                                    <th class="th-size">Net Content</th>
                                     <th class="th-qty">Quantity</th>
                                     <th class="th-uom">UOM</th>
                                     <th class="edit-only no-print" style="width: 28px; text-align: center;">✕</th>
                                 </tr>
                             </thead>
                             <tbody class="items-tbody">
-                                ${itemsRows || '<tr><td colspan="3" style="text-align: center; color: #888;">No items listed</td></tr>'}
+                                ${itemsRows || '<tr><td colspan="4" style="text-align: center; color: #888;">No items listed</td></tr>'}
                             </tbody>
                         </table>
                     </div>

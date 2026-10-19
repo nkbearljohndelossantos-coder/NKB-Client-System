@@ -349,11 +349,19 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), (req, r
             return res.status(400).json({ success: false, error: 'No products found in this Purchase Order.' });
         }
 
-        // Check which items already have an active JO for this PO
+        // Check which items already have an active JO for this PO (counting occurrences to support same product multiple times)
         const existingJOs = db.prepare("SELECT product_id, jo_number FROM job_orders WHERE po_id = ? AND status != 'CANCELLED'").all(po_id);
-        const existingProductIds = new Set(existingJOs.map(j => j.product_id));
+        const existingCounts = {};
+        for (const j of existingJOs) {
+            existingCounts[j.product_id] = (existingCounts[j.product_id] || 0) + 1;
+        }
 
-        const itemsToCreate = poItems.filter(item => !existingProductIds.has(item.product_id));
+        const seenCounts = {};
+        const itemsToCreate = poItems.filter(item => {
+            seenCounts[item.product_id] = (seenCounts[item.product_id] || 0) + 1;
+            const existingCount = existingCounts[item.product_id] || 0;
+            return seenCounts[item.product_id] > existingCount;
+        });
 
         if (itemsToCreate.length === 0) {
             return res.json({

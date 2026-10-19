@@ -1319,6 +1319,7 @@ async function openViewPOModal(poId) {
                     <div class="font-black text-slate-950 text-xs">${item.product_name}</div>
                     <div class="text-[10px] text-indigo-900 font-bold font-mono bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded inline-block mt-0.5">SKU: ${item.sku}</div>
                 </td>
+                <td class="py-3 px-3 text-center font-bold text-slate-800 text-xs">${item.size || '—'}</td>
                 <td class="py-3 px-3 text-center"><span class="badge bg-slate-100 text-slate-700 font-mono text-[10px]">${item.formula_code || 'FORM-2026-V1'}</span></td>
                 <td class="py-3 px-3 text-center text-slate-600">${item.shelf_life_months || 24} mos</td>
                 <td class="py-3 px-3 text-center font-black text-slate-950 font-mono">${NKB.formatNumber(item.target_quantity)} ${item.unit || 'pcs'}</td>
@@ -1381,7 +1382,13 @@ async function openViewPOModal(poId) {
                 </div>
 
                 <!-- Specifications Badges -->
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                <div class="grid grid-cols-1 sm:grid-cols-4 gap-2.5 text-xs">
+                    <div class="p-2.5 bg-slate-50 rounded-xl border border-slate-200/70 space-y-0.5">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Net Content</span>
+                        <div class="font-bold text-slate-900 flex items-center gap-1.5">
+                            <span>🧴</span><span>${item.size || '—'}</span>
+                        </div>
+                    </div>
                     <div class="p-2.5 bg-slate-50 rounded-xl border border-slate-200/70 space-y-0.5">
                         <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Formulation Code</span>
                         <div class="font-mono font-black text-slate-800 flex items-center gap-1.5">
@@ -1555,6 +1562,7 @@ async function openViewPOModal(poId) {
                                         <tr>
                                             <th class="py-2.5 px-3 text-center w-10">#</th>
                                             <th class="py-2.5 px-3">Product Name & SKU</th>
+                                            <th class="py-2.5 px-3 text-center">Net Content</th>
                                             <th class="py-2.5 px-3 text-center">Formula Code</th>
                                             <th class="py-2.5 px-3 text-center">Shelf Life</th>
                                             <th class="py-2.5 px-3 text-center">Target Qty</th>
@@ -2353,33 +2361,22 @@ function selectEditPOSuggestion(productId) {
     const prod = editPOCatalog.find(p => p.id === productId);
     if (!prod) return;
 
-    const existingIdx = editPOLineItems.findIndex(it => it.product_id === productId);
-    if (existingIdx !== -1) {
-        renderEditPOLineItems();
-        const rowInput = document.querySelector(`#edit-po-lines-body tr:nth-child(${existingIdx + 1}) input[type="number"]`);
+    editPOLineItems.push({
+        product_id: prod.id,
+        target_quantity: 1000,
+        unit_price: Number(prod.default_price || 0)
+    });
+    renderEditPOLineItems();
+    NKB.showToast(`Added ${prod.display_name} [${prod.brand}] to order!`, 'success');
+
+    const lastIdx = editPOLineItems.length - 1;
+    setTimeout(() => {
+        const rowInput = document.querySelector(`#edit-po-lines-body tr:nth-child(${lastIdx + 1}) input[type="number"]`);
         if (rowInput) {
             rowInput.focus();
             rowInput.select();
         }
-        NKB.showToast(`"${prod.display_name}" is already in order (Row #${existingIdx + 1}). Quantity focused.`, 'info');
-    } else {
-        editPOLineItems.push({
-            product_id: prod.id,
-            target_quantity: 1000,
-            unit_price: Number(prod.default_price || 0)
-        });
-        renderEditPOLineItems();
-        NKB.showToast(`Added ${prod.display_name} [${prod.brand}] to order!`, 'success');
-
-        const lastIdx = editPOLineItems.length - 1;
-        setTimeout(() => {
-            const rowInput = document.querySelector(`#edit-po-lines-body tr:nth-child(${lastIdx + 1}) input[type="number"]`);
-            if (rowInput) {
-                rowInput.focus();
-                rowInput.select();
-            }
-        }, 50);
-    }
+    }, 50);
 
     const container = document.getElementById('edit-po-suggestions-container');
     if (container) container.classList.add('hidden');

@@ -4732,6 +4732,124 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.ok(printJoHtml.includes('client.customer_po_number'), 'print-jo.html must display customer_po_number');
     });
 
+    test('94. Duplicate Products in PO, Optional Delivery Date, and Net Content in PO/SO Receipts', async () => {
+        // Find or create test client and product
+        const clientRow = db.prepare("SELECT id FROM clients LIMIT 1").get();
+        const prodRow = db.prepare("SELECT id, name, sku, size, unit FROM products LIMIT 1").get();
+        assert.ok(clientRow, 'Client must exist');
+        assert.ok(prodRow, 'Product must exist');
+
+        // 1. Create a PO having the SAME product twice with different quantities and optional delivery date
+        const deliveryDate = '2026-11-15';
+        const createRes = await request(app)
+            .post('/api/orders')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                client_id: clientRow.id,
+                customer_po_number: 'PO-SAME-PROD-94',
+                expected_delivery_date: deliveryDate,
+                form_of_payment: '30d',
+                notes: 'Test PO with duplicate product lines and optional delivery date',
+                items: [
+                    {
+                        product_id: prodRow.id,
+                        item_name: `${prodRow.name} - Batch 1`,
+                        target_quantity: 600,
+                        unit_price: 150.00
+                    },
+                    {
+                        product_id: prodRow.id,
+                        item_name: `${prodRow.name} - Batch 2`,
+                        target_quantity: 900,
+                        unit_price: 145.00
+                    }
+                ]
+            });
+
+        assert.strictEqual(createRes.status, 201);
+        assert.strictEqual(createRes.body.success, true);
+        const orderId = createRes.body.data.id;
+        assert.ok(orderId);
+        assert.strictEqual(createRes.body.data.expected_delivery_date, deliveryDate);
+
+        // 2. Fetch order via GET /api/orders/:id and verify both line items exist
+        const fetchRes = await request(app)
+            .get(`/api/orders/${orderId}`)
+            .set('Authorization', `Bearer ${adminToken}`);
+
+        assert.strictEqual(fetchRes.status, 200);
+        assert.strictEqual(fetchRes.body.data.expected_delivery_date, deliveryDate);
+        assert.strictEqual(fetchRes.body.data.items.length, 2, 'Must contain 2 line items');
+        assert.strictEqual(fetchRes.body.data.items[0].product_id, prodRow.id);
+        assert.strictEqual(fetchRes.body.data.items[1].product_id, prodRow.id);
+        assert.strictEqual(fetchRes.body.data.items[0].target_quantity, 600);
+        assert.strictEqual(fetchRes.body.data.items[1].target_quantity, 900);
+
+        // 3. Update order via PUT /api/orders/:id with duplicate products and updated delivery date
+        const updatedDeliveryDate = '2026-12-01';
+        const updateRes = await request(app)
+            .put(`/api/orders/${orderId}`)
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                expected_delivery_date: updatedDeliveryDate,
+                items: [
+                    {
+                        product_id: prodRow.id,
+                        item_name: `${prodRow.name} - Revised Batch 1`,
+                        target_quantity: 700,
+                        unit_price: 150.00
+                    },
+                    {
+                        product_id: prodRow.id,
+                        item_name: `${prodRow.name} - Revised Batch 2`,
+                        target_quantity: 1100,
+                        unit_price: 145.00
+                    }
+                ]
+            });
+
+        assert.strictEqual(updateRes.status, 200);
+        assert.strictEqual(updateRes.body.success, true);
+        assert.strictEqual(updateRes.body.data.expected_delivery_date, updatedDeliveryDate);
+        assert.strictEqual(updateRes.body.data.items.length, 2);
+        assert.strictEqual(updateRes.body.data.items[0].target_quantity, 700);
+        assert.strictEqual(updateRes.body.data.items[1].target_quantity, 1100);
+
+        // 4. Batch Job Order creation for PO with duplicate product lines
+        const joBatchRes = await request(app)
+            .post('/api/job-orders')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                po_id: orderId,
+                create_all: true
+            });
+
+        assert.strictEqual(joBatchRes.status, 201);
+        assert.strictEqual(joBatchRes.body.success, true);
+        assert.strictEqual(joBatchRes.body.count, 2, 'Should create 2 distinct Job Orders for both lines');
+
+        // 5. Verify UI template files for Net Content and optional Delivery Date
+        const printPoHtml = fs.readFileSync(path.join(__dirname, '../public/print-po.html'), 'utf8');
+        assert.ok(printPoHtml.includes('Net Content'), 'print-po.html must display Net Content header');
+        assert.ok(printPoHtml.includes('Delivery Date:'), 'print-po.html must include Delivery Date metadata');
+
+        const printJoHtml = fs.readFileSync(path.join(__dirname, '../public/print-jo.html'), 'utf8');
+        assert.ok(printJoHtml.includes('Net Content'), 'print-jo.html must display Net Content header');
+        assert.ok(printJoHtml.includes('Delivery Date:'), 'print-jo.html must include Delivery Date metadata');
+
+        const adminJs = fs.readFileSync(path.join(__dirname, '../public/js/admin.js'), 'utf8');
+        assert.ok(adminJs.includes('create-po-delivery-date'), 'admin.js must contain create-po-delivery-date input');
+
+        const clientHtml = fs.readFileSync(path.join(__dirname, '../public/client.html'), 'utf8');
+        assert.ok(clientHtml.includes('client-delivery-date'), 'client.html must contain client-delivery-date input');
+
+        const clientJs = fs.readFileSync(path.join(__dirname, '../public/js/client.js'), 'utf8');
+        assert.ok(clientJs.includes('duplicateClientCartItem'), 'client.js must include duplicateClientCartItem');
+
+        const appJs = fs.readFileSync(path.join(__dirname, '../public/js/app.js'), 'utf8');
+        assert.ok(appJs.includes('Net Content'), 'app.js view modal must include Net Content');
+    });
+
     after(() => {
         try {
             realtimeSyncService.closeAllClients();

@@ -895,7 +895,10 @@ async function loadOrders() {
             return `
             <tr class="bg-white hover:bg-slate-50/90 transition shadow-xs rounded-2xl group ${isVoided ? 'opacity-60 bg-rose-50/20' : ''}">
                 <td class="py-3.5 px-4 whitespace-nowrap rounded-l-2xl border-y border-l border-slate-200/90 border-l-4 ${statusBorderColor}">
-                    <div class="text-[11px] text-slate-500 font-semibold leading-none mb-1">${NKB.formatDate(po.po_date)}</div>
+                    <div class="text-[11px] text-slate-500 font-semibold leading-none mb-1">
+                        <span>${NKB.formatDate(po.po_date)}</span>
+                        ${po.expected_delivery_date ? `<span class="text-[10px] text-emerald-700 font-bold ml-1.5" title="Delivery Date">· 🚚 Due: ${NKB.formatDate(po.expected_delivery_date)}</span>` : ''}
+                    </div>
                     <div class="flex items-center gap-1.5 flex-wrap">
                         <button type="button" onclick="openViewPOModal('${po.id}')" class="font-mono font-black text-indigo-600 hover:text-indigo-800 hover:underline text-left block text-sm tracking-tight" title="Click to view full PO details">
                             ${po.po_number}
@@ -7942,7 +7945,7 @@ async function openCreatePOModal(options = {}) {
                     </button>
                 </div>
                 <form id="form-create-po" onsubmit="submitCreatePO(event)" class="space-y-4 text-xs font-normal flex-1 overflow-y-auto pr-1">
-                    <div class="grid grid-cols-1 sm:grid-cols-4 gap-3.5">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
                         <div>
                             <label class="block text-slate-500 font-medium text-xs mb-1.5 uppercase tracking-wider">Select Client *</label>
                             <select id="po-client-id" onchange="onAdminPOClientChanged()" required class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white font-normal text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
@@ -7956,6 +7959,10 @@ async function openCreatePOModal(options = {}) {
                         <div>
                             <label class="block text-slate-500 font-medium text-xs mb-1.5 uppercase tracking-wider">Customer PO # (Optional)</label>
                             <input type="text" id="create-po-customer-po-number" placeholder="e.g. PO-CUST-2026-001" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white font-normal text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
+                        </div>
+                        <div>
+                            <label class="block text-slate-500 font-medium text-xs mb-1.5 uppercase tracking-wider">Delivery Date (Optional)</label>
+                            <input type="date" id="create-po-delivery-date" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white font-normal text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
                         </div>
                         <div>
                             <label class="block text-slate-500 font-medium text-xs mb-1.5 uppercase tracking-wider">Term of Payment *</label>
@@ -8351,34 +8358,23 @@ function selectPOSuggestion(productId) {
     const prod = adminPOCatalog.find(p => p.id === productId);
     if (!prod) return;
 
-    // Check if already in line items
-    const existingIdx = adminPOLineItems.findIndex(it => it.product_id === productId);
-    if (existingIdx !== -1) {
-        renderAdminPOLineItems();
-        const rowInput = document.querySelector(`#admin-po-lines-body tr:nth-child(${existingIdx + 1}) input[type="number"]`);
-        if (rowInput) {
-            rowInput.focus();
-            rowInput.select();
-        }
-        NKB.showToast(`"${prod.display_name}" is already in order (Row #${existingIdx + 1}). Quantity highlighted.`, 'info');
+    // If single initial line item that hasn't been touched, replace it; otherwise add as a new line item (allowing same product multiple times)
+    if (adminPOLineItems.length === 1 && adminPOLineItems[0].target_quantity === 1000 && adminPOLineItems[0].product_id === adminPOCatalog[0]?.id && !adminPOLineItems[0]._userEdited) {
+        adminPOLineItems[0].product_id = prod.id;
+        adminPOLineItems[0].unit_price = Number(prod.default_price || 0);
+        adminPOLineItems[0]._userEdited = true;
     } else {
-        // If single line item that hasn't been touched, replace it
-        if (adminPOLineItems.length === 1 && adminPOLineItems[0].target_quantity === 1000 && adminPOLineItems[0].product_id === adminPOCatalog[0]?.id && !adminPOLineItems[0]._userEdited) {
-            adminPOLineItems[0].product_id = prod.id;
-            adminPOLineItems[0].unit_price = Number(prod.default_price || 0);
-            adminPOLineItems[0]._userEdited = true;
-        } else {
-            adminPOLineItems.push({
-                product_id: prod.id,
-                target_quantity: 1000,
-                unit_price: Number(prod.default_price || 0),
-                _userEdited: true
-            });
-        }
-        renderAdminPOLineItems();
-        NKB.showToast(`Added ${prod.display_name} [${prod.brand}] to order!`, 'success');
+        adminPOLineItems.push({
+            product_id: prod.id,
+            target_quantity: 1000,
+            unit_price: Number(prod.default_price || 0),
+            _userEdited: true
+        });
+    }
+    renderAdminPOLineItems();
+    NKB.showToast(`Added ${prod.display_name} [${prod.brand}] to order!`, 'success');
 
-        const lastIdx = adminPOLineItems.length - 1;
+    const lastIdx = adminPOLineItems.length - 1;
         setTimeout(() => {
             const rowInput = document.querySelector(`#admin-po-lines-body tr:nth-child(${lastIdx + 1}) input[type="number"]`);
             if (rowInput) {
@@ -8559,11 +8555,13 @@ async function submitCreatePO(e) {
     try {
         const isBufferStock = document.getElementById('create-po-is-buffer-stock')?.checked ? 1 : 0;
         const customerPoNumber = document.getElementById('create-po-customer-po-number')?.value?.trim() || undefined;
+        const deliveryDate = document.getElementById('create-po-delivery-date')?.value?.trim() || undefined;
         const res = await NKB.api('/api/orders', {
             method: 'POST',
             body: JSON.stringify({
                 client_id: clientId,
                 customer_po_number: customerPoNumber,
+                expected_delivery_date: deliveryDate,
                 tolerance_percent: tolerance,
                 billing_policy: policy,
                 is_buffer_stock: isBufferStock,

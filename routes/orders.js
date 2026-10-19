@@ -845,6 +845,8 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             `);
 
+            // Synchronize existing Job Orders for items in this PO (supporting multiple occurrences of same product)
+            const syncedJoIds = new Set();
             for (const it of processedItems) {
                 insertItemStmt.run(
                     it.id,
@@ -858,21 +860,22 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
                     it.subtotal
                 );
 
-                // Synchronize existing Job Orders for this product if any exist
-                const existingJO = db.prepare('SELECT id FROM job_orders WHERE po_id = ? AND product_id = ?').get(id, it.productId);
-                if (existingJO) {
+                const availableJOs = db.prepare('SELECT id FROM job_orders WHERE po_id = ? AND product_id = ? ORDER BY created_at ASC').all(id, it.productId);
+                const targetJO = availableJOs.find(j => !syncedJoIds.has(j.id));
+                if (targetJO) {
+                    syncedJoIds.add(targetJO.id);
                     db.prepare(`
                         UPDATE job_orders
                         SET target_quantity = ?, updated_at = datetime('now', 'localtime')
                         WHERE id = ?
-                    `).run(it.targetQuantity || it.target_quantity, existingJO.id);
+                    `).run(it.targetQuantity || it.target_quantity, targetJO.id);
 
                     // Sync target_quantity on active production batches
                     db.prepare(`
                         UPDATE production_batches
                         SET target_quantity = ?, updated_at = datetime('now', 'localtime')
                         WHERE jo_id = ? AND status IN ('PLANNED', 'MIXING')
-                    `).run(it.targetQuantity || it.target_quantity, existingJO.id);
+                    `).run(it.targetQuantity || it.target_quantity, targetJO.id);
                 }
             }
 

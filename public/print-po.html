@@ -813,7 +813,7 @@
                 <div id="meta-cust-po-row" style="display: none;">Customer PO #: <span id="meta-customer-po-number" contenteditable="false"></span></div>
                 <div>Date: <span id="meta-doc-date" contenteditable="false">08/20/2026</span></div>
                 <div>Terms: <span id="meta-doc-terms" contenteditable="false">COD</span></div>
-                <div>Due Date: <span id="meta-doc-due-date" contenteditable="false">08/20/2026</span></div>
+                <div>Delivery Date: <span id="meta-doc-due-date" contenteditable="false">08/20/2026</span></div>
             </div>
         </div>
 
@@ -823,7 +823,7 @@
                 <thead>
                     <tr>
                         <th class="th-desc">Description</th>
-                        <th class="th-size">Size</th>
+                        <th class="th-size">Net Content<span style="display:none">Size</span></th>
                         <th class="th-qty">Quantity</th>
                         <th class="th-uom">UOM</th>
                         <th class="th-price">Price</th>
@@ -1195,7 +1195,7 @@
             }
             document.getElementById('meta-doc-date').textContent = formatDateMMDDYYYY(po.po_date || po.created_at || new Date());
             document.getElementById('meta-doc-terms').textContent = po.form_of_payment || po.terms || 'COD';
-            document.getElementById('meta-doc-due-date').textContent = formatDateMMDDYYYY(po.expected_delivery_date || po.po_date || po.created_at || new Date());
+            document.getElementById('meta-doc-due-date').textContent = po.expected_delivery_date ? formatDateMMDDYYYY(po.expected_delivery_date) : (isEditMode ? '' : '—');
 
             // Items Table
             const items = po.items && po.items.length > 0 ? po.items : [];
