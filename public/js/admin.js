@@ -900,6 +900,11 @@ async function loadOrders() {
                         <button type="button" onclick="openViewPOModal('${po.id}')" class="font-mono font-black text-indigo-600 hover:text-indigo-800 hover:underline text-left block text-sm tracking-tight" title="Click to view full PO details">
                             ${po.po_number}
                         </button>
+                        ${po.customer_po_number ? `
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 inline-flex items-center gap-1 shadow-2xs" title="Customer PO Number: ${po.customer_po_number}">
+                                🏷️ ${po.customer_po_number}
+                            </span>
+                        ` : ''}
                         ${(po.is_buffer_stock === 1 || po.billing_policy === 'FIXED_PO_BUFFER') ? `
                             <span class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-300 inline-flex items-center gap-1 shadow-2xs" title="Manufactured for Client Buffer Stock Reserve">
                                 <span>🛡️</span> Buffer Stock
@@ -7937,7 +7942,7 @@ async function openCreatePOModal(options = {}) {
                     </button>
                 </div>
                 <form id="form-create-po" onsubmit="submitCreatePO(event)" class="space-y-4 text-xs font-normal flex-1 overflow-y-auto pr-1">
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                    <div class="grid grid-cols-1 sm:grid-cols-4 gap-3.5">
                         <div>
                             <label class="block text-slate-500 font-medium text-xs mb-1.5 uppercase tracking-wider">Select Client *</label>
                             <select id="po-client-id" onchange="onAdminPOClientChanged()" required class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white font-normal text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
@@ -7947,6 +7952,10 @@ async function openCreatePOModal(options = {}) {
                                     return `<option value="${c.id}">${label}</option>`;
                                 }).join('')}
                             </select>
+                        </div>
+                        <div>
+                            <label class="block text-slate-500 font-medium text-xs mb-1.5 uppercase tracking-wider">Customer PO # (Optional)</label>
+                            <input type="text" id="create-po-customer-po-number" placeholder="e.g. PO-CUST-2026-001" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white font-normal text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
                         </div>
                         <div>
                             <label class="block text-slate-500 font-medium text-xs mb-1.5 uppercase tracking-wider">Term of Payment *</label>
@@ -8549,10 +8558,12 @@ async function submitCreatePO(e) {
 
     try {
         const isBufferStock = document.getElementById('create-po-is-buffer-stock')?.checked ? 1 : 0;
+        const customerPoNumber = document.getElementById('create-po-customer-po-number')?.value?.trim() || undefined;
         const res = await NKB.api('/api/orders', {
             method: 'POST',
             body: JSON.stringify({
                 client_id: clientId,
+                customer_po_number: customerPoNumber,
                 tolerance_percent: tolerance,
                 billing_policy: policy,
                 is_buffer_stock: isBufferStock,

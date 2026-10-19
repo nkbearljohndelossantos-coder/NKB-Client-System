@@ -154,9 +154,9 @@ router.get('/', authenticateToken, enforceClientIsolation, (req, res) => {
     }
 
     if (search) {
-        query += ' AND (po.po_number LIKE ? OR c.company_name LIKE ? OR po.notes LIKE ? OR po.category LIKE ?)';
+        query += ' AND (po.po_number LIKE ? OR po.so_number LIKE ? OR po.customer_po_number LIKE ? OR c.company_name LIKE ? OR po.notes LIKE ? OR po.category LIKE ?)';
         const term = `%${search}%`;
-        params.push(term, term, term, term);
+        params.push(term, term, term, term, term, term);
     }
 
     query += ' ORDER BY po.po_number DESC, po.created_at DESC';
@@ -298,6 +298,38 @@ router.get('/supervisor-reminders', authenticateToken, (req, res) => {
 });
 
 /**
+ * GET /api/orders/export
+ * Outbound API for exporting purchase orders
+ */
+router.get('/export', authenticateToken, (req, res) => {
+    try {
+        const query = `
+            SELECT po.id, po.po_number, po.so_number, po.customer_po_number, c.company_name as client_name,
+                   po.po_date, po.expected_delivery_date, po.form_of_payment,
+                   po.status, po.subtotal, po.tax_amount, po.grand_total,
+                   COALESCE(po.payment_made, 0) as payment_made,
+                   po.notes, po.created_at, po.updated_at,
+                   (SELECT GROUP_CONCAT(COALESCE(poi.item_name, p.name) || ' (' || poi.target_quantity || ' ' || COALESCE(p.unit, 'pcs') || ')', '; ')
+                    FROM purchase_order_items poi
+                    LEFT JOIN products p ON poi.product_id = p.id
+                    WHERE poi.po_id = po.id) as items_summary
+            FROM purchase_orders po
+            LEFT JOIN clients c ON po.client_id = c.id
+            ORDER BY po.created_at DESC
+        `;
+        const orders = db.prepare(query).all();
+
+        return res.json({
+            success: true,
+            count: orders.length,
+            data: orders
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
  * GET /api/orders/:id
  * Retrieve PO details, line items, linked Job Orders, DRs, and Invoices
  */
@@ -429,6 +461,10 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
  */
 router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
     let { client_id, expected_delivery_date, tolerance_percent, billing_policy, notes, form_of_payment, items, tax_percent, category, category_color, is_buffer_stock } = req.body;
+    let customer_po_number = req.body.customer_po_number || req.body.client_po_number || req.body.customer_po || null;
+    if (typeof customer_po_number === 'string') {
+        customer_po_number = customer_po_number.trim() || null;
+    }
     if (form_of_payment === undefined && req.body.terms !== undefined) {
         form_of_payment = req.body.terms;
     }
@@ -577,12 +613,13 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
 
         db.prepare(`
             INSERT INTO purchase_orders
-            (id, po_number, so_number, client_id, po_date, expected_delivery_date, tolerance_percent, billing_policy, status, notes, form_of_payment, category, category_color, subtotal, tax_percent, tax_amount, grand_total, is_buffer_stock, created_by, approved_by, approved_at)
-            VALUES (?, ?, ?, ?, date('now', 'localtime'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (id, po_number, so_number, customer_po_number, client_id, po_date, expected_delivery_date, tolerance_percent, billing_policy, status, notes, form_of_payment, category, category_color, subtotal, tax_percent, tax_amount, grand_total, is_buffer_stock, created_by, approved_by, approved_at)
+            VALUES (?, ?, ?, ?, ?, date('now', 'localtime'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
             poId,
             poNumber,
             soNumber,
+            customer_po_number,
             client_id,
             expected_delivery_date || null,
             tolerance,
@@ -868,6 +905,15 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
             updatedCategoryColor = category_color;
         }
 
+        let updatedCustomerPo = po.customer_po_number;
+        if (req.body.customer_po_number !== undefined) {
+            updatedCustomerPo = req.body.customer_po_number ? String(req.body.customer_po_number).trim() : null;
+        } else if (req.body.client_po_number !== undefined) {
+            updatedCustomerPo = req.body.client_po_number ? String(req.body.client_po_number).trim() : null;
+        } else if (req.body.customer_po !== undefined) {
+            updatedCustomerPo = req.body.customer_po ? String(req.body.customer_po).trim() : null;
+        }
+
         const newIsBufferStock = is_buffer_stock !== undefined ? ((is_buffer_stock === true || is_buffer_stock === 1 || is_buffer_stock === '1' || is_buffer_stock === 'true') ? 1 : 0) : (po.is_buffer_stock || 0);
         const newPaymentMade = (payment_made !== undefined && payment_made !== null && !isNaN(parseFloat(payment_made)))
             ? Math.max(0, parseFloat(payment_made))
@@ -879,6 +925,7 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
                 expected_delivery_date = ?,
                 tolerance_percent = ?,
                 billing_policy = ?,
+                customer_po_number = ?,
                 notes = ?,
                 form_of_payment = ?,
                 category = ?,
@@ -896,6 +943,7 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
             expected_delivery_date !== undefined ? (expected_delivery_date || null) : po.expected_delivery_date,
             tolerance,
             policy,
+            updatedCustomerPo,
             notes !== undefined ? (notes || null) : po.notes,
             form_of_payment !== undefined ? (form_of_payment || null) : (po.form_of_payment || 'COD'),
             updatedCategory,
@@ -1926,6 +1974,7 @@ router.post('/import', authenticateToken, requireRoles('ADMIN', 'ACCOUNTING', 'S
                     clientId = clientByName.get(clientRaw.toLowerCase());
                 }
 
+                const customer_po_number = (item.customer_po_number || item['Customer PO'] || item['Customer PO #'] || item['Customer PO Number'] || item['Client PO #'] || (existing ? existing.customer_po_number : null) || '').trim() || null;
                 const po_date = (item.po_date || item['Order Date'] || item['PO Date'] || getManilaDate()).trim();
                 const expected_delivery_date = (item.expected_delivery_date || item['Due Date'] || item['Delivery Date'] || po_date).trim();
                 const terms = (item.terms || item['Payment Terms'] || item['Terms'] || 'COD').trim();
@@ -1944,17 +1993,16 @@ router.post('/import', authenticateToken, requireRoles('ADMIN', 'ACCOUNTING', 'S
                         UPDATE purchase_orders
                         SET po_date = COALESCE(?, po_date),
                             expected_delivery_date = COALESCE(?, expected_delivery_date),
-                            terms = COALESCE(?, terms),
                             form_of_payment = COALESCE(?, form_of_payment),
+                            customer_po_number = COALESCE(?, customer_po_number),
                             status = COALESCE(?, status),
                             notes = COALESCE(?, notes),
                             subtotal = ?,
                             tax_amount = ?,
-                            discount_amount = ?,
                             grand_total = ?,
                             updated_at = datetime('now', 'localtime')
                         WHERE id = ?
-                    `).run(po_date, expected_delivery_date, terms, form_of_payment, status, notes, subtotal, tax_amount, discount_amount, grand_total, existing.id);
+                    `).run(po_date, expected_delivery_date, form_of_payment, customer_po_number, status, notes, subtotal, tax_amount, grand_total, existing.id);
 
                     updatedCount++;
                     imported.push({ id: existing.id, po_number: existing.po_number, action: 'UPDATED' });
@@ -1974,13 +2022,13 @@ router.post('/import', authenticateToken, requireRoles('ADMIN', 'ACCOUNTING', 'S
 
                     db.prepare(`
                         INSERT INTO purchase_orders (
-                            id, client_id, po_number, so_number, po_date, expected_delivery_date,
-                            terms, form_of_payment, status, notes, subtotal, tax_amount, discount_amount, grand_total,
+                            id, client_id, po_number, so_number, customer_po_number, po_date, expected_delivery_date,
+                            form_of_payment, status, notes, subtotal, tax_amount, grand_total,
                             created_by, created_at, updated_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
                     `).run(
-                        newId, clientId, finalPoNum, finalSoNum, po_date, expected_delivery_date,
-                        terms, form_of_payment, status, notes, subtotal, tax_amount, discount_amount, grand_total,
+                        newId, clientId, finalPoNum, finalSoNum, customer_po_number, po_date, expected_delivery_date,
+                        form_of_payment, status, notes, subtotal, tax_amount, grand_total,
                         req.user.id
                     );
 
@@ -2014,38 +2062,6 @@ router.post('/import', authenticateToken, requireRoles('ADMIN', 'ACCOUNTING', 'S
     } catch (err) {
         console.error('Orders import error:', err);
         return res.status(500).json({ success: false, error: err.message || 'Failed to import orders.' });
-    }
-});
-
-/**
- * GET /api/orders/export
- * Outbound API for exporting purchase orders
- */
-router.get('/export', authenticateToken, (req, res) => {
-    try {
-        const query = `
-            SELECT po.id, po.po_number, po.so_number, c.company_name as client_name,
-                   po.po_date, po.expected_delivery_date, po.terms, po.form_of_payment,
-                   po.status, po.subtotal, po.tax_amount, po.discount_amount, po.grand_total,
-                   (SELECT COALESCE(SUM(amount), 0) FROM payments WHERE po_id = po.id AND is_voided = 0) as payment_made,
-                   po.notes, po.created_at, po.updated_at,
-                   (SELECT GROUP_CONCAT(COALESCE(poi.item_name, p.name) || ' (' || poi.target_quantity || ' ' || poi.unit || ')', '; ')
-                    FROM purchase_order_items poi
-                    LEFT JOIN products p ON poi.product_id = p.id
-                    WHERE poi.po_id = po.id) as items_summary
-            FROM purchase_orders po
-            LEFT JOIN clients c ON po.client_id = c.id
-            ORDER BY po.created_at DESC
-        `;
-        const orders = db.prepare(query).all();
-
-        return res.json({
-            success: true,
-            count: orders.length,
-            data: orders
-        });
-    } catch (err) {
-        return res.status(500).json({ success: false, error: err.message });
     }
 });
 

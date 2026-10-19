@@ -1568,6 +1568,7 @@
                             </div>
                             <div class="meta-right">
                                 <div class="doc-no doc-no-display" data-client-idx="${clientIdx}" data-raw-no="${escapeHtml(rawDocNo)}">${escapeHtml(formattedDocNo)}</div>
+                                ${client.customer_po_number ? `<div class="meta-line">Customer PO #: <strong>${escapeHtml(client.customer_po_number)}</strong></div>` : ''}
                                 <div class="meta-line">Date: <span class="doc-date-display">${escapeHtml(docDate)}</span></div>
                                 <div class="meta-line">Due Date: <span class="doc-duedate-display">${escapeHtml(dueDate)}</span></div>
                             </div>

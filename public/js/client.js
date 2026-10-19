@@ -385,9 +385,11 @@ async function submitClientPO(e) {
 
     const policy = document.querySelector('input[name="client_billing_policy"]:checked')?.value || 'ACTUAL_DELIVERY';
     const notes = document.getElementById('client-order-notes')?.value || '';
+    const customerPoNumber = document.getElementById('client-customer-po-number')?.value?.trim() || undefined;
 
     const orderPayload = {
         billing_policy: policy,
+        customer_po_number: customerPoNumber,
         notes,
         items: clientCartItems.map(item => ({
             product_id: item.product_id,
@@ -797,6 +799,13 @@ async function loadClientOrders() {
                     <button type="button" onclick="openViewPOModal('${po.id}')" class="font-mono font-black text-indigo-600 hover:text-indigo-800 hover:underline text-left block text-sm tracking-tight" title="Click to view full PO details">
                         ${po.po_number}
                     </button>
+                    ${po.customer_po_number ? `
+                        <div class="mt-0.5">
+                            <span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 inline-flex items-center gap-1" title="Your PO Reference: ${po.customer_po_number}">
+                                🏷️ ${po.customer_po_number}
+                            </span>
+                        </div>
+                    ` : ''}
                     ${po.form_of_payment ? `
                         <div class="mt-1">
                             <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 inline-flex items-center gap-1" title="Term of Payment: ${po.form_of_payment}">

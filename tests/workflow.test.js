@@ -4656,6 +4656,82 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.ok(adminJs.includes('exportArchiveDRsToExcel'), 'admin.js must provide exportArchiveDRsToExcel');
     });
 
+    test('93. Customer PO # in Purchase Orders: Create, Edit, Search, Export, and UI Verification', async () => {
+        const uniqueCustPO = `CUST-PO-${Date.now()}`;
+
+        // 1. Create PO with customer_po_number
+        const createRes = await request(app)
+            .post('/api/orders')
+            .set('Authorization', `Bearer ${clientToken}`)
+            .send({
+                client_id: demoClient.id,
+                customer_po_number: uniqueCustPO,
+                tolerance_percent: 10.0,
+                billing_policy: 'ACTUAL_DELIVERY',
+                items: [{ product_id: lotionProduct.id, target_quantity: 500, unit_price: 120.0 }]
+            });
+        assert.strictEqual(createRes.status, 201);
+        const orderId = createRes.body.data.id;
+
+        // 2. GET /api/orders/:id returns customer_po_number
+        const getRes = await request(app)
+            .get(`/api/orders/${orderId}`)
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(getRes.status, 200);
+        assert.strictEqual(getRes.body.data.customer_po_number, uniqueCustPO);
+
+        // 3. Search by Customer PO Number in GET /api/orders?search=...
+        const searchRes = await request(app)
+            .get(`/api/orders?search=${encodeURIComponent(uniqueCustPO)}`)
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(searchRes.status, 200);
+        assert.ok(searchRes.body.data.length >= 1);
+        assert.strictEqual(searchRes.body.data[0].id, orderId);
+        assert.strictEqual(searchRes.body.data[0].customer_po_number, uniqueCustPO);
+
+        // 4. Update customer_po_number in PUT /api/orders/:id
+        const updatedCustPO = `${uniqueCustPO}-REV1`;
+        const updateRes = await request(app)
+            .put(`/api/orders/${orderId}`)
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                customer_po_number: updatedCustPO,
+                notes: 'Updated with client revised PO reference'
+            });
+        assert.strictEqual(updateRes.status, 200);
+
+        const verifyUpdateRes = await request(app)
+            .get(`/api/orders/${orderId}`)
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(verifyUpdateRes.body.data.customer_po_number, updatedCustPO);
+
+        // 5. Outbound Export includes customer_po_number
+        const exportRes = await request(app)
+            .get('/api/orders/export')
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(exportRes.status, 200);
+        const exportedOrder = exportRes.body.data.find(o => o.id === orderId);
+        assert.ok(exportedOrder, 'Order must be found in exported orders');
+        assert.strictEqual(exportedOrder.customer_po_number, updatedCustPO);
+
+        // 6. UI static files verification
+        const adminJs = fs.readFileSync(path.join(__dirname, '../public/js/admin.js'), 'utf8');
+        assert.ok(adminJs.includes('create-po-customer-po-number'), 'admin.js must contain create-po-customer-po-number');
+
+        const appJs = fs.readFileSync(path.join(__dirname, '../public/js/app.js'), 'utf8');
+        assert.ok(appJs.includes('edit-po-customer-po-number'), 'app.js must contain edit-po-customer-po-number');
+        assert.ok(appJs.includes('Customer PO:'), 'app.js view modal must display Customer PO');
+
+        const clientHtml = fs.readFileSync(path.join(__dirname, '../public/client.html'), 'utf8');
+        assert.ok(clientHtml.includes('client-customer-po-number'), 'client.html must contain client-customer-po-number');
+
+        const printPoHtml = fs.readFileSync(path.join(__dirname, '../public/print-po.html'), 'utf8');
+        assert.ok(printPoHtml.includes('meta-customer-po-number'), 'print-po.html must contain meta-customer-po-number');
+
+        const printJoHtml = fs.readFileSync(path.join(__dirname, '../public/print-jo.html'), 'utf8');
+        assert.ok(printJoHtml.includes('client.customer_po_number'), 'print-jo.html must display customer_po_number');
+    });
+
     after(() => {
         try {
             realtimeSyncService.closeAllClients();

@@ -1469,6 +1469,8 @@ async function openViewPOModal(poId) {
                         <div>
                             <div class="flex items-center gap-2 flex-wrap">
                                 <h3 class="text-xl font-black text-slate-900 font-mono">${po.po_number}</h3>
+                                ${po.so_number ? `<span class="badge bg-slate-100 text-slate-700 font-mono text-xs">SO: ${po.so_number}</span>` : ''}
+                                ${po.customer_po_number ? `<span class="badge bg-indigo-100 text-indigo-800 font-mono text-xs font-bold border border-indigo-200">🏷️ Customer PO: ${po.customer_po_number}</span>` : ''}
                                 ${NKB.renderStatusBadge(po.status)}
                                 ${po.category ? `
                                     <span class="px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-wider border shadow-2xs inline-flex items-center gap-1.5" style="background-color: ${po.effective_category_color || po.category_color || '#8b5cf6'}18; color: ${po.effective_category_color || po.category_color || '#8b5cf6'}; border-color: ${po.effective_category_color || po.category_color || '#8b5cf6'}40;" title="Order Category: ${po.category}">
@@ -1513,6 +1515,7 @@ async function openViewPOModal(poId) {
                         <div class="space-y-1">
                             <span class="text-[10px] uppercase font-bold text-slate-400">Contract & Payment Terms</span>
                             <div>Term of Payment: <strong class="text-slate-800">${po.form_of_payment || po.terms || 'COD'}</strong></div>
+                            ${po.customer_po_number ? `<div>Customer PO #: <strong class="text-indigo-800 font-mono">${po.customer_po_number}</strong></div>` : ''}
                             ${po.target_bank_name ? `<div>Target Bank: <strong class="text-slate-800">${po.target_bank_name}</strong></div>` : ''}
                         </div>
                     </div>
@@ -1982,12 +1985,16 @@ async function openEditPOModal(poId) {
                 </div>
                 
                 <form id="form-edit-po" onsubmit="submitEditPO(event)" class="space-y-4 text-xs font-normal flex-1 overflow-y-auto pr-1">
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                    <div class="grid grid-cols-1 sm:grid-cols-4 gap-3.5">
                         <div>
                             <label class="block text-slate-500 font-medium text-xs mb-1.5 uppercase tracking-wider">Client / Buyer</label>
                             <div class="px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 text-slate-700 font-medium text-xs">
                                 ${(po.is_vyuceutical_ops === 1 || (po.company_name && po.company_name.toLowerCase().includes('vyuceutical'))) ? `Vyuceutical OPC - ${po.contact_person || po.company_name}` : po.company_name}
                             </div>
+                        </div>
+                        <div>
+                            <label class="block text-slate-500 font-medium text-xs mb-1.5 uppercase tracking-wider">Customer PO # (Optional)</label>
+                            <input type="text" id="edit-po-customer-po-number" value="${po.customer_po_number ? po.customer_po_number.replace(/"/g, '&quot;') : ''}" placeholder="e.g. PO-CUST-2026-001" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white font-normal text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
                         </div>
                         <div>
                             <label class="block text-slate-500 font-medium text-xs mb-1.5 uppercase tracking-wider">Order Date</label>
@@ -2554,6 +2561,7 @@ async function submitEditPO(e) {
 
     const poDate = document.getElementById('edit-po-date').value;
     const deliveryDate = document.getElementById('edit-po-delivery-date').value;
+    const customerPoNumber = document.getElementById('edit-po-customer-po-number')?.value?.trim() || null;
     const policy = document.getElementById('edit-po-billing-policy').value;
     const formOfPaymentEl = document.getElementById('edit-po-form-of-payment');
     let formOfPayment = formOfPaymentEl ? formOfPaymentEl.value : undefined;
@@ -2570,6 +2578,7 @@ async function submitEditPO(e) {
         body: JSON.stringify({
             po_date: poDate || undefined,
             expected_delivery_date: deliveryDate || null,
+            customer_po_number: customerPoNumber,
             billing_policy: policy,
             form_of_payment: formOfPayment,
             category: document.getElementById('edit-po-category')?.value || null,

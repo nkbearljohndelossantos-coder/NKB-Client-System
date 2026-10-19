@@ -119,6 +119,7 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
     id TEXT PRIMARY KEY,
     po_number TEXT UNIQUE NOT NULL,
     so_number TEXT,
+    customer_po_number TEXT,
     client_id TEXT NOT NULL,
     po_date TEXT NOT NULL DEFAULT (date('now', 'localtime')),
     expected_delivery_date TEXT,

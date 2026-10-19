@@ -810,6 +810,7 @@
             </div>
             <div class="meta-order-col">
                 <div class="order-number" id="meta-doc-number" contenteditable="false">SO-1271</div>
+                <div id="meta-cust-po-row" style="display: none;">Customer PO #: <span id="meta-customer-po-number" contenteditable="false"></span></div>
                 <div>Date: <span id="meta-doc-date" contenteditable="false">08/20/2026</span></div>
                 <div>Terms: <span id="meta-doc-terms" contenteditable="false">COD</span></div>
                 <div>Due Date: <span id="meta-doc-due-date" contenteditable="false">08/20/2026</span></div>
@@ -1182,6 +1183,16 @@
                 }
             }
             document.getElementById('meta-doc-number').textContent = docNumber;
+            const custPoRow = document.getElementById('meta-cust-po-row');
+            const custPoVal = document.getElementById('meta-customer-po-number');
+            if (custPoRow && custPoVal) {
+                if (po.customer_po_number) {
+                    custPoVal.textContent = po.customer_po_number;
+                    custPoRow.style.display = '';
+                } else {
+                    custPoRow.style.display = 'none';
+                }
+            }
             document.getElementById('meta-doc-date').textContent = formatDateMMDDYYYY(po.po_date || po.created_at || new Date());
             document.getElementById('meta-doc-terms').textContent = po.form_of_payment || po.terms || 'COD';
             document.getElementById('meta-doc-due-date').textContent = formatDateMMDDYYYY(po.expected_delivery_date || po.po_date || po.created_at || new Date());

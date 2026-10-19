@@ -58,6 +58,9 @@ function runMigrations(dbInstance, isMysql) {
             dbInstance.exec(`ALTER TABLE purchase_orders ADD COLUMN so_number ${textType};`);
         } catch (_) {}
         try {
+            dbInstance.exec(`ALTER TABLE purchase_orders ADD COLUMN customer_po_number ${textType};`);
+        } catch (_) {}
+        try {
             dbInstance.exec("UPDATE purchase_orders SET so_number = REPLACE(po_number, 'PO-', 'SO-') WHERE so_number IS NULL OR so_number = '';");
         } catch (_) {}
         try {
