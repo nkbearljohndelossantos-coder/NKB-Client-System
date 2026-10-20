@@ -191,7 +191,7 @@ router.get('/', authenticateToken, enforceClientIsolation, (req, res) => {
             FROM purchase_order_items poi
             JOIN products p ON poi.product_id = p.id
             WHERE poi.po_id = ?
-            ORDER BY poi.created_at ASC
+            ORDER BY poi.rowid ASC
         `).all(po.id);
     }
 
@@ -393,6 +393,7 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
         JOIN products p ON poi.product_id = p.id
         LEFT JOIN client_product_prices cpp ON cpp.product_id = p.id AND cpp.client_id = ?
         WHERE poi.po_id = ?
+        ORDER BY poi.rowid ASC
     `).all(po.client_id, id);
 
     // Job Orders

@@ -4828,7 +4828,17 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.strictEqual(joBatchRes.body.success, true);
         assert.strictEqual(joBatchRes.body.count, 2, 'Should create 2 distinct Job Orders for both lines');
 
-        // 5. Verify UI template files for Net Content and optional Delivery Date
+        // 5. Verify /api/job-orders/po/:poId returns both duplicate items in exact PO order
+        const soDataRes = await request(app)
+            .get(`/api/job-orders/po/${orderId}`)
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(soDataRes.status, 200);
+        assert.strictEqual(soDataRes.body.success, true);
+        assert.strictEqual(soDataRes.body.data.items.length, 2, 'SO data must contain both line items without collapsing duplicates');
+        assert.strictEqual(soDataRes.body.data.items[0].target_quantity, 700);
+        assert.strictEqual(soDataRes.body.data.items[1].target_quantity, 1100);
+
+        // 6. Verify UI template files for Net Content and optional Delivery Date
         const printPoHtml = fs.readFileSync(path.join(__dirname, '../public/print-po.html'), 'utf8');
         assert.ok(printPoHtml.includes('Net Content'), 'print-po.html must display Net Content header');
         assert.ok(printPoHtml.includes('Delivery Date:'), 'print-po.html must include Delivery Date metadata');

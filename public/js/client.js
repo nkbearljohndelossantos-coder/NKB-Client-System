@@ -288,18 +288,13 @@ function addToClientCart(productId) {
     const qtyInput = document.getElementById(`catalog-qty-${productId}`);
     const qty = qtyInput ? (parseInt(qtyInput.value) || 500) : 500;
 
-    const existingIndex = clientCartItems.findIndex(i => i.product_id === productId);
-    if (existingIndex >= 0) {
-        clientCartItems[existingIndex].target_quantity += qty;
-    } else {
-        clientCartItems.push({
-            product_id: prod.id,
-            name: prod.name,
-            sku: prod.effective_sku || prod.sku,
-            unit_price: Number(prod.default_price || 0),
-            target_quantity: qty
-        });
-    }
+    clientCartItems.push({
+        product_id: prod.id,
+        name: prod.name,
+        sku: prod.effective_sku || prod.sku,
+        unit_price: Number(prod.default_price || 0),
+        target_quantity: qty
+    });
 
     NKB.showToast(`Added ${NKB.formatNumber(qty)} pcs of ${prod.name} to order!`, 'success');
     renderClientCart();

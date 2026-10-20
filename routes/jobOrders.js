@@ -100,7 +100,7 @@ function getClientConsolidatedJOData(clientId, specificPoId = null, specificJoId
     // 3. All ordered products across active POs for this client
     let poItemQuery = `
         SELECT poi.*, po.po_number, po.po_date, po.expected_delivery_date, po.notes as po_notes,
-               p.name as product_name, p.sku, p.unit,
+               p.name as product_name, p.sku, p.unit, COALESCE(p.size, '') as size,
                COALESCE(poi.item_name, cpp.custom_name, p.name) as display_product_name,
                COALESCE(cpp.custom_sku, p.sku) as display_sku
         FROM purchase_order_items poi
@@ -116,33 +116,37 @@ function getClientConsolidatedJOData(clientId, specificPoId = null, specificJoId
     } else {
         poItemQuery += " AND po.status IN ('APPROVED', 'IN_PRODUCTION', 'COMPLETED')";
     }
-    poItemQuery += ' ORDER BY poi.created_at ASC';
+    poItemQuery += ' ORDER BY poi.rowid ASC';
     const poItems = db.prepare(poItemQuery).all(...poItemParams);
 
-    // 4. Consolidate into unique items list: all products for this client
-    const itemsMap = new Map();
-
-    for (const item of poItems) {
-        itemsMap.set(item.product_id, {
+    // 4. Retain exact items and sequence of the PO(s), maintaining duplicate line items
+    const usedJoIds = new Set();
+    const items = poItems.map(item => {
+        const matchedJo = jos.find(j => j.product_id === item.product_id && !usedJoIds.has(j.id));
+        if (matchedJo) {
+            usedJoIds.add(matchedJo.id);
+        }
+        return {
+            id: item.id,
             product_id: item.product_id,
             product_name: item.display_product_name || item.product_name,
             sku: item.display_sku || item.sku,
+            size: (item.size || '').trim(),
             target_quantity: item.target_quantity,
             unit: item.unit || 'PC',
+            jo_number: matchedJo ? matchedJo.jo_number : undefined,
             po_number: item.po_number
-        });
-    }
+        };
+    });
 
+    // If there are standalone Job Orders for this client not attached to poItems, include them
     for (const jo of jos) {
-        if (itemsMap.has(jo.product_id)) {
-            const existing = itemsMap.get(jo.product_id);
-            existing.jo_number = jo.jo_number;
-            existing.target_quantity = jo.target_quantity || existing.target_quantity;
-        } else {
-            itemsMap.set(jo.product_id, {
+        if (!usedJoIds.has(jo.id)) {
+            items.push({
                 product_id: jo.product_id,
                 product_name: jo.display_product_name || jo.product_name,
                 sku: jo.display_sku || jo.sku,
+                size: (jo.size || '').trim(),
                 target_quantity: jo.target_quantity,
                 unit: jo.unit || 'PC',
                 jo_number: jo.jo_number,
@@ -150,8 +154,6 @@ function getClientConsolidatedJOData(clientId, specificPoId = null, specificJoId
             });
         }
     }
-
-    const items = Array.from(itemsMap.values());
     const targetJO = specificJoId ? (jos.find(j => j.id === specificJoId) || jos[0]) : (jos.length > 0 ? jos[0] : null);
     const primaryPO = pos.length > 0 ? pos[0] : null;
     const uniquePONumbers = Array.from(new Set(pos.map(p => p.po_number).filter(Boolean)));
