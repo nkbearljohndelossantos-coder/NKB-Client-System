@@ -1788,7 +1788,11 @@ window.KNOWN_PO_BRANDS = [
     'BEAUTAIN',
     'BIOESSENCE',
     'INTIMATE WHITE',
-    'JLS NO BRAND'
+    'JLS NO BRAND',
+    'PERFECT FORMULA',
+    'BRILLIANT SKIN',
+    'BRILLIANT',
+    'K BELLA'
 ].sort((a, b) => b.length - a.length);
 
 window.detectPOBrand = function(name) {
@@ -1799,6 +1803,11 @@ window.detectPOBrand = function(name) {
     }
     for (const b of window.KNOWN_PO_BRANDS) {
         if (upper.startsWith(b)) {
+            return b;
+        }
+    }
+    for (const b of window.KNOWN_PO_BRANDS) {
+        if (upper.includes(b)) {
             return b;
         }
     }
@@ -1873,14 +1882,22 @@ async function openEditPOModal(poId) {
         return;
     }
 
-    editingPOId = poId;
+    const isVyuceutical = po.is_vyuceutical_ops === 1 || (po.company_name && po.company_name.toLowerCase().includes('vyuceutical'));
 
     // Fetch client product catalog (fallback to all company products if client has no custom products)
-    let catRes = await NKB.api(`/api/products?clientId=${po.client_id}&assignedOnly=true`);
-    if (!catRes.success || !catRes.data || catRes.data.length === 0) {
-        catRes = await NKB.api('/api/products?activeOnly=true');
+    let catRes;
+    if (isVyuceutical) {
+        catRes = await NKB.api(`/api/products?clientId=${po.client_id}&allMasterCatalog=true&activeOnly=true`);
+        if (!catRes || !catRes.success || !catRes.data || catRes.data.length === 0) {
+            catRes = await NKB.api('/api/products?activeOnly=true');
+        }
+    } else {
+        catRes = await NKB.api(`/api/products?clientId=${po.client_id}&assignedOnly=true`);
+        if (!catRes || !catRes.success || !catRes.data || catRes.data.length === 0) {
+            catRes = await NKB.api('/api/products?activeOnly=true');
+        }
     }
-    editPOCatalog = (catRes.success && catRes.data) ? catRes.data.slice() : [];
+    editPOCatalog = (catRes && catRes.success && catRes.data) ? catRes.data.slice() : [];
 
     // Ensure all products currently on the PO exist in editPOCatalog
     if (po.items && po.items.length > 0) {
@@ -1899,7 +1916,6 @@ async function openEditPOModal(poId) {
         });
     }
 
-    const isVyuceutical = po.is_vyuceutical_ops === 1 || (po.company_name && po.company_name.toLowerCase().includes('vyuceutical'));
     editPOCatalog = editPOCatalog.map(p => {
         const brand = window.detectPOBrand ? window.detectPOBrand(p.name) : null;
         return {

@@ -110,9 +110,13 @@ router.get('/', optionalAuthenticateToken, (req, res) => {
             } catch (e) {}
         }
 
+        // Check if target client is Vyuceutical (which orders across all brands)
+        const clientRow = db.prepare('SELECT id, company_name, is_vyuceutical_ops FROM clients WHERE id = ?').get(targetClientId);
+        const isClientVyuceutical = clientRow && (clientRow.is_vyuceutical_ops === 1 || (clientRow.company_name && clientRow.company_name.toLowerCase().includes('vyuceutical')));
+
         // If client has assigned products, return those assigned products
-        // If client doesn't have products yet (assignedCount === 0), show all company products!
-        if (checkAssigned && checkAssigned.cnt > 0 && (req.query.assignedOnly === 'true' || req.user.role === 'CLIENT' || req.query.allMasterCatalog !== 'true')) {
+        // If client doesn't have products yet (assignedCount === 0), or if client is Vyuceutical, or if allMasterCatalog is requested: show all company products!
+        if (checkAssigned && checkAssigned.cnt > 0 && !isClientVyuceutical && req.query.allMasterCatalog !== 'true' && (req.query.assignedOnly === 'true' || req.user.role === 'CLIENT')) {
             query = `
                 SELECT p.id,
                        COALESCE(cpp.custom_sku, p.sku) as sku,

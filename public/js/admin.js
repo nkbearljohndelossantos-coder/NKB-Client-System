@@ -4123,7 +4123,7 @@ function renderPayablesRows(payablesList, currentTotal) {
     if (!payablesList || payablesList.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="10" class="py-12 text-center text-slate-400">
+                <td colspan="9" class="py-12 text-center text-slate-400">
                     <span class="text-3xl block mb-2">📑</span>
                     <div class="font-bold text-slate-600">No cheque payable records found</div>
                     <div class="text-xs text-slate-400 mt-1">Click "Request Payables" above to submit a new cheque requisition for COO approval.</div>
@@ -4196,9 +4196,6 @@ function renderPayablesRows(payablesList, currentTotal) {
     };
 
     tbody.innerHTML = payablesList.map(cp => {
-        const hasAttachment = !!cp.attachment_url;
-        const isPdf = hasAttachment && cp.attachment_url.toLowerCase().endsWith('.pdf');
-
         return `
             <tr class="hover:bg-slate-50/80 transition border-b border-slate-100">
                 <td class="py-3.5 px-4 font-mono font-bold text-indigo-700 whitespace-nowrap">
@@ -4228,16 +4225,6 @@ function renderPayablesRows(payablesList, currentTotal) {
                 </td>
                 <td class="py-3.5 px-4 text-right font-black text-slate-900 text-sm whitespace-nowrap">
                     ${NKB.formatCurrency(cp.amount)}
-                </td>
-                <td class="py-3.5 px-4 text-center whitespace-nowrap">
-                    ${hasAttachment ? `
-                        <button onclick="openViewPayableDetailsModal('${cp.id}')" class="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-[11px] font-bold inline-flex items-center gap-1 shadow-2xs transition cursor-pointer" title="View Voucher / Bill Attachment">
-                            <span>${isPdf ? '📄' : '🖼️'}</span>
-                            <span>View</span>
-                        </button>
-                    ` : `
-                        <span class="text-slate-300 text-xs">—</span>
-                    `}
                 </td>
                 <td class="py-3.5 px-4 whitespace-nowrap">${getStatusBadge(cp.status)}</td>
                 <td class="py-3.5 px-4 text-right whitespace-nowrap">
@@ -6177,8 +6164,8 @@ async function openViewPayableDetailsModal(payableId) {
     }
 
     root.innerHTML = `
-        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-3 sm:p-5 z-50 overflow-y-auto">
-            <div class="bg-white rounded-2xl max-w-4xl w-full p-5 sm:p-7 shadow-2xl space-y-4 my-6 max-h-[92vh] overflow-y-auto border border-slate-200">
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-2 sm:p-4 md:p-6 z-50 overflow-y-auto">
+            <div class="bg-white rounded-2xl max-w-4xl w-full p-4 sm:p-6 md:p-7 shadow-2xl space-y-4 my-auto max-h-[92vh] overflow-y-auto border border-slate-200">
                 <!-- Top Header -->
                 <div class="flex justify-between items-start border-b border-slate-200 pb-3">
                     <div>
@@ -7873,7 +7860,8 @@ if (!window.KNOWN_PO_BRANDS) {
         'BRIGHTEST', 'ROYCE B', 'ELIXIA', 'ADORN', 'CUTIS ANO NE',
         'TARATITAT', 'MAGNIFIQUE WHITE', 'DREAM GIRL', 'SABELA SKIN', 'KKSKIN.PH',
         'KYLE SKIN', 'RG LOVE', 'CZAR', 'MI.SKIN', 'EIGHT',
-        'BEAUTAIN', 'BIOESSENCE', 'INTIMATE WHITE', 'JLS NO BRAND'
+        'BEAUTAIN', 'BIOESSENCE', 'INTIMATE WHITE', 'JLS NO BRAND', 'PERFECT FORMULA',
+        'BRILLIANT SKIN', 'BRILLIANT', 'K BELLA'
     ].sort((a, b) => b.length - a.length);
 }
 if (!window.detectPOBrand) {
@@ -7885,6 +7873,9 @@ if (!window.detectPOBrand) {
         }
         for (const b of window.KNOWN_PO_BRANDS) {
             if (upper.startsWith(b)) return b;
+        }
+        for (const b of window.KNOWN_PO_BRANDS) {
+            if (upper.includes(b)) return b;
         }
         return null;
     };
@@ -7908,20 +7899,20 @@ async function openCreatePOModal(options = {}) {
     const isBufferStockInitial = !!(options && options.is_buffer_stock);
 
     root.innerHTML = `
-        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50 overflow-y-auto">
-            <div class="bg-white rounded-2xl max-w-4xl w-full p-6 sm:p-7 shadow-2xl space-y-4 max-h-[92vh] flex flex-col my-auto">
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-2 sm:p-4 md:p-6 z-50 overflow-y-auto">
+            <div class="bg-white rounded-2xl max-w-4xl xl:max-w-5xl w-full p-4 sm:p-6 md:p-7 shadow-2xl space-y-4 max-h-[92vh] flex flex-col my-auto border border-slate-200">
                 <div class="flex justify-between items-center border-b border-slate-100 pb-3 flex-shrink-0">
                     <div>
-                        <h3 class="text-lg font-bold text-slate-900">${isBufferStockInitial ? '🛡️ Create Buffer Stock Purchase Order' : 'Create Multi-Item Purchase Order (PO)'}</h3>
+                        <h3 class="text-base sm:text-lg font-bold text-slate-900">${isBufferStockInitial ? '🛡️ Create Buffer Stock Purchase Order' : 'Create Multi-Item Purchase Order (PO)'}</h3>
                         <p class="text-xs text-slate-500">${isBufferStockInitial ? 'Manufacture inventory specifically for client buffer stock reserve' : 'Order multiple cosmetic products with client-specific pricing'}</p>
                     </div>
-                    <button onclick="closeModal()" title="Close (Esc)" class="text-slate-400 hover:text-slate-600 font-bold text-lg flex items-center gap-1.5">
+                    <button onclick="closeModal()" title="Close (Esc)" class="text-slate-400 hover:text-slate-600 font-bold text-lg flex items-center gap-1.5 cursor-pointer">
                         <kbd class="text-[10px] font-mono text-slate-400 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded font-normal">Esc</kbd>
                         <span>&times;</span>
                     </button>
                 </div>
                 <form id="form-create-po" onsubmit="submitCreatePO(event)" class="space-y-4 text-xs font-normal flex-1 overflow-y-auto pr-1">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
                         <div>
                             <label class="block text-slate-500 font-medium text-xs mb-1.5 uppercase tracking-wider">Select Client *</label>
                             <select id="po-client-id" onchange="onAdminPOClientChanged()" required class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white font-normal text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
@@ -8122,14 +8113,20 @@ async function onAdminPOClientChanged() {
     const client = (cachedClients || []).find(c => c.id === clientId);
     const isVyuceutical = client && (client.is_vyuceutical_ops === 1 || (client.company_name && client.company_name.toLowerCase().includes('vyuceutical')));
 
-    let res = await NKB.api(`/api/products?clientId=${clientId}&assignedOnly=true`);
-    if (res.success && res.data && res.data.length > 0) {
-        adminPORawCatalog = res.data;
+    let res;
+    if (isVyuceutical) {
+        // Vyuceutical can order across all brands and full product catalog
+        res = await NKB.api(`/api/products?clientId=${clientId}&allMasterCatalog=true&activeOnly=true`);
+        if (!res || !res.success || !res.data || res.data.length === 0) {
+            res = await NKB.api('/api/products?activeOnly=true');
+        }
     } else {
-        // Fallback: If client doesn't have custom products yet, show all company products!
-        const allRes = await NKB.api('/api/products?activeOnly=true');
-        adminPORawCatalog = (allRes.success && allRes.data) ? allRes.data : [];
+        res = await NKB.api(`/api/products?clientId=${clientId}&assignedOnly=true`);
+        if (!res || !res.success || !res.data || res.data.length === 0) {
+            res = await NKB.api('/api/products?activeOnly=true');
+        }
     }
+    adminPORawCatalog = (res && res.success && res.data) ? res.data : [];
 
     // Process adminPOCatalog: Every product retains full name and brand
     adminPOCatalog = adminPORawCatalog.map(p => {
@@ -8157,7 +8154,7 @@ async function onAdminPOClientChanged() {
     const noteEl = document.getElementById('po-search-note');
     if (noteEl) {
         if (isVyuceutical) {
-            noteEl.innerHTML = `<span>💡</span><span>Vyuceutical OPC (${client.contact_person || client.company_name}): Brand names & SUS prefixes are automatically removed. You can order items across different brands simultaneously.</span>`;
+            noteEl.innerHTML = `<span>💡</span><span>Vyuceutical OPC (${client?.contact_person || client?.company_name || 'All Brands'}): All brands available (${adminPOCatalog.length} products). You can order items across different brands simultaneously.</span>`;
         } else {
             noteEl.innerHTML = `<span>💡</span><span>Order products across multiple different brands in the same PO. Click any suggestion or use Search Product to add items.</span>`;
         }

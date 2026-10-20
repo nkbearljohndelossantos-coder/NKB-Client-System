@@ -277,7 +277,7 @@
         <div id="sidebar-backdrop" onclick="toggleMobileSidebar(false)" class="sidebar-backdrop hidden md:hidden"></div>
 
         <!-- White Main Content Area -->
-        <main class="flex-1 overflow-y-auto p-6 lg:p-8 bg-[#f8fafc]">
+        <main class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-[#f8fafc] min-w-0">
             
             <!-- TAB: DASHBOARD -->
             <section id="view-dashboard" class="space-y-6">
@@ -1252,17 +1252,17 @@
                 </div>
 
                 <!-- Cheque Payables Filter Bar & Table Card -->
-                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-6 space-y-4">
                     <!-- Filters Grid -->
                     <div class="space-y-3 pb-3 border-b border-slate-100">
-                        <div class="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
                             <!-- Search -->
-                            <div class="relative flex-1">
-                                <input type="text" id="payables-search-input" oninput="filterPayablesTable()" placeholder="Search payee, cheque #, purpose, bank, or req #..." class="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 transition">
+                            <div class="relative sm:col-span-2 xl:col-span-1">
+                                <input type="text" id="payables-search-input" oninput="filterPayablesTable()" placeholder="Search payee, cheque #, purpose, bank, or req #..." class="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 transition shadow-2xs">
                                 <svg class="w-4 h-4 text-slate-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                             </div>
                             <!-- Status Dropdown -->
-                            <select id="payables-status-filter" onchange="filterPayablesTable()" class="px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 text-slate-700 font-semibold focus:bg-white">
+                            <select id="payables-status-filter" onchange="filterPayablesTable()" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 text-slate-700 font-semibold focus:bg-white shadow-2xs">
                                 <option value="">All Statuses & PDCs</option>
                                 <option value="PENDING_COO_APPROVAL">Pending COO Approval</option>
                                 <option value="CONFIRMED">Confirmed / Approved</option>
@@ -1274,7 +1274,7 @@
                                 <option value="CANCELLED">Cancelled</option>
                             </select>
                             <!-- Category Dropdown -->
-                            <select id="payables-category-filter" onchange="filterPayablesTable()" class="px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 text-slate-700 font-semibold focus:bg-white">
+                            <select id="payables-category-filter" onchange="filterPayablesTable()" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 text-slate-700 font-semibold focus:bg-white shadow-2xs">
                                 <option value="">All Categories</option>
                                 <option value="Trade Payable">Trade Payable</option>
                                 <option value="Personal Expenses">Personal Expenses</option>
@@ -1283,35 +1283,35 @@
                                 <option value="Office Encashment">Office Encashment</option>
                             </select>
                             <!-- Bank Dropdown -->
-                            <select id="payables-bank-filter" onchange="filterPayablesTable()" class="px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 text-slate-700 font-semibold focus:bg-white">
+                            <select id="payables-bank-filter" onchange="filterPayablesTable()" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 text-slate-700 font-semibold focus:bg-white shadow-2xs">
                                 <option value="">All Banks</option>
                             </select>
                         </div>
 
                         <!-- Date Range & Preset Row -->
-                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-2">
+                        <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 pt-2">
                             <div class="flex flex-wrap items-center gap-2 text-xs">
-                                <span class="font-bold text-slate-500">Cheque Date Range:</span>
+                                <span class="font-bold text-slate-500 whitespace-nowrap">Cheque Date Range:</span>
                                 <input type="date" id="payables-date-from" onchange="filterPayablesTable()" class="px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 text-slate-700 font-medium">
                                 <span class="text-slate-400">to</span>
                                 <input type="date" id="payables-date-to" onchange="filterPayablesTable()" class="px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 text-slate-700 font-medium">
-                                <div class="flex items-center gap-1 ml-2">
+                                <div class="flex flex-wrap items-center gap-1 sm:ml-2">
                                     <button type="button" onclick="setPayablesDatePreset('today')" class="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-[11px] transition">Today</button>
                                     <button type="button" onclick="setPayablesDatePreset('week')" class="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-[11px] transition">This Week</button>
                                     <button type="button" onclick="setPayablesDatePreset('month')" class="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-[11px] transition">This Month</button>
                                     <button type="button" onclick="setPayablesDatePreset('all')" class="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-[11px] transition">All Time</button>
                                 </div>
                             </div>
-                            <div class="flex items-center gap-3">
-                                <button type="button" onclick="resetPayablesFilters()" class="text-xs text-rose-600 hover:text-rose-800 font-bold hover:underline">Clear Filters</button>
+                            <div class="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
+                                <button type="button" onclick="resetPayablesFilters()" class="text-xs text-rose-600 hover:text-rose-800 font-bold hover:underline cursor-pointer">Clear Filters</button>
                                 <span id="payables-visible-count" class="text-xs font-semibold text-slate-500 whitespace-nowrap">Showing all</span>
                             </div>
                         </div>
                     </div>
 
                     <!-- Cheques Table -->
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left text-xs">
+                    <div class="overflow-x-auto -mx-4 sm:mx-0">
+                        <table class="w-full text-left text-xs min-w-[820px]">
                             <thead class="bg-slate-50 border-y border-slate-200 text-slate-600 font-bold uppercase tracking-wider">
                                 <tr>
                                     <th class="py-3 px-4">Req / Cheque No.</th>
@@ -1321,19 +1321,18 @@
                                     <th class="py-3 px-4">Bank & Account</th>
                                     <th class="py-3 px-4 min-w-[200px]">Purpose / Usage</th>
                                     <th class="py-3 px-4 text-right">Amount (₱)</th>
-                                    <th class="py-3 px-4 text-center">Attachment</th>
                                     <th class="py-3 px-4">COO Approval</th>
                                     <th class="py-3 px-4 text-right">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="table-payables-body" class="divide-y divide-slate-100 font-medium">
-                                <tr><td colspan="10" class="py-8 text-center text-slate-400 font-medium">Loading cheque payables...</td></tr>
+                                <tr><td colspan="9" class="py-8 text-center text-slate-400 font-medium">Loading cheque payables...</td></tr>
                             </tbody>
                             <tfoot id="table-payables-footer" class="bg-slate-50/90 border-t-2 border-slate-200 text-xs font-bold text-slate-800">
                                 <tr>
                                     <td colspan="6" class="py-3.5 px-4 text-right uppercase tracking-wider text-slate-600">Total Filtered Amount:</td>
                                     <td id="table-payables-footer-total" class="py-3.5 px-4 text-right font-black text-amber-700 text-sm">₱0.00</td>
-                                    <td colspan="3"></td>
+                                    <td colspan="2"></td>
                                 </tr>
                             </tfoot>
                         </table>
@@ -2631,8 +2630,8 @@
     </div>
 
     <script src="/js/xlsx.full.min.js"></script>
-    <script src="/js/app.js?v=2.4.4"></script>
-    <script src="/js/admin.js?v=2.4.4"></script>
-    <script src="/js/agent-widgets.js?v=2.4.4"></script>
+    <script src="/js/app.js?v=2.4.5"></script>
+    <script src="/js/admin.js?v=2.4.5"></script>
+    <script src="/js/agent-widgets.js?v=2.4.5"></script>
 </body>
 </html>
