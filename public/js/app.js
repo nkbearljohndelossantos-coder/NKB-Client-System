@@ -1806,31 +1806,7 @@ window.detectPOBrand = function(name) {
 };
 
 window.cleanPOBrandFromName = function(name, chosenBrand = null) {
-    if (!name) return '';
-    let cleaned = name.trim();
-    if (chosenBrand && chosenBrand !== 'ALL') {
-        const esc = chosenBrand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        cleaned = cleaned.replace(new RegExp('^' + esc + '\\s*[-:–—]?\\s*', 'i'), '');
-        cleaned = cleaned.replace(new RegExp('\\(' + esc + '\\s*[-:–—]?\\s*', 'gi'), '(');
-        if (chosenBrand.toUpperCase() === 'BELLA SKIN') {
-            cleaned = cleaned.replace(/^SUS\s*[-:–—]?\s*/i, '');
-        }
-    } else {
-        if (/^SUS\s*[-:–—]?\s*/i.test(cleaned)) {
-            cleaned = cleaned.replace(/^SUS\s*[-:–—]?\s*/i, '');
-        }
-        for (const b of window.KNOWN_PO_BRANDS) {
-            const esc = b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const reg = new RegExp('^' + esc + '\\s*[-:–—]?\\s*', 'i');
-            if (reg.test(cleaned)) {
-                cleaned = cleaned.replace(reg, '');
-                cleaned = cleaned.replace(new RegExp('\\(' + esc + '\\s*[-:–—]?\\s*', 'gi'), '(');
-                cleaned = cleaned.replace(/^SUS\s*[-:–—]?\s*/i, '');
-                break;
-            }
-        }
-    }
-    return cleaned.trim() || name;
+    return name ? name.trim() : '';
 };
 
 window.getBrandBadgeClass = function(brand) {
@@ -1926,12 +1902,11 @@ async function openEditPOModal(poId) {
     const isVyuceutical = po.is_vyuceutical_ops === 1 || (po.company_name && po.company_name.toLowerCase().includes('vyuceutical'));
     editPOCatalog = editPOCatalog.map(p => {
         const brand = window.detectPOBrand ? window.detectPOBrand(p.name) : null;
-        const clean = isVyuceutical ? cleanPOBrandFromName(p.name) : p.name;
         return {
             ...p,
             brand: brand || 'OTHER',
-            clean_name: clean,
-            display_name: clean
+            clean_name: p.name,
+            display_name: p.name
         };
     });
 
@@ -2292,7 +2267,6 @@ function renderEditPOSuggestions(query = '') {
         </div>
         <div class="divide-y divide-slate-100">
             ${displayList.map((p, idx) => {
-                const isCleaned = p.clean_name && p.clean_name !== p.name;
                 const isSelected = idx === editPOHighlightedSuggestionIdx;
                 return `
                     <div id="edit-po-suggestion-item-${idx}" 
@@ -2302,10 +2276,9 @@ function renderEditPOSuggestions(query = '') {
                         <div class="min-w-0 flex-1">
                             <div class="flex items-center gap-2 flex-wrap">
                                 <span class="px-2 py-0.5 rounded text-[10px] font-bold ${window.getBrandBadgeClass ? window.getBrandBadgeClass(p.brand) : 'bg-slate-100 text-slate-700'}" style="font-weight: 700 !important;">${p.brand || 'OTHER'}</span>
-                                <span class="suggestion-prod-name font-black text-xs truncate" style="color: #020617 !important; font-weight: 800 !important;">${p.display_name}</span>
+                                <span class="suggestion-prod-name font-black text-xs truncate" style="color: #020617 !important; font-weight: 800 !important;">${p.name}</span>
                                 <span class="suggestion-prod-sku text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border" style="color: #1e1b4b !important; background-color: #e0e7ff !important; border-color: #c7d2fe !important;">${p.effective_sku || p.sku}</span>
                             </div>
-                            ${isCleaned ? `<div class="text-[10px] mt-0.5 truncate font-semibold" style="color: #64748b !important;">Original: ${p.name}</div>` : ''}
                         </div>
                         <div class="flex items-center gap-2 flex-shrink-0">
                             <span class="suggestion-prod-price text-xs font-black font-mono" style="color: #065f46 !important; font-weight: 900 !important;">₱${Number(p.default_price || 0).toFixed(2)}</span>
@@ -2585,7 +2558,7 @@ async function submitEditPO(e) {
                 const prod = editPOCatalog.find(p => p.id === item.product_id);
                 return {
                     product_id: item.product_id,
-                    item_name: prod ? (prod.clean_name || prod.display_name || prod.name) : undefined,
+                    item_name: prod ? prod.name : undefined,
                     target_quantity: item.target_quantity,
                     unit_price: item.unit_price !== undefined ? Number(item.unit_price) : undefined,
                     save_custom_price: true

@@ -4837,6 +4837,7 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.strictEqual(soDataRes.body.data.items.length, 2, 'SO data must contain both line items without collapsing duplicates');
         assert.strictEqual(soDataRes.body.data.items[0].target_quantity, 700);
         assert.strictEqual(soDataRes.body.data.items[1].target_quantity, 1100);
+        assert.strictEqual(soDataRes.body.data.items[0].product_name, `${prodRow.name} - Revised Batch 1`, 'SO item must preserve original product and brand name');
 
         // 6. Verify UI template files for Net Content and optional Delivery Date
         const printPoHtml = fs.readFileSync(path.join(__dirname, '../public/print-po.html'), 'utf8');

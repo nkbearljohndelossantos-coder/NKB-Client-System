@@ -15,7 +15,7 @@ router.get('/', authenticateToken, (req, res) => {
 
     let query = `
         SELECT jo.*, po.po_number, po.so_number, po.po_date, po.created_at as po_created_at, po.client_id, c.company_name, c.contact_person, c.is_vyuceutical_ops,
-               COALESCE((SELECT poi.item_name FROM purchase_order_items poi WHERE poi.po_id = jo.po_id AND poi.product_id = jo.product_id LIMIT 1), p.name) as product_name, 
+               p.name as product_name, 
                p.sku, p.unit,
                (SELECT COUNT(*) FROM production_batches WHERE jo_id = jo.id) as batch_count,
                (SELECT id FROM production_batches WHERE jo_id = jo.id ORDER BY created_at DESC LIMIT 1) as latest_batch_id,
@@ -65,7 +65,7 @@ function getClientConsolidatedJOData(clientId, specificPoId = null, specificJoId
     let joQuery = `
         SELECT jo.*, po.po_number, po.po_date, po.expected_delivery_date, po.notes as po_notes,
                p.name as product_name, p.sku, p.unit,
-               COALESCE((SELECT poi.item_name FROM purchase_order_items poi WHERE poi.po_id = jo.po_id AND poi.product_id = jo.product_id LIMIT 1), cpp.custom_name, p.name) as display_product_name,
+               COALESCE(cpp.custom_name, p.name) as display_product_name,
                COALESCE(cpp.custom_sku, p.sku) as display_sku
         FROM job_orders jo
         JOIN purchase_orders po ON jo.po_id = po.id
@@ -101,7 +101,10 @@ function getClientConsolidatedJOData(clientId, specificPoId = null, specificJoId
     let poItemQuery = `
         SELECT poi.*, po.po_number, po.po_date, po.expected_delivery_date, po.notes as po_notes,
                p.name as product_name, p.sku, p.unit, COALESCE(p.size, '') as size,
-               COALESCE(poi.item_name, cpp.custom_name, p.name) as display_product_name,
+               CASE 
+                   WHEN poi.item_name IS NOT NULL AND poi.item_name != '' AND (p.name LIKE '%' || poi.item_name AND p.name != poi.item_name) THEN p.name
+                   ELSE COALESCE(poi.item_name, cpp.custom_name, p.name)
+               END as display_product_name,
                COALESCE(cpp.custom_sku, p.sku) as display_sku
         FROM purchase_order_items poi
         JOIN purchase_orders po ON poi.po_id = po.id
@@ -269,7 +272,7 @@ router.get('/:id', authenticateToken, (req, res) => {
         SELECT jo.*, po.po_number, po.po_date, po.expected_delivery_date, po.notes as po_notes,
                po.tolerance_percent, po.billing_policy, po.client_id,
                c.company_name, c.contact_person, c.is_vyuceutical_ops, c.address as client_address, c.phone as client_phone, c.email as client_email, c.tin as client_tin,
-               COALESCE((SELECT poi.item_name FROM purchase_order_items poi WHERE poi.po_id = jo.po_id AND poi.product_id = jo.product_id LIMIT 1), p.name) as display_product_name,
+               p.name as display_product_name,
                p.name as product_name, p.sku, p.formula_code, p.unit,
                u.name as creator_name
         FROM job_orders jo

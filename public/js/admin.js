@@ -7891,31 +7891,7 @@ if (!window.detectPOBrand) {
 }
 if (!window.cleanPOBrandFromName) {
     window.cleanPOBrandFromName = function(name, chosenBrand = null) {
-        if (!name) return '';
-        let cleaned = name.trim();
-        if (chosenBrand && chosenBrand !== 'ALL') {
-            const esc = chosenBrand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            cleaned = cleaned.replace(new RegExp('^' + esc + '\\s*[-:–—]?\\s*', 'i'), '');
-            cleaned = cleaned.replace(new RegExp('\\(' + esc + '\\s*[-:–—]?\\s*', 'gi'), '(');
-            if (chosenBrand.toUpperCase() === 'BELLA SKIN') {
-                cleaned = cleaned.replace(/^SUS\s*[-:–—]?\s*/i, '');
-            }
-        } else {
-            if (/^SUS\s*[-:–—]?\s*/i.test(cleaned)) {
-                cleaned = cleaned.replace(/^SUS\s*[-:–—]?\s*/i, '');
-            }
-            for (const b of window.KNOWN_PO_BRANDS) {
-                const esc = b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                const reg = new RegExp('^' + esc + '\\s*[-:–—]?\\s*', 'i');
-                if (reg.test(cleaned)) {
-                    cleaned = cleaned.replace(reg, '');
-                    cleaned = cleaned.replace(new RegExp('\\(' + esc + '\\s*[-:–—]?\\s*', 'gi'), '(');
-                    cleaned = cleaned.replace(/^SUS\s*[-:–—]?\s*/i, '');
-                    break;
-                }
-            }
-        }
-        return cleaned.trim() || name;
+        return name ? name.trim() : '';
     };
 }
 
@@ -8155,15 +8131,14 @@ async function onAdminPOClientChanged() {
         adminPORawCatalog = (allRes.success && allRes.data) ? allRes.data : [];
     }
 
-    // Process adminPOCatalog: Every product has brand and clean_name preserved for multi-brand orders
+    // Process adminPOCatalog: Every product retains full name and brand
     adminPOCatalog = adminPORawCatalog.map(p => {
         const brand = detectPOBrand(p.name) || 'OTHER';
-        const cleanName = isVyuceutical ? cleanPOBrandFromName(p.name) : p.name;
         return {
             ...p,
             brand,
-            clean_name: cleanName,
-            display_name: cleanName
+            clean_name: p.name,
+            display_name: p.name
         };
     });
 
@@ -8289,7 +8264,6 @@ function renderPOSuggestions(query = '') {
         </div>
         <div class="divide-y divide-slate-100">
             ${displayList.map((p, idx) => {
-                const isCleaned = p.clean_name && p.clean_name !== p.name;
                 const isSelected = idx === poHighlightedSuggestionIdx;
                 return `
                     <div id="po-suggestion-item-${idx}" 
@@ -8299,10 +8273,9 @@ function renderPOSuggestions(query = '') {
                         <div class="min-w-0 flex-1">
                             <div class="flex items-center gap-2 flex-wrap">
                                 <span class="px-2 py-0.5 rounded text-[10px] font-bold ${window.getBrandBadgeClass ? window.getBrandBadgeClass(p.brand) : 'bg-slate-100 text-slate-700'}" style="font-weight: 700 !important;">${p.brand || 'OTHER'}</span>
-                                <span class="suggestion-prod-name font-black text-xs truncate" style="color: #020617 !important; font-weight: 800 !important;">${p.display_name}</span>
+                                <span class="suggestion-prod-name font-black text-xs truncate" style="color: #020617 !important; font-weight: 800 !important;">${p.name}</span>
                                 <span class="suggestion-prod-sku text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border" style="color: #1e1b4b !important; background-color: #e0e7ff !important; border-color: #c7d2fe !important;">${p.effective_sku || p.sku}</span>
                             </div>
-                            ${isCleaned ? `<div class="text-[10px] mt-0.5 truncate font-semibold" style="color: #64748b !important;">Original: ${p.name}</div>` : ''}
                         </div>
                         <div class="flex items-center gap-2 flex-shrink-0">
                             <span class="suggestion-prod-price text-xs font-black font-mono" style="color: #065f46 !important; font-weight: 900 !important;">₱${Number(p.default_price || 0).toFixed(2)}</span>
@@ -8372,7 +8345,7 @@ function selectPOSuggestion(productId) {
         });
     }
     renderAdminPOLineItems();
-    NKB.showToast(`Added ${prod.display_name} [${prod.brand}] to order!`, 'success');
+    NKB.showToast(`Added ${prod.name} to order!`, 'success');
 
     const lastIdx = adminPOLineItems.length - 1;
     setTimeout(() => {
@@ -8571,7 +8544,7 @@ async function submitCreatePO(e) {
                     const prod = adminPOCatalog.find(p => p.id === item.product_id);
                     return {
                         product_id: item.product_id,
-                        item_name: prod ? (prod.clean_name || prod.display_name || prod.name) : undefined,
+                        item_name: prod ? prod.name : undefined,
                         target_quantity: item.target_quantity,
                         unit_price: Math.round(Number(item.unit_price || 0) * 100) / 100,
                         save_custom_price: true

@@ -19,15 +19,7 @@ const KNOWN_PO_BRANDS = [
 
 function cleanItemNameForVyuceutical(rawName) {
     if (!rawName) return null;
-    let cleaned = rawName.trim();
-    cleaned = cleaned.replace(/^SUS\s*[-:–—]?\s*/i, '');
-    for (const b of KNOWN_PO_BRANDS) {
-        const esc = b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        cleaned = cleaned.replace(new RegExp('^' + esc + '\\s*[-:–—]?\\s*', 'i'), '');
-        cleaned = cleaned.replace(new RegExp('\\(' + esc + '\\s*[-:–—]?\\s*', 'gi'), '(');
-        cleaned = cleaned.replace(/^SUS\s*[-:–—]?\s*/i, '');
-    }
-    return cleaned.trim() || rawName;
+    return rawName.trim();
 }
 
 function normalizeReminderDateTime(str) {
@@ -165,7 +157,7 @@ router.get('/', authenticateToken, enforceClientIsolation, (req, res) => {
     // Attach ordered products separately to each PO
     for (const po of orders) {
         po.items = db.prepare(`
-            SELECT poi.*, COALESCE(poi.item_name, p.name) as product_name, p.sku, p.unit, COALESCE(p.size, '') as size, p.category, p.formula_code, p.shelf_life_months,
+            SELECT poi.*, COALESCE(p.name, poi.item_name) as product_name, p.sku, p.unit, COALESCE(p.size, '') as size, p.category, p.formula_code, p.shelf_life_months,
                    (
                        SELECT COALESCE(SUM(di.delivered_quantity), 0)
                        FROM delivery_items di
@@ -360,7 +352,10 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
     // Line items with detailed product specifications and manufacturing lineage
     const items = db.prepare(`
         SELECT poi.*, 
-               COALESCE(poi.item_name, cpp.custom_name, p.name) as product_name, 
+               CASE 
+                   WHEN poi.item_name IS NOT NULL AND poi.item_name != '' AND (p.name LIKE '%' || poi.item_name AND p.name != poi.item_name) THEN p.name
+                   ELSE COALESCE(poi.item_name, cpp.custom_name, p.name)
+               END as product_name, 
                COALESCE(cpp.custom_sku, p.sku) as sku, 
                p.unit, 
                COALESCE(p.size, '') as size,
@@ -399,14 +394,14 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
     // Job Orders
     const jobOrders = db.prepare(`
         SELECT jo.*, 
-               COALESCE((SELECT poi.item_name FROM purchase_order_items poi WHERE poi.po_id = jo.po_id AND poi.product_id = jo.product_id LIMIT 1), p.name) as product_name, 
+               COALESCE((SELECT cpp2.custom_name FROM client_product_prices cpp2 WHERE cpp2.product_id = p.id AND cpp2.client_id = ? LIMIT 1), p.name) as product_name, 
                p.sku,
                (SELECT actual_yield FROM production_batches WHERE jo_id = jo.id ORDER BY created_at DESC LIMIT 1) as latest_yield
         FROM job_orders jo
         JOIN products p ON jo.product_id = p.id
         WHERE jo.po_id = ?
         ORDER BY jo.created_at ASC
-    `).all(id);
+    `).all(po.client_id, id);
 
     // Delivery Receipts
     const deliveries = db.prepare(`
@@ -559,9 +554,7 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
             const minQty = Math.floor(targetQty * (1 - tolerance / 100));
             const maxQty = Math.ceil(targetQty * (1 + tolerance / 100));
 
-            const isVyuceutical = client && (client.is_vyuceutical_ops === 1 || (client.company_name && client.company_name.toLowerCase().includes('vyuceutical')));
-            let rawItemName = item.item_name ? item.item_name.trim() : (isVyuceutical ? product.name : null);
-            let finalItemName = isVyuceutical ? cleanItemNameForVyuceutical(rawItemName) : rawItemName;
+            let finalItemName = (item.item_name && item.item_name.trim()) ? item.item_name.trim() : product.name;
 
             processedItems.push({
                 id: uuidv4(),
@@ -809,8 +802,7 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
                 const minQty = Math.floor(targetQty * (1 - tolerance / 100));
                 const maxQty = Math.ceil(targetQty * (1 + tolerance / 100));
 
-                let rawItemName = item.item_name ? item.item_name.trim() : (isVyuceutical ? product.name : null);
-                let finalItemName = isVyuceutical ? cleanItemNameForVyuceutical(rawItemName) : rawItemName;
+                let finalItemName = (item.item_name && item.item_name.trim()) ? item.item_name.trim() : product.name;
 
                 processedItems.push({
                     id: uuidv4(),
