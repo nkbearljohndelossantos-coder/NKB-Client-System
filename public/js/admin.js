@@ -8375,14 +8375,13 @@ function selectPOSuggestion(productId) {
     NKB.showToast(`Added ${prod.display_name} [${prod.brand}] to order!`, 'success');
 
     const lastIdx = adminPOLineItems.length - 1;
-        setTimeout(() => {
-            const rowInput = document.querySelector(`#admin-po-lines-body tr:nth-child(${lastIdx + 1}) input[type="number"]`);
-            if (rowInput) {
-                rowInput.focus();
-                rowInput.select();
-            }
-        }, 50);
-    }
+    setTimeout(() => {
+        const rowInput = document.querySelector(`#admin-po-lines-body tr:nth-child(${lastIdx + 1}) input[type="number"]`);
+        if (rowInput) {
+            rowInput.focus();
+            rowInput.select();
+        }
+    }, 50);
 
     const container = document.getElementById('po-suggestions-container');
     if (container) container.classList.add('hidden');

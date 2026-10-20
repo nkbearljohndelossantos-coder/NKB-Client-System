@@ -4858,6 +4858,18 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
 
         const appJs = fs.readFileSync(path.join(__dirname, '../public/js/app.js'), 'utf8');
         assert.ok(appJs.includes('Net Content'), 'app.js view modal must include Net Content');
+
+        // 7. Verify frontend JS files are free of syntax errors
+        const vm = require('vm');
+        assert.doesNotThrow(() => {
+            new vm.Script(adminJs);
+        }, 'admin.js must not contain syntax errors');
+        assert.doesNotThrow(() => {
+            new vm.Script(appJs);
+        }, 'app.js must not contain syntax errors');
+        assert.doesNotThrow(() => {
+            new vm.Script(clientJs);
+        }, 'client.js must not contain syntax errors');
     });
 
     after(() => {
