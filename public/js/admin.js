@@ -14753,6 +14753,7 @@ function populateITQuickActionSelects() {
     }
 
     onITStatusTableChange();
+    populateITDeliveryReceiptsSelect();
 }
 
 function onITStatusTableChange() {
@@ -14855,6 +14856,8 @@ function getITTableHeaderHTML(table) {
             return baseHeader(['Batch No.', 'JO / PO', 'Product', 'Formula', 'Prod Date', 'Yield / Target', 'Status', 'QC Notes']);
         case 'delivery_receipts':
             return baseHeader(['DR Number', 'Client Company', 'PO Number', 'Delivery Date', 'Driver & Plate', 'Status']);
+        case 'delivery_items':
+            return baseHeader(['DR Number', 'PO Number', 'Product Name & SKU', 'Batch No.', 'Delivered Qty', 'Accepted Qty', 'Rejected Qty', 'Unit Price', 'Line Total']);
         case 'sales_invoices':
             return baseHeader(['Invoice No.', 'Client Company', 'PO Number', 'DR Number', 'Total Amount', 'Due Date', 'Status']);
         case 'payments':
@@ -14964,6 +14967,26 @@ function getITTableRowHTML(table, r) {
                     ${actionButtons}
                 </tr>
             `;
+        case 'delivery_items': {
+            const lineTotal = (Number(r.delivered_quantity) || 0) * (Number(r.unit_price) || 0);
+            return `
+                <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+                    <td class="py-2.5 px-3 font-mono font-bold text-indigo-700">${r.dr_number || r.dr_id}</td>
+                    <td class="py-2.5 px-3 font-mono text-slate-600">${r.po_number || '-'}</td>
+                    <td class="py-2.5 px-3 font-semibold text-slate-800">
+                        <div>${r.product_name || '-'}</div>
+                        ${r.product_sku ? `<span class="text-[10px] text-slate-400 font-mono">${r.product_sku}</span>` : ''}
+                    </td>
+                    <td class="py-2.5 px-3 font-mono text-slate-600">${r.batch_number || r.batch_id || '-'}</td>
+                    <td class="py-2.5 px-3 font-mono font-bold text-slate-900">${NKB.formatNumber(r.delivered_quantity || 0)}</td>
+                    <td class="py-2.5 px-3 font-mono text-emerald-700 font-semibold">${NKB.formatNumber(r.accepted_quantity || 0)}</td>
+                    <td class="py-2.5 px-3 font-mono text-rose-600">${NKB.formatNumber(r.rejected_quantity || 0)}</td>
+                    <td class="py-2.5 px-3 font-mono text-slate-900">${NKB.formatCurrency(r.unit_price || 0)}</td>
+                    <td class="py-2.5 px-3 font-mono font-bold text-indigo-700">${NKB.formatCurrency(lineTotal)}</td>
+                    ${actionButtons}
+                </tr>
+            `;
+        }
         case 'sales_invoices':
             return `
                 <tr class="hover:bg-slate-50 transition border-b border-slate-100">
@@ -15206,6 +15229,40 @@ function generateITFieldInputHTML(col, val, table) {
                     ${itLookups.orders.map(o => `
                         <option value="${o.id}" ${o.id === safeVal ? 'selected' : ''}>
                             ${o.po_number} [${o.status}]
+                        </option>
+                    `).join('')}
+                </select>
+            </div>
+        `;
+    }
+
+    // 3b. Delivery Receipt dropdown
+    if (col === 'dr_id' && itLookups && itLookups.deliveryReceipts) {
+        return `
+            <div>
+                <label class="block text-[11px] font-bold text-slate-700 mb-1">${label}</label>
+                <select name="${col}" class="w-full text-xs p-2 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-rose-500 font-mono text-slate-800">
+                    <option value="">-- Select Delivery Receipt --</option>
+                    ${itLookups.deliveryReceipts.map(dr => `
+                        <option value="${dr.id}" ${dr.id === safeVal ? 'selected' : ''}>
+                            ${dr.dr_number} [${dr.status || 'DRAFT'}] (${dr.company_name || 'No Client'})
+                        </option>
+                    `).join('')}
+                </select>
+            </div>
+        `;
+    }
+
+    // 3c. Production Batch dropdown
+    if (col === 'batch_id' && itLookups && itLookups.batches) {
+        return `
+            <div>
+                <label class="block text-[11px] font-bold text-slate-700 mb-1">${label}</label>
+                <select name="${col}" class="w-full text-xs p-2 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-rose-500 font-mono text-slate-800">
+                    <option value="">-- No Batch Assigned --</option>
+                    ${itLookups.batches.map(b => `
+                        <option value="${b.id}" ${b.id === safeVal ? 'selected' : ''}>
+                            ${b.batch_number} [${b.status || 'ACTIVE'}]
                         </option>
                     `).join('')}
                 </select>
@@ -15790,6 +15847,386 @@ window.executeQuickPOReassignment = executeQuickPOReassignment;
 window.executeQuickStatusOverride = executeQuickStatusOverride;
 window.onITStatusTableChange = onITStatusTableChange;
 window.deleteITRecord = deleteITRecord;
+
+// ============================================================================
+// IT MANAGEMENT: DELIVERED PRODUCTS (DR ITEMS) MASTER EDITOR
+// ============================================================================
+let itSelectedDR = null;
+let itDeliveredItems = [];
+
+async function populateITDeliveryReceiptsSelect(selectedDrId = null) {
+    const drSelect = document.getElementById('it-dr-select');
+    if (!drSelect) return;
+
+    try {
+        let drs = [];
+        if (itLookups && itLookups.deliveryReceipts && itLookups.deliveryReceipts.length > 0) {
+            drs = itLookups.deliveryReceipts;
+        } else {
+            const res = await NKB.api('/api/it-management/delivered-products/drs');
+            if (res.success && res.data) {
+                drs = res.data;
+            }
+        }
+
+        if (!drs || drs.length === 0) {
+            drSelect.innerHTML = '<option value="">-- No Delivery Receipts Found --</option>';
+            return;
+        }
+
+        const currentVal = selectedDrId || drSelect.value;
+        drSelect.innerHTML = '<option value="">-- Select a Delivery Receipt to Edit Delivered Products --</option>' +
+            drs.map(dr => {
+                const isSelected = (currentVal && String(dr.id) === String(currentVal)) ? 'selected' : '';
+                const itemsCount = dr.item_count || 0;
+                const totalQty = dr.total_delivered_qty || 0;
+                return `<option value="${dr.id}" ${isSelected}>${dr.dr_number} - ${dr.company_name || 'No Client'} (PO: ${dr.po_number || 'N/A'}) [${dr.status || 'DRAFT'}] (${itemsCount} items, ${totalQty} units)</option>`;
+            }).join('');
+
+        if (currentVal) {
+            drSelect.value = currentVal;
+            onITDeliveryReceiptSelect();
+        }
+    } catch (err) {
+        console.error('Failed to populate IT DR select:', err);
+        drSelect.innerHTML = '<option value="">-- Error loading DRs --</option>';
+    }
+}
+
+async function onITDeliveryReceiptSelect() {
+    const drSelect = document.getElementById('it-dr-select');
+    const container = document.getElementById('it-dr-items-container');
+    const addBtn = document.getElementById('it-add-delivered-item-btn');
+    const metaBadge = document.getElementById('it-dr-meta-badge');
+    const tbody = document.getElementById('it-dr-items-tbody');
+
+    const drId = drSelect ? drSelect.value : null;
+
+    if (!drId) {
+        itSelectedDR = null;
+        itDeliveredItems = [];
+        if (container) container.classList.add('hidden');
+        if (addBtn) addBtn.disabled = true;
+        return;
+    }
+
+    if (addBtn) addBtn.disabled = false;
+    if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center py-6 text-slate-400">Loading delivered products...</td></tr>';
+    if (container) container.classList.remove('hidden');
+
+    try {
+        const res = await NKB.api(`/api/it-management/delivered-products/drs/${drId}`);
+        if (!res.success || !res.data) {
+            NKB.showToast(res.error || 'Failed to load DR details.', 'error');
+            return;
+        }
+
+        itSelectedDR = res.data.dr;
+        itDeliveredItems = res.data.items || [];
+
+        // Render meta badge
+        if (metaBadge && itSelectedDR) {
+            let statusCls = 'bg-slate-100 text-slate-700 border-slate-200';
+            const s = itSelectedDR.status || '';
+            if (s.includes('DELIVER') || s.includes('ACCEPT') || s.includes('INVOICE') || s.includes('COMPLET')) statusCls = 'bg-emerald-100 text-emerald-800 border-emerald-200 font-bold';
+            else if (s.includes('DISPATCH') || s.includes('PARTIAL')) statusCls = 'bg-indigo-100 text-indigo-800 border-indigo-200 font-bold';
+            else if (s.includes('DRAFT') || s.includes('PENDING')) statusCls = 'bg-amber-100 text-amber-800 border-amber-200 font-bold';
+            else if (s.includes('CANCEL') || s.includes('REJECT')) statusCls = 'bg-rose-100 text-rose-800 border-rose-200 font-bold';
+
+            metaBadge.innerHTML = `
+                <div class="flex items-center gap-3 flex-wrap">
+                    <span class="font-mono font-bold text-indigo-700 text-sm">${itSelectedDR.dr_number}</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] border ${statusCls}">${s || 'DRAFT'}</span>
+                    <span class="text-slate-600">Client: <strong class="text-slate-900">${itSelectedDR.company_name || 'N/A'}</strong></span>
+                    <span class="text-slate-600">PO: <strong class="font-mono text-slate-900">${itSelectedDR.po_number || 'N/A'}</strong></span>
+                    <span class="text-slate-600">Date: <strong>${itSelectedDR.delivery_date || 'N/A'}</strong></span>
+                    ${itSelectedDR.driver_name ? `<span class="text-slate-600">Driver: <strong>${itSelectedDR.driver_name} (${itSelectedDR.vehicle_plate || 'No Plate'})</strong></span>` : ''}
+                </div>
+                <div class="text-[11px] text-slate-500 font-medium">
+                    Line Items: <span class="font-bold text-slate-800" id="it-dr-items-count-badge">${itDeliveredItems.length}</span>
+                </div>
+            `;
+        }
+
+        renderITDeliveredItemsTable();
+    } catch (err) {
+        console.error('Error fetching DR delivered items:', err);
+        NKB.showToast(err.message, 'error');
+    }
+}
+
+function renderITDeliveredItemsTable() {
+    const tbody = document.getElementById('it-dr-items-tbody');
+    if (!tbody) return;
+
+    if (!itDeliveredItems || itDeliveredItems.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" class="text-center py-6 text-slate-400">
+                    No delivered products found for this DR. Click <strong class="text-indigo-600 font-semibold cursor-pointer" onclick="addITDeliveredItemRow()">+ Add Product</strong> to add delivered line items.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    const products = (itLookups && itLookups.products) ? itLookups.products : [];
+    const batches = (itLookups && itLookups.batches) ? itLookups.batches : [];
+
+    tbody.innerHTML = itDeliveredItems.map((item, idx) => {
+        const lineTotal = (Number(item.delivered_quantity) || 0) * (Number(item.unit_price) || 0);
+
+        const productOptions = products.map(p => {
+            const isSel = (p.id === item.product_id) ? 'selected' : '';
+            return `<option value="${p.id}" ${isSel}>${p.name} [${p.sku}]</option>`;
+        }).join('');
+
+        const batchOptions = '<option value="">-- No Batch Assigned --</option>' +
+            batches.map(b => {
+                const isSel = (b.id === item.batch_id) ? 'selected' : '';
+                return `<option value="${b.id}" ${isSel}>${b.batch_number} [${b.status || 'ACTIVE'}]</option>`;
+            }).join('');
+
+        return `
+            <tr data-index="${idx}" class="hover:bg-slate-50/70 transition">
+                <td class="py-2 px-3">
+                    <select class="it-dr-item-prod w-full text-xs p-1.5 border border-slate-300 rounded-lg bg-white font-medium" onchange="onITDeliveredItemProductChange(${idx}, this.value)">
+                        <option value="">-- Select Product --</option>
+                        ${productOptions}
+                    </select>
+                </td>
+                <td class="py-2 px-3">
+                    <select class="it-dr-item-batch w-full text-xs p-1.5 border border-slate-300 rounded-lg bg-white font-mono text-[11px]">
+                        ${batchOptions}
+                    </select>
+                </td>
+                <td class="py-2 px-2 text-right">
+                    <input type="number" min="1" step="1" value="${item.delivered_quantity != null ? item.delivered_quantity : 1}" class="it-dr-item-del-qty w-20 text-xs p-1.5 text-right font-mono font-bold border border-slate-300 rounded-lg focus:ring-1 focus:ring-indigo-500" oninput="updateITDeliveredItemLineTotal(${idx})">
+                </td>
+                <td class="py-2 px-2 text-right">
+                    <input type="number" min="0" step="1" value="${item.accepted_quantity != null ? item.accepted_quantity : (item.delivered_quantity || 1)}" class="it-dr-item-acc-qty w-20 text-xs p-1.5 text-right font-mono font-semibold text-emerald-700 border border-slate-300 rounded-lg focus:ring-1 focus:ring-emerald-500">
+                </td>
+                <td class="py-2 px-2 text-right">
+                    <input type="number" min="0" step="1" value="${item.rejected_quantity != null ? item.rejected_quantity : 0}" class="it-dr-item-rej-qty w-20 text-xs p-1.5 text-right font-mono text-rose-600 border border-slate-300 rounded-lg focus:ring-1 focus:ring-rose-500">
+                </td>
+                <td class="py-2 px-2 text-right">
+                    <input type="number" min="0" step="0.01" value="${item.unit_price != null ? item.unit_price : 0}" class="it-dr-item-price w-24 text-xs p-1.5 text-right font-mono border border-slate-300 rounded-lg focus:ring-1 focus:ring-indigo-500" oninput="updateITDeliveredItemLineTotal(${idx})">
+                </td>
+                <td class="py-2 px-3 text-right">
+                    <span id="it-dr-line-total-${idx}" class="font-mono font-bold text-slate-900 text-xs">${NKB.formatCurrency(lineTotal)}</span>
+                </td>
+                <td class="py-2 px-2 text-center whitespace-nowrap">
+                    <button type="button" onclick="removeITDeliveredItemRow(${idx})" class="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg font-bold transition cursor-pointer" title="Remove Product">
+                        🗑️
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    const countBadge = document.getElementById('it-dr-items-count-badge');
+    if (countBadge) countBadge.textContent = itDeliveredItems.length;
+}
+
+function collectITDeliveredItemsFromDOM() {
+    const tbody = document.getElementById('it-dr-items-tbody');
+    if (!tbody) return itDeliveredItems;
+
+    const rows = tbody.querySelectorAll('tr[data-index]');
+    const updated = [];
+
+    rows.forEach((row, i) => {
+        const prodSelect = row.querySelector('.it-dr-item-prod');
+        const batchSelect = row.querySelector('.it-dr-item-batch');
+        const delInput = row.querySelector('.it-dr-item-del-qty');
+        const accInput = row.querySelector('.it-dr-item-acc-qty');
+        const rejInput = row.querySelector('.it-dr-item-rej-qty');
+        const priceInput = row.querySelector('.it-dr-item-price');
+
+        const original = itDeliveredItems[i] || {};
+        updated.push({
+            id: original.id || null,
+            dr_id: (itSelectedDR && itSelectedDR.id) ? itSelectedDR.id : original.dr_id,
+            product_id: prodSelect ? prodSelect.value : original.product_id,
+            batch_id: (batchSelect && batchSelect.value) ? batchSelect.value : null,
+            delivered_quantity: delInput ? (parseInt(delInput.value, 10) || 1) : 1,
+            accepted_quantity: accInput ? (parseInt(accInput.value, 10) || 0) : 0,
+            rejected_quantity: rejInput ? (parseInt(rejInput.value, 10) || 0) : 0,
+            unit_price: priceInput ? (parseFloat(priceInput.value) || 0) : 0
+        });
+    });
+
+    return updated;
+}
+
+function onITDeliveredItemProductChange(idx, newProductId) {
+    if (!newProductId) return;
+    const products = (itLookups && itLookups.products) ? itLookups.products : [];
+    const prod = products.find(p => String(p.id) === String(newProductId));
+    if (prod && prod.default_price) {
+        const tbody = document.getElementById('it-dr-items-tbody');
+        const row = tbody ? tbody.querySelector(`tr[data-index="${idx}"]`) : null;
+        const priceInput = row ? row.querySelector('.it-dr-item-price') : null;
+        if (priceInput && (parseFloat(priceInput.value) === 0 || !priceInput.value)) {
+            priceInput.value = prod.default_price;
+            updateITDeliveredItemLineTotal(idx);
+        }
+    }
+}
+
+function updateITDeliveredItemLineTotal(idx) {
+    const tbody = document.getElementById('it-dr-items-tbody');
+    const row = tbody ? tbody.querySelector(`tr[data-index="${idx}"]`) : null;
+    if (!row) return;
+
+    const delInput = row.querySelector('.it-dr-item-del-qty');
+    const priceInput = row.querySelector('.it-dr-item-price');
+    const totalEl = document.getElementById(`it-dr-line-total-${idx}`);
+
+    const qty = delInput ? (parseFloat(delInput.value) || 0) : 0;
+    const price = priceInput ? (parseFloat(priceInput.value) || 0) : 0;
+
+    if (totalEl) {
+        totalEl.textContent = NKB.formatCurrency(qty * price);
+    }
+}
+
+function addITDeliveredItemRow() {
+    if (!itSelectedDR) {
+        NKB.showToast('Please select a Delivery Receipt first.', 'warning');
+        return;
+    }
+
+    itDeliveredItems = collectITDeliveredItemsFromDOM();
+
+    const products = (itLookups && itLookups.products) ? itLookups.products : [];
+    const defaultProduct = products[0] || null;
+
+    itDeliveredItems.push({
+        id: null,
+        dr_id: itSelectedDR.id,
+        product_id: defaultProduct ? defaultProduct.id : '',
+        batch_id: null,
+        delivered_quantity: 1,
+        accepted_quantity: 1,
+        rejected_quantity: 0,
+        unit_price: defaultProduct ? (defaultProduct.default_price || 0) : 0
+    });
+
+    renderITDeliveredItemsTable();
+}
+
+function removeITDeliveredItemRow(idx) {
+    itDeliveredItems = collectITDeliveredItemsFromDOM();
+    if (idx >= 0 && idx < itDeliveredItems.length) {
+        itDeliveredItems.splice(idx, 1);
+        renderITDeliveredItemsTable();
+    }
+}
+
+async function saveITDeliveredProducts() {
+    if (!itSelectedDR) {
+        NKB.showToast('Please select a Delivery Receipt to save changes.', 'warning');
+        return;
+    }
+
+    itDeliveredItems = collectITDeliveredItemsFromDOM();
+
+    if (itDeliveredItems.length === 0) {
+        if (!confirm('There are 0 delivered products for this DR. Saving will clear all delivered items for this DR and reset PO delivered quantities. Do you want to proceed?')) {
+            return;
+        }
+    }
+
+    // Validation
+    for (let i = 0; i < itDeliveredItems.length; i++) {
+        const item = itDeliveredItems[i];
+        if (!item.product_id) {
+            NKB.showToast(`Row #${i + 1}: Please select a valid product.`, 'error');
+            return;
+        }
+        if (item.delivered_quantity <= 0) {
+            NKB.showToast(`Row #${i + 1}: Delivered quantity must be greater than 0.`, 'error');
+            return;
+        }
+    }
+
+    const reason = document.getElementById('it-dr-edit-reason')?.value?.trim();
+    const saveBtn = document.getElementById('it-save-delivered-products-btn');
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<span>⏳ Saving Delivered Products...</span>';
+    }
+
+    try {
+        const res = await NKB.api(`/api/it-management/delivered-products/drs/${itSelectedDR.id}`, {
+            method: 'PUT',
+            body: JSON.stringify({
+                items: itDeliveredItems,
+                reason
+            })
+        });
+
+        if (res.success) {
+            NKB.showToast(`Delivered products for DR ${itSelectedDR.dr_number} successfully saved!`, 'success');
+            const reasonInput = document.getElementById('it-dr-edit-reason');
+            if (reasonInput) reasonInput.value = '';
+
+            // Reload lookups & DR list
+            const lRes = await NKB.api('/api/it-management/lookups');
+            if (lRes.success && lRes.data) {
+                itLookups = lRes.data;
+                populateITQuickActionSelects();
+            }
+
+            await populateITDeliveryReceiptsSelect(itSelectedDR.id);
+
+            // If current table view is delivery_items, delivery_receipts, or purchase_order_items, refresh it
+            if (['delivery_items', 'delivery_receipts', 'purchase_order_items', 'purchase_orders'].includes(itCurrentTable)) {
+                fetchAndRenderITRecords();
+            }
+        } else {
+            NKB.showToast(res.error || 'Failed to save delivered products.', 'error');
+        }
+    } catch (err) {
+        console.error('Error saving delivered products:', err);
+        NKB.showToast(err.message, 'error');
+    } finally {
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<span>💾 Save Delivered Products Changes</span>';
+        }
+    }
+}
+
+async function refreshITDeliveredProductsEditor() {
+    const drId = document.getElementById('it-dr-select')?.value;
+    try {
+        const res = await NKB.api('/api/it-management/lookups');
+        if (res.success && res.data) {
+            itLookups = res.data;
+            populateITQuickActionSelects();
+        }
+        await populateITDeliveryReceiptsSelect(drId);
+    } catch (err) {
+        console.error('Error reloading DR list:', err);
+    }
+}
+
+function cancelITDeliveredProductsEdit() {
+    onITDeliveryReceiptSelect();
+}
+
+window.populateITDeliveryReceiptsSelect = populateITDeliveryReceiptsSelect;
+window.onITDeliveryReceiptSelect = onITDeliveryReceiptSelect;
+window.renderITDeliveredItemsTable = renderITDeliveredItemsTable;
+window.onITDeliveredItemProductChange = onITDeliveredItemProductChange;
+window.updateITDeliveredItemLineTotal = updateITDeliveredItemLineTotal;
+window.addITDeliveredItemRow = addITDeliveredItemRow;
+window.removeITDeliveredItemRow = removeITDeliveredItemRow;
+window.saveITDeliveredProducts = saveITDeliveredProducts;
+window.refreshITDeliveredProductsEditor = refreshITDeliveredProductsEditor;
+window.cancelITDeliveredProductsEdit = cancelITDeliveredProductsEdit;
 
 // =============================================================
 // PRODUCTION SUPERVISOR DASHBOARD & INTERACTIVE SALES ORDER BOARD

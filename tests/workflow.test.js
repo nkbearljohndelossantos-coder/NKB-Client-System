@@ -4878,7 +4878,7 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
 
         // 1. Verify UI HTML & JS code and syntax
         const adminHtml = fs.readFileSync(path.join(__dirname, '../public/admin.html'), 'utf8');
-        assert.ok(adminHtml.includes('admin.js?v=2.4.7') || adminHtml.includes('admin.js?v=2.4.6'), 'admin.html must reference admin.js');
+        assert.ok(adminHtml.includes('admin.js?v='), 'admin.html must reference admin.js');
 
         const adminJs = fs.readFileSync(path.join(__dirname, '../public/js/admin.js'), 'utf8');
         assert.ok(adminJs.includes('onBatchApprovalChanged'), 'admin.js must implement onBatchApprovalChanged');
@@ -5078,6 +5078,161 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         // Cleanup
         db.prepare("DELETE FROM production_batches WHERE id = ?").run(createdBatchId);
         db.prepare("DELETE FROM job_orders WHERE po_id = ?").run(po.id);
+        db.prepare("DELETE FROM purchase_order_items WHERE po_id = ?").run(po.id);
+        db.prepare("DELETE FROM purchase_orders WHERE id = ?").run(po.id);
+    });
+
+    test('97. IT Management: Editing of Delivered Products, DR Line Items, and PO Synchronization', async () => {
+        const superAdminToken = getAuthToken('SUPER_ADMIN');
+        assert.ok(superAdminToken, 'Super Admin token must be available');
+
+        // 1. Verify UI HTML & JS elements exist
+        const adminHtml = fs.readFileSync(path.join(__dirname, '../public/admin.html'), 'utf8');
+        assert.ok(adminHtml.includes('id="it-dr-select"'), 'admin.html must contain #it-dr-select');
+        assert.ok(adminHtml.includes('id="it-dr-items-container"'), 'admin.html must contain #it-dr-items-container');
+        assert.ok(adminHtml.includes('id="it-add-delivered-item-btn"'), 'admin.html must contain #it-add-delivered-item-btn');
+        assert.ok(adminHtml.includes('id="it-save-delivered-products-btn"'), 'admin.html must contain #it-save-delivered-products-btn');
+        assert.ok(adminHtml.includes('admin.js?v=2.4.8'), 'admin.html must load admin.js with version 2.4.8');
+
+        const adminJs = fs.readFileSync(path.join(__dirname, '../public/js/admin.js'), 'utf8');
+        assert.ok(adminJs.includes('window.populateITDeliveryReceiptsSelect = populateITDeliveryReceiptsSelect;'), 'admin.js must export populateITDeliveryReceiptsSelect');
+        assert.ok(adminJs.includes('window.onITDeliveryReceiptSelect = onITDeliveryReceiptSelect;'), 'admin.js must export onITDeliveryReceiptSelect');
+        assert.ok(adminJs.includes('window.renderITDeliveredItemsTable = renderITDeliveredItemsTable;'), 'admin.js must export renderITDeliveredItemsTable');
+        assert.ok(adminJs.includes('window.saveITDeliveredProducts = saveITDeliveredProducts;'), 'admin.js must export saveITDeliveredProducts');
+        assert.ok(adminJs.includes("case 'delivery_items':"), 'admin.js must include delivery_items in IT tables');
+
+        // 2. Test GET /api/it-management/tables includes delivery_items
+        const tablesRes = await request(app)
+            .get('/api/it-management/tables')
+            .set('Authorization', `Bearer ${superAdminToken}`);
+        assert.strictEqual(tablesRes.status, 200);
+        const diTable = tablesRes.body.data.find(t => t.tableName === 'delivery_items');
+        assert.ok(diTable, 'delivery_items must be registered in IT tables');
+        assert.strictEqual(diTable.label, 'Delivered Products (DR Items)');
+
+        // 3. Setup test PO, products, and DR
+        const client = db.prepare("SELECT * FROM clients LIMIT 1").get();
+        const products = db.prepare("SELECT * FROM products LIMIT 2").all();
+        assert.ok(products.length >= 2, 'Must have at least 2 products');
+
+        const poRes = await request(app)
+            .post('/api/orders')
+            .set('Authorization', `Bearer ${superAdminToken}`)
+            .send({
+                client_id: client.id,
+                items: [
+                    { product_id: products[0].id, target_quantity: 50, unit_price: 150.0 },
+                    { product_id: products[1].id, target_quantity: 30, unit_price: 200.0 }
+                ]
+            });
+        assert.strictEqual(poRes.status, 201);
+        const po = poRes.body.data;
+
+        await request(app)
+            .post(`/api/orders/${po.id}/approve`)
+            .set('Authorization', `Bearer ${superAdminToken}`);
+
+        const testDrNumber = 'DR-TEST-IT-' + Date.now();
+        const testUser = db.prepare("SELECT id FROM users LIMIT 1").get();
+        const drInsertRes = db.prepare(`
+            INSERT INTO delivery_receipts (id, dr_number, client_id, po_id, delivery_date, status, created_by, created_at, updated_at)
+            VALUES (?, ?, ?, ?, '2026-10-22', 'DISPATCHED', ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
+        `).run('test-dr-it-' + Date.now(), testDrNumber, client.id, po.id, testUser.id);
+        const drId = 'test-dr-it-' + Date.now();
+        const testDr = db.prepare("SELECT * FROM delivery_receipts WHERE dr_number = ?").get(testDrNumber);
+
+        // Add 1 delivery item initially: 20 units of product 0
+        const itemId1 = 'di-test-1-' + Date.now();
+        const testBatch = db.prepare("SELECT id FROM production_batches LIMIT 1").get();
+        db.prepare(`
+            INSERT INTO delivery_items (id, dr_id, product_id, batch_id, delivered_quantity, accepted_quantity, rejected_quantity, unit_price, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
+        `).run(itemId1, testDr.id, products[0].id, testBatch.id, 20, 20, 0, 150.0);
+
+        // Sync initial delivered_quantity in PO item
+        db.prepare("UPDATE purchase_order_items SET delivered_quantity = 20 WHERE po_id = ? AND product_id = ?").run(po.id, products[0].id);
+
+        // 4. Test GET /api/it-management/delivered-products/drs
+        const drsRes = await request(app)
+            .get('/api/it-management/delivered-products/drs')
+            .set('Authorization', `Bearer ${superAdminToken}`);
+        assert.strictEqual(drsRes.status, 200);
+        assert.ok(Array.isArray(drsRes.body.data));
+        const foundDR = drsRes.body.data.find(d => d.id === testDr.id);
+        assert.ok(foundDR, 'Created test DR must be in drs list');
+        assert.strictEqual(foundDR.item_count, 1);
+        assert.strictEqual(foundDR.total_delivered_qty, 20);
+
+        // 5. Test GET /api/it-management/delivered-products/drs/:drId
+        const singleDrRes = await request(app)
+            .get(`/api/it-management/delivered-products/drs/${testDr.id}`)
+            .set('Authorization', `Bearer ${superAdminToken}`);
+        assert.strictEqual(singleDrRes.status, 200);
+        assert.strictEqual(singleDrRes.body.data.dr.id, testDr.id);
+        assert.strictEqual(singleDrRes.body.data.items.length, 1);
+        assert.strictEqual(singleDrRes.body.data.items[0].id, itemId1);
+
+        // 6. Test PUT /api/it-management/delivered-products/drs/:drId (Edit existing item & add second product)
+        const updateDrRes = await request(app)
+            .put(`/api/it-management/delivered-products/drs/${testDr.id}`)
+            .set('Authorization', `Bearer ${superAdminToken}`)
+            .send({
+                reason: 'Typographical delivery correction by IT',
+                items: [
+                    {
+                        id: itemId1,
+                        product_id: products[0].id,
+                        batch_id: null,
+                        delivered_quantity: 35, // modified from 20 to 35
+                        accepted_quantity: 33,
+                        rejected_quantity: 2,
+                        unit_price: 155.0
+                    },
+                    {
+                        id: null, // new item
+                        product_id: products[1].id,
+                        batch_id: null,
+                        delivered_quantity: 15,
+                        accepted_quantity: 15,
+                        rejected_quantity: 0,
+                        unit_price: 200.0
+                    }
+                ]
+            });
+        assert.strictEqual(updateDrRes.status, 200);
+        assert.strictEqual(updateDrRes.body.success, true);
+        assert.strictEqual(updateDrRes.body.data.length, 2);
+
+        // Check purchase_order_items delivered_quantity synchronization
+        const poItem0 = db.prepare("SELECT * FROM purchase_order_items WHERE po_id = ? AND product_id = ?").get(po.id, products[0].id);
+        const poItem1 = db.prepare("SELECT * FROM purchase_order_items WHERE po_id = ? AND product_id = ?").get(po.id, products[1].id);
+        assert.strictEqual(poItem0.delivered_quantity, 35, 'PO item 0 delivered_quantity must synchronize to 35');
+        assert.strictEqual(poItem1.delivered_quantity, 15, 'PO item 1 delivered_quantity must synchronize to 15');
+
+        // Check DR notes appended with reason
+        const refreshedDR = db.prepare("SELECT notes FROM delivery_receipts WHERE id = ?").get(testDr.id);
+        assert.ok(refreshedDR.notes && refreshedDR.notes.includes('Typographical delivery correction by IT'), 'DR notes must record modification reason');
+
+        // 7. Test PUT /api/it-management/delivered-items/:id (Direct single item modification)
+        const singleItemUpdateRes = await request(app)
+            .put(`/api/it-management/delivered-items/${itemId1}`)
+            .set('Authorization', `Bearer ${superAdminToken}`)
+            .send({
+                delivered_quantity: 40,
+                accepted_quantity: 40,
+                rejected_quantity: 0,
+                unit_price: 160.0,
+                reason: 'Single delivered item override'
+            });
+        assert.strictEqual(singleItemUpdateRes.status, 200);
+        assert.strictEqual(singleItemUpdateRes.body.data.delivered_quantity, 40);
+
+        const poItem0AfterSingle = db.prepare("SELECT delivered_quantity FROM purchase_order_items WHERE po_id = ? AND product_id = ?").get(po.id, products[0].id);
+        assert.strictEqual(poItem0AfterSingle.delivered_quantity, 40, 'PO item delivered_quantity must update after single item edit');
+
+        // Cleanup
+        db.prepare("DELETE FROM delivery_items WHERE dr_id = ?").run(testDr.id);
+        db.prepare("DELETE FROM delivery_receipts WHERE id = ?").run(testDr.id);
         db.prepare("DELETE FROM purchase_order_items WHERE po_id = ?").run(po.id);
         db.prepare("DELETE FROM purchase_orders WHERE id = ?").run(po.id);
     });

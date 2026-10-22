@@ -8,10 +8,12 @@
 
 const express = require('express');
 const router = express.Router();
+const { v4: uuidv4 } = require('uuid');
 const db = require('../database/db');
 const { authenticateToken, requireRoles } = require('../middleware/auth');
 const { ROLES } = require('../middleware/rbac');
 const { logAudit } = require('../services/auditService');
+const { getManilaDate } = require('../helpers/timezone');
 
 // Whitelist of manageable tables and their field definitions
 const TABLE_DEFINITIONS = {
@@ -107,6 +109,25 @@ const TABLE_DEFINITIONS = {
             LEFT JOIN purchase_orders po ON delivery_receipts.po_id = po.id
         `,
         selectFields: 'delivery_receipts.*, c.company_name as client_company_name, po.po_number'
+    },
+    delivery_items: {
+        label: 'Delivered Products (DR Items)',
+        icon: '📦',
+        tableName: 'delivery_items',
+        primaryKey: 'id',
+        displayField: 'id',
+        searchFields: ['id', 'delivered_quantity', 'accepted_quantity', 'rejected_quantity', 'unit_price', 'dr.dr_number', 'po.po_number', 'p.name', 'p.sku', 'pb.batch_number'],
+        editableColumns: [
+            'dr_id', 'product_id', 'batch_id', 'delivered_quantity',
+            'accepted_quantity', 'rejected_quantity', 'unit_price'
+        ],
+        joins: `
+            LEFT JOIN delivery_receipts dr ON delivery_items.dr_id = dr.id
+            LEFT JOIN products p ON delivery_items.product_id = p.id
+            LEFT JOIN production_batches pb ON delivery_items.batch_id = pb.id
+            LEFT JOIN purchase_orders po ON dr.po_id = po.id
+        `,
+        selectFields: 'delivery_items.*, dr.dr_number, dr.status as dr_status, p.name as product_name, p.sku as product_sku, pb.batch_number, po.po_number'
     },
     sales_invoices: {
         label: 'Sales Invoices',
@@ -292,6 +313,17 @@ router.get('/lookups', ...authorizeITAdmin, (req, res) => {
         const orders = db.prepare('SELECT id, po_number, so_number, client_id, status FROM purchase_orders ORDER BY po_number DESC LIMIT 200').all();
         const jobOrders = db.prepare('SELECT id, jo_number, po_id, status FROM job_orders ORDER BY jo_number DESC LIMIT 200').all();
         const batches = db.prepare('SELECT id, batch_number, status FROM production_batches ORDER BY batch_number DESC LIMIT 200').all();
+        const deliveryReceipts = db.prepare(`
+            SELECT dr.id, dr.dr_number, dr.po_id, dr.status, dr.delivery_date,
+                   c.company_name, po.po_number,
+                   (SELECT COUNT(*) FROM delivery_items WHERE dr_id = dr.id) as item_count,
+                   (SELECT COALESCE(SUM(delivered_quantity), 0) FROM delivery_items WHERE dr_id = dr.id) as total_delivered_qty
+            FROM delivery_receipts dr
+            LEFT JOIN clients c ON dr.client_id = c.id
+            LEFT JOIN purchase_orders po ON dr.po_id = po.id
+            ORDER BY dr.dr_number DESC
+            LIMIT 500
+        `).all();
         const users = db.prepare('SELECT id, name, email, role FROM users ORDER BY name ASC').all();
         const orderCategories = db.prepare('SELECT id, name, color, description FROM order_categories ORDER BY name ASC').all();
 
@@ -303,6 +335,7 @@ router.get('/lookups', ...authorizeITAdmin, (req, res) => {
                 orders,
                 jobOrders,
                 batches,
+                deliveryReceipts,
                 users,
                 orderCategories,
                 statuses: {
@@ -345,7 +378,7 @@ router.get('/records/:table', ...authorizeITAdmin, (req, res) => {
 
         if (search && search.trim()) {
             const term = `%${search.trim()}%`;
-            const orConditions = def.searchFields.map(field => `${def.tableName}.${field} LIKE ?`);
+            const orConditions = def.searchFields.map(field => field.includes('.') ? `${field} LIKE ?` : `${def.tableName}.${field} LIKE ?`);
             orConditions.push(`${def.tableName}.${def.primaryKey} LIKE ?`);
             whereClauses.push(`(${orConditions.join(' OR ')})`);
             for (let i = 0; i < orConditions.length; i++) {
@@ -501,6 +534,24 @@ router.put('/records/:table/:id', ...authorizeITAdmin, (req, res) => {
             db.prepare('UPDATE delivery_receipts SET client_id = ? WHERE po_id = ?').run(updates.client_id, id);
             db.prepare('UPDATE sales_invoices SET client_id = ? WHERE po_id = ?').run(updates.client_id, id);
             db.prepare('UPDATE payments SET client_id = ? WHERE invoice_id IN (SELECT id FROM sales_invoices WHERE po_id = ?)').run(updates.client_id, id);
+        }
+
+        // Special handling: if delivery_items changed, sync purchase_order_items.delivered_quantity
+        if (table === 'delivery_items') {
+            const drId = updates.dr_id || currentRecord.dr_id;
+            const dr = db.prepare('SELECT po_id FROM delivery_receipts WHERE id = ?').get(drId);
+            if (dr && dr.po_id) {
+                db.prepare(`
+                    UPDATE purchase_order_items
+                    SET delivered_quantity = (
+                        SELECT COALESCE(SUM(di.delivered_quantity), 0)
+                        FROM delivery_items di
+                        JOIN delivery_receipts dr2 ON di.dr_id = dr2.id
+                        WHERE dr2.po_id = ? AND di.product_id = purchase_order_items.product_id
+                    )
+                    WHERE po_id = ?
+                `).run(dr.po_id, dr.po_id);
+            }
         }
 
         // Audit Trail Logging
@@ -700,7 +751,26 @@ router.delete('/records/:table/:id', ...authorizeITAdmin, (req, res) => {
     }
 
     try {
+        let poIdToSync = null;
+        if (table === 'delivery_items' && currentRecord.dr_id) {
+            const dr = db.prepare('SELECT po_id FROM delivery_receipts WHERE id = ?').get(currentRecord.dr_id);
+            if (dr) poIdToSync = dr.po_id;
+        }
+
         db.prepare(`DELETE FROM ${def.tableName} WHERE ${def.primaryKey} = ?`).run(id);
+
+        if (poIdToSync) {
+            db.prepare(`
+                UPDATE purchase_order_items
+                SET delivered_quantity = (
+                    SELECT COALESCE(SUM(di.delivered_quantity), 0)
+                    FROM delivery_items di
+                    JOIN delivery_receipts dr2 ON di.dr_id = dr2.id
+                    WHERE dr2.po_id = ? AND di.product_id = purchase_order_items.product_id
+                )
+                WHERE po_id = ?
+            `).run(poIdToSync, poIdToSync);
+        }
 
         logAudit({
             userId: req.user.id,
@@ -726,6 +796,305 @@ router.delete('/records/:table/:id', ...authorizeITAdmin, (req, res) => {
             success: false,
             error: `Cannot delete record: It may be referenced by other records (${err.message})`
         });
+    }
+});
+
+/**
+ * GET /api/it-management/delivered-products/drs
+ * List all delivery receipts with their delivered product statistics for quick selection
+ */
+router.get('/delivered-products/drs', ...authorizeITAdmin, (req, res) => {
+    try {
+        const drs = db.prepare(`
+            SELECT dr.id, dr.dr_number, dr.client_id, dr.po_id, dr.delivery_date, dr.driver_name,
+                   dr.vehicle_plate, dr.status, dr.notes,
+                   c.company_name, po.po_number,
+                   (SELECT COUNT(*) FROM delivery_items WHERE dr_id = dr.id) as items_count,
+                   (SELECT COUNT(*) FROM delivery_items WHERE dr_id = dr.id) as item_count,
+                   (SELECT COALESCE(SUM(delivered_quantity), 0) FROM delivery_items WHERE dr_id = dr.id) as total_delivered,
+                   (SELECT COALESCE(SUM(delivered_quantity), 0) FROM delivery_items WHERE dr_id = dr.id) as total_delivered_qty,
+                   (SELECT COALESCE(SUM(accepted_quantity), 0) FROM delivery_items WHERE dr_id = dr.id) as total_accepted,
+                   (SELECT COALESCE(SUM(rejected_quantity), 0) FROM delivery_items WHERE dr_id = dr.id) as total_rejected
+            FROM delivery_receipts dr
+            LEFT JOIN clients c ON dr.client_id = c.id
+            LEFT JOIN purchase_orders po ON dr.po_id = po.id
+            ORDER BY dr.dr_number DESC
+            LIMIT 500
+        `).all();
+        return res.json({ success: true, data: drs });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * GET /api/it-management/delivered-products/drs/:drId
+ * Get a specific Delivery Receipt and all its delivered products
+ */
+router.get('/delivered-products/drs/:drId', ...authorizeITAdmin, (req, res) => {
+    const { drId } = req.params;
+    try {
+        const dr = db.prepare(`
+            SELECT dr.*, c.company_name, po.po_number
+            FROM delivery_receipts dr
+            LEFT JOIN clients c ON dr.client_id = c.id
+            LEFT JOIN purchase_orders po ON dr.po_id = po.id
+            WHERE dr.id = ? OR dr.dr_number = ?
+        `).get(drId, drId);
+
+        if (!dr) {
+            return res.status(404).json({ success: false, error: 'Delivery Receipt not found.' });
+        }
+
+        const items = db.prepare(`
+            SELECT di.*, p.name as product_name, p.sku as product_sku, pb.batch_number
+            FROM delivery_items di
+            LEFT JOIN products p ON di.product_id = p.id
+            LEFT JOIN production_batches pb ON di.batch_id = pb.id
+            WHERE di.dr_id = ?
+            ORDER BY di.created_at ASC
+        `).all(dr.id);
+
+        return res.json({
+            success: true,
+            data: {
+                dr,
+                items
+            }
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * PUT /api/it-management/delivered-products/drs/:drId
+ * Update delivered products for a Delivery Receipt
+ */
+router.put('/delivered-products/drs/:drId', ...authorizeITAdmin, (req, res) => {
+    const { drId } = req.params;
+    const { items, reason } = req.body || {};
+
+    if (!items || !Array.isArray(items)) {
+        return res.status(400).json({ success: false, error: 'Items array is required.' });
+    }
+
+    const dr = db.prepare('SELECT * FROM delivery_receipts WHERE id = ? OR dr_number = ?').get(drId, drId);
+    if (!dr) {
+        return res.status(404).json({ success: false, error: 'Delivery Receipt not found.' });
+    }
+
+    try {
+        const previousItems = db.prepare('SELECT * FROM delivery_items WHERE dr_id = ?').all(dr.id);
+
+        const updateTx = db.transaction(() => {
+            const incomingIds = items.filter(it => it.id && !it.id.startsWith('new_')).map(it => it.id);
+
+            // Delete removed items
+            const toDelete = previousItems.filter(p => !incomingIds.includes(p.id));
+            for (const del of toDelete) {
+                db.prepare('DELETE FROM delivery_items WHERE id = ?').run(del.id);
+            }
+
+            // Update or insert items
+            for (const item of items) {
+                const deliveredQty = parseInt(item.delivered_quantity, 10) || 0;
+                const acceptedQty = parseInt(item.accepted_quantity !== undefined ? item.accepted_quantity : deliveredQty, 10) || 0;
+                const rejectedQty = parseInt(item.rejected_quantity || 0, 10) || 0;
+                const unitPrice = parseFloat(item.unit_price) || 0.0;
+
+                if (!item.product_id) {
+                    throw new Error('Product is required for each delivered item.');
+                }
+                if (deliveredQty <= 0) {
+                    throw new Error('Delivered quantity must be greater than 0.');
+                }
+
+                // Resolve valid batch_id if not provided to satisfy database constraints
+                let resolvedBatchId = item.batch_id;
+                if (!resolvedBatchId) {
+                    const existingBatch = db.prepare(`
+                        SELECT pb.id FROM production_batches pb
+                        LEFT JOIN job_orders jo ON pb.jo_id = jo.id
+                        WHERE (jo.po_id = ? AND pb.product_id = ?) OR pb.product_id = ?
+                        LIMIT 1
+                    `).get(dr.po_id, item.product_id, item.product_id) || db.prepare("SELECT id FROM production_batches LIMIT 1").get();
+
+                    if (existingBatch) {
+                        resolvedBatchId = existingBatch.id;
+                    } else {
+                        resolvedBatchId = uuidv4();
+                        try {
+                            db.prepare(`
+                                INSERT INTO production_batches (id, batch_number, product_id, status, created_at, updated_at)
+                                VALUES (?, ?, ?, 'COMPLETED', datetime('now', 'localtime'), datetime('now', 'localtime'))
+                            `).run(resolvedBatchId, 'BATCH-AUTO-' + Date.now(), item.product_id);
+                        } catch (_) {}
+                    }
+                }
+
+                if (item.id && !item.id.startsWith('new_') && previousItems.some(p => p.id === item.id)) {
+                    // Update existing
+                    db.prepare(`
+                        UPDATE delivery_items
+                        SET product_id = ?, batch_id = ?, delivered_quantity = ?, accepted_quantity = ?, rejected_quantity = ?, unit_price = ?
+                        WHERE id = ? AND dr_id = ?
+                    `).run(item.product_id, resolvedBatchId, deliveredQty, acceptedQty, rejectedQty, unitPrice, item.id, dr.id);
+                } else {
+                    // Insert new
+                    const newId = uuidv4();
+                    db.prepare(`
+                        INSERT INTO delivery_items (id, dr_id, product_id, batch_id, delivered_quantity, accepted_quantity, rejected_quantity, unit_price)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    `).run(newId, dr.id, item.product_id, resolvedBatchId, deliveredQty, acceptedQty, rejectedQty, unitPrice);
+                }
+            }
+
+            // Synchronize delivered_quantity in purchase_order_items for the linked PO
+            if (dr.po_id) {
+                db.prepare(`
+                    UPDATE purchase_order_items
+                    SET delivered_quantity = (
+                        SELECT COALESCE(SUM(di.delivered_quantity), 0)
+                        FROM delivery_items di
+                        JOIN delivery_receipts dr2 ON di.dr_id = dr2.id
+                        WHERE dr2.po_id = ? AND di.product_id = purchase_order_items.product_id
+                    )
+                    WHERE po_id = ?
+                `).run(dr.po_id, dr.po_id);
+            }
+
+            // Update DR notes if reason provided
+            if (reason) {
+                const appendNote = `[IT EDIT ${getManilaDate()} by ${req.user.name}: ${reason}]`;
+                const newNotes = dr.notes ? `${dr.notes}\n${appendNote}` : appendNote;
+                db.prepare("UPDATE delivery_receipts SET notes = ?, updated_at = datetime('now', 'localtime') WHERE id = ?").run(newNotes, dr.id);
+            }
+
+            logAudit({
+                userId: req.user.id,
+                userName: req.user.name,
+                userRole: req.user.role,
+                action: 'IT_MANAGEMENT_EDIT_DELIVERED_PRODUCTS',
+                entityType: 'DELIVERY_RECEIPT',
+                entityId: dr.dr_number,
+                details: {
+                    drId: dr.id,
+                    drNumber: dr.dr_number,
+                    poId: dr.po_id,
+                    previousItemsCount: previousItems.length,
+                    newItemsCount: items.length,
+                    reason: reason || 'Administrative correction of delivered products'
+                }
+            });
+        });
+
+        updateTx();
+
+        const updatedItems = db.prepare(`
+            SELECT di.*, p.name as product_name, p.sku as product_sku, pb.batch_number
+            FROM delivery_items di
+            LEFT JOIN products p ON di.product_id = p.id
+            LEFT JOIN production_batches pb ON di.batch_id = pb.id
+            WHERE di.dr_id = ?
+            ORDER BY di.created_at ASC
+        `).all(dr.id);
+
+        return res.json({
+            success: true,
+            message: `Delivered products for DR ${dr.dr_number} successfully updated.`,
+            data: updatedItems
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * PUT /api/it-management/delivered-items/:id
+ * Directly update a single delivered product item
+ */
+router.put('/delivered-items/:id', ...authorizeITAdmin, (req, res) => {
+    const { id } = req.params;
+    const { product_id, batch_id, delivered_quantity, accepted_quantity, rejected_quantity, unit_price, reason } = req.body || {};
+
+    const item = db.prepare('SELECT * FROM delivery_items WHERE id = ?').get(id);
+    if (!item) {
+        return res.status(404).json({ success: false, error: 'Delivered product item not found.' });
+    }
+
+    const dr = db.prepare('SELECT * FROM delivery_receipts WHERE id = ?').get(item.dr_id);
+
+    try {
+        const newProduct = product_id || item.product_id;
+        const newBatch = batch_id !== undefined ? batch_id : item.batch_id;
+        const newDelivered = delivered_quantity !== undefined ? parseInt(delivered_quantity, 10) : item.delivered_quantity;
+        const newAccepted = accepted_quantity !== undefined ? parseInt(accepted_quantity, 10) : item.accepted_quantity;
+        const newRejected = rejected_quantity !== undefined ? parseInt(rejected_quantity, 10) : item.rejected_quantity;
+        const newPrice = unit_price !== undefined ? parseFloat(unit_price) : item.unit_price;
+
+        if (newDelivered <= 0) {
+            return res.status(400).json({ success: false, error: 'Delivered quantity must be greater than 0.' });
+        }
+
+        db.prepare(`
+            UPDATE delivery_items
+            SET product_id = ?, batch_id = ?, delivered_quantity = ?, accepted_quantity = ?, rejected_quantity = ?, unit_price = ?
+            WHERE id = ?
+        `).run(newProduct, newBatch, newDelivered, newAccepted, newRejected, newPrice, id);
+
+        if (dr && dr.po_id) {
+            db.prepare(`
+                UPDATE purchase_order_items
+                SET delivered_quantity = (
+                    SELECT COALESCE(SUM(di.delivered_quantity), 0)
+                    FROM delivery_items di
+                    JOIN delivery_receipts dr2 ON di.dr_id = dr2.id
+                    WHERE dr2.po_id = ? AND di.product_id = purchase_order_items.product_id
+                )
+                WHERE po_id = ?
+            `).run(dr.po_id, dr.po_id);
+        }
+
+        logAudit({
+            userId: req.user.id,
+            userName: req.user.name,
+            userRole: req.user.role,
+            action: 'IT_MANAGEMENT_EDIT_DELIVERED_ITEM',
+            entityType: 'DELIVERY_ITEM',
+            entityId: id,
+            details: {
+                itemId: id,
+                drId: item.dr_id,
+                drNumber: dr ? dr.dr_number : null,
+                previousValues: item,
+                newValues: {
+                    product_id: newProduct,
+                    batch_id: newBatch,
+                    delivered_quantity: newDelivered,
+                    accepted_quantity: newAccepted,
+                    rejected_quantity: newRejected,
+                    unit_price: newPrice
+                },
+                reason: reason || 'Individual delivered item modification'
+            }
+        });
+
+        const updated = db.prepare(`
+            SELECT di.*, p.name as product_name, p.sku as product_sku, pb.batch_number
+            FROM delivery_items di
+            LEFT JOIN products p ON di.product_id = p.id
+            LEFT JOIN production_batches pb ON di.batch_id = pb.id
+            WHERE di.id = ?
+        `).get(id);
+
+        return res.json({
+            success: true,
+            message: 'Delivered item updated successfully.',
+            data: updated
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
     }
 });
 
