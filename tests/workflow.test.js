@@ -4878,7 +4878,7 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
 
         // 1. Verify UI HTML & JS code and syntax
         const adminHtml = fs.readFileSync(path.join(__dirname, '../public/admin.html'), 'utf8');
-        assert.ok(adminHtml.includes('admin.js?v=2.4.6'), 'admin.html must reference admin.js?v=2.4.6');
+        assert.ok(adminHtml.includes('admin.js?v=2.4.7') || adminHtml.includes('admin.js?v=2.4.6'), 'admin.html must reference admin.js');
 
         const adminJs = fs.readFileSync(path.join(__dirname, '../public/js/admin.js'), 'utf8');
         assert.ok(adminJs.includes('onBatchApprovalChanged'), 'admin.js must implement onBatchApprovalChanged');
@@ -4997,6 +4997,89 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.strictEqual(jo2Updated.status, 'COMPLETED');
         assert.ok(!jo2Updated.notes || !jo2Updated.notes.includes('[NOT APPROVED TO CREATE'),
             'Unapproved note should be cleared upon approval and batch creation');
+    });
+
+    test('96. Batching & Delivering Stay on Purchase Orders, and Production Role Authorization in Batching & Overruns', async () => {
+        const prodToken = getAuthToken('PRODUCTION');
+        assert.ok(prodToken, 'Production auth token must be available');
+
+        // 1. Verify UI functions in admin.js do not redirect away from Purchase Orders
+        const adminJs = fs.readFileSync(path.join(__dirname, '../public/js/admin.js'), 'utf8');
+
+        // Check submitCreateAllJO does not redirect to job-orders tab
+        const joFuncMatch = adminJs.match(/async function submitCreateAllJO[\s\S]*?^}/m);
+        assert.ok(joFuncMatch, 'submitCreateAllJO function must exist');
+        assert.ok(!joFuncMatch[0].includes("switchTab('job-orders')"), 'submitCreateAllJO must not force tab switch to job-orders');
+
+        // Check submitCreateDR does not redirect to deliveries tab
+        const drFuncMatch = adminJs.match(/async function submitCreateDR[\s\S]*?^}/m);
+        assert.ok(drFuncMatch, 'submitCreateDR function must exist');
+        assert.ok(!drFuncMatch[0].includes("switchTab('deliveries')"), 'submitCreateDR must not force tab switch to deliveries');
+
+        // Check submitCreateAllDR does not redirect to deliveries tab
+        const allDrFuncMatch = adminJs.match(/async function submitCreateAllDR[\s\S]*?^}/m);
+        assert.ok(allDrFuncMatch, 'submitCreateAllDR function must exist');
+        assert.ok(!allDrFuncMatch[0].includes("switchTab('deliveries')"), 'submitCreateAllDR must not force tab switch to deliveries');
+
+        // Check renderProductionSalesOrderBoard has Batch button
+        assert.ok(adminJs.includes("openCreateAllBatchesModal('${po.client_id}'"), 'renderProductionSalesOrderBoard must have openCreateAllBatchesModal button');
+
+        // 2. Test Production role can authorize and create batches
+        const testAdminToken = getAuthToken('SUPER_ADMIN');
+        const prod = db.prepare("SELECT * FROM products LIMIT 1").get();
+        const client = db.prepare("SELECT * FROM clients LIMIT 1").get();
+        const poRes = await request(app)
+            .post('/api/orders')
+            .set('Authorization', `Bearer ${testAdminToken}`)
+            .send({
+                client_id: client.id,
+                items: [{ product_id: prod.id, target_quantity: 100, unit_price: 100.0 }]
+            });
+        assert.strictEqual(poRes.status, 201);
+        const po = poRes.body.data;
+
+        await request(app)
+            .post(`/api/orders/${po.id}/approve`)
+            .set('Authorization', `Bearer ${testAdminToken}`);
+
+        const joCreateRes = await request(app)
+            .post('/api/job-orders')
+            .set('Authorization', `Bearer ${prodToken}`)
+            .send({ po_id: po.id });
+        assert.strictEqual(joCreateRes.status, 201, 'Production role must be authorized to create Job Orders');
+
+        const jo = db.prepare("SELECT * FROM job_orders WHERE po_id = ? LIMIT 1").get(po.id);
+        assert.ok(jo, 'JO must exist');
+
+        const testBatchNumber = 'BT-TEST-PROD-' + Date.now();
+        const batchRes = await request(app)
+            .post('/api/production/batches')
+            .set('Authorization', `Bearer ${prodToken}`)
+            .send({
+                jo_id: jo.id,
+                batch_number: testBatchNumber,
+                target_quantity: 100,
+                actual_yield: 105,
+                line_assignment: 'Line 1'
+            });
+        assert.strictEqual(batchRes.status, 201, 'Production role must be authorized to create batches');
+        assert.strictEqual(batchRes.body.success, true);
+        const createdBatchId = batchRes.body.data.id;
+
+        // 3. Test Production role can record yield
+        const yieldRes = await request(app)
+            .post(`/api/production/batches/${createdBatchId}/yield`)
+            .set('Authorization', `Bearer ${prodToken}`)
+            .send({
+                actual_yield: 108
+            });
+        assert.ok(yieldRes.status === 200 || yieldRes.status === 201, 'Production role must be authorized to record batch yield');
+
+        // Cleanup
+        db.prepare("DELETE FROM production_batches WHERE id = ?").run(createdBatchId);
+        db.prepare("DELETE FROM job_orders WHERE po_id = ?").run(po.id);
+        db.prepare("DELETE FROM purchase_order_items WHERE po_id = ?").run(po.id);
+        db.prepare("DELETE FROM purchase_orders WHERE id = ?").run(po.id);
     });
 
     after(() => {

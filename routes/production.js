@@ -685,7 +685,7 @@ router.post('/batches/:id/yield', authenticateToken, requireRoles('ADMIN', 'PROD
  * POST /api/production/batches/:id/approve-overrun
  * Admin / Accounting approves an over-tolerance batch
  */
-router.post('/batches/:id/approve-overrun', authenticateToken, requireRoles('ADMIN', 'ACCOUNTING'), (req, res) => {
+router.post('/batches/:id/approve-overrun', authenticateToken, requireRoles('ADMIN', 'ACCOUNTING', 'PRODUCTION'), (req, res) => {
     const { id } = req.params;
     const { approved_quantity, reason, notes } = req.body;
 

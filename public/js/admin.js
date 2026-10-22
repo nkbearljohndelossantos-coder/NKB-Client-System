@@ -1058,6 +1058,9 @@ async function loadOrders() {
                                         </button>
                                     ` : ''}
                                     ${(canManageProduction && po.status !== 'COMPLETED' && po.status !== 'CANCELLED' && po.status !== 'VOIDED' && po.status !== 'DRAFT') ? `
+                                        <button onclick="openCreateAllBatchesModal('${po.client_id}', '${po.id}', '${(po.company_name || '').replace(/'/g, "\\'")}')" class="w-full flex items-center gap-2 px-3 py-1.5 text-purple-700 hover:bg-purple-50 transition text-left font-bold cursor-pointer">
+                                            <span>⚗️</span><span>Batch Products</span>
+                                        </button>
                                         <button onclick="openCreateAllDRModal('${po.client_id}', '${po.id}', '${(po.company_name || '').replace(/'/g, "\\'")}')" class="w-full flex items-center gap-2 px-3 py-1.5 text-emerald-700 hover:bg-emerald-50 transition text-left font-bold cursor-pointer">
                                             <span>🚚</span><span>Deliver Products (DR)</span>
                                         </button>
@@ -8715,11 +8718,9 @@ async function submitCreateAllJO(e, poId, clientName) {
         const count = res.count || (res.data ? res.data.length : 0);
         NKB.showToast(`🎉 Successfully started Job Orders for all products (${count} created)!`, 'success');
         closeModal();
-        if (typeof switchTab === 'function') {
-            switchTab('job-orders');
-        } else {
-            location.reload();
-        }
+        if (typeof loadOrders === 'function') loadOrders();
+        if (typeof loadJobOrders === 'function') loadJobOrders();
+        if (typeof loadProductionSupervisorDashboard === 'function') loadProductionSupervisorDashboard();
     } else {
         if (btn) {
             btn.disabled = false;
@@ -8764,6 +8765,19 @@ async function openCreateAllBatchesModal(clientId, poId, companyName) {
     }
 
     if (clientJOs.length === 0) {
+        if (poId) {
+            let poNum = '';
+            if (typeof cachedOrders !== 'undefined' && cachedOrders) {
+                const foundPo = cachedOrders.find(o => o.id === poId);
+                if (foundPo) poNum = foundPo.po_number || '';
+            }
+            if (typeof cachedProductionOrders !== 'undefined' && cachedProductionOrders && !poNum) {
+                const foundPo = cachedProductionOrders.find(o => o.id === poId);
+                if (foundPo) poNum = foundPo.po_number || '';
+            }
+            NKB.showToast('Starting Job Orders for this order first before batching...', 'info');
+            return openCreateJOModal(poId, poNum || 'PO', companyName || 'Client Order');
+        }
         NKB.showToast('No active Job Orders found for this client order.', 'error');
         return;
     }
@@ -9131,6 +9145,7 @@ async function submitCreateAllBatches(e, clientId, poId, companyName) {
         if (typeof loadJobOrders === 'function') loadJobOrders();
         if (typeof loadOrders === 'function') loadOrders();
         if (typeof loadBatches === 'function') loadBatches();
+        if (typeof loadProductionSupervisorDashboard === 'function') loadProductionSupervisorDashboard();
     } else {
         if (btn) {
             btn.disabled = false;
@@ -9457,6 +9472,7 @@ async function submitCreateBatch(e, joId) {
         if (typeof loadJobOrders === 'function') loadJobOrders();
         if (typeof loadOrders === 'function') loadOrders();
         if (typeof loadBatches === 'function') loadBatches();
+        if (typeof loadProductionSupervisorDashboard === 'function') loadProductionSupervisorDashboard();
     } else {
         NKB.showToast(res.error || 'Failed to create Batch.', 'error');
     }
@@ -9707,7 +9723,10 @@ async function submitCreateDR(e, poNumber, batchId) {
     if (res.success) {
         NKB.showToast(`Delivery Receipt ${res.data.dr_number} created! Waiting for client digital acceptance.`, 'success');
         closeModal();
-        switchTab('deliveries');
+        if (typeof loadOrders === 'function') loadOrders();
+        if (typeof loadJobOrders === 'function') loadJobOrders();
+        if (typeof loadDeliveries === 'function') loadDeliveries();
+        if (typeof loadProductionSupervisorDashboard === 'function') loadProductionSupervisorDashboard();
         if (res.data?.id) {
             setTimeout(() => {
                 if (typeof openDispatchAlertModal === 'function') {
@@ -9949,9 +9968,7 @@ async function submitCreateAllDR(e, poId, companyName) {
         if (typeof loadJobOrders === 'function') loadJobOrders();
         if (typeof loadOrders === 'function') loadOrders();
         if (typeof loadDeliveries === 'function') loadDeliveries();
-        if (typeof switchTab === 'function') {
-            switchTab('deliveries');
-        }
+        if (typeof loadProductionSupervisorDashboard === 'function') loadProductionSupervisorDashboard();
         if (res.data?.id) {
             setTimeout(() => {
                 if (typeof openDispatchAlertModal === 'function') {
@@ -16171,7 +16188,11 @@ function renderProductionSalesOrderBoard() {
                     <div class="flex flex-col gap-1 items-end">
                         <button onclick="openViewPOModal('${po.id}')" class="w-full px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold text-[10.5px] transition cursor-pointer text-center">👁️ View</button>
                         ${(po.status !== 'COMPLETED' && po.status !== 'CANCELLED' && po.status !== 'VOIDED' && po.status !== 'DRAFT') ? `
-                            <button onclick="openCreateAllDRModal('${po.client_id}', '${po.id}', '${po.company_name.replace(/'/g, "\\'")}')" class="w-full px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[10.5px] transition shadow-xs cursor-pointer text-center">🚚 Deliver</button>
+                            ${(!po.jo_count || po.jo_count === 0) ? `
+                                <button onclick="openCreateJOModal('${po.id}', '${po.po_number}', '${(po.company_name || '').replace(/'/g, "\\'")}')" class="w-full px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-[10.5px] transition shadow-xs cursor-pointer text-center">🏭 Start JO</button>
+                            ` : ''}
+                            <button onclick="openCreateAllBatchesModal('${po.client_id}', '${po.id}', '${(po.company_name || '').replace(/'/g, "\\'")}')" class="w-full px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold text-[10.5px] transition shadow-xs cursor-pointer text-center">⚗️ Batch</button>
+                            <button onclick="openCreateAllDRModal('${po.client_id}', '${po.id}', '${(po.company_name || '').replace(/'/g, "\\'")}')" class="w-full px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[10.5px] transition shadow-xs cursor-pointer text-center">🚚 Deliver</button>
                             <button onclick="promptDeclareOrderFinished('${po.id}', '${po.po_number}')" class="w-full px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg font-bold text-[9.5px] transition cursor-pointer text-center" title="Declare Order Finished">✓ Finish</button>
                         ` : ''}
                     </div>
