@@ -2183,6 +2183,13 @@ function renderJobOrdersTable(jobOrders) {
                 <td class="py-3 px-4">
                     <span class="font-black text-slate-950 text-xs">${jo.product_name}</span>
                     ${jo.sku ? `<div class="mt-0.5"><span class="text-[10px] text-indigo-900 font-mono font-bold bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200 inline-block">SKU: ${jo.sku}</span></div>` : ''}
+                    ${jo.notes && jo.notes.includes('[NOT APPROVED TO CREATE') ? `
+                        <div class="mt-1">
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200 inline-flex items-center gap-1" title="${(jo.notes || '').replace(/"/g, '&quot;')}">
+                                <span>🚫</span><span>Not Approved to Create</span>
+                            </span>
+                        </div>
+                    ` : ''}
                 </td>
                 <td class="py-3 px-4 font-black text-slate-950 font-mono">${NKB.formatNumber(jo.target_quantity)} pcs</td>
                 <td class="py-3 px-4 text-slate-600 font-medium">${jo.assigned_team || 'Team Alpha'}</td>
@@ -8769,40 +8776,56 @@ async function openCreateAllBatchesModal(clientId, poId, companyName) {
     const itemsRowsHtml = clientJOs.map((jo, idx) => {
         const hasBatch = jo.batch_count > 0;
         const targetQty = jo.target_quantity || 0;
+        const isPreviouslyUnapproved = jo.notes && jo.notes.includes('[NOT APPROVED TO CREATE');
+        let prevReason = '';
+        if (isPreviouslyUnapproved) {
+            const match = jo.notes.match(/\[NOT APPROVED TO CREATE:?\s*([^\]]*)\]/i);
+            if (match && match[1]) prevReason = match[1].trim();
+        }
+
         return `
-        <tr class="hover:bg-slate-50 transition border-b border-slate-100 last:border-b-0 batch-launch-item" data-jo-id="${jo.id}">
-            <td class="py-2.5 px-3 font-mono font-bold text-indigo-600">${jo.jo_number}</td>
-            <td class="py-2.5 px-3">
+        <tr class="hover:bg-slate-50 transition border-b border-slate-100 last:border-b-0 batch-launch-item ${isPreviouslyUnapproved ? 'bg-rose-50/40 opacity-75' : ''}" data-jo-id="${jo.id}">
+            <td class="py-2.5 px-3 align-top">
+                <div class="flex flex-col gap-1 min-w-[170px]">
+                    <select class="batch-item-approval w-full px-2 py-1 text-xs font-bold rounded-lg border transition ${isPreviouslyUnapproved ? 'border-rose-300 bg-rose-50 text-rose-800' : 'border-emerald-300 bg-emerald-50 text-emerald-800'}" onchange="onBatchApprovalChanged(this, '${jo.id}')">
+                        <option value="APPROVED" ${!isPreviouslyUnapproved ? 'selected' : ''}>✅ Approved to Create</option>
+                        <option value="NOT_APPROVED" ${isPreviouslyUnapproved ? 'selected' : ''}>🚫 Not Approved to Create</option>
+                    </select>
+                    <input type="text" class="batch-item-unapproved-reason ${isPreviouslyUnapproved ? '' : 'hidden'} w-full px-2 py-1 text-[11px] border border-rose-300 rounded-lg bg-white text-rose-900 placeholder-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-500 font-normal" placeholder="Reason (e.g. Lacks Raw Materials)..." value="${prevReason.replace(/"/g, '&quot;')}">
+                </div>
+            </td>
+            <td class="py-2.5 px-3 font-mono font-bold text-indigo-600 align-top">${jo.jo_number}</td>
+            <td class="py-2.5 px-3 align-top">
                 <div class="font-bold text-slate-800">${jo.product_name}</div>
                 ${jo.sku ? `<div class="text-[10px] text-slate-400 font-mono">SKU: ${jo.sku}</div>` : ''}
             </td>
-            <td class="py-2.5 px-3">
-                <input type="text" value="${jo.formula_code || 'FORM-2026-V1'}" class="batch-item-formula w-24 px-2 py-1 text-xs border rounded-lg bg-slate-50 font-mono text-slate-700">
+            <td class="py-2.5 px-3 align-top">
+                <input type="text" value="${jo.formula_code || 'FORM-2026-V1'}" ${isPreviouslyUnapproved ? 'disabled' : ''} class="batch-item-formula w-24 px-2 py-1 text-xs border rounded-lg bg-slate-50 font-mono text-slate-700 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed">
             </td>
-            <td class="py-2.5 px-3 font-mono text-right">
+            <td class="py-2.5 px-3 font-mono text-right align-top">
                 <span class="font-bold text-slate-700">${NKB.formatNumber(targetQty)}</span>
                 <input type="hidden" class="batch-item-qty" value="${targetQty}">
             </td>
-            <td class="py-2.5 px-2 text-center">
-                <input type="number" min="1" value="1" oninput="onBulkBatchSplitChanged(this, 'batches', ${targetQty})" class="batch-item-target-batches w-14 px-2 py-1 text-xs border border-indigo-200 rounded-lg bg-indigo-50/50 font-mono font-bold text-indigo-900 text-center" title="Target Batches">
+            <td class="py-2.5 px-2 text-center align-top">
+                <input type="number" min="1" value="1" ${isPreviouslyUnapproved ? 'disabled' : ''} oninput="onBulkBatchSplitChanged(this, 'batches', ${targetQty})" class="batch-item-target-batches w-14 px-2 py-1 text-xs border border-indigo-200 rounded-lg bg-indigo-50/50 font-mono font-bold text-indigo-900 text-center disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200 disabled:cursor-not-allowed" title="Target Batches">
             </td>
-            <td class="py-2.5 px-2 text-right">
-                <input type="number" min="1" value="${targetQty}" oninput="onBulkBatchSplitChanged(this, 'qty', ${targetQty})" class="batch-item-qty-per-batch w-20 px-2 py-1 text-xs border border-indigo-200 rounded-lg bg-indigo-50/50 font-mono font-bold text-indigo-900 text-right" title="Qty. Per Batch">
+            <td class="py-2.5 px-2 text-right align-top">
+                <input type="number" min="1" value="${targetQty}" ${isPreviouslyUnapproved ? 'disabled' : ''} oninput="onBulkBatchSplitChanged(this, 'qty', ${targetQty})" class="batch-item-qty-per-batch w-20 px-2 py-1 text-xs border border-indigo-200 rounded-lg bg-indigo-50/50 font-mono font-bold text-indigo-900 text-right disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200 disabled:cursor-not-allowed" title="Qty. Per Batch">
             </td>
-            <td class="py-2.5 px-2 text-right">
-                <input type="number" min="1" value="${targetQty}" oninput="onBulkActualYieldChanged(this, ${targetQty})" required class="batch-item-actual-yield w-20 px-2 py-1 text-xs border rounded-lg bg-emerald-50 border-emerald-300 font-bold text-emerald-900 text-right" title="Enter actual manufactured units">
+            <td class="py-2.5 px-2 text-right align-top">
+                <input type="number" min="1" value="${targetQty}" ${isPreviouslyUnapproved ? 'disabled' : ''} oninput="onBulkActualYieldChanged(this, ${targetQty})" required class="batch-item-actual-yield w-20 px-2 py-1 text-xs border rounded-lg bg-emerald-50 border-emerald-300 font-bold text-emerald-900 text-right disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200 disabled:cursor-not-allowed" title="Enter actual manufactured units">
             </td>
-            <td class="py-2.5 px-2 text-right">
-                <input type="number" min="0" value="0" class="batch-item-buffer-stock w-16 px-2 py-1 text-xs border border-purple-200 rounded-lg bg-purple-50/50 font-bold text-purple-900 text-right" title="Buffer stocks reserve (excess or dedicated stock)">
+            <td class="py-2.5 px-2 text-right align-top">
+                <input type="number" min="0" value="0" ${isPreviouslyUnapproved ? 'disabled' : ''} class="batch-item-buffer-stock w-16 px-2 py-1 text-xs border border-purple-200 rounded-lg bg-purple-50/50 font-bold text-purple-900 text-right disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200 disabled:cursor-not-allowed" title="Buffer stocks reserve (excess or dedicated stock)">
             </td>
-            <td class="py-2.5 px-3 text-center whitespace-nowrap">
+            <td class="py-2.5 px-3 text-center whitespace-nowrap align-top">
                 ${hasBatch ? `
                     <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 font-mono" title="Batch recorded">
                         ✓ ${jo.latest_batch_number || 'Batched'}
                     </span>
                 ` : `
-                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                        Ready to Batch
+                    <span class="batch-status-badge px-2 py-0.5 rounded-full text-[10px] font-bold ${isPreviouslyUnapproved ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}">
+                        ${isPreviouslyUnapproved ? 'Excluded' : 'Ready to Batch'}
                     </span>
                 `}
             </td>
@@ -8812,7 +8835,7 @@ async function openCreateAllBatchesModal(clientId, poId, companyName) {
 
     root.innerHTML = `
         <div class="fixed inset-0 modal-backdrop flex items-start justify-center p-3 sm:p-6 z-50 overflow-y-auto">
-            <div class="bg-white rounded-3xl max-w-4xl w-full p-5 sm:p-7 shadow-2xl space-y-5 my-auto max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-3.5rem)] flex flex-col">
+            <div class="bg-white rounded-3xl max-w-5xl w-full p-5 sm:p-7 shadow-2xl space-y-5 my-auto max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-3.5rem)] flex flex-col">
                 <!-- Header -->
                 <div class="flex justify-between items-center border-b border-slate-100 pb-3 flex-shrink-0">
                     <div>
@@ -8822,7 +8845,7 @@ async function openCreateAllBatchesModal(clientId, poId, companyName) {
                         </div>
                         <p class="text-xs text-slate-500 mt-0.5">
                             Client: <strong class="text-indigo-600">${clientCompName}</strong> • SO: <strong class="font-mono text-slate-800">${clientSO}</strong> • PO: <strong class="font-mono text-slate-800">${primaryPoNum}</strong>
-                            <br><span class="text-slate-400">Products are physically manufactured in cleanroom. Configure target batches, qty per batch, actual yield, and buffer stocks before QC approval.</span>
+                            <br><span class="text-slate-400">Select which products are approved to create. Unapproved products will be skipped and remain on hold.</span>
                         </p>
                     </div>
                     <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-xl px-2">&times;</button>
@@ -8883,10 +8906,11 @@ async function openCreateAllBatchesModal(clientId, poId, companyName) {
                                 <span>📦</span><span>Finished Products & Confirmed Yield (${clientJOs.length} Products • Total Target: ${NKB.formatNumber(totalTargetUnits)} pcs)</span>
                             </span>
                         </div>
-                        <div class="border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white">
+                        <div class="border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white overflow-x-auto">
                             <table class="w-full text-left text-xs">
                                 <thead class="bg-slate-100 text-slate-700 font-bold uppercase text-[10px]">
                                     <tr>
+                                        <th class="py-2.5 px-3 min-w-[175px]">Production Approval</th>
                                         <th class="py-2.5 px-3">JO Ref</th>
                                         <th class="py-2.5 px-3">Product Name & SKU</th>
                                         <th class="py-2.5 px-3">Formula Code</th>
@@ -8918,6 +8942,8 @@ async function openCreateAllBatchesModal(clientId, poId, companyName) {
             </div>
         </div>
     `;
+
+    updateBatchSubmitButtonState();
 }
 
 function onBulkBatchSplitChanged(el, source, targetQty) {
@@ -8954,22 +8980,99 @@ function onBulkActualYieldChanged(el, targetQty) {
 }
 window.onBulkActualYieldChanged = onBulkActualYieldChanged;
 
+function onBatchApprovalChanged(selectEl) {
+    const row = selectEl.closest('tr');
+    if (!row) return;
+    const isApproved = selectEl.value === 'APPROVED';
+    const reasonInput = row.querySelector('.batch-item-unapproved-reason');
+    const inputs = row.querySelectorAll('.batch-item-target-batches, .batch-item-qty-per-batch, .batch-item-actual-yield, .batch-item-buffer-stock, .batch-item-formula');
+    const statusBadge = row.querySelector('.batch-status-badge');
+
+    if (isApproved) {
+        selectEl.className = 'batch-item-approval w-full px-2 py-1 text-xs font-bold rounded-lg border transition border-emerald-300 bg-emerald-50 text-emerald-800';
+        if (reasonInput) {
+            reasonInput.classList.add('hidden');
+        }
+        row.classList.remove('bg-rose-50/40', 'opacity-75');
+        inputs.forEach(inp => {
+            inp.disabled = false;
+        });
+        if (statusBadge) {
+            statusBadge.className = 'batch-status-badge px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800';
+            statusBadge.textContent = 'Ready to Batch';
+        }
+    } else {
+        selectEl.className = 'batch-item-approval w-full px-2 py-1 text-xs font-bold rounded-lg border transition border-rose-300 bg-rose-50 text-rose-800';
+        if (reasonInput) {
+            reasonInput.classList.remove('hidden');
+            reasonInput.focus();
+        }
+        row.classList.add('bg-rose-50/40', 'opacity-75');
+        inputs.forEach(inp => {
+            inp.disabled = true;
+        });
+        if (statusBadge) {
+            statusBadge.className = 'batch-status-badge px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800';
+            statusBadge.textContent = 'Excluded';
+        }
+    }
+    updateBatchSubmitButtonState();
+}
+window.onBatchApprovalChanged = onBatchApprovalChanged;
+
+function updateBatchSubmitButtonState() {
+    const btn = document.getElementById('btn-submit-all-batches');
+    if (!btn) return;
+    const allRows = document.querySelectorAll('.batch-launch-item');
+    const totalCount = allRows.length;
+    let approvedCount = 0;
+    let unapprovedCount = 0;
+
+    allRows.forEach(row => {
+        const approvalSelect = row.querySelector('.batch-item-approval');
+        if (!approvalSelect || approvalSelect.value === 'APPROVED') {
+            approvedCount++;
+        } else {
+            unapprovedCount++;
+        }
+    });
+
+    if (approvedCount === 0) {
+        btn.disabled = true;
+        btn.className = 'px-5 py-2.5 bg-slate-300 text-slate-500 rounded-xl font-bold text-xs cursor-not-allowed transition flex items-center gap-2';
+        btn.innerHTML = '<span>⚠️ No Products Approved to Create</span>';
+    } else {
+        btn.disabled = false;
+        btn.className = 'px-5 py-2.5 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-xl font-bold text-xs shadow-lg shadow-purple-600/30 transition flex items-center gap-2 cursor-pointer';
+        if (unapprovedCount > 0) {
+            btn.innerHTML = `<span>🚀 Complete Batching (${approvedCount} of ${totalCount} Approved • ${unapprovedCount} Not Approved)</span>`;
+        } else {
+            btn.innerHTML = `<span>🚀 Complete Batching (All ${totalCount} Products Approved) — Ready for Delivery</span>`;
+        }
+    }
+}
+window.updateBatchSubmitButtonState = updateBatchSubmitButtonState;
+
 async function submitCreateAllBatches(e, clientId, poId, companyName) {
     e.preventDefault();
-    const btn = document.getElementById('btn-submit-all-batches');
-    if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = '<span>⏳ Recording Batches & Yields...</span>';
-    }
-
-    const compoundingOperator = document.getElementById('batch-all-compounding-operator')?.value || '';
-    const bottlingLead = document.getElementById('batch-all-bottling-lead')?.value || '';
-    const qcInspector = document.getElementById('batch-all-qc-inspector')?.value || '';
-    const lineAssignment = document.getElementById('batch-all-line-assignment')?.value || '';
 
     const items = [];
+    const unapprovedItems = [];
+
     document.querySelectorAll('.batch-launch-item').forEach(el => {
         const joId = el.dataset.joId;
+        const approvalSelect = el.querySelector('.batch-item-approval');
+        const isApproved = !approvalSelect || approvalSelect.value === 'APPROVED';
+
+        if (!isApproved) {
+            const reason = el.querySelector('.batch-item-unapproved-reason')?.value?.trim() || '';
+            unapprovedItems.push({
+                jo_id: joId,
+                reason: reason
+            });
+            return;
+        }
+
         const qty = parseInt(el.querySelector('.batch-item-qty')?.value || '0');
         const targetBatches = parseInt(el.querySelector('.batch-item-target-batches')?.value || '1');
         const qtyPerBatch = parseInt(el.querySelector('.batch-item-qty-per-batch')?.value || qty || '0');
@@ -8989,6 +9092,22 @@ async function submitCreateAllBatches(e, clientId, poId, companyName) {
         }
     });
 
+    if (items.length === 0) {
+        NKB.showToast('Please approve at least one product to create batches.', 'warning');
+        return;
+    }
+
+    const btn = document.getElementById('btn-submit-all-batches');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span>⏳ Recording Batches & Yields...</span>';
+    }
+
+    const compoundingOperator = document.getElementById('batch-all-compounding-operator')?.value || '';
+    const bottlingLead = document.getElementById('batch-all-bottling-lead')?.value || '';
+    const qcInspector = document.getElementById('batch-all-qc-inspector')?.value || '';
+    const lineAssignment = document.getElementById('batch-all-line-assignment')?.value || '';
+
     const res = await NKB.api('/api/production/batches', {
         method: 'POST',
         body: JSON.stringify({
@@ -8999,13 +9118,15 @@ async function submitCreateAllBatches(e, clientId, poId, companyName) {
             bottling_lead: bottlingLead,
             qc_inspector: qcInspector,
             line_assignment: lineAssignment,
-            items: items
+            items: items,
+            unapproved_items: unapprovedItems
         })
     });
 
     if (res.success) {
         const count = res.count || items.length;
-        NKB.showToast(`🎉 Successfully batched and inspected ${count} products for ${companyName}! Ready for delivery.`, 'success');
+        const skippedMsg = unapprovedItems.length > 0 ? ` (${unapprovedItems.length} product(s) marked not approved and kept on hold)` : '';
+        NKB.showToast(`🎉 Successfully batched and inspected ${count} approved product(s) for ${companyName}!${skippedMsg}`, 'success');
         closeModal();
         if (typeof loadJobOrders === 'function') loadJobOrders();
         if (typeof loadOrders === 'function') loadOrders();
@@ -9013,7 +9134,7 @@ async function submitCreateAllBatches(e, clientId, poId, companyName) {
     } else {
         if (btn) {
             btn.disabled = false;
-            btn.innerHTML = '<span>🚀 Complete Batching</span>';
+            updateBatchSubmitButtonState();
         }
         NKB.showToast(res.error || 'Failed to record batches.', 'error');
     }

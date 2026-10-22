@@ -160,6 +160,7 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
         client_id,
         jo_ids,
         items,
+        unapproved_items,
         jo_id,
         target_quantity,
         target_batches,
@@ -258,6 +259,21 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
         const affectedPOIds = new Set();
 
         const tx = db.transaction(() => {
+            // Process unapproved items if any (record note on JO and keep status as PENDING)
+            if (unapproved_items && Array.isArray(unapproved_items)) {
+                for (const unapp of unapproved_items) {
+                    if (!unapp.jo_id) continue;
+                    const reasonClean = unapp.reason ? unapp.reason.trim() : '';
+                    const tag = reasonClean ? `[NOT APPROVED TO CREATE: ${reasonClean}]` : '[NOT APPROVED TO CREATE]';
+                    const currentJO = db.prepare("SELECT notes FROM job_orders WHERE id = ?").get(unapp.jo_id);
+                    if (currentJO) {
+                        const cleanNotes = (currentJO.notes || '').replace(/\[NOT APPROVED TO CREATE[^\]]*\]/g, '').trim();
+                        const newNotes = cleanNotes ? `${cleanNotes} ${tag}` : tag;
+                        db.prepare("UPDATE job_orders SET notes = ?, updated_at = datetime('now', 'localtime') WHERE id = ?").run(newNotes, unapp.jo_id);
+                    }
+                }
+            }
+
             for (const jo of itemsToCreate) {
                 const batchId = uuidv4();
                 const batchNumber = (jo.custom_batch_number || req.body.batch_number)
@@ -350,8 +366,9 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
                     });
                 }
 
-                // Complete Job Order since product is made and batched
-                db.prepare("UPDATE job_orders SET status = 'COMPLETED', updated_at = datetime('now', 'localtime') WHERE id = ?").run(jo.id);
+                // Complete Job Order since product is made and batched, and clear any previous unapproved note
+                const cleanNotes = (jo.notes || '').replace(/\[NOT APPROVED TO CREATE[^\]]*\]/g, '').trim();
+                db.prepare("UPDATE job_orders SET status = 'COMPLETED', notes = ?, updated_at = datetime('now', 'localtime') WHERE id = ?").run(cleanNotes || null, jo.id);
                 if (jo.po_id) affectedPOIds.add(jo.po_id);
 
                 createdBatches.push({
@@ -385,6 +402,8 @@ router.post('/batches', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), 
             details: {
                 batchCount: createdBatches.length,
                 batches: createdBatches,
+                unapprovedCount: (unapproved_items && Array.isArray(unapproved_items)) ? unapproved_items.length : 0,
+                unapproved_items: unapproved_items || [],
                 compounding_operator,
                 bottling_lead,
                 qc_inspector,

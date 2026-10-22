@@ -4873,6 +4873,132 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         }, 'client.js must not contain syntax errors');
     });
 
+    test('95. Batching Approval Option: Select which product is not approved to create', async () => {
+        const testToken = getAuthToken('SUPER_ADMIN');
+
+        // 1. Verify UI HTML & JS code and syntax
+        const adminHtml = fs.readFileSync(path.join(__dirname, '../public/admin.html'), 'utf8');
+        assert.ok(adminHtml.includes('admin.js?v=2.4.6'), 'admin.html must reference admin.js?v=2.4.6');
+
+        const adminJs = fs.readFileSync(path.join(__dirname, '../public/js/admin.js'), 'utf8');
+        assert.ok(adminJs.includes('onBatchApprovalChanged'), 'admin.js must implement onBatchApprovalChanged');
+        assert.ok(adminJs.includes('updateBatchSubmitButtonState'), 'admin.js must implement updateBatchSubmitButtonState');
+        assert.ok(adminJs.includes('batch-item-approval'), 'admin.js must include batch-item-approval select');
+        assert.ok(adminJs.includes('batch-item-unapproved-reason'), 'admin.js must include batch-item-unapproved-reason input');
+        assert.ok(adminJs.includes('Not Approved to Create'), 'admin.js must include Not Approved to Create badge / option');
+
+        const vm = require('vm');
+        assert.doesNotThrow(() => {
+            new vm.Script(adminJs);
+        }, 'admin.js must not contain syntax errors');
+
+        // 2. Setup a multi-product PO with 2 Job Orders using demoClient
+        const serumProduct = db.prepare("SELECT * FROM products WHERE sku = 'NCS-030'").get();
+        const multiPoRes = await request(app)
+            .post('/api/orders')
+            .set('Authorization', `Bearer ${clientToken}`)
+            .send({
+                client_id: demoClient.id,
+                items: [
+                    { product_id: lotionProduct.id, target_quantity: 1000, unit_price: 105.0 },
+                    { product_id: serumProduct.id, target_quantity: 500, unit_price: 225.0 }
+                ]
+            });
+        assert.strictEqual(multiPoRes.status, 201);
+        const po = multiPoRes.body.data;
+
+        await request(app)
+            .post(`/api/orders/${po.id}/approve`)
+            .set('Authorization', `Bearer ${testToken}`);
+
+        const joRes = await request(app)
+            .post('/api/job-orders')
+            .set('Authorization', `Bearer ${testToken}`)
+            .send({ po_id: po.id });
+        assert.strictEqual(joRes.status, 201);
+
+        const jos = db.prepare("SELECT * FROM job_orders WHERE po_id = ? ORDER BY target_quantity ASC").all(po.id);
+        assert.strictEqual(jos.length, 2);
+        const jo1Id = jos[0].id; // 500 pcs
+        const jo2Id = jos[1].id; // 1000 pcs
+
+        // 3. Batch run where Product 1 is APPROVED and Product 2 is NOT APPROVED
+        const batchRes = await request(app)
+            .post('/api/production/batches')
+            .set('Authorization', `Bearer ${testToken}`)
+            .send({
+                create_all: true,
+                po_id: po.id,
+                client_id: demoClient.id,
+                compounding_operator: 'Lead Chemist',
+                bottling_lead: 'Packaging Lead',
+                qc_inspector: 'QC Specialist',
+                line_assignment: 'Cleanroom Line 1 (Alpha)',
+                items: [
+                    {
+                        jo_id: jo1Id,
+                        target_quantity: 500,
+                        actual_yield: 500,
+                        target_batches: 1,
+                        qty_per_batch: 500,
+                        buffer_stock_qty: 0,
+                        formula_code: 'FORM-2026-TEST1'
+                    }
+                ],
+                unapproved_items: [
+                    {
+                        jo_id: jo2Id,
+                        reason: 'Lacks Primary Bottles Packaging'
+                    }
+                ]
+            });
+
+        assert.strictEqual(batchRes.status, 201);
+        assert.strictEqual(batchRes.body.success, true);
+        assert.strictEqual(batchRes.body.count, 1, 'Only approved product must have batch created');
+
+        // 4. Verify JO1 status is COMPLETED and batch was recorded
+        const jo1Db = db.prepare("SELECT * FROM job_orders WHERE id = ?").get(jo1Id);
+        assert.strictEqual(jo1Db.status, 'COMPLETED');
+        const batch1Db = db.prepare("SELECT * FROM production_batches WHERE jo_id = ?").get(jo1Id);
+        assert.ok(batch1Db, 'Batch for JO1 must exist');
+
+        // 5. Verify JO2 status remains IN_PRODUCTION (not COMPLETED) and notes reflect NOT APPROVED tag with reason
+        const jo2Db = db.prepare("SELECT * FROM job_orders WHERE id = ?").get(jo2Id);
+        assert.strictEqual(jo2Db.status, 'IN_PRODUCTION');
+        assert.ok(jo2Db.notes && jo2Db.notes.includes('[NOT APPROVED TO CREATE: Lacks Primary Bottles Packaging]'),
+            'JO2 notes must contain unapproved reason tag');
+        const batch2Db = db.prepare("SELECT * FROM production_batches WHERE jo_id = ?").get(jo2Id);
+        assert.ok(!batch2Db, 'No batch should be created for unapproved JO2');
+
+        // 6. Later, batch JO2 once approved and verify note is cleared
+        const batch2Res = await request(app)
+            .post('/api/production/batches')
+            .set('Authorization', `Bearer ${testToken}`)
+            .send({
+                create_all: true,
+                po_id: po.id,
+                client_id: demoClient.id,
+                items: [
+                    {
+                        jo_id: jo2Id,
+                        target_quantity: 1000,
+                        actual_yield: 1000,
+                        target_batches: 1,
+                        qty_per_batch: 1000,
+                        buffer_stock_qty: 0,
+                        formula_code: 'FORM-2026-TEST2'
+                    }
+                ]
+            });
+
+        assert.strictEqual(batch2Res.status, 201);
+        const jo2Updated = db.prepare("SELECT * FROM job_orders WHERE id = ?").get(jo2Id);
+        assert.strictEqual(jo2Updated.status, 'COMPLETED');
+        assert.ok(!jo2Updated.notes || !jo2Updated.notes.includes('[NOT APPROVED TO CREATE'),
+            'Unapproved note should be cleared upon approval and batch creation');
+    });
+
     after(() => {
         try {
             realtimeSyncService.closeAllClients();
