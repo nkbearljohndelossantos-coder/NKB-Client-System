@@ -1078,3 +1078,117 @@ textarea:focus {
     animation: nkb-shake 0.45s cubic-bezier(0.36, 0.07, 0.19, 0.97) both !important;
 }
 
+/* ==========================================================================
+   PO MONITOR CLIPBOARD & NON-SWIPABLE TABS
+   ========================================================================== */
+
+/* 1. NON-SWIPABLE TABS ON LEFT SCREEN:
+   The sidebar navigation stays firmly anchored on the left side.
+   Swiping the front area (main view, receipts, tables) CANNOT drag or move tabs.
+   Vertical scrolling/swiping in tabs is strictly confined to #admin-sidebar. */
+#admin-sidebar {
+    touch-action: pan-y !important;
+    overscroll-behavior: contain !important;
+}
+
+#admin-sidebar nav {
+    touch-action: pan-y !important;
+    overscroll-behavior-y: contain !important;
+    -webkit-overflow-scrolling: touch !important;
+}
+
+main,
+#main-content,
+#view-po-monitor,
+.po-clipboard-stage,
+.po-clipboard-board,
+.po-clipboard-stack {
+    touch-action: pan-y !important;
+    overscroll-behavior-x: none !important;
+}
+
+/* 2. AUTHENTIC CLIPBOARD BOARD STYLING */
+.po-clipboard-stage {
+    perspective: 1200px;
+}
+
+.po-clipboard-board {
+    background: #2b1f1a;
+    background: radial-gradient(circle at 50% 20%, #3e2e28 0%, #241a16 75%, #18110e 100%);
+    box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.05), inset 0 2px 4px rgba(255, 255, 255, 0.1);
+    border: 3px solid #1a120e;
+}
+
+/* Brushed Metallic Clipboard Clamp */
+.po-clipboard-clamp {
+    background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 25%, #cbd5e1 50%, #94a3b8 80%, #64748b 100%);
+    border-left: 2px solid #ffffff;
+    border-right: 2px solid #64748b;
+    border-bottom: 2px solid #475569;
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35), inset 0 1px 1px #ffffff;
+}
+
+/* 3. CLIPBOARD STACK: INSTANT VERTICAL FLIP / SWIPE WITH ZERO TRANSITION */
+.po-clipboard-stack {
+    height: calc(100vh - 225px);
+    min-height: 620px;
+    scroll-snap-type: y mandatory;
+    scroll-behavior: auto !important; /* NO TRANSITION LATENCY */
+    transition: none !important;
+    touch-action: pan-y;
+    overscroll-behavior-y: contain;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+
+.po-clipboard-stack::-webkit-scrollbar {
+    width: 6px;
+}
+.po-clipboard-stack::-webkit-scrollbar-track {
+    background: transparent;
+}
+.po-clipboard-stack::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.25);
+    border-radius: 9999px;
+}
+.po-clipboard-stack::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.45);
+}
+
+/* 4. FULL PAPER RECEIPT CARD */
+.po-receipt-card {
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+    transition: none !important; /* NO TRANSITION ON CARD SWIPES */
+    background: #ffffff;
+    color: #0f172a;
+    border-radius: 6px;
+    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.15);
+    border: 1px solid #e2e8f0;
+    max-width: 820px;
+    margin-left: auto;
+    margin-right: auto;
+    font-family: 'Lato', 'Carlito', 'Segoe UI', Arial, sans-serif;
+    position: relative;
+}
+
+/* Paper clamp clip-mark indentation on top of receipt */
+.po-receipt-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 140px;
+    height: 6px;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.15), transparent);
+    border-radius: 0 0 4px 4px;
+    pointer-events: none;
+}
+
+.po-receipt-box {
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    background: #ffffff;
+}
+

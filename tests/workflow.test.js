@@ -5092,7 +5092,7 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.ok(adminHtml.includes('id="it-dr-items-container"'), 'admin.html must contain #it-dr-items-container');
         assert.ok(adminHtml.includes('id="it-add-delivered-item-btn"'), 'admin.html must contain #it-add-delivered-item-btn');
         assert.ok(adminHtml.includes('id="it-save-delivered-products-btn"'), 'admin.html must contain #it-save-delivered-products-btn');
-        assert.ok(adminHtml.includes('admin.js?v=2.4.8'), 'admin.html must load admin.js with version 2.4.8');
+        assert.ok(adminHtml.includes('admin.js?v=2.4.8') || adminHtml.includes('admin.js?v=2.4.9'), 'admin.html must load admin.js with version >= 2.4.8');
 
         const adminJs = fs.readFileSync(path.join(__dirname, '../public/js/admin.js'), 'utf8');
         assert.ok(adminJs.includes('window.populateITDeliveryReceiptsSelect = populateITDeliveryReceiptsSelect;'), 'admin.js must export populateITDeliveryReceiptsSelect');
@@ -5235,6 +5235,64 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         db.prepare("DELETE FROM delivery_receipts WHERE id = ?").run(testDr.id);
         db.prepare("DELETE FROM purchase_order_items WHERE po_id = ?").run(po.id);
         db.prepare("DELETE FROM purchase_orders WHERE id = ?").run(po.id);
+    });
+
+    test('TEST 98: PO Monitor Tab (Clipboard Full Receipts) & Non-Swipable Sidebar Tabs', async () => {
+        // 1. Verify GET /api/orders returns client_address and client_tin
+        const ordersRes = await request(app)
+            .get('/api/orders')
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(ordersRes.status, 200);
+        assert.strictEqual(ordersRes.body.success, true);
+        assert.ok(Array.isArray(ordersRes.body.data));
+
+        // If orders exist, verify address and tin fields are present on order object
+        if (ordersRes.body.data.length > 0) {
+            const firstPO = ordersRes.body.data[0];
+            assert.ok('client_address' in firstPO, 'GET /api/orders must return client_address');
+            assert.ok('client_tin' in firstPO, 'GET /api/orders must return client_tin');
+        }
+
+        // 2. Verify HTML markup in public/admin.html
+        const adminHtml = fs.readFileSync(path.join(__dirname, '../public/admin.html'), 'utf8');
+        assert.ok(adminHtml.includes('id="tab-btn-po-monitor"'), 'admin.html must contain tab-btn-po-monitor button');
+        assert.ok(adminHtml.includes('switchTab(\'po-monitor\')'), 'admin.html must call switchTab("po-monitor")');
+        assert.ok(adminHtml.includes('id="view-po-monitor"'), 'admin.html must contain view-po-monitor section');
+        assert.ok(adminHtml.includes('id="po-monitor-stack"'), 'admin.html must contain po-monitor-stack clipboard container');
+        assert.ok(adminHtml.includes('id="po-monitor-search"'), 'admin.html must contain po-monitor-search input');
+        assert.ok(adminHtml.includes('id="po-monitor-status"'), 'admin.html must contain po-monitor-status select');
+        assert.ok(adminHtml.includes('id="po-monitor-jump-select"'), 'admin.html must contain po-monitor-jump-select dropdown');
+        assert.ok(adminHtml.includes('id="po-monitor-counter"'), 'admin.html must contain po-monitor-counter badge');
+        assert.ok(adminHtml.includes('po-clipboard-board'), 'admin.html must contain po-clipboard-board element');
+        assert.ok(adminHtml.includes('po-clipboard-clamp'), 'admin.html must contain po-clipboard-clamp metallic element');
+        assert.ok(adminHtml.includes('admin.js?v=2.4.9'), 'admin.html must have cache-busted admin.js?v=2.4.9');
+
+        // 3. Verify CSS styling in public/css/style.css
+        const styleCss = fs.readFileSync(path.join(__dirname, '../public/css/style.css'), 'utf8');
+        assert.ok(styleCss.includes('#admin-sidebar'), 'style.css must target #admin-sidebar');
+        assert.ok(styleCss.includes('overscroll-behavior: contain !important'), 'Sidebar must have overscroll-behavior: contain !important');
+        assert.ok(styleCss.includes('overscroll-behavior-x: none !important'), 'Main content must prevent horizontal overscroll / front swiping');
+        assert.ok(styleCss.includes('.po-clipboard-stack'), 'style.css must style .po-clipboard-stack');
+        assert.ok(styleCss.includes('scroll-snap-type: y mandatory'), 'Stack must have mandatory vertical scroll snap');
+        assert.ok(styleCss.includes('scroll-behavior: auto !important'), 'Stack must have scroll-behavior: auto !important (no transition latency)');
+        assert.ok(styleCss.includes('transition: none !important'), 'Cards must have transition: none !important (instant flip)');
+        assert.ok(styleCss.includes('.po-receipt-card'), 'style.css must style .po-receipt-card');
+
+        // 4. Verify JS implementation in public/js/admin.js
+        const adminJs = fs.readFileSync(path.join(__dirname, '../public/js/admin.js'), 'utf8');
+        assert.ok(adminJs.includes("tabId === 'po-monitor') loadPOMonitor()"), 'switchTab must route po-monitor to loadPOMonitor');
+        assert.ok(adminJs.includes('async function loadPOMonitor('), 'admin.js must define loadPOMonitor');
+        assert.ok(adminJs.includes('function renderPOMonitorReceipts('), 'admin.js must define renderPOMonitorReceipts');
+        assert.ok(adminJs.includes('function jumpPOMonitorToIndex('), 'admin.js must define jumpPOMonitorToIndex');
+        assert.ok(adminJs.includes('function jumpPOMonitorPrev('), 'admin.js must define jumpPOMonitorPrev');
+        assert.ok(adminJs.includes('function jumpPOMonitorNext('), 'admin.js must define jumpPOMonitorNext');
+        assert.ok(adminJs.includes('function jumpToPOMonitorById('), 'admin.js must define jumpToPOMonitorById');
+        assert.ok(adminJs.includes('function printCurrentPOMonitorReceipt('), 'admin.js must define printCurrentPOMonitorReceipt');
+        assert.ok(adminJs.includes('function openCurrentPOInOrdersTab('), 'admin.js must define openCurrentPOInOrdersTab');
+        assert.ok(adminJs.includes('function filterPOMonitorReceipts('), 'admin.js must define filterPOMonitorReceipts');
+        assert.ok(adminJs.includes('setupPOMonitorTouchSwipe'), 'admin.js must setup touch swipe for clipboard');
+        assert.ok(adminJs.includes('initTabsSwipeProtection'), 'admin.js must protect tabs from front swipes');
+        assert.ok(adminJs.includes("hideTab('po-monitor')"), 'admin.js must hide po-monitor for non-authorized roles');
     });
 
     after(() => {

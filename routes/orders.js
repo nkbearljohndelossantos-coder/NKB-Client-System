@@ -109,7 +109,7 @@ router.get('/', authenticateToken, enforceClientIsolation, (req, res) => {
     evaluateOrderRemindersAndAutoPrioritize(db);
 
     let query = `
-        SELECT po.*, c.company_name, c.contact_person, c.email as client_email, c.is_vyuceutical_ops,
+        SELECT po.*, c.company_name, c.contact_person, c.email as client_email, c.phone as client_phone, c.address as client_address, c.tin as client_tin, c.is_vyuceutical_ops,
                COALESCE(oc.color, po.category_color, '#8b5cf6') as effective_category_color,
                (SELECT COUNT(*) FROM purchase_order_items WHERE po_id = po.id) as items_count,
                (SELECT SUM(target_quantity) FROM purchase_order_items WHERE po_id = po.id) as total_target_quantity,

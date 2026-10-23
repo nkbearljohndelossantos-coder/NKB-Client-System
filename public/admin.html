@@ -129,6 +129,13 @@
                             </div>
                             <kbd class="hidden md:inline-block text-[9px] bg-slate-800 text-slate-400 px-1 py-0.2 rounded border border-slate-700 font-mono">Ctrl+O</kbd>
                         </button>
+                        <button onclick="switchTab('po-monitor')" id="tab-btn-po-monitor" class="sidebar-btn w-full flex items-center justify-between px-3 py-2 rounded-xl text-amber-300 hover:text-white hover:bg-slate-900 transition">
+                            <div class="flex items-center gap-3">
+                                <svg class="w-4 h-4 flex-shrink-0 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+                                <span>PO Monitor</span>
+                            </div>
+                            <span class="text-[8px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-extrabold border border-amber-500/30">STACK</span>
+                        </button>
                         <button onclick="switchTab('raw-materials')" id="tab-btn-raw-materials" class="sidebar-btn w-full flex items-center justify-between px-3 py-2 rounded-xl text-teal-300 hover:text-white hover:bg-slate-900 transition">
                             <div class="flex items-center gap-3">
                                 <svg class="w-4 h-4 flex-shrink-0 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
@@ -678,6 +685,104 @@
                                 <tr><td colspan="7" class="py-8 text-center text-slate-400 bg-white rounded-2xl border border-slate-200">Loading purchase orders...</td></tr>
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB: PO MONITOR (FULL RECEIPTS CLIPBOARD) -->
+            <section id="view-po-monitor" class="space-y-4 hidden">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                        <div class="flex items-center gap-3">
+                            <h2 class="text-2xl font-black text-slate-900">PO Monitor</h2>
+                            <span class="px-2.5 py-1 bg-amber-100 text-amber-900 border border-amber-300 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs">
+                                <span>📋</span><span>Receipts Clipboard</span>
+                            </span>
+                        </div>
+                        <p class="text-sm text-slate-500">Every Purchase Order displayed as an authentic full paper receipt. Swipe or scroll vertically with zero transition.</p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button type="button" onclick="jumpPOMonitorPrev()" class="px-3 py-2 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer" title="Previous Receipt (Up Arrow)">
+                            <span>⬆</span><span>Prev</span>
+                        </button>
+                        <button type="button" onclick="jumpPOMonitorNext()" class="px-3 py-2 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer" title="Next Receipt (Down Arrow)">
+                            <span>⬇</span><span>Next</span>
+                        </button>
+                        <button type="button" onclick="printCurrentPOMonitorReceipt()" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 transition flex items-center gap-1.5 cursor-pointer" title="Print Current PO Receipt">
+                            <span>🖨️</span><span>Print Receipt</span>
+                        </button>
+                        <button type="button" onclick="openCurrentPOInOrdersTab()" class="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer" title="View / Edit in Orders Tab">
+                            <span>📄</span><span>Open in POs</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- PO Monitor Control Bar -->
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+                    <div class="flex flex-1 flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                        <div class="relative flex-1 sm:max-w-xs">
+                            <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">🔍</span>
+                            <input type="text" id="po-monitor-search" oninput="debouncePOMonitorFilter()" placeholder="Search PO#, Client, SKU, Item..." class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 font-medium">
+                        </div>
+                        <select id="po-monitor-status" onchange="filterPOMonitorReceipts()" class="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 font-semibold text-slate-700">
+                            <option value="">All Statuses</option>
+                            <option value="PENDING_APPROVAL">Pending Approval</option>
+                            <option value="APPROVED">Approved</option>
+                            <option value="IN_PRODUCTION">In Production</option>
+                            <option value="PARTIALLY_DELIVERED">Partially Delivered</option>
+                            <option value="COMPLETED">Completed</option>
+                            <option value="VOIDED">Voided</option>
+                        </select>
+                        <select id="po-monitor-jump-select" onchange="jumpToPOMonitorById(this.value)" class="flex-1 sm:max-w-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 font-bold text-slate-800">
+                            <option value="">Jump directly to PO...</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center justify-between md:justify-end gap-3 border-t md:border-t-0 pt-2 md:pt-0 border-slate-100">
+                        <div id="po-monitor-counter" class="px-3 py-1.5 rounded-xl bg-amber-50 text-amber-900 border border-amber-200 text-xs font-black tracking-wide">
+                            Receipt 0 of 0
+                        </div>
+                        <span class="text-[11px] text-slate-400 hidden lg:inline-flex items-center gap-1 font-mono">
+                            <kbd class="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-[10px]">↑</kbd>
+                            <kbd class="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-[10px]">↓</kbd>
+                            <span>Swipe or keys to flip</span>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Authentic Clipboard Stage -->
+                <div class="po-clipboard-stage flex justify-center py-2 px-1 sm:px-4">
+                    <div class="po-clipboard-board relative w-full max-w-4xl rounded-3xl shadow-2xl overflow-hidden border border-amber-950/20">
+                        <!-- Brushed Metal Top Clamp/Clip -->
+                        <div class="po-clipboard-clip-wrapper sticky top-0 z-30 flex flex-col items-center select-none pointer-events-none">
+                            <!-- Metal Hanging Ring -->
+                            <div class="w-12 h-6 border-4 border-slate-400/80 rounded-t-full bg-slate-200/50 -mb-1 shadow-sm"></div>
+                            <!-- Metallic Heavy Clamp -->
+                            <div class="po-clipboard-clamp relative w-64 sm:w-80 py-2.5 px-6 rounded-b-xl shadow-xl flex items-center justify-between border-t border-white/60">
+                                <!-- Rivet Left -->
+                                <div class="w-3.5 h-3.5 rounded-full bg-gradient-to-br from-slate-200 to-slate-500 border border-slate-600 shadow-inner flex items-center justify-center">
+                                    <div class="w-1.5 h-0.5 bg-slate-700 transform rotate-45"></div>
+                                </div>
+                                <!-- Stamped Text & Grip Ridges -->
+                                <div class="flex flex-col items-center">
+                                    <span class="text-[9px] font-black tracking-widest uppercase text-slate-800 drop-shadow-xs font-mono">NKB PO CLIPBOARD</span>
+                                    <div class="flex gap-1 mt-0.5">
+                                        <span class="w-8 h-0.5 bg-slate-400 rounded-full"></span>
+                                        <span class="w-8 h-0.5 bg-slate-400 rounded-full"></span>
+                                    </div>
+                                </div>
+                                <!-- Rivet Right -->
+                                <div class="w-3.5 h-3.5 rounded-full bg-gradient-to-br from-slate-200 to-slate-500 border border-slate-600 shadow-inner flex items-center justify-center">
+                                    <div class="w-1.5 h-0.5 bg-slate-700 transform -rotate-45"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Swipe Stack of Full Receipts -->
+                        <div id="po-monitor-stack" class="po-clipboard-stack overflow-y-auto px-2 sm:px-6 pt-4 pb-12 space-y-8">
+                            <div class="py-20 text-center text-slate-400 font-bold text-sm bg-white/90 rounded-2xl shadow-sm border border-slate-200 max-w-2xl mx-auto">
+                                Loading PO receipts clipboard...
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -2711,7 +2816,7 @@
 
     <script src="/js/xlsx.full.min.js"></script>
     <script src="/js/app.js?v=2.4.6"></script>
-    <script src="/js/admin.js?v=2.4.8"></script>
+    <script src="/js/admin.js?v=2.4.9"></script>
     <script src="/js/agent-widgets.js?v=2.4.6"></script>
 </body>
 </html>

@@ -289,6 +289,7 @@ function applyRoleBasedUI() {
         hideTab('reports');
         hideTab('audit');
         hideTab('it-management');
+        hideTab('po-monitor');
         switchTab('raw-materials');
     } else if (role === 'PURCHASING') {
         // Purchasing Department: remove Management and Lab & Formulations
@@ -309,6 +310,7 @@ function applyRoleBasedUI() {
         hideTab('reports');
         hideTab('audit');
         hideTab('it-management');
+        hideTab('po-monitor');
         switchTab('purchasing');
     } else if (role === 'QC') {
         // QC: remove Finance & Stock, Management, Lab & Formulations, and Requisitions
@@ -327,6 +329,7 @@ function applyRoleBasedUI() {
         hideTab('audit');
         hideTab('purchasing');
         hideTab('it-management');
+        hideTab('po-monitor');
         switchTab('production');
     } else if (role === 'PRODUCTION') {
         // Production Supervisor: remove Finance & Stock, Requisitions, Lab & Formulations, and Management.
@@ -353,6 +356,7 @@ function applyRoleBasedUI() {
         hideGroup('management');
         hideGroup('lab');
         hideTab('orders');
+        hideTab('po-monitor');
         hideTab('purchasing');
         hideTab('job-orders');
         hideTab('production');
@@ -499,6 +503,7 @@ function switchTab(tabId) {
     // Call tab-specific loader
     if (tabId === 'dashboard') loadDashboard();
     else if (tabId === 'orders') loadOrders();
+    else if (tabId === 'po-monitor') loadPOMonitor();
     else if (tabId === 'raw-materials') loadRawMaterials();
     else if (tabId === 'job-orders') loadJobOrders();
     else if (tabId === 'production') loadBatches();
@@ -18224,5 +18229,574 @@ async function handleClientsExcelImport(input) {
     }
 }
 window.handleClientsExcelImport = handleClientsExcelImport;
+
+// ==========================================================================
+// PO MONITOR: AUTHENTIC CLIPBOARD FULL RECEIPTS & NON-SWIPABLE TABS
+// ==========================================================================
+
+let poMonitorCachedOrders = [];
+let poMonitorFilteredOrders = [];
+let poMonitorCurrentIndex = 0;
+let poMonitorDebounceTimer = null;
+let poMonitorIntersectionObserver = null;
+
+/**
+ * Loads all purchase orders from /api/orders and renders full printable receipts
+ * on the authentic clipboard stack.
+ */
+async function loadPOMonitor() {
+    const stack = document.getElementById('po-monitor-stack');
+    if (!stack) return;
+
+    stack.innerHTML = `
+        <div class="py-24 text-center text-slate-400 font-bold text-sm bg-white/90 rounded-2xl shadow-sm border border-slate-200 max-w-2xl mx-auto">
+            <span class="inline-block animate-spin text-2xl mb-2">🔄</span>
+            <div>Loading full PO receipts clipboard...</div>
+        </div>
+    `;
+
+    try {
+        const res = await NKB.api('/api/orders');
+        if (res.success && Array.isArray(res.data)) {
+            poMonitorCachedOrders = res.data;
+            window.poMonitorCachedOrders = poMonitorCachedOrders;
+            filterPOMonitorReceipts();
+        } else {
+            stack.innerHTML = `
+                <div class="py-24 text-center text-rose-500 font-bold text-sm bg-white/90 rounded-2xl shadow-sm border border-rose-200 max-w-2xl mx-auto">
+                    Failed to load purchase orders: ${res.error || 'Unknown error'}
+                </div>
+            `;
+        }
+    } catch (err) {
+        console.error('loadPOMonitor error:', err);
+        stack.innerHTML = `
+            <div class="py-24 text-center text-rose-500 font-bold text-sm bg-white/90 rounded-2xl shadow-sm border border-rose-200 max-w-2xl mx-auto">
+                Error loading clipboard receipts: ${err.message}
+            </div>
+        `;
+    }
+}
+window.loadPOMonitor = loadPOMonitor;
+
+/**
+ * Filters cached orders by search term and status, then re-renders the receipt stack.
+ */
+function filterPOMonitorReceipts() {
+    const searchVal = (document.getElementById('po-monitor-search')?.value || '').trim().toLowerCase();
+    const statusVal = document.getElementById('po-monitor-status')?.value || '';
+
+    poMonitorFilteredOrders = poMonitorCachedOrders.filter(po => {
+        if (statusVal && po.status !== statusVal) return false;
+        if (!searchVal) return true;
+
+        const matchPO = (po.po_number || '').toLowerCase().includes(searchVal);
+        const matchSO = (po.so_number || '').toLowerCase().includes(searchVal);
+        const matchCustPO = (po.customer_po_number || '').toLowerCase().includes(searchVal);
+        const matchClient = (po.company_name || '').toLowerCase().includes(searchVal);
+        const matchNotes = (po.notes || '').toLowerCase().includes(searchVal);
+        const matchCategory = (po.category || '').toLowerCase().includes(searchVal);
+
+        let matchItem = false;
+        if (po.items && Array.isArray(po.items)) {
+            matchItem = po.items.some(it => 
+                (it.product_name || '').toLowerCase().includes(searchVal) ||
+                (it.sku || '').toLowerCase().includes(searchVal) ||
+                (it.formula_code || '').toLowerCase().includes(searchVal)
+            );
+        }
+
+        return matchPO || matchSO || matchCustPO || matchClient || matchNotes || matchCategory || matchItem;
+    });
+
+    renderPOMonitorReceipts(poMonitorFilteredOrders);
+}
+window.filterPOMonitorReceipts = filterPOMonitorReceipts;
+
+function debouncePOMonitorFilter() {
+    clearTimeout(poMonitorDebounceTimer);
+    poMonitorDebounceTimer = setTimeout(() => {
+        filterPOMonitorReceipts();
+    }, 200);
+}
+window.debouncePOMonitorFilter = debouncePOMonitorFilter;
+
+/**
+ * Renders full receipt cards into the clipboard stack.
+ */
+function renderPOMonitorReceipts(orders) {
+    const stack = document.getElementById('po-monitor-stack');
+    const jumpSelect = document.getElementById('po-monitor-jump-select');
+    const counter = document.getElementById('po-monitor-counter');
+    if (!stack) return;
+
+    if (!orders || orders.length === 0) {
+        stack.innerHTML = `
+            <div class="py-24 text-center text-slate-500 font-bold text-sm bg-white/95 rounded-2xl shadow-sm border border-slate-200 max-w-2xl mx-auto p-8">
+                <span class="text-4xl block mb-2">📋</span>
+                <div class="text-base font-extrabold text-slate-800">No Purchase Order Receipts Found</div>
+                <p class="text-xs text-slate-500 mt-1">Try adjusting your search keywords or status filter.</p>
+            </div>
+        `;
+        if (counter) counter.textContent = 'Receipt 0 of 0';
+        if (jumpSelect) jumpSelect.innerHTML = '<option value="">No POs found</option>';
+        return;
+    }
+
+    const userRole = NKB.user ? NKB.user.role : '';
+    const isExecAdmin = ['ADMIN', 'SUPER_ADMIN', 'IT_ADMIN'].includes(userRole);
+    const canViewPrices = isExecAdmin || ['CEO', 'ACCOUNTING'].includes(userRole);
+
+    // Populate Jump-to selector
+    if (jumpSelect) {
+        jumpSelect.innerHTML = '<option value="">Jump directly to PO...</option>' + orders.map((po, idx) => {
+            const num = po.so_number || po.po_number || `PO-${idx + 1}`;
+            const client = po.company_name || 'Client';
+            return `<option value="${po.id}">#${idx + 1}: ${num} - ${client}</option>`;
+        }).join('');
+    }
+
+    // Status badge style helper
+    const getStatusBadge = (status) => {
+        switch (status) {
+            case 'APPROVED':
+                return '<span class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300">APPROVED</span>';
+            case 'IN_PRODUCTION':
+                return '<span class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-100 text-blue-800 border border-blue-300">IN PRODUCTION</span>';
+            case 'PARTIALLY_DELIVERED':
+                return '<span class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-teal-100 text-teal-800 border border-teal-300">DELIVERING</span>';
+            case 'COMPLETED':
+                return '<span class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-800 border border-slate-300">COMPLETED</span>';
+            case 'VOIDED':
+            case 'CANCELLED':
+                return '<span class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-100 text-rose-800 border border-rose-300">VOIDED</span>';
+            case 'PENDING_APPROVAL':
+            default:
+                return '<span class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-300">PENDING APPROVAL</span>';
+        }
+    };
+
+    // Render receipt cards
+    stack.innerHTML = orders.map((po, idx) => {
+        const docNumber = po.so_number || po.po_number || `PO-${po.id.slice(0, 8)}`;
+        const customerPo = po.customer_po_number || '';
+        const clientName = po.company_name || 'Customer';
+        const clientAddress = po.client_address || po.delivery_address || 'Cavite / NCR, Philippines';
+        const clientTin = po.client_tin || '000-000-000-00000';
+        const orderDate = po.po_date || po.order_date || (po.created_at ? po.created_at.slice(0, 10) : 'N/A');
+        const deliveryDate = po.expected_delivery_date || po.target_delivery_date || 'Standard Lead Time';
+        const terms = po.form_of_payment || po.payment_terms || 'COD';
+
+        // Items breakdown
+        const items = Array.isArray(po.items) ? po.items : [];
+        let subtotalCalc = 0;
+
+        const itemsRows = items.length > 0 ? items.map((it, itIdx) => {
+            const qty = Number(it.target_quantity || it.quantity || 0);
+            const unit = it.unit || 'pcs';
+            const size = it.size || it.size_ml || '-';
+            const price = Number(it.unit_price || 0);
+            const lineSubtotal = qty * price;
+            subtotalCalc += lineSubtotal;
+
+            return `
+                <tr class="border-b border-slate-200/80">
+                    <td class="py-2.5 px-3 align-top font-bold text-slate-900 text-xs">
+                        <div class="font-extrabold uppercase text-slate-950">${it.product_name || 'Product'}</div>
+                        <div class="text-[10px] text-slate-500 font-mono mt-0.5 flex flex-wrap gap-1 items-center">
+                            <span class="bg-slate-100 px-1 py-0.2 rounded border border-slate-200">${it.sku || 'SKU'}</span>
+                            ${it.formula_code ? `<span class="bg-indigo-50 text-indigo-700 px-1 py-0.2 rounded border border-indigo-200">FC: ${it.formula_code}</span>` : ''}
+                        </div>
+                    </td>
+                    <td class="py-2.5 px-3 text-center align-top font-bold text-xs text-slate-700 whitespace-nowrap">${size}</td>
+                    <td class="py-2.5 px-3 text-right align-top font-black text-xs text-slate-950 font-mono whitespace-nowrap">${NKB.formatNumber(qty)}</td>
+                    <td class="py-2.5 px-3 text-left align-top font-bold text-xs text-slate-600 whitespace-nowrap">${unit}</td>
+                    ${canViewPrices ? `
+                        <td class="py-2.5 px-3 text-right align-top font-bold text-xs text-slate-800 font-mono whitespace-nowrap">₱${price.toFixed(2)}</td>
+                        <td class="py-2.5 px-3 text-right align-top font-black text-xs text-slate-950 font-mono whitespace-nowrap">₱${lineSubtotal.toFixed(2)}</td>
+                    ` : `
+                        <td class="py-2.5 px-3 text-right align-top font-bold text-xs text-slate-400 italic" colspan="2">Operations Copy</td>
+                    `}
+                </tr>
+            `;
+        }).join('') : `
+            <tr>
+                <td colspan="${canViewPrices ? 6 : 5}" class="py-6 text-center text-slate-400 italic text-xs">
+                    No order line items recorded
+                </td>
+            </tr>
+        `;
+
+        // Financial calculations
+        const subtotalVal = (po.subtotal !== null && po.subtotal !== undefined) ? Number(po.subtotal) : subtotalCalc;
+        const taxVal = Number(po.tax_amount || 0);
+        const discountVal = Number(po.discount_amount || 0);
+        const paymentMadeVal = Number(po.payment_made || 0);
+        const grandTotalVal = (po.grand_total !== null && po.grand_total !== undefined) ? Number(po.grand_total) : (subtotalVal + taxVal - discountVal);
+        const totalBalanceVal = Math.max(0, grandTotalVal - paymentMadeVal);
+
+        return `
+            <article class="po-receipt-card p-4 sm:p-8" id="po-receipt-card-${idx}" data-po-id="${po.id}" data-index="${idx}">
+                <!-- Quick Card Header / Status / Direct Actions -->
+                <div class="flex flex-wrap items-center justify-between gap-2 pb-4 mb-4 border-b border-slate-200">
+                    <div class="flex items-center gap-2">
+                        <span class="text-[11px] font-black font-mono px-2 py-0.5 rounded bg-slate-900 text-white">#${idx + 1} of ${orders.length}</span>
+                        ${getStatusBadge(po.status)}
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <a href="/print-po.html?id=${po.id}" target="_blank" class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1 shadow-xs" title="Open Full Sheet Printable Version">
+                            <span>🖨️</span><span>Print Sheet</span>
+                        </a>
+                        <button type="button" onclick="openPOByIdInOrders('${po.id}', '${encodeURIComponent(docNumber)}')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-lg text-xs font-bold transition inline-flex items-center gap-1 shadow-xs cursor-pointer" title="View / Edit in Orders Table">
+                            <span>📋</span><span>Open in Table</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Company Header -->
+                <div class="text-center mb-4">
+                    <h1 class="text-xl sm:text-2xl font-black uppercase text-slate-950 tracking-wider">Vyuceutical OPC</h1>
+                    <p class="text-xs font-bold text-slate-700">B4 L5 Twig St., Sampaguita Village, Mambog II, Bacoor City, 4102 Cavite, Philippines</p>
+                    <p class="text-xs font-bold text-slate-700">TIN: 800-189-847-00000</p>
+                </div>
+
+                <!-- Document Title -->
+                <div class="text-center mb-6">
+                    <span class="text-base sm:text-lg font-black uppercase text-slate-950 underline underline-offset-4 tracking-widest">
+                        ${po.so_number ? 'SALES ORDER' : 'PURCHASE ORDER'}
+                    </span>
+                </div>
+
+                <!-- Metadata Grid -->
+                <div class="flex flex-col sm:flex-row justify-between items-start gap-4 mb-6 text-xs font-bold text-slate-800">
+                    <div class="sm:max-w-[60%] space-y-1">
+                        <div class="text-sm font-black text-slate-950 uppercase">${clientName}</div>
+                        <div class="text-slate-700">${clientAddress}</div>
+                        <div class="text-slate-700 font-mono">TIN: ${clientTin}</div>
+                    </div>
+                    <div class="sm:text-right space-y-1 font-medium sm:min-w-[35%]">
+                        <div class="text-sm font-black text-slate-950 font-mono">${docNumber}</div>
+                        ${customerPo ? `<div>Customer PO #: <span class="font-bold text-slate-900 font-mono">${customerPo}</span></div>` : ''}
+                        <div>Date: <span class="font-bold text-slate-900">${orderDate}</span></div>
+                        <div>Terms: <span class="font-bold text-slate-900">${terms}</span></div>
+                        <div>Delivery Date: <span class="font-bold text-slate-900">${deliveryDate}</span></div>
+                    </div>
+                </div>
+
+                <!-- Items Table Box -->
+                <div class="po-receipt-box p-3 sm:p-4 mb-6">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr class="border-b-2 border-slate-900 text-slate-900 font-black uppercase tracking-wider text-[11px]">
+                                    <th class="py-2 px-3">Description</th>
+                                    <th class="py-2 px-3 text-center">Net Content</th>
+                                    <th class="py-2 px-3 text-right">Quantity</th>
+                                    <th class="py-2 px-3 text-left">UOM</th>
+                                    ${canViewPrices ? `
+                                        <th class="py-2 px-3 text-right">Price</th>
+                                        <th class="py-2 px-3 text-right">Subtotal</th>
+                                    ` : `
+                                        <th class="py-2 px-3 text-right" colspan="2">Details</th>
+                                    `}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${itemsRows}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    ${canViewPrices ? `
+                        <!-- Financial Totals Block -->
+                        <div class="flex justify-end mt-4 pt-3 border-t border-slate-200">
+                            <table class="w-full sm:w-72 text-xs font-bold border-collapse">
+                                <tr>
+                                    <td class="py-1 text-right text-slate-600 pr-3">Subtotal</td>
+                                    <td class="py-1 text-right text-slate-900 font-mono">₱${subtotalVal.toFixed(2)}</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-1 text-right text-slate-600 pr-3">VAT</td>
+                                    <td class="py-1 text-right text-slate-900 font-mono">₱${taxVal.toFixed(2)}</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-1 text-right text-slate-600 pr-3">Discount</td>
+                                    <td class="py-1 text-right text-slate-900 font-mono">₱${discountVal.toFixed(2)}</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-1 text-right text-slate-600 pr-3">Payment Made</td>
+                                    <td class="py-1 text-right text-slate-900 font-mono">₱${paymentMadeVal.toFixed(2)}</td>
+                                </tr>
+                                <tr class="border-t-2 border-slate-900 font-black text-sm text-slate-950">
+                                    <td class="py-2 text-right pr-3 uppercase">Total Balance</td>
+                                    <td class="py-2 text-right font-mono text-indigo-900">₱${totalBalanceVal.toFixed(2)}</td>
+                                </tr>
+                            </table>
+                        </div>
+                    ` : ''}
+                </div>
+
+                ${po.notes ? `
+                    <!-- Order Notes Section -->
+                    <div class="mb-6 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                        <div class="font-black uppercase text-slate-700 text-[11px] mb-1">Order Notes / Instructions:</div>
+                        <div class="font-bold text-slate-900 whitespace-pre-wrap">${po.notes}</div>
+                    </div>
+                ` : ''}
+
+                <!-- Bank Details Footer (Matching print-po.html) -->
+                <div class="pt-4 border-t border-slate-200 text-xs text-slate-800">
+                    <div class="font-black text-slate-900 mb-2">Please make checks payable to / transfer payment to:</div>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                        <div class="p-2.5 bg-slate-50 border border-slate-300 border-l-4 border-l-slate-900 rounded font-bold">
+                            <div class="font-black text-slate-950 uppercase text-[11px]">BDO UNIBANK, INC.</div>
+                            <div class="text-[10px] text-slate-700">VYUCEUTICAL OPC</div>
+                            <div class="text-xs font-mono font-black text-sky-700 mt-1">0054-9801-4439</div>
+                            <div class="text-[9px] text-slate-500">Bacoor Cavite Branch</div>
+                        </div>
+                        <div class="p-2.5 bg-slate-50 border border-slate-300 border-l-4 border-l-slate-900 rounded font-bold">
+                            <div class="font-black text-slate-950 uppercase text-[11px]">BANK OF THE PHILIPPINE ISLANDS</div>
+                            <div class="text-[10px] text-slate-700">VYUCEUTICAL OPC</div>
+                            <div class="text-xs font-mono font-black text-sky-700 mt-1">0921-0082-62</div>
+                            <div class="text-[9px] text-slate-500">Bacoor Mambog Branch</div>
+                        </div>
+                        <div class="p-2.5 bg-slate-50 border border-slate-300 border-l-4 border-l-slate-900 rounded font-bold">
+                            <div class="font-black text-slate-950 uppercase text-[11px]">SECURITY BANK CORPORATION</div>
+                            <div class="text-[10px] text-slate-700">VYUCEUTICAL OPC</div>
+                            <div class="text-xs font-mono font-black text-sky-700 mt-1">0000-0538-9921-1</div>
+                            <div class="text-[9px] text-slate-500">Imus Cavite Branch</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-6 pt-3 border-t border-slate-100 flex flex-wrap justify-between items-center text-[10px] text-slate-400 font-mono">
+                    <span>NKB Quality Products System • PO ID: ${po.id}</span>
+                    <span>Confidential & Proprietary</span>
+                </div>
+            </article>
+        `;
+    }).join('');
+
+    // Attach IntersectionObserver to track live card index during scroll
+    setupPOMonitorObserver(orders);
+
+    // Attach Touch swipe listeners with zero transition
+    setupPOMonitorTouchSwipe();
+
+    // Reset index to top card
+    poMonitorCurrentIndex = 0;
+    updatePOMonitorCounter(0, orders.length);
+}
+
+/**
+ * Setup IntersectionObserver to track visible receipt as user scrolls/swipes
+ */
+function setupPOMonitorObserver(orders) {
+    if (poMonitorIntersectionObserver) {
+        poMonitorIntersectionObserver.disconnect();
+    }
+
+    const stack = document.getElementById('po-monitor-stack');
+    if (!stack || !orders || orders.length === 0) return;
+
+    poMonitorIntersectionObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                const idx = parseInt(entry.target.getAttribute('data-index') || '0', 10);
+                poMonitorCurrentIndex = idx;
+                updatePOMonitorCounter(idx, orders.length);
+
+                const jumpSelect = document.getElementById('po-monitor-jump-select');
+                const poId = entry.target.getAttribute('data-po-id');
+                if (jumpSelect && poId) {
+                    jumpSelect.value = poId;
+                }
+            }
+        });
+    }, {
+        root: stack,
+        threshold: 0.5
+    });
+
+    const cards = stack.querySelectorAll('.po-receipt-card');
+    cards.forEach(card => poMonitorIntersectionObserver.observe(card));
+}
+
+function updatePOMonitorCounter(currentIdx, totalCount) {
+    const counter = document.getElementById('po-monitor-counter');
+    if (counter) {
+        const current = totalCount > 0 ? (currentIdx + 1) : 0;
+        counter.textContent = `Receipt ${current} of ${totalCount}`;
+    }
+}
+
+/**
+ * Jump to specific receipt card index instantaneously with NO TRANSITION.
+ */
+function jumpPOMonitorToIndex(idx) {
+    const stack = document.getElementById('po-monitor-stack');
+    if (!stack) return;
+
+    const cards = stack.querySelectorAll('.po-receipt-card');
+    if (cards.length === 0) return;
+
+    const targetIdx = Math.max(0, Math.min(idx, cards.length - 1));
+    const targetCard = cards[targetIdx];
+    if (targetCard) {
+        poMonitorCurrentIndex = targetIdx;
+        // Zero transition: instant scroll assignment
+        stack.scrollTop = targetCard.offsetTop - stack.offsetTop;
+        updatePOMonitorCounter(targetIdx, cards.length);
+
+        const jumpSelect = document.getElementById('po-monitor-jump-select');
+        const poId = targetCard.getAttribute('data-po-id');
+        if (jumpSelect && poId) {
+            jumpSelect.value = poId;
+        }
+    }
+}
+window.jumpPOMonitorToIndex = jumpPOMonitorToIndex;
+
+function jumpPOMonitorPrev() {
+    jumpPOMonitorToIndex(poMonitorCurrentIndex - 1);
+}
+window.jumpPOMonitorPrev = jumpPOMonitorPrev;
+
+function jumpPOMonitorNext() {
+    jumpPOMonitorToIndex(poMonitorCurrentIndex + 1);
+}
+window.jumpPOMonitorNext = jumpPOMonitorNext;
+
+function jumpToPOMonitorById(poId) {
+    if (!poId) return;
+    const stack = document.getElementById('po-monitor-stack');
+    if (!stack) return;
+
+    const targetCard = stack.querySelector(`.po-receipt-card[data-po-id="${poId}"]`);
+    if (targetCard) {
+        const idx = parseInt(targetCard.getAttribute('data-index') || '0', 10);
+        jumpPOMonitorToIndex(idx);
+    }
+}
+window.jumpToPOMonitorById = jumpToPOMonitorById;
+
+function printCurrentPOMonitorReceipt() {
+    const stack = document.getElementById('po-monitor-stack');
+    if (!stack) return;
+    const currentCard = stack.querySelectorAll('.po-receipt-card')[poMonitorCurrentIndex];
+    if (currentCard) {
+        const poId = currentCard.getAttribute('data-po-id');
+        if (poId) {
+            window.open(`/print-po.html?id=${poId}`, '_blank');
+        }
+    } else {
+        NKB.showToast('No active receipt to print.', 'info');
+    }
+}
+window.printCurrentPOMonitorReceipt = printCurrentPOMonitorReceipt;
+
+function openCurrentPOInOrdersTab() {
+    const stack = document.getElementById('po-monitor-stack');
+    if (!stack) return;
+    const currentCard = stack.querySelectorAll('.po-receipt-card')[poMonitorCurrentIndex];
+    if (currentCard) {
+        const poId = currentCard.getAttribute('data-po-id');
+        openPOByIdInOrders(poId);
+    }
+}
+window.openCurrentPOInOrdersTab = openCurrentPOInOrdersTab;
+
+function openPOByIdInOrders(poId, docNum) {
+    switchTab('orders');
+    if (docNum) {
+        const searchInput = document.getElementById('filter-po-search');
+        if (searchInput) {
+            searchInput.value = decodeURIComponent(docNum);
+            loadOrders();
+        }
+    }
+}
+window.openPOByIdInOrders = openPOByIdInOrders;
+
+/**
+ * Vertical Touch Swipe detection with zero transition latency.
+ */
+function setupPOMonitorTouchSwipe() {
+    const stack = document.getElementById('po-monitor-stack');
+    if (!stack || stack.__touchSwipeBound) return;
+    stack.__touchSwipeBound = true;
+
+    let touchStartY = 0;
+    let touchStartX = 0;
+
+    stack.addEventListener('touchstart', (e) => {
+        if (e.touches && e.touches.length === 1) {
+            touchStartY = e.touches[0].clientY;
+            touchStartX = e.touches[0].clientX;
+        }
+    }, { passive: true });
+
+    stack.addEventListener('touchend', (e) => {
+        if (!e.changedTouches || e.changedTouches.length === 0) return;
+        const deltaY = touchStartY - e.changedTouches[0].clientY;
+        const deltaX = touchStartX - e.changedTouches[0].clientX;
+
+        // Ensure vertical gesture dominates horizontal gesture
+        if (Math.abs(deltaY) > 35 && Math.abs(deltaY) > Math.abs(deltaX) * 1.5) {
+            if (deltaY > 0) {
+                // Swiped up -> flip to next receipt
+                jumpPOMonitorNext();
+            } else {
+                // Swiped down -> flip to previous receipt
+                jumpPOMonitorPrev();
+            }
+        }
+    }, { passive: true });
+}
+
+// Keyboard shortcuts for PO Monitor: Up/Down arrow flips receipts instantly
+document.addEventListener('keydown', (e) => {
+    const view = document.getElementById('view-po-monitor');
+    if (!view || view.classList.contains('hidden')) return;
+
+    // Do not capture if user is typing inside an input or select
+    const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+    if (activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select') return;
+
+    if (e.key === 'ArrowDown' || e.key === 'PageDown') {
+        e.preventDefault();
+        jumpPOMonitorNext();
+    } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
+        e.preventDefault();
+        jumpPOMonitorPrev();
+    }
+});
+
+/**
+ * NON-SWIPABLE TABS ON LEFT SCREEN:
+ * The sidebar navigation stays firmly anchored on the left side of the screen.
+ * Swiping the front area (main content, receipts, tables) CANNOT drag or move tabs.
+ * Swiping / scrolling tabs is strictly confined to when the touch originates inside #admin-sidebar.
+ */
+(function initTabsSwipeProtection() {
+    let touchOriginatedInTabs = false;
+
+    document.addEventListener('touchstart', (e) => {
+        const sidebar = document.getElementById('admin-sidebar');
+        if (sidebar && (sidebar === e.target || sidebar.contains(e.target))) {
+            touchOriginatedInTabs = true;
+        } else {
+            touchOriginatedInTabs = false;
+        }
+    }, { passive: true });
+
+    document.addEventListener('touchmove', (e) => {
+        if (!touchOriginatedInTabs) {
+            // Touch started outside tabs (on the front of screen):
+            // Tabs section stays strictly locked in place on the left side.
+        }
+    }, { passive: true });
+})();
+
 
 
