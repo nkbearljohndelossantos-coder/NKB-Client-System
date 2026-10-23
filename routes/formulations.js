@@ -43,7 +43,7 @@ function authenticateInventoryApiKey(req, res, next) {
  * List all product formulations with confidentiality tags
  * Strictly restricted to authorized staff (Clients FORBIDDEN)
  */
-router.get('/', authenticateToken, requireRoles('SUPER_ADMIN', 'ADMIN', 'IT_ADMIN', 'CEO', 'PRODUCTION', 'INVENTORY'), (req, res) => {
+router.get('/', authenticateToken, requireRoles('SUPER_ADMIN', 'ADMIN', 'IT_ADMIN', 'CEO', 'PRODUCTION', 'INVENTORY', 'COMPOUNDING'), (req, res) => {
     try {
         const { search } = req.query;
         const list = getFormulations(db, { search });
@@ -62,7 +62,7 @@ router.get('/', authenticateToken, requireRoles('SUPER_ADMIN', 'ADMIN', 'IT_ADMI
  * GET /api/formulations/fms-status
  * Check live connection to FMS Formulation Management System
  */
-router.get('/fms-status', authenticateToken, requireRoles('SUPER_ADMIN', 'ADMIN', 'IT_ADMIN', 'CEO', 'PRODUCTION', 'INVENTORY'), async (req, res) => {
+router.get('/fms-status', authenticateToken, requireRoles('SUPER_ADMIN', 'ADMIN', 'IT_ADMIN', 'CEO', 'PRODUCTION', 'INVENTORY', 'COMPOUNDING'), async (req, res) => {
     try {
         const result = await fetchFmsFormulations(5000);
         return res.json({
@@ -87,7 +87,7 @@ router.get('/fms-status', authenticateToken, requireRoles('SUPER_ADMIN', 'ADMIN'
  * POST /api/formulations/sync-fms
  * Trigger live synchronization of authentic formulas directly from FMS API
  */
-router.post('/sync-fms', authenticateToken, requireRoles('SUPER_ADMIN', 'ADMIN', 'IT_ADMIN', 'CEO', 'PRODUCTION'), async (req, res) => {
+router.post('/sync-fms', authenticateToken, requireRoles('SUPER_ADMIN', 'ADMIN', 'IT_ADMIN', 'CEO', 'PRODUCTION', 'COMPOUNDING'), async (req, res) => {
     try {
         const result = await syncFmsToDatabase(db);
         try {
@@ -115,7 +115,7 @@ router.post('/sync-fms', authenticateToken, requireRoles('SUPER_ADMIN', 'ADMIN',
  * GET /api/formulations/:productId
  * Get detailed formulation with phase ingredients
  */
-router.get('/:productId', authenticateToken, requireRoles('SUPER_ADMIN', 'ADMIN', 'IT_ADMIN', 'CEO', 'PRODUCTION', 'INVENTORY'), (req, res) => {
+router.get('/:productId', authenticateToken, requireRoles('SUPER_ADMIN', 'ADMIN', 'IT_ADMIN', 'CEO', 'PRODUCTION', 'INVENTORY', 'COMPOUNDING'), (req, res) => {
     try {
         const { productId } = req.params;
         const formulation = getFormulationByProductId(db, productId);
@@ -132,7 +132,7 @@ router.get('/:productId', authenticateToken, requireRoles('SUPER_ADMIN', 'ADMIN'
  * POST /api/formulations
  * Create or update product formulation and its ingredients
  */
-router.post('/', authenticateToken, requireRoles('SUPER_ADMIN', 'ADMIN', 'IT_ADMIN', 'CEO', 'PRODUCTION'), (req, res) => {
+router.post('/', authenticateToken, requireRoles('SUPER_ADMIN', 'ADMIN', 'IT_ADMIN', 'CEO', 'PRODUCTION', 'COMPOUNDING'), (req, res) => {
     try {
         const updated = saveFormulation(db, req.body, req.user.id);
         logAudit({
@@ -188,7 +188,7 @@ router.get('/orders/:poId/breakdown', authenticateToken, (req, res) => {
  * POST /api/formulations/orders/:poId/convert
  * Trigger manual conversion or recalculation of raw materials for an order
  */
-router.post('/orders/:poId/convert', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'CEO', 'INVENTORY'), (req, res) => {
+router.post('/orders/:poId/convert', authenticateToken, requireRoles('ACCOUNTING', 'ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'CEO', 'INVENTORY', 'COMPOUNDING'), (req, res) => {
     try {
         const { poId } = req.params;
         const result = convertOrderToRawMaterials(db, poId, req.user.id);

@@ -209,7 +209,8 @@ function applyRoleBasedUI() {
         'PRODUCTION': { title: 'Production Supervisor', badge: 'bg-amber-900/80 text-amber-300 border-amber-700/50' },
         'WAREHOUSE': { title: 'Logistics & Warehouse', badge: 'bg-purple-900/80 text-purple-300 border-purple-700/50' },
         'ACCOUNTING': { title: 'Senior Accountant', badge: 'bg-emerald-900/80 text-emerald-300 border-emerald-700/50' },
-        'INVENTORY': { title: 'Inventory Officer', badge: 'bg-teal-900/80 text-teal-300 border-teal-700/50' }
+        'INVENTORY': { title: 'Inventory Officer', badge: 'bg-teal-900/80 text-teal-300 border-teal-700/50' },
+        'COMPOUNDING': { title: 'Compounding Specialist', badge: 'bg-violet-900/80 text-violet-300 border-violet-700/50' }
     };
 
     const config = roleMap[role] || { title: role };
@@ -242,7 +243,7 @@ function applyRoleBasedUI() {
     };
 
     // Operator accounts check: Operators must only see operation interface, hide client view link
-    const isOperator = ['PRODUCTION', 'WAREHOUSE', 'QC', 'INVENTORY', 'PURCHASING'].includes(role);
+    const isOperator = ['PRODUCTION', 'WAREHOUSE', 'QC', 'INVENTORY', 'PURCHASING', 'COMPOUNDING'].includes(role);
     const clientViewLink = document.getElementById('nav-client-view') || document.querySelector('a[href="/client.html"]');
     if (clientViewLink) {
         if (isOperator) {
@@ -252,12 +253,14 @@ function applyRoleBasedUI() {
         }
     }
 
-    // Rule 1: In ALL accounts EXCEPT Super Admin and Executives (CEO & COO), remove Lab & Formulations and Management
+    // Rule 1: In ALL accounts EXCEPT Super Admin, Executives (CEO & COO), and Compounding, remove Lab & Formulations
     const isSuperOrExecutive = ['SUPER_ADMIN', 'ADMIN', 'CEO', 'COO'].includes(role);
-    if (!isSuperOrExecutive) {
+    if (!isSuperOrExecutive && role !== 'COMPOUNDING') {
         hideGroup('lab');
-        hideGroup('management');
         hideTab('formulations');
+    }
+    if (!isSuperOrExecutive) {
+        hideGroup('management');
         hideTab('clients');
         hideTab('products');
         hideTab('users');
@@ -366,6 +369,31 @@ function applyRoleBasedUI() {
         hideTab('users');
         hideTab('audit');
         hideTab('it-management');
+    } else if (role === 'COMPOUNDING') {
+        // Compounding Specialist: manages raw materials & compounding formulations
+        hideGroup('finance');
+        hideGroup('management');
+        showGroup('lab');
+        showTab('formulations');
+        showTab('raw-materials');
+        showTab('orders');
+        showTab('job-orders');
+        showTab('production');
+        showTab('po-monitor');
+        hideTab('purchasing');
+        hideTab('deliveries');
+        hideTab('invoices');
+        hideTab('payments');
+        hideTab('payables');
+        hideTab('buffer');
+        hideTab('clients');
+        hideTab('products');
+        hideTab('users');
+        hideTab('reports');
+        hideTab('audit');
+        hideTab('apikeys');
+        hideTab('it-management');
+        switchTab('raw-materials');
     } else if (role === 'ACCOUNTING') {
         // Senior Accountant: remove Requisitions, IT Management, and Lab & Formulations.
         // Keep Clients and Cosmetic Products visible for Senior Accountant, while hiding Staff & Roles, Reports, Audit Trails, Developer API, and IT Management.
@@ -11803,6 +11831,7 @@ async function loadUsers() {
         'ADMIN': 'bg-indigo-100 text-indigo-800 border-indigo-200',
         'PURCHASING': 'bg-teal-100 text-teal-800 border-teal-200',
         'PRODUCTION': 'bg-amber-100 text-amber-800 border-amber-200',
+        'COMPOUNDING': 'bg-violet-100 text-violet-800 border-violet-200',
         'WAREHOUSE': 'bg-purple-100 text-purple-800 border-purple-200',
         'ACCOUNTING': 'bg-emerald-100 text-emerald-800 border-emerald-200',
         'INVENTORY': 'bg-teal-100 text-teal-800 border-teal-200',
@@ -11817,6 +11846,7 @@ async function loadUsers() {
         'ADMIN': '👑',
         'PURCHASING': '🛒',
         'PRODUCTION': '🧪',
+        'COMPOUNDING': '⚗️',
         'WAREHOUSE': '🚚',
         'ACCOUNTING': '💰',
         'INVENTORY': '📦',
@@ -12033,6 +12063,7 @@ async function openCreateUserModal() {
                         <select id="usr-role" onchange="toggleClientDropdown(this.value, 'client-select-container')" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 transition">
                             <option value="PURCHASING">🛒 Purchasing Department (Raw Materials & Requisitions)</option>
                             <option value="PRODUCTION">🧪 Production Supervisor (Formulas & Batches)</option>
+                            <option value="COMPOUNDING">⚗️ Compounding Specialist (Raw Materials & Mixing)</option>
                             <option value="QC">🔬 Quality Control Inspector (QC)</option>
                             <option value="WAREHOUSE">🚚 Logistics & Warehouse (Inventory & DR)</option>
                             <option value="ACCOUNTING">💰 Senior Accountant (Invoices & AR)</option>
@@ -12183,6 +12214,7 @@ async function openEditUserModal(userId) {
                             <select id="usr-edit-role" onchange="toggleClientDropdown(this.value, 'usr-edit-client-container')" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 transition">
                                 <option value="PURCHASING" ${u.role === 'PURCHASING' ? 'selected' : ''}>🛒 Purchasing Department</option>
                                 <option value="PRODUCTION" ${u.role === 'PRODUCTION' ? 'selected' : ''}>🧪 Production Supervisor</option>
+                                <option value="COMPOUNDING" ${u.role === 'COMPOUNDING' ? 'selected' : ''}>⚗️ Compounding Specialist</option>
                                 <option value="QC" ${u.role === 'QC' ? 'selected' : ''}>🔬 Quality Control Inspector</option>
                                 <option value="WAREHOUSE" ${u.role === 'WAREHOUSE' ? 'selected' : ''}>🚚 Logistics & Warehouse</option>
                                 <option value="ACCOUNTING" ${u.role === 'ACCOUNTING' ? 'selected' : ''}>💰 Senior Accountant</option>
@@ -16872,7 +16904,7 @@ let selectedRawMaterialId = null;
 let selectedRawMaterialIndex = 0;
 
 function isInventoryOfficerAccount() {
-    return Boolean(typeof NKB !== 'undefined' && NKB.user && NKB.user.role === 'INVENTORY');
+    return Boolean(typeof NKB !== 'undefined' && NKB.user && (NKB.user.role === 'INVENTORY' || NKB.user.role === 'COMPOUNDING'));
 }
 
 function updateInventoryShortcutsBarVisibility() {

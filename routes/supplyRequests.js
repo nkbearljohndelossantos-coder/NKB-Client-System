@@ -83,7 +83,7 @@ function restockBomMaterialsIfPresent(bomItemsJson, notesPrefix = '') {
  * GET /api/supply-requests
  * Retrieve all supply requisitions submitted by Inventory for Purchasing Department
  */
-router.get('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.PURCHASING, ROLES.INVENTORY, ROLES.QC, ROLES.CEO), (req, res) => {
+router.get('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.PURCHASING, ROLES.INVENTORY, ROLES.QC, ROLES.COMPOUNDING, ROLES.CEO), (req, res) => {
     try {
         const { status, urgency, search } = req.query;
 
@@ -139,7 +139,7 @@ router.get('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_ADMI
  * POST /api/supply-requests
  * Create a Bill of Materials (BOM) raw material requisition directly from Warehouse Inventory or Requisitions view
  */
-router.post('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.PURCHASING, ROLES.INVENTORY), (req, res) => {
+router.post('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.PURCHASING, ROLES.INVENTORY, ROLES.COMPOUNDING), (req, res) => {
     try {
         const { po_id, materials_needed, urgency = 'NORMAL', target_date, notes, affected_products, bom_items } = req.body || {};
 
@@ -228,7 +228,7 @@ router.post('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_ADM
  * GET /api/supply-requests/:id
  * Retrieve a single supply request by ID
  */
-router.get('/:id', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.PURCHASING, ROLES.INVENTORY, ROLES.QC, ROLES.CEO), (req, res) => {
+router.get('/:id', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.PURCHASING, ROLES.INVENTORY, ROLES.QC, ROLES.COMPOUNDING, ROLES.CEO), (req, res) => {
     const { id } = req.params;
     const reqItem = getEnrichedSupplyRequest(id);
 

@@ -406,8 +406,8 @@ router.get('/pending', authenticateToken, (req, res) => {
             }
         }
 
-        // 5. Production Department: Ready for Job Order / Compounding Batches & SO Queue Reminders
-        if (role === ROLES.SUPER_ADMIN || role === ROLES.IT_ADMIN || role === ROLES.ADMIN || role === ROLES.PRODUCTION) {
+        // 5. Production & Compounding Department: Ready for Job Order / Compounding Batches & SO Queue Reminders
+        if (role === ROLES.SUPER_ADMIN || role === ROLES.IT_ADMIN || role === ROLES.ADMIN || role === ROLES.PRODUCTION || role === ROLES.COMPOUNDING) {
             try {
                 const ordersRouter = require('./orders');
                 if (ordersRouter && typeof ordersRouter.evaluateOrderRemindersAndAutoPrioritize === 'function') {

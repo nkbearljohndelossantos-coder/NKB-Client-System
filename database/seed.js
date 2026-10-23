@@ -112,6 +112,7 @@ function seedDatabase() {
         insertUser.run(acctUserId, 'Senior Accountant', 'accounting@nkbmanufacturing.com', staffPasswordHash, 'Staff123!', 'ACCOUNTING', null, '+63 917 000 0004', '+639170000004');
         insertUser.run(uuidv4(), 'Inventory Officer', 'inventory@nkbmanufacturing.com', staffPasswordHash, 'Staff123!', 'INVENTORY', null, '+63 917 000 0009', '+639170000009');
         insertUser.run(uuidv4(), 'Purchasing Officer', 'purchasing@nkbmanufacturing.com', staffPasswordHash, 'Staff123!', 'PURCHASING', null, '+63 917 000 0005', '+639170000005');
+        insertUser.run(uuidv4(), 'Compounding Specialist', 'compounding@nkbmanufacturing.com', staffPasswordHash, 'Staff123!', 'COMPOUNDING', null, '+63 917 000 0010', '+639170000010');
         insertUser.run(clientUserId, 'Maria Santos (ABC Cosmetics)', 'client@example.com', clientPasswordHash, 'Client123!', 'CLIENT', clientId, '+63 917 123 4567', '+639171234567');
         insertUser.run(client2UserId, 'John Michael Reyes (Glow Essence)', 'glow@example.com', clientPasswordHash, 'Client123!', 'CLIENT', client2Id, '+63 918 987 6543', '+639189876543');
 

@@ -6,8 +6,8 @@ const { authenticateToken } = require('../middleware/auth');
 const { logAudit } = require('../services/auditService');
 const { getManilaDateTime } = require('../helpers/timezone');
 
-const ALLOWED_VIEW_ROLES = ['INVENTORY', 'PURCHASING', 'PRODUCTION', 'QC', 'WAREHOUSE', 'SUPER_ADMIN', 'ADMIN', 'CEO', 'COO', 'IT_ADMIN'];
-const ALLOWED_EDIT_ROLES = ['INVENTORY', 'PURCHASING', 'SUPER_ADMIN', 'ADMIN', 'CEO', 'COO', 'IT_ADMIN'];
+const ALLOWED_VIEW_ROLES = ['INVENTORY', 'PURCHASING', 'PRODUCTION', 'QC', 'WAREHOUSE', 'SUPER_ADMIN', 'ADMIN', 'CEO', 'COO', 'IT_ADMIN', 'COMPOUNDING'];
+const ALLOWED_EDIT_ROLES = ['INVENTORY', 'PURCHASING', 'COMPOUNDING', 'SUPER_ADMIN', 'ADMIN', 'CEO', 'COO', 'IT_ADMIN'];
 
 function computeStockStatus(currentStock, minLevel) {
     const stock = Number(currentStock) || 0;
@@ -180,7 +180,7 @@ router.post('/', authenticateToken, (req, res) => {
  */
 router.put('/:id', authenticateToken, (req, res) => {
     if (!ALLOWED_EDIT_ROLES.includes(req.user.role)) {
-        return res.status(403).json({ success: false, error: 'Only Inventory Officer, Purchasing, or Executives can update raw materials.' });
+        return res.status(403).json({ success: false, error: 'Only Inventory Officer, Purchasing, Compounding, or Executives can update raw materials.' });
     }
 
     const { id } = req.params;
@@ -392,7 +392,7 @@ router.post('/:id/adjust-stock', authenticateToken, (req, res) => {
  * DELETE /api/raw-materials/:id
  */
 router.delete('/:id', authenticateToken, (req, res) => {
-    if (!['INVENTORY', 'SUPER_ADMIN', 'ADMIN', 'CEO', 'COO', 'IT_ADMIN'].includes(req.user.role)) {
+    if (!['INVENTORY', 'COMPOUNDING', 'SUPER_ADMIN', 'ADMIN', 'CEO', 'COO', 'IT_ADMIN'].includes(req.user.role)) {
         return res.status(403).json({ success: false, error: 'Access denied.' });
     }
 

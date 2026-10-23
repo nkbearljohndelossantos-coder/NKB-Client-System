@@ -324,7 +324,7 @@ router.get('/:id', authenticateToken, (req, res) => {
  * POST /api/job-orders
  * Admin / Production creates Job Order from an approved PO
  */
-router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION'), (req, res) => {
+router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'COMPOUNDING'), (req, res) => {
     const { po_id, product_id, target_quantity, scheduled_start_date, scheduled_end_date, assigned_team, notes, create_all } = req.body;
 
     if (!po_id) {

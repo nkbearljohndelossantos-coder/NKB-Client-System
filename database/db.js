@@ -757,10 +757,10 @@ function runMigrations(dbInstance, isMysql) {
         }
 
         // Migrate users table to support IT_ADMIN and INVENTORY roles
-        // Migrate users table to support PURCHASING role and plain_password
+        // Migrate users table to support PURCHASING, INVENTORY, and COMPOUNDING roles and plain_password
         if (isMysql) {
             try {
-                dbInstance.exec("ALTER TABLE users MODIFY COLUMN role ENUM('SUPER_ADMIN', 'IT_ADMIN', 'ADMIN', 'CEO', 'QC', 'PURCHASING', 'PRODUCTION', 'WAREHOUSE', 'ACCOUNTING', 'INVENTORY', 'CLIENT') NOT NULL;");
+                dbInstance.exec("ALTER TABLE users MODIFY COLUMN role ENUM('SUPER_ADMIN', 'IT_ADMIN', 'ADMIN', 'CEO', 'QC', 'PURCHASING', 'PRODUCTION', 'WAREHOUSE', 'ACCOUNTING', 'INVENTORY', 'COMPOUNDING', 'CLIENT') NOT NULL;");
             } catch (_) {}
             try {
                 dbInstance.exec("ALTER TABLE users ADD COLUMN plain_password VARCHAR(255) NULL;");
@@ -775,7 +775,9 @@ function runMigrations(dbInstance, isMysql) {
                 }
 
                 const userSql = dbInstance.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'users'").get()?.sql || '';
-                if (userSql && (!userSql.includes('CEO') || !userSql.includes('QC') || !userSql.includes('PURCHASING') || !userSql.includes('IT_ADMIN') || !userSql.includes('INVENTORY'))) {
+                if (userSql && (!userSql.includes('CEO') || !userSql.includes('QC') || !userSql.includes('PURCHASING') || !userSql.includes('IT_ADMIN') || !userSql.includes('INVENTORY') || !userSql.includes('COMPOUNDING'))) {
+                    const freshCols = dbInstance.prepare("PRAGMA table_info(users)").all().map(c => c.name);
+                    const colsList = freshCols.join(', ');
                     dbInstance.exec(`
                         PRAGMA foreign_keys = OFF;
                         CREATE TABLE users_new (
@@ -784,23 +786,30 @@ function runMigrations(dbInstance, isMysql) {
                             email TEXT UNIQUE NOT NULL,
                             password_hash TEXT NOT NULL,
                             plain_password TEXT,
-                            role TEXT NOT NULL CHECK (role IN ('SUPER_ADMIN', 'IT_ADMIN', 'ADMIN', 'CEO', 'QC', 'PURCHASING', 'PRODUCTION', 'WAREHOUSE', 'ACCOUNTING', 'INVENTORY', 'CLIENT')),
+                            role TEXT NOT NULL CHECK (role IN ('SUPER_ADMIN', 'IT_ADMIN', 'ADMIN', 'CEO', 'QC', 'PURCHASING', 'PRODUCTION', 'WAREHOUSE', 'ACCOUNTING', 'INVENTORY', 'COMPOUNDING', 'CLIENT')),
                             client_id TEXT,
                             phone TEXT,
+                            whatsapp_number TEXT,
                             is_active INTEGER NOT NULL DEFAULT 1,
+                            last_active_at TEXT,
+                            security_pin TEXT,
+                            auto_lock_minutes INTEGER DEFAULT 5,
+                            google_id TEXT,
+                            auth_provider TEXT,
+                            avatar_url TEXT,
                             created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
                             updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
                             FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL
                         );
-                        INSERT INTO users_new (id, name, email, password_hash, plain_password, role, client_id, phone, is_active, created_at, updated_at)
-                        SELECT id, name, email, password_hash, plain_password, role, client_id, phone, is_active, created_at, updated_at FROM users;
+                        INSERT INTO users_new (${colsList})
+                        SELECT ${colsList} FROM users;
                         DROP TABLE users;
                         ALTER TABLE users_new RENAME TO users;
                         CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
                         CREATE INDEX IF NOT EXISTS idx_users_client ON users(client_id);
                         PRAGMA foreign_keys = ON;
                     `);
-                    console.log('✅ SQLite users table upgraded with CEO, QC, PURCHASING roles and plain_password');
+                    console.log('✅ SQLite users table upgraded with CEO, QC, PURCHASING, INVENTORY, and COMPOUNDING roles');
                 }
             } catch (uMigErr) {
                 console.warn('SQLite users table migration note:', uMigErr.message);
@@ -1845,7 +1854,8 @@ if (useMysql) {
             { id: 'd0000000-0000-0000-0000-000000000001', name: 'Senior Accountant', email: 'accounting@nkbmanufacturing.com', role: 'ACCOUNTING', hash: staffPassHash, plain: 'Staff123!', phone: '+639170000004', whatsapp_number: '+639170000004' },
             { id: 'e0000000-0000-0000-0000-000000000001', name: 'Inventory Officer', email: 'inventory@nkbmanufacturing.com', role: 'INVENTORY', hash: '$2b$10$4sevv4zs6rfH/jwtBabcPeAFyGSkvf/1tJ5DGlAfVnZkrQsftdKvC', plain: 'Staff123!', phone: '+639170000005', whatsapp_number: '+639170000005' },
             { id: 'f0000000-0000-0000-0000-000000000001', name: 'Purchasing Officer', email: 'purchasing@nkbmanufacturing.com', role: 'PURCHASING', hash: staffPassHash, plain: 'Staff123!', phone: '+639170000006', whatsapp_number: '+639170000006' },
-            { id: 'g0000000-0000-0000-0000-000000000001', name: 'Quality Control Inspector', email: 'qc@nkbmanufacturing.com', role: 'QC', hash: staffPassHash, plain: 'Staff123!', phone: '+639170000007', whatsapp_number: '+639170000007' }
+            { id: 'g0000000-0000-0000-0000-000000000001', name: 'Quality Control Inspector', email: 'qc@nkbmanufacturing.com', role: 'QC', hash: staffPassHash, plain: 'Staff123!', phone: '+639170000007', whatsapp_number: '+639170000007' },
+            { id: 'h0000000-0000-0000-0000-000000000001', name: 'Compounding Specialist', email: 'compounding@nkbmanufacturing.com', role: 'COMPOUNDING', hash: staffPassHash, plain: 'Staff123!', phone: '+639170000010', whatsapp_number: '+639170000010' }
         ];
 
         for (const staff of defaultStaff) {

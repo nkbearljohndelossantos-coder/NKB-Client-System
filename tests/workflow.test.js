@@ -5295,6 +5295,132 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.ok(adminJs.includes("hideTab('po-monitor')"), 'admin.js must hide po-monitor for non-authorized roles');
     });
 
+    test('TEST 99: Role for Compounding: Raw Materials & Formulations Management', async () => {
+        const { ROLES, normalizeRole } = require('../middleware/rbac');
+
+        // 1. Verify Role Definition & Aliases
+        assert.strictEqual(ROLES.COMPOUNDING, 'COMPOUNDING');
+        assert.strictEqual(normalizeRole('COMPOUNDING'), 'COMPOUNDING');
+        assert.strictEqual(normalizeRole('compounding'), 'COMPOUNDING');
+        assert.strictEqual(normalizeRole('COMPOUNDER'), 'COMPOUNDING');
+        assert.strictEqual(normalizeRole('COMPOUNDING_OPERATOR'), 'COMPOUNDING');
+        assert.strictEqual(normalizeRole('COMPOUNDING_SPECIALIST'), 'COMPOUNDING');
+
+        // 2. Authenticate as Compounding Specialist
+        const compoundingToken = getAuthToken('COMPOUNDING');
+        assert.ok(compoundingToken, 'Compounding Specialist JWT must be generated');
+
+        // 3. Compounding Specialist can list raw materials inventory
+        const listRes = await request(app)
+            .get('/api/raw-materials')
+            .set('Authorization', `Bearer ${compoundingToken}`);
+        assert.strictEqual(listRes.status, 200);
+        assert.strictEqual(listRes.body.success, true);
+        assert.ok(Array.isArray(listRes.body.data));
+
+        // 4. Compounding Specialist can create a new raw material
+        const newCode = `CMP-TEST-${Date.now().toString().slice(-4)}`;
+        const createRes = await request(app)
+            .post('/api/raw-materials')
+            .set('Authorization', `Bearer ${compoundingToken}`)
+            .send({
+                material_code: newCode,
+                material_name: 'Compounding Active Emulsifier FEA15',
+                category: 'Chemical Additives',
+                supplier: 'Brenntag Phils',
+                current_stock: 120.5,
+                unit: 'kg',
+                minimum_stock_level: 25.0,
+                unit_cost: 450.0,
+                location: 'Aisle C-3 Mixing Tank',
+                batch_lot_number: 'LOT-CMP-2026-X',
+                notes: 'Dedicated compounding stabilizer'
+            });
+        assert.strictEqual(createRes.status, 201);
+        assert.strictEqual(createRes.body.success, true);
+        const createdMat = createRes.body.data;
+        assert.strictEqual(createdMat.material_code, newCode);
+
+        // 5. Compounding Specialist can update raw material
+        const updateRes = await request(app)
+            .put(`/api/raw-materials/${createdMat.id}`)
+            .set('Authorization', `Bearer ${compoundingToken}`)
+            .send({
+                current_stock: 150.0,
+                location: 'Aisle C-3 Tank Alpha (Compounding Line)'
+            });
+        assert.strictEqual(updateRes.status, 200);
+        assert.strictEqual(updateRes.body.success, true);
+        assert.strictEqual(Number(updateRes.body.data.current_stock), 150.0);
+
+        // 6. Compounding Specialist can adjust stock (Issue/Consume to mixing)
+        const adjustRes = await request(app)
+            .post(`/api/raw-materials/${createdMat.id}/adjust-stock`)
+            .set('Authorization', `Bearer ${compoundingToken}`)
+            .send({
+                adjustment_type: 'DEDUCT',
+                quantity: 10.0,
+                reason: 'Mixing 500kg sunscreen batch #BAT-2026-09'
+            });
+        assert.strictEqual(adjustRes.status, 200);
+        assert.strictEqual(adjustRes.body.success, true);
+        assert.strictEqual(Number(adjustRes.body.data.current_stock), 140.0);
+
+        // 7. Compounding Specialist can toggle fast-moving tag
+        const toggleRes = await request(app)
+            .post(`/api/raw-materials/${createdMat.id}/toggle-fast-moving`)
+            .set('Authorization', `Bearer ${compoundingToken}`)
+            .send({ is_fast_moving: 1 });
+        assert.strictEqual(toggleRes.status, 200);
+        assert.strictEqual(Number(toggleRes.body.data.is_fast_moving), 1);
+
+        // 8. Compounding Specialist can view formulations and product recipe ingredients
+        const formRes = await request(app)
+            .get('/api/formulations')
+            .set('Authorization', `Bearer ${compoundingToken}`);
+        assert.strictEqual(formRes.status, 200);
+        assert.strictEqual(formRes.body.success, true);
+
+        // 9. Compounding Specialist can trigger order conversion to raw materials
+        const samplePo = db.prepare("SELECT id FROM purchase_orders WHERE status NOT IN ('VOIDED', 'CANCELLED') LIMIT 1").get();
+        if (samplePo) {
+            const convRes = await request(app)
+                .post(`/api/formulations/orders/${samplePo.id}/convert`)
+                .set('Authorization', `Bearer ${compoundingToken}`)
+                .send({});
+            assert.strictEqual(convRes.status, 200);
+            assert.strictEqual(convRes.body.success, true);
+        }
+
+        // 10. Compounding Specialist is prohibited from commercial finance actions (e.g. creating invoices)
+        const unbilledDR = db.prepare("SELECT id FROM delivery_receipts WHERE status = 'ACCEPTED' LIMIT 1").get();
+        if (unbilledDR) {
+            const failInvRes = await request(app)
+                .post(`/api/invoices/from-dr/${unbilledDR.id}`)
+                .set('Authorization', `Bearer ${compoundingToken}`)
+                .send({});
+            assert.strictEqual(failInvRes.status, 403);
+        }
+
+        // 11. Admin can create a new user with role COMPOUNDING
+        const newStaffEmail = `compounder_${Date.now()}@nkbmanufacturing.com`;
+        const createStaffRes = await request(app)
+            .post('/api/users')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                name: 'Carlos Mixer',
+                email: newStaffEmail,
+                password: 'StaffPassword123!',
+                role: 'COMPOUNDING'
+            });
+        assert.strictEqual(createStaffRes.status, 201);
+        assert.strictEqual(createStaffRes.body.data.role, 'COMPOUNDING');
+
+        // Cleanup test raw material
+        db.prepare('DELETE FROM raw_materials_inventory WHERE id = ?').run(createdMat.id);
+        db.prepare('DELETE FROM users WHERE email = ?').run(newStaffEmail);
+    });
+
     after(() => {
         try {
             realtimeSyncService.closeAllClients();

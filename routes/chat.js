@@ -81,7 +81,8 @@ router.get('/contacts', authenticateToken, (req, res) => {
             { id: 'role-accounting', name: 'Accounting Department', role: 'ACCOUNTING', avatar: '💰', desc: 'Invoices, credit limits & payment approvals' },
             { id: 'role-purchasing', name: 'Purchasing Department', role: 'PURCHASING', avatar: '🛒', desc: 'Raw material procurement & supplier management' },
             { id: 'role-inventory', name: 'Inventory & Materials', role: 'INVENTORY', avatar: '📦', desc: 'Stock availability & warehouse chemicals' },
-            { id: 'role-production', name: 'Production & Compounding', role: 'PRODUCTION', avatar: '🧪', desc: 'Batches, job orders & formula mixing' },
+            { id: 'role-production', name: 'Production Department', role: 'PRODUCTION', avatar: '🧪', desc: 'Batches, job orders & bottling lines' },
+            { id: 'role-compounding', name: 'Compounding Department', role: 'COMPOUNDING', avatar: '⚗️', desc: 'Raw material compounding, formula mixing & stock control' },
             { id: 'role-warehouse', name: 'Logistics & Warehouse', role: 'WAREHOUSE', avatar: '🚚', desc: 'Delivery receipts, dispatching & dispatch fleets' },
             { id: 'role-admin', name: 'Executive Administration', role: 'ADMIN', avatar: '👑', desc: 'Executive oversight & operational directives' }
         ];

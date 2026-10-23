@@ -346,7 +346,7 @@ router.get('/lookups', ...authorizeITAdmin, (req, res) => {
                     sales_invoices: ['DRAFT', 'ISSUED', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'CANCELLED'],
                     payments: ['PENDING', 'VERIFIED', 'REJECTED', 'CANCELLED'],
                     cheque_payables: ['PENDING_COO_APPROVAL', 'CONFIRMED', 'ISSUED', 'CLEARED', 'REJECTED', 'VOIDED'],
-                    users: ['SUPER_ADMIN', 'IT_ADMIN', 'ADMIN', 'CEO', 'QC', 'PURCHASING', 'PRODUCTION', 'WAREHOUSE', 'ACCOUNTING', 'INVENTORY', 'CLIENT'],
+                    users: ['SUPER_ADMIN', 'IT_ADMIN', 'ADMIN', 'CEO', 'QC', 'PURCHASING', 'PRODUCTION', 'WAREHOUSE', 'ACCOUNTING', 'INVENTORY', 'COMPOUNDING', 'CLIENT'],
                     api_keys: ['ACTIVE', 'REVOKED', 'EXPIRED']
                 }
             }
