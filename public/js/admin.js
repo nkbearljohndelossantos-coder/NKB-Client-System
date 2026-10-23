@@ -18427,6 +18427,44 @@ function renderPOMonitorReceipts(orders) {
             </tr>
         `;
 
+        // Mobile-adapted itemized cards (< 640px)
+        const mobileItemsList = items.length > 0 ? items.map((it, itIdx) => {
+            const qty = Number(it.target_quantity || it.quantity || 0);
+            const unit = it.unit || 'pcs';
+            const size = it.size || it.size_ml || '-';
+            const price = Number(it.unit_price || 0);
+            const lineSubtotal = qty * price;
+
+            return `
+                <div class="p-2.5 bg-slate-50/90 rounded-xl border border-slate-200/90 text-xs shadow-2xs mb-2 last:mb-0">
+                    <div class="flex items-start justify-between gap-2">
+                        <div class="flex-1 min-w-0">
+                            <div class="font-extrabold uppercase text-slate-950 text-xs leading-snug break-words">${it.product_name || 'Product'}</div>
+                            <div class="flex flex-wrap items-center gap-1 my-1.5 text-[10px] font-mono">
+                                <span class="bg-white px-1.5 py-0.5 rounded border border-slate-300 font-bold text-slate-700">SKU: ${it.sku || 'N/A'}</span>
+                                ${it.formula_code ? `<span class="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-200 font-bold">FC: ${it.formula_code}</span>` : ''}
+                                ${size && size !== '-' ? `<span class="bg-amber-50 text-amber-800 px-1.5 py-0.5 rounded border border-amber-200 font-bold">Size: ${size}</span>` : ''}
+                            </div>
+                        </div>
+                        <div class="text-right flex-shrink-0">
+                            <div class="text-xs font-black font-mono text-slate-950">${NKB.formatNumber(qty)} <span class="text-[10px] text-slate-500 font-normal">${unit}</span></div>
+                            ${canViewPrices ? `<div class="text-[10px] font-mono text-slate-600 font-bold mt-0.5">@ ₱${price.toFixed(2)}</div>` : ''}
+                        </div>
+                    </div>
+                    ${canViewPrices ? `
+                        <div class="pt-1.5 mt-1 border-t border-slate-200/80 flex justify-between items-center text-xs">
+                            <span class="text-slate-500 font-bold text-[10px] uppercase">Line Subtotal:</span>
+                            <span class="font-black font-mono text-slate-950 text-xs">₱${lineSubtotal.toFixed(2)}</span>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }).join('') : `
+            <div class="py-4 text-center text-slate-400 italic text-xs bg-slate-50 rounded-xl">
+                No order line items recorded
+            </div>
+        `;
+
         // Financial calculations
         const subtotalVal = (po.subtotal !== null && po.subtotal !== undefined) ? Number(po.subtotal) : subtotalCalc;
         const taxVal = Number(po.tax_amount || 0);
@@ -18436,56 +18474,69 @@ function renderPOMonitorReceipts(orders) {
         const totalBalanceVal = Math.max(0, grandTotalVal - paymentMadeVal);
 
         return `
-            <article class="po-receipt-card p-4 sm:p-8" id="po-receipt-card-${idx}" data-po-id="${po.id}" data-index="${idx}">
+            <article class="po-receipt-card p-3 sm:p-8" id="po-receipt-card-${idx}" data-po-id="${po.id}" data-index="${idx}">
                 <!-- Quick Card Header / Status / Direct Actions -->
-                <div class="flex flex-wrap items-center justify-between gap-2 pb-4 mb-4 border-b border-slate-200">
-                    <div class="flex items-center gap-2">
-                        <span class="text-[11px] font-black font-mono px-2 py-0.5 rounded bg-slate-900 text-white">#${idx + 1} of ${orders.length}</span>
+                <div class="flex flex-wrap items-center justify-between gap-2 pb-3 mb-3 sm:pb-4 sm:mb-4 border-b border-slate-200">
+                    <div class="flex items-center gap-1.5 sm:gap-2">
+                        <span class="text-[10px] sm:text-[11px] font-black font-mono px-2 py-0.5 rounded bg-slate-900 text-white">#${idx + 1} of ${orders.length}</span>
                         ${getStatusBadge(po.status)}
                     </div>
-                    <div class="flex items-center gap-2">
-                        <a href="/print-po.html?id=${po.id}" target="_blank" class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-1 shadow-xs" title="Open Full Sheet Printable Version">
-                            <span>🖨️</span><span>Print Sheet</span>
+                    <div class="flex items-center gap-1.5 sm:gap-2">
+                        <a href="/print-po.html?id=${po.id}" target="_blank" class="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-[11px] sm:text-xs font-bold transition inline-flex items-center gap-1 shadow-xs" title="Open Full Sheet Printable Version">
+                            <span>🖨️</span><span>Print</span>
                         </a>
-                        <button type="button" onclick="openPOByIdInOrders('${po.id}', '${encodeURIComponent(docNumber)}')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-lg text-xs font-bold transition inline-flex items-center gap-1 shadow-xs cursor-pointer" title="View / Edit in Orders Table">
-                            <span>📋</span><span>Open in Table</span>
+                        <button type="button" onclick="openPOByIdInOrders('${po.id}', '${encodeURIComponent(docNumber)}')" class="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-lg text-[11px] sm:text-xs font-bold transition inline-flex items-center gap-1 shadow-xs cursor-pointer" title="View / Edit in Orders Table">
+                            <span>📋</span><span>Orders Table</span>
                         </button>
                     </div>
                 </div>
 
                 <!-- Company Header -->
-                <div class="text-center mb-4">
-                    <h1 class="text-xl sm:text-2xl font-black uppercase text-slate-950 tracking-wider">Vyuceutical OPC</h1>
-                    <p class="text-xs font-bold text-slate-700">B4 L5 Twig St., Sampaguita Village, Mambog II, Bacoor City, 4102 Cavite, Philippines</p>
-                    <p class="text-xs font-bold text-slate-700">TIN: 800-189-847-00000</p>
+                <div class="text-center mb-3 sm:mb-4">
+                    <h1 class="text-lg sm:text-2xl font-black uppercase text-slate-950 tracking-wider">Vyuceutical OPC</h1>
+                    <p class="text-[11px] sm:text-xs font-bold text-slate-700">B4 L5 Twig St., Sampaguita Village, Mambog II, Bacoor City, 4102 Cavite, Philippines</p>
+                    <p class="text-[11px] sm:text-xs font-bold text-slate-700 font-mono">TIN: 800-189-847-00000</p>
                 </div>
 
                 <!-- Document Title -->
-                <div class="text-center mb-6">
-                    <span class="text-base sm:text-lg font-black uppercase text-slate-950 underline underline-offset-4 tracking-widest">
+                <div class="text-center mb-4 sm:mb-6">
+                    <span class="text-sm sm:text-lg font-black uppercase text-slate-950 underline underline-offset-4 tracking-widest">
                         ${po.so_number ? 'SALES ORDER' : 'PURCHASE ORDER'}
                     </span>
                 </div>
 
-                <!-- Metadata Grid -->
-                <div class="flex flex-col sm:flex-row justify-between items-start gap-4 mb-6 text-xs font-bold text-slate-800">
-                    <div class="sm:max-w-[60%] space-y-1">
-                        <div class="text-sm font-black text-slate-950 uppercase">${clientName}</div>
-                        <div class="text-slate-700">${clientAddress}</div>
-                        <div class="text-slate-700 font-mono">TIN: ${clientTin}</div>
+                <!-- Metadata Grid: Responsive & High Contrast on All Devices -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4 mb-4 sm:mb-6 text-xs text-slate-800 bg-slate-50/90 p-3 sm:p-4 rounded-xl border border-slate-200/80">
+                    <div class="space-y-1">
+                        <div class="text-[10px] font-black uppercase tracking-wider text-slate-500">Customer Details</div>
+                        <div class="text-xs sm:text-sm font-black text-slate-950 uppercase">${clientName}</div>
+                        <div class="text-[11px] sm:text-xs text-slate-700 font-medium flex items-start gap-1">
+                            <span class="text-slate-400">📍</span><span>${clientAddress}</span>
+                        </div>
+                        <div class="text-[11px] sm:text-xs text-slate-700 font-mono font-bold flex items-center gap-1">
+                            <span class="text-slate-400">🆔</span><span>TIN: ${clientTin}</span>
+                        </div>
                     </div>
-                    <div class="sm:text-right space-y-1 font-medium sm:min-w-[35%]">
-                        <div class="text-sm font-black text-slate-950 font-mono">${docNumber}</div>
-                        ${customerPo ? `<div>Customer PO #: <span class="font-bold text-slate-900 font-mono">${customerPo}</span></div>` : ''}
-                        <div>Date: <span class="font-bold text-slate-900">${orderDate}</span></div>
-                        <div>Terms: <span class="font-bold text-slate-900">${terms}</span></div>
-                        <div>Delivery Date: <span class="font-bold text-slate-900">${deliveryDate}</span></div>
+                    <div class="space-y-1 sm:text-right border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-200/60 font-medium">
+                        <div class="text-[10px] font-black uppercase tracking-wider text-slate-500">Order Reference</div>
+                        <div class="text-xs sm:text-sm font-black text-slate-950 font-mono">${docNumber}</div>
+                        ${customerPo ? `<div class="text-[11px] sm:text-xs text-slate-700">Customer PO #: <span class="font-bold text-slate-950 font-mono">${customerPo}</span></div>` : ''}
+                        <div class="text-[11px] sm:text-xs text-slate-700">Date: <span class="font-bold text-slate-950">${orderDate}</span></div>
+                        <div class="text-[11px] sm:text-xs text-slate-700">Terms: <span class="font-bold text-slate-950">${terms}</span></div>
+                        <div class="text-[11px] sm:text-xs text-slate-700">Delivery Date: <span class="font-bold text-slate-950">${deliveryDate}</span></div>
                     </div>
                 </div>
 
-                <!-- Items Table Box -->
-                <div class="po-receipt-box p-3 sm:p-4 mb-6">
-                    <div class="overflow-x-auto">
+                <!-- Items Box: Dual-Adaptive for Device -->
+                <div class="po-receipt-box p-2.5 sm:p-4 mb-4 sm:mb-6">
+                    <!-- Mobile View: Itemized Cards (< 640px) -->
+                    <div class="sm:hidden space-y-2 mb-2">
+                        <div class="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Ordered Line Items (${items.length})</div>
+                        ${mobileItemsList}
+                    </div>
+
+                    <!-- Desktop & Tablet View: Formal Receipt Table (>= 640px) -->
+                    <div class="hidden sm:block overflow-x-auto">
                         <table class="w-full text-left text-xs border-collapse">
                             <thead>
                                 <tr class="border-b-2 border-slate-900 text-slate-900 font-black uppercase tracking-wider text-[11px]">
@@ -18509,7 +18560,7 @@ function renderPOMonitorReceipts(orders) {
 
                     ${canViewPrices ? `
                         <!-- Financial Totals Block -->
-                        <div class="flex justify-end mt-4 pt-3 border-t border-slate-200">
+                        <div class="flex justify-end mt-3 sm:mt-4 pt-3 border-t border-slate-200">
                             <table class="w-full sm:w-72 text-xs font-bold border-collapse">
                                 <tr>
                                     <td class="py-1 text-right text-slate-600 pr-3">Subtotal</td>
@@ -18538,38 +18589,69 @@ function renderPOMonitorReceipts(orders) {
 
                 ${po.notes ? `
                     <!-- Order Notes Section -->
-                    <div class="mb-6 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
-                        <div class="font-black uppercase text-slate-700 text-[11px] mb-1">Order Notes / Instructions:</div>
-                        <div class="font-bold text-slate-900 whitespace-pre-wrap">${po.notes}</div>
+                    <div class="mb-4 sm:mb-6 p-2.5 sm:p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                        <div class="font-black uppercase text-slate-700 text-[10px] sm:text-[11px] mb-1">Order Notes / Instructions:</div>
+                        <div class="font-bold text-slate-900 whitespace-pre-wrap text-[11px] sm:text-xs">${po.notes}</div>
                     </div>
                 ` : ''}
 
-                <!-- Bank Details Footer (Matching print-po.html) -->
-                <div class="pt-4 border-t border-slate-200 text-xs text-slate-800">
-                    <div class="font-black text-slate-900 mb-2">Please make checks payable to / transfer payment to:</div>
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                        <div class="p-2.5 bg-slate-50 border border-slate-300 border-l-4 border-l-slate-900 rounded font-bold">
-                            <div class="font-black text-slate-950 uppercase text-[11px]">BDO UNIBANK, INC.</div>
-                            <div class="text-[10px] text-slate-700">VYUCEUTICAL OPC</div>
-                            <div class="text-xs font-mono font-black text-sky-700 mt-1">0054-9801-4439</div>
-                            <div class="text-[9px] text-slate-500">Bacoor Cavite Branch</div>
+                <!-- Bank Details Footer (Matching print-po.html with 1-Tap Copy on Mobile) -->
+                <div class="pt-3 sm:pt-4 border-t border-slate-200 text-xs text-slate-800">
+                    <div class="font-black text-slate-900 mb-2 flex items-center justify-between">
+                        <span>Please make checks payable to / transfer payment to:</span>
+                        <span class="text-[10px] text-slate-400 hidden sm:inline">Tap copy to clipboard</span>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-2.5">
+                        <div class="p-2 sm:p-2.5 bg-slate-50 border border-slate-300 border-l-4 border-l-slate-900 rounded font-bold flex items-center justify-between sm:block">
+                            <div>
+                                <div class="font-black text-slate-950 uppercase text-[10px] sm:text-[11px]">BDO UNIBANK, INC.</div>
+                                <div class="text-[9.5px] sm:text-[10px] text-slate-700">VYUCEUTICAL OPC</div>
+                                <div class="text-xs font-mono font-black text-sky-700 mt-0.5">0054-9801-4439</div>
+                                <div class="text-[9px] text-slate-500">Bacoor Cavite Branch</div>
+                            </div>
+                            <button type="button" onclick="copyBankAccountNumber('0054-9801-4439', 'BDO')" class="sm:hidden px-2 py-1 bg-white border border-slate-300 rounded text-[10px] font-bold text-slate-700 active:bg-slate-200 shadow-2xs cursor-pointer" title="Copy BDO Account Number">
+                                📋 Copy
+                            </button>
                         </div>
-                        <div class="p-2.5 bg-slate-50 border border-slate-300 border-l-4 border-l-slate-900 rounded font-bold">
-                            <div class="font-black text-slate-950 uppercase text-[11px]">BANK OF THE PHILIPPINE ISLANDS</div>
-                            <div class="text-[10px] text-slate-700">VYUCEUTICAL OPC</div>
-                            <div class="text-xs font-mono font-black text-sky-700 mt-1">0921-0082-62</div>
-                            <div class="text-[9px] text-slate-500">Bacoor Mambog Branch</div>
+                        <div class="p-2 sm:p-2.5 bg-slate-50 border border-slate-300 border-l-4 border-l-slate-900 rounded font-bold flex items-center justify-between sm:block">
+                            <div>
+                                <div class="font-black text-slate-950 uppercase text-[10px] sm:text-[11px]">BANK OF THE PHILIPPINE ISLANDS</div>
+                                <div class="text-[9.5px] sm:text-[10px] text-slate-700">VYUCEUTICAL OPC</div>
+                                <div class="text-xs font-mono font-black text-sky-700 mt-0.5">0921-0082-62</div>
+                                <div class="text-[9px] text-slate-500">Bacoor Mambog Branch</div>
+                            </div>
+                            <button type="button" onclick="copyBankAccountNumber('0921-0082-62', 'BPI')" class="sm:hidden px-2 py-1 bg-white border border-slate-300 rounded text-[10px] font-bold text-slate-700 active:bg-slate-200 shadow-2xs cursor-pointer" title="Copy BPI Account Number">
+                                📋 Copy
+                            </button>
                         </div>
-                        <div class="p-2.5 bg-slate-50 border border-slate-300 border-l-4 border-l-slate-900 rounded font-bold">
-                            <div class="font-black text-slate-950 uppercase text-[11px]">SECURITY BANK CORPORATION</div>
-                            <div class="text-[10px] text-slate-700">VYUCEUTICAL OPC</div>
-                            <div class="text-xs font-mono font-black text-sky-700 mt-1">0000-0538-9921-1</div>
-                            <div class="text-[9px] text-slate-500">Imus Cavite Branch</div>
+                        <div class="p-2 sm:p-2.5 bg-slate-50 border border-slate-300 border-l-4 border-l-slate-900 rounded font-bold flex items-center justify-between sm:block">
+                            <div>
+                                <div class="font-black text-slate-950 uppercase text-[10px] sm:text-[11px]">SECURITY BANK CORPORATION</div>
+                                <div class="text-[9.5px] sm:text-[10px] text-slate-700">VYUCEUTICAL OPC</div>
+                                <div class="text-xs font-mono font-black text-sky-700 mt-0.5">0000-0538-9921-1</div>
+                                <div class="text-[9px] text-slate-500">Imus Cavite Branch</div>
+                            </div>
+                            <button type="button" onclick="copyBankAccountNumber('0000-0538-9921-1', 'Security Bank')" class="sm:hidden px-2 py-1 bg-white border border-slate-300 rounded text-[10px] font-bold text-slate-700 active:bg-slate-200 shadow-2xs cursor-pointer" title="Copy Security Bank Account Number">
+                                📋 Copy
+                            </button>
                         </div>
                     </div>
                 </div>
 
-                <div class="mt-6 pt-3 border-t border-slate-100 flex flex-wrap justify-between items-center text-[10px] text-slate-400 font-mono">
+                <!-- Mobile Quick Navigation Footer on Each Card -->
+                <div class="sm:hidden mt-3 pt-3 border-t border-slate-200 flex items-center justify-between gap-2">
+                    <button type="button" onclick="jumpPOMonitorPrev()" class="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-800 border border-slate-300 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition">
+                        <span>⬆</span><span>Prev PO</span>
+                    </button>
+                    <a href="/print-po.html?id=${po.id}" target="_blank" class="flex-1 py-1.5 bg-indigo-600 active:scale-95 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition shadow-xs text-center">
+                        <span>🖨️</span><span>Print</span>
+                    </a>
+                    <button type="button" onclick="jumpPOMonitorNext()" class="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-800 border border-slate-300 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition">
+                        <span>Next PO</span><span>⬇</span>
+                    </button>
+                </div>
+
+                <div class="mt-4 sm:mt-6 pt-3 border-t border-slate-100 flex flex-wrap justify-between items-center text-[9px] sm:text-[10px] text-slate-400 font-mono">
                     <span>NKB Quality Products System • PO ID: ${po.id}</span>
                     <span>Confidential & Proprietary</span>
                 </div>
@@ -18717,6 +18799,48 @@ function openPOByIdInOrders(poId, docNum) {
     }
 }
 window.openPOByIdInOrders = openPOByIdInOrders;
+
+/**
+ * Quick copy bank account number on mobile/desktop with feedback
+ */
+function copyBankAccountNumber(accNo, bankName) {
+    if (!accNo) return;
+    const cleanNo = accNo.trim();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(cleanNo).then(() => {
+            if (typeof NKB !== 'undefined' && NKB.showToast) {
+                NKB.showToast(`${bankName || 'Bank'} account number (${cleanNo}) copied!`, 'success');
+            } else {
+                alert(`${bankName || 'Bank'} account number copied: ${cleanNo}`);
+            }
+        }).catch(() => {
+            fallbackCopy(cleanNo, bankName);
+        });
+    } else {
+        fallbackCopy(cleanNo, bankName);
+    }
+}
+function fallbackCopy(accNo, bankName) {
+    const el = document.createElement('textarea');
+    el.value = accNo;
+    el.setAttribute('readonly', '');
+    el.style.position = 'absolute';
+    el.style.left = '-9999px';
+    document.body.appendChild(el);
+    el.select();
+    try {
+        document.execCommand('copy');
+        if (typeof NKB !== 'undefined' && NKB.showToast) {
+            NKB.showToast(`${bankName || 'Bank'} account number (${accNo}) copied!`, 'success');
+        } else {
+            alert(`${bankName || 'Bank'} account number copied: ${accNo}`);
+        }
+    } catch (e) {
+        prompt('Copy account number:', accNo);
+    }
+    document.body.removeChild(el);
+}
+window.copyBankAccountNumber = copyBankAccountNumber;
 
 /**
  * Vertical Touch Swipe detection with zero transition latency.

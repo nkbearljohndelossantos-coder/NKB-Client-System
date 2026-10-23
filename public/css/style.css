@@ -1192,3 +1192,54 @@ main,
     background: #ffffff;
 }
 
+/* 5. MOBILE RESPONSIVE ADAPTATIONS FOR PO MONITOR */
+@media (max-width: 640px) {
+    .po-clipboard-stage {
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        width: 100% !important;
+    }
+
+    .po-clipboard-board {
+        border-radius: 16px !important;
+        border-width: 2px !important;
+        margin: 0 !important;
+        width: 100% !important;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.45) !important;
+    }
+
+    .po-clipboard-clip-wrapper {
+        position: relative !important;
+        padding-top: 4px !important;
+    }
+
+    .po-clipboard-clamp {
+        width: 180px !important;
+        padding: 4px 10px !important;
+        border-radius: 0 0 8px 8px !important;
+    }
+
+    .po-clipboard-stack {
+        height: calc(100dvh - 190px) !important;
+        min-height: 480px !important;
+        padding: 8px 4px 40px 4px !important;
+        gap: 1rem !important;
+    }
+
+    .po-receipt-card {
+        padding: 12px 10px !important;
+        border-radius: 8px !important;
+        margin-bottom: 14px !important;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25) !important;
+    }
+
+    .po-receipt-card::before {
+        width: 70px !important;
+        height: 3.5px !important;
+    }
+
+    .po-receipt-box {
+        padding: 8px 6px !important;
+    }
+}
+
