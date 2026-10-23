@@ -292,7 +292,7 @@ function applyRoleBasedUI() {
         hideTab('reports');
         hideTab('audit');
         hideTab('it-management');
-        hideTab('po-monitor');
+        showTab('po-monitor');
         switchTab('raw-materials');
     } else if (role === 'PURCHASING') {
         // Purchasing Department: remove Management and Lab & Formulations
@@ -313,7 +313,7 @@ function applyRoleBasedUI() {
         hideTab('reports');
         hideTab('audit');
         hideTab('it-management');
-        hideTab('po-monitor');
+        showTab('po-monitor');
         switchTab('purchasing');
     } else if (role === 'QC') {
         // QC: remove Finance & Stock, Management, Lab & Formulations, and Requisitions
@@ -332,7 +332,7 @@ function applyRoleBasedUI() {
         hideTab('audit');
         hideTab('purchasing');
         hideTab('it-management');
-        hideTab('po-monitor');
+        showTab('po-monitor');
         switchTab('production');
     } else if (role === 'PRODUCTION') {
         // Production Supervisor: remove Finance & Stock, Requisitions, Lab & Formulations, and Management.
@@ -352,6 +352,7 @@ function applyRoleBasedUI() {
         hideTab('reports');
         hideTab('audit');
         hideTab('it-management');
+        showTab('po-monitor');
         const soLabel = document.getElementById('sidebar-label-orders');
         if (soLabel) soLabel.textContent = 'Sales Orders';
     } else if (role === 'WAREHOUSE') {
@@ -359,7 +360,7 @@ function applyRoleBasedUI() {
         hideGroup('management');
         hideGroup('lab');
         hideTab('orders');
-        hideTab('po-monitor');
+        showTab('po-monitor');
         hideTab('purchasing');
         hideTab('job-orders');
         hideTab('production');
@@ -401,6 +402,7 @@ function applyRoleBasedUI() {
         showGroup('management');
         showTab('clients');
         showTab('products');
+        showTab('po-monitor');
         hideTab('purchasing');
         hideTab('raw-materials');
         hideTab('it-management');
@@ -18821,13 +18823,18 @@ function openCurrentPOInOrdersTab() {
 window.openCurrentPOInOrdersTab = openCurrentPOInOrdersTab;
 
 function openPOByIdInOrders(poId, docNum) {
-    switchTab('orders');
-    if (docNum) {
-        const searchInput = document.getElementById('filter-po-search');
-        if (searchInput) {
-            searchInput.value = decodeURIComponent(docNum);
-            loadOrders();
+    const ordersBtn = document.getElementById('tab-btn-orders');
+    if (ordersBtn && ordersBtn.style.display !== 'none') {
+        switchTab('orders');
+        if (docNum) {
+            const searchInput = document.getElementById('filter-po-search');
+            if (searchInput) {
+                searchInput.value = decodeURIComponent(docNum);
+                loadOrders();
+            }
         }
+    } else {
+        jumpToPOMonitorById(poId);
     }
 }
 window.openPOByIdInOrders = openPOByIdInOrders;

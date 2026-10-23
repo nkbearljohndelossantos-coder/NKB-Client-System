@@ -5292,7 +5292,7 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.ok(adminJs.includes('function filterPOMonitorReceipts('), 'admin.js must define filterPOMonitorReceipts');
         assert.ok(adminJs.includes('setupPOMonitorTouchSwipe'), 'admin.js must setup touch swipe for clipboard');
         assert.ok(adminJs.includes('initTabsSwipeProtection'), 'admin.js must protect tabs from front swipes');
-        assert.ok(adminJs.includes("hideTab('po-monitor')"), 'admin.js must hide po-monitor for non-authorized roles');
+        assert.ok(adminJs.includes("showTab('po-monitor')"), 'admin.js must show po-monitor for all authorized roles and operators');
     });
 
     test('TEST 99: Role for Compounding: Raw Materials & Formulations Management', async () => {
@@ -5419,6 +5419,55 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         // Cleanup test raw material
         db.prepare('DELETE FROM raw_materials_inventory WHERE id = ?').run(createdMat.id);
         db.prepare('DELETE FROM users WHERE email = ?').run(newStaffEmail);
+    });
+
+    test('TEST 100: Universal PO Monitoring Authority for All Factory Operators & Staff Roles', async () => {
+        const { ROLES } = require('../middleware/rbac');
+
+        // 1. Verify every staff and operator role can view purchase orders via /api/orders
+        const staffRoles = [
+            ROLES.SUPER_ADMIN,
+            ROLES.IT_ADMIN,
+            ROLES.CEO,
+            ROLES.ACCOUNTING,
+            ROLES.PRODUCTION,
+            ROLES.WAREHOUSE,
+            ROLES.QC,
+            ROLES.PURCHASING,
+            ROLES.INVENTORY,
+            ROLES.COMPOUNDING
+        ];
+
+        for (const role of staffRoles) {
+            const token = getAuthToken(role);
+            assert.ok(token, `Auth token must exist for role: ${role}`);
+            const ordersRes = await request(app)
+                .get('/api/orders')
+                .set('Authorization', `Bearer ${token}`);
+            assert.strictEqual(ordersRes.status, 200, `Role ${role} must be authorized to access /api/orders`);
+            assert.strictEqual(ordersRes.body.success, true);
+            assert.ok(Array.isArray(ordersRes.body.data), `Role ${role} must receive list of orders`);
+        }
+
+        // 2. Verify admin.js UI configuration ensures po-monitor is visible to all operators
+        const adminJs = fs.readFileSync(path.join(__dirname, '../public/js/admin.js'), 'utf8');
+        const roleFunctionBody = adminJs.substring(adminJs.indexOf('function applyRoleBasedUI('), adminJs.indexOf('async function loadInitialData('));
+
+        // Ensure no operator role explicitly hides po-monitor
+        assert.strictEqual(roleFunctionBody.includes("hideTab('po-monitor')"), false, 'No role must have hideTab("po-monitor") in applyRoleBasedUI');
+
+        // Ensure key operators explicitly call showTab('po-monitor')
+        ['INVENTORY', 'PURCHASING', 'QC', 'PRODUCTION', 'WAREHOUSE', 'COMPOUNDING', 'ACCOUNTING'].forEach(r => {
+            const roleBlockStart = roleFunctionBody.indexOf(`role === '${r}'`);
+            assert.ok(roleBlockStart !== -1, `Role ${r} block must exist in applyRoleBasedUI`);
+            const nextElse = roleFunctionBody.indexOf('} else', roleBlockStart);
+            const blockContent = roleFunctionBody.substring(roleBlockStart, nextElse !== -1 ? nextElse : roleBlockStart + 500);
+            assert.ok(blockContent.includes("showTab('po-monitor')"), `Role ${r} must explicitly show po-monitor`);
+        });
+
+        // 3. Verify price masking rules in renderPOMonitorReceipts
+        assert.ok(adminJs.includes("canViewPrices = isExecAdmin || ['CEO', 'ACCOUNTING'].includes(userRole)"), 'renderPOMonitorReceipts must restrict commercial price display to authorized financial roles');
+        assert.ok(adminJs.includes('Operations Copy'), 'renderPOMonitorReceipts must show Operations Copy placeholder for non-price authorized roles');
     });
 
     after(() => {
