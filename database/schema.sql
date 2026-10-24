@@ -156,6 +156,22 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
     FOREIGN KEY (created_by) REFERENCES users(id)
 );
 
+-- Operator Monitoring Notes on Purchase Orders
+CREATE TABLE IF NOT EXISTS po_operator_notes (
+    id TEXT PRIMARY KEY,
+    po_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    user_name TEXT,
+    user_role TEXT,
+    note_text TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    FOREIGN KEY (po_id) REFERENCES purchase_orders(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_po_operator_notes_po_id ON po_operator_notes(po_id);
+CREATE INDEX IF NOT EXISTS idx_po_operator_notes_user_id ON po_operator_notes(user_id);
+
 -- Supply Requisitions for Purchasing Department
 CREATE TABLE IF NOT EXISTS supply_requests (
     id TEXT PRIMARY KEY,

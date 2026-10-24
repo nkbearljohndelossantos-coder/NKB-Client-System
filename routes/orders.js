@@ -203,6 +203,23 @@ router.get('/', authenticateToken, enforceClientIsolation, (req, res) => {
         }
     }
 
+    // Attach operator monitoring notes for all orders
+    try {
+        const allNotes = db.prepare('SELECT * FROM po_operator_notes ORDER BY created_at ASC').all();
+        const notesByPoId = {};
+        for (const n of allNotes) {
+            if (!notesByPoId[n.po_id]) notesByPoId[n.po_id] = [];
+            notesByPoId[n.po_id].push(n);
+        }
+        for (const po of orders) {
+            po.operator_notes = notesByPoId[po.id] || [];
+        }
+    } catch (_) {
+        for (const po of orders) {
+            po.operator_notes = po.operator_notes || [];
+        }
+    }
+
     return res.json({ success: true, data: orders });
 });
 
@@ -439,6 +456,11 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
         }
     }
 
+    let operatorNotes = [];
+    try {
+        operatorNotes = db.prepare('SELECT * FROM po_operator_notes WHERE po_id = ? ORDER BY created_at ASC').all(id);
+    } catch (_) {}
+
     return res.json({
         success: true,
         data: {
@@ -446,7 +468,8 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
             items,
             jobOrders,
             deliveries,
-            invoices: canSeePrices ? invoices : []
+            invoices: canSeePrices ? invoices : [],
+            operator_notes: operatorNotes
         }
     });
 });
@@ -2058,6 +2081,150 @@ router.post('/import', authenticateToken, requireRoles('ADMIN', 'ACCOUNTING', 'S
     } catch (err) {
         console.error('Orders import error:', err);
         return res.status(500).json({ success: false, error: err.message || 'Failed to import orders.' });
+    }
+});
+
+/**
+ * GET /api/orders/:id/operator-notes
+ * Retrieve all operator monitoring notes for a specific PO
+ */
+router.get('/:id/operator-notes', authenticateToken, (req, res) => {
+    const { id } = req.params;
+    const po = db.prepare('SELECT id, client_id FROM purchase_orders WHERE id = ?').get(id);
+    if (!po) {
+        return res.status(404).json({ success: false, error: 'Purchase Order not found.' });
+    }
+    if (req.user.role === 'CLIENT' && po.client_id !== req.clientId) {
+        return res.status(403).json({ success: false, error: 'Access denied.' });
+    }
+    try {
+        const notes = db.prepare(`
+            SELECT * FROM po_operator_notes 
+            WHERE po_id = ? 
+            ORDER BY created_at ASC
+        `).all(id);
+        return res.json({ success: true, data: notes });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/orders/:id/operator-notes
+ * Allows any factory operator or staff role to add text / remarks in PO monitoring
+ */
+router.post('/:id/operator-notes', authenticateToken, (req, res) => {
+    const { id } = req.params;
+    const { note_text } = req.body || {};
+    if (!note_text || !String(note_text).trim()) {
+        return res.status(400).json({ success: false, error: 'Note text cannot be empty.' });
+    }
+
+    const po = db.prepare('SELECT id, po_number, so_number, client_id FROM purchase_orders WHERE id = ?').get(id);
+    if (!po) {
+        return res.status(404).json({ success: false, error: 'Purchase Order not found.' });
+    }
+    if (req.user.role === 'CLIENT' && po.client_id !== req.clientId) {
+        return res.status(403).json({ success: false, error: 'Access denied.' });
+    }
+
+    const cleanText = String(note_text).trim();
+    const noteId = uuidv4();
+    const now = getManilaDateTime();
+    const userName = req.user.name || req.user.email || 'Factory Operator';
+    const userRole = req.user.role || 'OPERATOR';
+
+    try {
+        db.prepare(`
+            INSERT INTO po_operator_notes (id, po_id, user_id, user_name, user_role, note_text, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(noteId, id, req.user.id, userName, userRole, cleanText, now, now);
+
+        const newNote = db.prepare('SELECT * FROM po_operator_notes WHERE id = ?').get(noteId);
+
+        logAudit({
+            userId: req.user.id,
+            userName,
+            userRole,
+            action: 'PO_OPERATOR_NOTE_ADDED',
+            entityType: 'PURCHASE_ORDER',
+            entityId: id,
+            details: { po_number: po.po_number || po.so_number, note_id: noteId, note_length: cleanText.length }
+        });
+
+        return res.status(201).json({
+            success: true,
+            message: 'Operator note added successfully.',
+            data: newNote
+        });
+    } catch (err) {
+        console.error('Error adding operator note:', err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * PUT /api/orders/:id/operator-notes/:noteId
+ * Allows note author or admins to update note text
+ */
+router.put('/:id/operator-notes/:noteId', authenticateToken, (req, res) => {
+    const { id, noteId } = req.params;
+    const { note_text } = req.body || {};
+    if (!note_text || !String(note_text).trim()) {
+        return res.status(400).json({ success: false, error: 'Note text cannot be empty.' });
+    }
+
+    const note = db.prepare('SELECT * FROM po_operator_notes WHERE id = ? AND po_id = ?').get(noteId, id);
+    if (!note) {
+        return res.status(404).json({ success: false, error: 'Operator note not found.' });
+    }
+
+    const isAuthor = req.user.id === note.user_id;
+    const isAdmin = ['SUPER_ADMIN', 'ADMIN', 'IT_ADMIN'].includes(req.user.role);
+    if (!isAuthor && !isAdmin) {
+        return res.status(403).json({ success: false, error: 'You are only authorized to edit your own notes.' });
+    }
+
+    const cleanText = String(note_text).trim();
+    const now = getManilaDateTime();
+
+    try {
+        db.prepare(`
+            UPDATE po_operator_notes
+            SET note_text = ?, updated_at = ?
+            WHERE id = ?
+        `).run(cleanText, now, noteId);
+
+        const updatedNote = db.prepare('SELECT * FROM po_operator_notes WHERE id = ?').get(noteId);
+        return res.json({ success: true, message: 'Operator note updated successfully.', data: updatedNote });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * DELETE /api/orders/:id/operator-notes/:noteId
+ * Allows note author or admins to delete note
+ */
+router.delete('/:id/operator-notes/:noteId', authenticateToken, (req, res) => {
+    const { id, noteId } = req.params;
+
+    const note = db.prepare('SELECT * FROM po_operator_notes WHERE id = ? AND po_id = ?').get(noteId, id);
+    if (!note) {
+        return res.status(404).json({ success: false, error: 'Operator note not found.' });
+    }
+
+    const isAuthor = req.user.id === note.user_id;
+    const isAdmin = ['SUPER_ADMIN', 'ADMIN', 'IT_ADMIN'].includes(req.user.role);
+    if (!isAuthor && !isAdmin) {
+        return res.status(403).json({ success: false, error: 'You are only authorized to delete your own notes.' });
+    }
+
+    try {
+        db.prepare('DELETE FROM po_operator_notes WHERE id = ?').run(noteId);
+        return res.json({ success: true, message: 'Operator note deleted successfully.' });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
     }
 });
 

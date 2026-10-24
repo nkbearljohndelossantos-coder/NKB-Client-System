@@ -18340,7 +18340,16 @@ function filterPOMonitorReceipts() {
             );
         }
 
-        return matchPO || matchSO || matchCustPO || matchClient || matchNotes || matchCategory || matchItem;
+        let matchOpNotes = false;
+        if (po.operator_notes && Array.isArray(po.operator_notes)) {
+            matchOpNotes = po.operator_notes.some(n =>
+                (n.note_text || '').toLowerCase().includes(searchVal) ||
+                (n.user_name || '').toLowerCase().includes(searchVal) ||
+                (n.user_role || '').toLowerCase().includes(searchVal)
+            );
+        }
+
+        return matchPO || matchSO || matchCustPO || matchClient || matchNotes || matchCategory || matchItem || matchOpNotes;
     });
 
     renderPOMonitorReceipts(poMonitorFilteredOrders);
@@ -18623,11 +18632,43 @@ function renderPOMonitorReceipts(orders) {
 
                 ${po.notes ? `
                     <!-- Order Notes Section -->
-                    <div class="mb-4 sm:mb-6 p-2.5 sm:p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                    <div class="mb-3 sm:mb-4 p-2.5 sm:p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
                         <div class="font-black uppercase text-slate-700 text-[10px] sm:text-[11px] mb-1">Order Notes / Instructions:</div>
                         <div class="font-bold text-slate-900 whitespace-pre-wrap text-[11px] sm:text-xs">${po.notes}</div>
                     </div>
                 ` : ''}
+
+                <!-- Operator PO Monitoring Notes & Add Text Box -->
+                <div class="mb-4 sm:mb-6 p-3 sm:p-4 rounded-2xl bg-amber-50/80 border border-amber-200/90 text-xs text-slate-800 shadow-2xs">
+                    <div class="flex items-center justify-between mb-2 pb-2 border-b border-amber-200/70">
+                        <div class="flex items-center gap-1.5 font-black uppercase text-amber-950 text-[11px] sm:text-xs tracking-wider">
+                            <span>💬</span>
+                            <span>Operator Monitoring Notes (<span id="po-notes-count-${po.id}">${(po.operator_notes || []).length}</span>)</span>
+                        </div>
+                        <span class="text-[10px] text-amber-900 font-bold px-2 py-0.5 rounded-full bg-amber-100/90 border border-amber-300">
+                            ${userRole || 'OPERATOR'}
+                        </span>
+                    </div>
+
+                    <!-- Existing Notes List for this PO -->
+                    <div id="po-notes-list-${po.id}" class="space-y-2 mb-3">
+                        ${renderPOMonitorNotesList(po.operator_notes, po.id)}
+                    </div>
+
+                    <!-- Add Text Box Container -->
+                    <div class="pt-2 border-t border-amber-200/80">
+                        <label for="po-note-input-${po.id}" class="block text-[10px] font-black uppercase tracking-wider text-amber-900 mb-1 flex items-center justify-between">
+                            <span>Add Operator Note / Remark</span>
+                            <span class="text-[9px] text-slate-500 font-normal">Press Ctrl+Enter or tap Add</span>
+                        </label>
+                        <div class="flex flex-col sm:flex-row items-stretch sm:items-end gap-2">
+                            <textarea id="po-note-input-${po.id}" rows="2" placeholder="Write operational notes, mixing progress, packing updates, or QC remarks for this PO..." class="flex-1 w-full p-2.5 bg-white border border-amber-300 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 font-medium resize-y" onkeydown="if(event.ctrlKey && event.key==='Enter') submitPOMonitorNote('${po.id}')"></textarea>
+                            <button type="button" onclick="submitPOMonitorNote('${po.id}')" id="po-note-btn-${po.id}" class="px-4 py-2 sm:py-2.5 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-extrabold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer">
+                                <span>➕</span><span>Add Text</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- Bank Details Footer (Matching print-po.html with 1-Tap Copy on Mobile) -->
                 <div class="pt-3 sm:pt-4 border-t border-slate-200 text-xs text-slate-800">
@@ -18838,6 +18879,232 @@ function openPOByIdInOrders(poId, docNum) {
     }
 }
 window.openPOByIdInOrders = openPOByIdInOrders;
+
+/**
+ * Escape HTML utility for operator notes
+ */
+function escapeOpNoteHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+/**
+ * Render list of operator notes for a PO
+ */
+function renderPOMonitorNotesList(notes, poId) {
+    if (!notes || notes.length === 0) {
+        return `
+            <div class="py-2.5 px-3 bg-white/60 rounded-xl border border-dashed border-amber-300 text-center text-slate-500 text-[11px] italic">
+                No operator notes recorded yet. Use the text box below to record operational remarks, compounding status, or shift notes for this PO.
+            </div>
+        `;
+    }
+
+    const currentUserId = NKB.user ? NKB.user.id : '';
+    const currentUserRole = NKB.user ? NKB.user.role : '';
+    const isAdmin = ['SUPER_ADMIN', 'ADMIN', 'IT_ADMIN'].includes(currentUserRole);
+
+    return notes.map(n => {
+        const isAuthor = currentUserId && n.user_id === currentUserId;
+        const canManage = isAuthor || isAdmin;
+        const noteDate = n.created_at ? n.created_at.replace('T', ' ').slice(0, 16) : 'Just now';
+        const roleBadgeColor = {
+            'COMPOUNDING': 'bg-purple-100 text-purple-800 border-purple-200',
+            'PRODUCTION': 'bg-blue-100 text-blue-800 border-blue-200',
+            'WAREHOUSE': 'bg-teal-100 text-teal-800 border-teal-200',
+            'QC': 'bg-emerald-100 text-emerald-800 border-emerald-200',
+            'INVENTORY': 'bg-cyan-100 text-cyan-800 border-cyan-200',
+            'PURCHASING': 'bg-orange-100 text-orange-800 border-orange-200',
+            'ACCOUNTING': 'bg-amber-100 text-amber-800 border-amber-200',
+            'SUPER_ADMIN': 'bg-rose-100 text-rose-800 border-rose-200',
+            'ADMIN': 'bg-slate-800 text-white border-slate-900',
+            'CEO': 'bg-indigo-100 text-indigo-800 border-indigo-200'
+        }[n.user_role] || 'bg-slate-100 text-slate-700 border-slate-200';
+
+        return `
+            <div class="p-2.5 sm:p-3 bg-white rounded-xl border border-amber-200/90 shadow-2xs text-xs text-slate-800" id="op-note-card-${n.id}">
+                <div class="flex items-start justify-between gap-2 mb-1.5">
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        <span class="font-extrabold text-slate-950 text-[11px]">${escapeOpNoteHtml(n.user_name || 'Operator')}</span>
+                        <span class="px-1.5 py-0.2 rounded text-[9.5px] font-black border ${roleBadgeColor}">${n.user_role || 'STAFF'}</span>
+                        <span class="text-[10px] text-slate-400 font-mono">${noteDate}</span>
+                    </div>
+                    ${canManage ? `
+                        <div class="flex items-center gap-1">
+                            <button type="button" onclick="editPOMonitorNote('${poId}', '${n.id}')" class="p-1 text-slate-400 hover:text-indigo-600 transition cursor-pointer" title="Edit Note">
+                                ✏️
+                            </button>
+                            <button type="button" onclick="deletePOMonitorNote('${poId}', '${n.id}')" class="p-1 text-slate-400 hover:text-rose-600 transition cursor-pointer" title="Delete Note">
+                                🗑️
+                            </button>
+                        </div>
+                    ` : ''}
+                </div>
+                <div class="text-slate-900 font-medium whitespace-pre-wrap text-[11.5px] leading-relaxed break-words" id="op-note-text-${n.id}">${escapeOpNoteHtml(n.note_text || '')}</div>
+            </div>
+        `;
+    }).join('');
+}
+window.renderPOMonitorNotesList = renderPOMonitorNotesList;
+
+/**
+ * Submit operator note for a PO in PO Monitor
+ */
+async function submitPOMonitorNote(poId) {
+    const input = document.getElementById(`po-note-input-${poId}`);
+    if (!input) return;
+    const text = input.value.trim();
+    if (!text) {
+        if (typeof NKB !== 'undefined' && NKB.showToast) NKB.showToast('Please type text before adding note.', 'warning');
+        input.focus();
+        return;
+    }
+
+    const btn = document.getElementById(`po-note-btn-${poId}`);
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span>⏳</span><span>Adding...</span>';
+    }
+
+    try {
+        const res = await NKB.api(`/api/orders/${poId}/operator-notes`, 'POST', { note_text: text });
+        if (res.success && res.data) {
+            input.value = '';
+            // Update cached order
+            [window.poMonitorCachedOrders, window.poMonitorFilteredOrders].forEach(list => {
+                if (list) {
+                    const po = list.find(p => p.id === poId);
+                    if (po) {
+                        if (!po.operator_notes) po.operator_notes = [];
+                        po.operator_notes.push(res.data);
+                    }
+                }
+            });
+
+            // Re-render notes list and count badge
+            const listEl = document.getElementById(`po-notes-list-${poId}`);
+            const countEl = document.getElementById(`po-notes-count-${poId}`);
+            const targetPO = (window.poMonitorCachedOrders || []).find(p => p.id === poId);
+            const notes = targetPO ? targetPO.operator_notes : [res.data];
+            if (listEl) {
+                listEl.innerHTML = renderPOMonitorNotesList(notes, poId);
+            }
+            if (countEl) {
+                countEl.textContent = notes.length;
+            }
+            if (typeof NKB !== 'undefined' && NKB.showToast) {
+                NKB.showToast('Operator note added successfully!', 'success');
+            }
+        } else {
+            alert(res.error || 'Failed to add operator note');
+        }
+    } catch (err) {
+        console.error('submitPOMonitorNote error:', err);
+        alert('Error adding note: ' + err.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<span>➕</span><span>Add Text</span>';
+        }
+    }
+}
+window.submitPOMonitorNote = submitPOMonitorNote;
+
+/**
+ * Delete operator note
+ */
+async function deletePOMonitorNote(poId, noteId) {
+    if (!confirm('Are you sure you want to delete this operator note?')) return;
+    try {
+        const res = await NKB.api(`/api/orders/${poId}/operator-notes/${noteId}`, 'DELETE');
+        if (res.success) {
+            [window.poMonitorCachedOrders, window.poMonitorFilteredOrders].forEach(list => {
+                if (list) {
+                    const po = list.find(p => p.id === poId);
+                    if (po && po.operator_notes) {
+                        po.operator_notes = po.operator_notes.filter(n => n.id !== noteId);
+                    }
+                }
+            });
+            const listEl = document.getElementById(`po-notes-list-${poId}`);
+            const countEl = document.getElementById(`po-notes-count-${poId}`);
+            const targetPO = (window.poMonitorCachedOrders || []).find(p => p.id === poId);
+            const notes = targetPO ? targetPO.operator_notes : [];
+            if (listEl) {
+                listEl.innerHTML = renderPOMonitorNotesList(notes, poId);
+            }
+            if (countEl) {
+                countEl.textContent = notes.length;
+            }
+            if (typeof NKB !== 'undefined' && NKB.showToast) {
+                NKB.showToast('Operator note removed.', 'info');
+            }
+        } else {
+            alert(res.error || 'Failed to delete note');
+        }
+    } catch (err) {
+        console.error('deletePOMonitorNote error:', err);
+        alert('Error deleting note: ' + err.message);
+    }
+}
+window.deletePOMonitorNote = deletePOMonitorNote;
+
+/**
+ * Edit operator note
+ */
+function editPOMonitorNote(poId, noteId) {
+    const textEl = document.getElementById(`op-note-text-${noteId}`);
+    if (!textEl) return;
+    const currentText = textEl.innerText.trim();
+    const newText = prompt('Edit your operator note:', currentText);
+    if (newText === null || newText.trim() === '' || newText.trim() === currentText) return;
+
+    NKB.api(`/api/orders/${poId}/operator-notes/${noteId}`, 'PUT', { note_text: newText.trim() })
+        .then(res => {
+            if (res.success && res.data) {
+                textEl.innerText = res.data.note_text;
+                [window.poMonitorCachedOrders, window.poMonitorFilteredOrders].forEach(list => {
+                    if (list) {
+                        const po = list.find(p => p.id === poId);
+                        if (po && po.operator_notes) {
+                            const found = po.operator_notes.find(n => n.id === noteId);
+                            if (found) found.note_text = res.data.note_text;
+                        }
+                    }
+                });
+                if (typeof NKB !== 'undefined' && NKB.showToast) {
+                    NKB.showToast('Note updated successfully!', 'success');
+                }
+            } else {
+                alert(res.error || 'Failed to update note');
+            }
+        })
+        .catch(err => alert('Error updating note: ' + err.message));
+}
+window.editPOMonitorNote = editPOMonitorNote;
+
+/**
+ * Focus and scroll to the operator text box of currently visible PO receipt card
+ */
+function focusCurrentPOMonitorNoteBox() {
+    if (!window.poMonitorFilteredOrders || window.poMonitorFilteredOrders.length === 0) {
+        if (typeof NKB !== 'undefined' && NKB.showToast) NKB.showToast('No PO loaded to add notes to.', 'warning');
+        return;
+    }
+    const currentPO = window.poMonitorFilteredOrders[window.poMonitorCurrentIndex || 0] || window.poMonitorFilteredOrders[0];
+    if (!currentPO) return;
+    const input = document.getElementById(`po-note-input-${currentPO.id}`);
+    if (input) {
+        input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setTimeout(() => input.focus(), 300);
+    }
+}
+window.focusCurrentPOMonitorNoteBox = focusCurrentPOMonitorNoteBox;
 
 /**
  * Quick copy bank account number on mobile/desktop with feedback

@@ -1616,6 +1616,44 @@ function runMigrations(dbInstance, isMysql) {
         }
 
         try {
+            if (isMysql) {
+                dbInstance.exec(`
+                    CREATE TABLE IF NOT EXISTS po_operator_notes (
+                        id VARCHAR(36) PRIMARY KEY,
+                        po_id VARCHAR(36) NOT NULL,
+                        user_id VARCHAR(36) NOT NULL,
+                        user_name VARCHAR(255),
+                        user_role VARCHAR(50),
+                        note_text TEXT NOT NULL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        INDEX idx_po_op_notes_po (po_id),
+                        INDEX idx_po_op_notes_user (user_id)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+                `);
+            } else {
+                dbInstance.exec(`
+                    CREATE TABLE IF NOT EXISTS po_operator_notes (
+                        id TEXT PRIMARY KEY,
+                        po_id TEXT NOT NULL,
+                        user_id TEXT NOT NULL,
+                        user_name TEXT,
+                        user_role TEXT,
+                        note_text TEXT NOT NULL,
+                        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                        updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                        FOREIGN KEY (po_id) REFERENCES purchase_orders(id) ON DELETE CASCADE,
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_po_operator_notes_po_id ON po_operator_notes(po_id);
+                    CREATE INDEX IF NOT EXISTS idx_po_operator_notes_user_id ON po_operator_notes(user_id);
+                `);
+            }
+        } catch (opNotesErr) {
+            console.warn('PO operator notes init note:', opNotesErr.message);
+        }
+
+        try {
             // Seed / sync JLS Skin Essentials OPC perfume catalog (82 items, 79 pesos)
             const { seedJlsPerfumes } = require('./seed-jls-perfumes');
             seedJlsPerfumes(dbInstance);

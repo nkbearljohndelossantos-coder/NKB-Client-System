@@ -5470,6 +5470,93 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.ok(adminJs.includes('Operations Copy'), 'renderPOMonitorReceipts must show Operations Copy placeholder for non-price authorized roles');
     });
 
+    test('TEST 101: PO Monitoring Add Text Box & Operator Remarks System', async () => {
+        // 1. Get an existing PO for testing
+        const samplePo = db.prepare("SELECT id, po_number FROM purchase_orders LIMIT 1").get();
+        assert.ok(samplePo, 'Sample PO must exist for operator notes testing');
+
+        // 2. Compounding Specialist adds a note in PO monitoring
+        const compoundingToken = getAuthToken('COMPOUNDING');
+        const cmpRes = await request(app)
+            .post(`/api/orders/${samplePo.id}/operator-notes`)
+            .set('Authorization', `Bearer ${compoundingToken}`)
+            .send({ note_text: 'Compounding in progress: 200kg emulsion batch mixed at 75°C' });
+        assert.strictEqual(cmpRes.status, 201);
+        assert.strictEqual(cmpRes.body.success, true);
+        assert.strictEqual(cmpRes.body.data.user_role, 'COMPOUNDING');
+        assert.strictEqual(cmpRes.body.data.note_text, 'Compounding in progress: 200kg emulsion batch mixed at 75°C');
+        const cmpNoteId = cmpRes.body.data.id;
+
+        // 3. Warehouse Officer adds a note in PO monitoring
+        const warehouseToken = getAuthToken('WAREHOUSE');
+        const whRes = await request(app)
+            .post(`/api/orders/${samplePo.id}/operator-notes`)
+            .set('Authorization', `Bearer ${warehouseToken}`)
+            .send({ note_text: 'Packaging materials staged in Zone B ready for filling line' });
+        assert.strictEqual(whRes.status, 201);
+        assert.strictEqual(whRes.body.success, true);
+        assert.strictEqual(whRes.body.data.user_role, 'WAREHOUSE');
+        const whNoteId = whRes.body.data.id;
+
+        // 4. Retrieve operator notes for the PO
+        const getNotesRes = await request(app)
+            .get(`/api/orders/${samplePo.id}/operator-notes`)
+            .set('Authorization', `Bearer ${compoundingToken}`);
+        assert.strictEqual(getNotesRes.status, 200);
+        assert.strictEqual(getNotesRes.body.success, true);
+        assert.ok(Array.isArray(getNotesRes.body.data));
+        assert.ok(getNotesRes.body.data.some(n => n.id === cmpNoteId));
+        assert.ok(getNotesRes.body.data.some(n => n.id === whNoteId));
+
+        // 5. Verify operator_notes are attached in GET /api/orders
+        const allOrdersRes = await request(app)
+            .get('/api/orders')
+            .set('Authorization', `Bearer ${compoundingToken}`);
+        assert.strictEqual(allOrdersRes.status, 200);
+        const orderFromList = allOrdersRes.body.data.find(o => o.id === samplePo.id);
+        assert.ok(orderFromList);
+        assert.ok(Array.isArray(orderFromList.operator_notes));
+        assert.ok(orderFromList.operator_notes.some(n => n.id === cmpNoteId));
+
+        // 6. Author can edit their own note
+        const editRes = await request(app)
+            .put(`/api/orders/${samplePo.id}/operator-notes/${cmpNoteId}`)
+            .set('Authorization', `Bearer ${compoundingToken}`)
+            .send({ note_text: 'Compounding completed: 200kg emulsion batch cooled and transferred' });
+        assert.strictEqual(editRes.status, 200);
+        assert.strictEqual(editRes.body.data.note_text, 'Compounding completed: 200kg emulsion batch cooled and transferred');
+
+        // 7. Non-author cannot edit someone else's note
+        const unauthorizedEditRes = await request(app)
+            .put(`/api/orders/${samplePo.id}/operator-notes/${cmpNoteId}`)
+            .set('Authorization', `Bearer ${warehouseToken}`)
+            .send({ note_text: 'Unauthorized modification attempt' });
+        assert.strictEqual(unauthorizedEditRes.status, 403);
+
+        // 8. Author can delete their own note
+        const delRes = await request(app)
+            .delete(`/api/orders/${samplePo.id}/operator-notes/${cmpNoteId}`)
+            .set('Authorization', `Bearer ${compoundingToken}`);
+        assert.strictEqual(delRes.status, 200);
+
+        // Cleanup remaining test note
+        await request(app)
+            .delete(`/api/orders/${samplePo.id}/operator-notes/${whNoteId}`)
+            .set('Authorization', `Bearer ${adminToken}`);
+
+        // 9. Verify UI elements exist in admin.html and admin.js
+        const adminHtml = fs.readFileSync(path.join(__dirname, '../public/admin.html'), 'utf8');
+        assert.ok(adminHtml.includes('focusCurrentPOMonitorNoteBox'), 'admin.html must contain focusCurrentPOMonitorNoteBox button in PO monitor header');
+
+        const adminJs = fs.readFileSync(path.join(__dirname, '../public/js/admin.js'), 'utf8');
+        assert.ok(adminJs.includes('function renderPOMonitorNotesList('), 'admin.js must define renderPOMonitorNotesList');
+        assert.ok(adminJs.includes('async function submitPOMonitorNote('), 'admin.js must define submitPOMonitorNote');
+        assert.ok(adminJs.includes('async function deletePOMonitorNote('), 'admin.js must define deletePOMonitorNote');
+        assert.ok(adminJs.includes('function editPOMonitorNote('), 'admin.js must define editPOMonitorNote');
+        assert.ok(adminJs.includes('function focusCurrentPOMonitorNoteBox('), 'admin.js must define focusCurrentPOMonitorNoteBox');
+        assert.ok(adminJs.includes('po-note-input-'), 'admin.js must render po-note-input textarea on PO receipt cards');
+    });
+
     after(() => {
         try {
             realtimeSyncService.closeAllClients();
