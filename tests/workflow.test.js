@@ -5557,6 +5557,59 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.ok(adminJs.includes('po-note-input-'), 'admin.js must render po-note-input textarea on PO receipt cards');
     });
 
+    test('TEST 102: PO Monitor Vyuceutical Client Name Display & Perfume/Fragrance Marking', async () => {
+        // 1. Verify category 'Perfume & Fragrance' is present in database
+        const catRow = db.prepare("SELECT * FROM order_categories WHERE name = 'Perfume & Fragrance'").get();
+        assert.ok(catRow, 'Category Perfume & Fragrance must exist in order_categories');
+        assert.strictEqual(catRow.color, '#8b5cf6');
+
+        // 2. Fetch all POs and verify category marking
+        const ordersRes = await request(app)
+            .get('/api/orders')
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(ordersRes.status, 200);
+        assert.ok(ordersRes.body.data.length > 0, 'Must return purchase orders');
+
+        // Verify all POs have category Perfume & Fragrance (or specific category)
+        const samplePo = ordersRes.body.data[0];
+        assert.ok(samplePo.category, 'PO category must not be null');
+        assert.strictEqual(samplePo.category, 'Perfume & Fragrance');
+        assert.ok(samplePo.effective_category_color, 'Effective category color must be provided');
+
+        // 3. Verify Vyuceutical PO returns contact_person and is_vyuceutical_ops
+        const vyuPo = ordersRes.body.data.find(p => p.is_vyuceutical_ops === 1 || (p.company_name && p.company_name.toLowerCase().includes('vyuceutical')));
+        if (vyuPo) {
+            assert.ok(vyuPo.contact_person, 'Vyuceutical PO must have client name (contact_person)');
+            assert.ok(vyuPo.company_name.toLowerCase().includes('vyuceutical'), 'Vyuceutical PO company must be Vyuceutical');
+        }
+
+        // 4. Verify creating a PO defaults to Perfume & Fragrance
+        const existingItem = db.prepare('SELECT product_id, unit_price FROM purchase_order_items WHERE po_id = ? LIMIT 1').get(samplePo.id);
+        const createPoRes = await request(app)
+            .post('/api/orders')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                client_id: samplePo.client_id,
+                items: [
+                    { product_id: existingItem.product_id, target_quantity: 50, unit_price: existingItem.unit_price || 150 }
+                ]
+            });
+        assert.strictEqual(createPoRes.status, 201);
+        assert.strictEqual(createPoRes.body.data.category, 'Perfume & Fragrance');
+        assert.strictEqual(createPoRes.body.data.category_color, '#8b5cf6');
+
+        // Cleanup newly created test PO
+        db.prepare('DELETE FROM purchase_order_items WHERE po_id = ?').run(createPoRes.body.data.id);
+        db.prepare('DELETE FROM purchase_orders WHERE id = ?').run(createPoRes.body.data.id);
+
+        // 5. Verify frontend implementation in public/js/admin.js
+        const adminJs = fs.readFileSync(path.join(__dirname, '../public/js/admin.js'), 'utf8');
+        assert.ok(adminJs.includes('vyuceuticalClientName'), 'admin.js must resolve vyuceuticalClientName');
+        assert.ok(adminJs.includes('Vyuceutical Client'), 'admin.js must render Vyuceutical Client badge');
+        assert.ok(adminJs.includes("po.category || 'Perfume & Fragrance'"), 'admin.js must mark all POs with Perfume & Fragrance badge');
+        assert.ok(adminJs.includes('po.contact_person'), 'admin.js must include contact_person in search filter and jump-to selector');
+    });
+
     after(() => {
         try {
             realtimeSyncService.closeAllClients();

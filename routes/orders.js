@@ -615,7 +615,10 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
             }
         }
 
-        if (finalCategory && !finalCategoryColor) {
+        if (!finalCategory) {
+            finalCategory = 'Perfume & Fragrance';
+            finalCategoryColor = '#8b5cf6';
+        } else if (!finalCategoryColor) {
             try {
                 const row = db.prepare('SELECT color FROM order_categories WHERE LOWER(name) = LOWER(?)').get(finalCategory);
                 finalCategoryColor = row ? row.color : '#8b5cf6';
@@ -2043,12 +2046,12 @@ router.post('/import', authenticateToken, requireRoles('ADMIN', 'ACCOUNTING', 'S
                         INSERT INTO purchase_orders (
                             id, client_id, po_number, so_number, customer_po_number, po_date, expected_delivery_date,
                             form_of_payment, status, notes, subtotal, tax_amount, grand_total,
-                            created_by, created_at, updated_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
+                            category, category_color, created_by, created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
                     `).run(
                         newId, clientId, finalPoNum, finalSoNum, customer_po_number, po_date, expected_delivery_date,
                         form_of_payment, status, notes, subtotal, tax_amount, grand_total,
-                        req.user.id
+                        'Perfume & Fragrance', '#8b5cf6', req.user.id
                     );
 
                     createdCount++;

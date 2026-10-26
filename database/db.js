@@ -136,11 +136,12 @@ function runMigrations(dbInstance, isMysql) {
             } catch (_) {}
         }
 
-        // Seed Default Initial Categories: Fragrance and Perfume
+        // Seed Default Initial Categories: Fragrance, Perfume, and Perfume & Fragrance
         try {
             const defaultCategories = [
                 { id: 'cat-fragrance', name: 'Fragrance', color: '#ec4899', description: 'Fragrance oils, body mists, scented formulations, and aromatic solutions' },
-                { id: 'cat-perfume', name: 'Perfume', color: '#8b5cf6', description: 'Fine perfumery, Eau de Parfum, Cologne, and spray scents' }
+                { id: 'cat-perfume', name: 'Perfume', color: '#8b5cf6', description: 'Fine perfumery, Eau de Parfum, Cologne, and spray scents' },
+                { id: 'cat-perfume-fragrance', name: 'Perfume & Fragrance', color: '#8b5cf6', description: 'Fine perfumery, Eau de Parfum, colognes, and fragrance formulations' }
             ];
             for (const cat of defaultCategories) {
                 if (isMysql) {
@@ -151,36 +152,12 @@ function runMigrations(dbInstance, isMysql) {
             }
         } catch (_) {}
 
-        // Auto-assign color for all orders of Fragrance and Perfume
+        // Mark all POs with Perfume & Fragrance
         try {
-            // Find orders containing perfume items
-            const perfumePOs = dbInstance.prepare(`
-                SELECT DISTINCT po.id, po.po_number
-                FROM purchase_orders po
-                JOIN purchase_order_items poi ON poi.po_id = po.id
-                JOIN products p ON poi.product_id = p.id
-                WHERE LOWER(p.category) LIKE '%perfume%'
-                   OR LOWER(p.name) LIKE '%perfume%'
-                   OR LOWER(poi.item_name) LIKE '%perfume%'
-            `).all();
-
-            for (const p of perfumePOs) {
-                dbInstance.prepare(`UPDATE purchase_orders SET category = 'Perfume', category_color = '#8b5cf6' WHERE id = ? AND (category IS NULL OR category = '')`).run(p.id);
-            }
-
-            // Find orders containing fragrance items (that are not already set to perfume)
-            const fragrancePOs = dbInstance.prepare(`
-                SELECT DISTINCT po.id, po.po_number
-                FROM purchase_orders po
-                JOIN purchase_order_items poi ON poi.po_id = po.id
-                JOIN products p ON poi.product_id = p.id
-                WHERE (LOWER(p.category) LIKE '%fragrance%'
-                   OR LOWER(p.name) LIKE '%fragrance%'
-                   OR LOWER(poi.item_name) LIKE '%fragrance%')
-            `).all();
-
-            for (const f of fragrancePOs) {
-                dbInstance.prepare(`UPDATE purchase_orders SET category = 'Fragrance', category_color = '#ec4899' WHERE id = ? AND (category IS NULL OR category = '')`).run(f.id);
+            if (isMysql) {
+                dbInstance.exec(`UPDATE purchase_orders SET category = 'Perfume & Fragrance', category_color = '#8b5cf6' WHERE category IS NULL OR category = '' OR category IN ('Perfume', 'Fragrance');`);
+            } else {
+                dbInstance.prepare(`UPDATE purchase_orders SET category = 'Perfume & Fragrance', category_color = '#8b5cf6' WHERE category IS NULL OR category = '' OR category IN ('Perfume', 'Fragrance')`).run();
             }
         } catch (catAssignErr) {
             console.warn('Initial order category assignment note:', catAssignErr.message);

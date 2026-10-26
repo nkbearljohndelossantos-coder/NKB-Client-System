@@ -18327,7 +18327,8 @@ function filterPOMonitorReceipts() {
         const matchPO = (po.po_number || '').toLowerCase().includes(searchVal);
         const matchSO = (po.so_number || '').toLowerCase().includes(searchVal);
         const matchCustPO = (po.customer_po_number || '').toLowerCase().includes(searchVal);
-        const matchClient = (po.company_name || '').toLowerCase().includes(searchVal);
+        const matchClient = (po.company_name || '').toLowerCase().includes(searchVal) ||
+                            (po.contact_person || '').toLowerCase().includes(searchVal);
         const matchNotes = (po.notes || '').toLowerCase().includes(searchVal);
         const matchCategory = (po.category || '').toLowerCase().includes(searchVal);
 
@@ -18394,7 +18395,8 @@ function renderPOMonitorReceipts(orders) {
     if (jumpSelect) {
         jumpSelect.innerHTML = '<option value="">Jump directly to PO...</option>' + orders.map((po, idx) => {
             const num = po.so_number || po.po_number || `PO-${idx + 1}`;
-            const client = po.company_name || 'Client';
+            const isVyuceutical = Number(po.is_vyuceutical_ops) === 1 || (po.company_name && po.company_name.toLowerCase().includes('vyuceutical'));
+            const client = (isVyuceutical && po.contact_person) ? `Vyuceutical - ${po.contact_person}` : (po.company_name || 'Client');
             return `<option value="${po.id}">#${idx + 1}: ${num} - ${client}</option>`;
         }).join('');
     }
@@ -18423,12 +18425,16 @@ function renderPOMonitorReceipts(orders) {
     stack.innerHTML = orders.map((po, idx) => {
         const docNumber = po.so_number || po.po_number || `PO-${po.id.slice(0, 8)}`;
         const customerPo = po.customer_po_number || '';
+        const isVyuceutical = Number(po.is_vyuceutical_ops) === 1 || (po.company_name && po.company_name.toLowerCase().includes('vyuceutical'));
         const clientName = po.company_name || 'Customer';
-        const clientAddress = po.client_address || po.delivery_address || 'Cavite / NCR, Philippines';
-        const clientTin = po.client_tin || '000-000-000-00000';
+        const vyuceuticalClientName = (po.contact_person || '').trim();
+        const clientAddress = po.client_address || po.delivery_address || (isVyuceutical ? 'Cavite / NCR, Philippines' : 'Cavite / NCR, Philippines');
+        const clientTin = po.client_tin || (isVyuceutical ? '800-189-847-00000' : '000-000-000-00000');
         const orderDate = po.po_date || po.order_date || (po.created_at ? po.created_at.slice(0, 10) : 'N/A');
         const deliveryDate = po.expected_delivery_date || po.target_delivery_date || 'Standard Lead Time';
         const terms = po.form_of_payment || po.payment_terms || 'COD';
+        const poCategory = po.category || 'Perfume & Fragrance';
+        const poCategoryColor = po.effective_category_color || po.category_color || '#8b5cf6';
 
         // Items breakdown
         const items = Array.isArray(po.items) ? po.items : [];
@@ -18520,9 +18526,12 @@ function renderPOMonitorReceipts(orders) {
             <article class="po-receipt-card p-3 sm:p-8" id="po-receipt-card-${idx}" data-po-id="${po.id}" data-index="${idx}">
                 <!-- Quick Card Header / Status / Direct Actions -->
                 <div class="flex flex-wrap items-center justify-between gap-2 pb-3 mb-3 sm:pb-4 sm:mb-4 border-b border-slate-200">
-                    <div class="flex items-center gap-1.5 sm:gap-2">
+                    <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
                         <span class="text-[10px] sm:text-[11px] font-black font-mono px-2 py-0.5 rounded bg-slate-900 text-white">#${idx + 1} of ${orders.length}</span>
                         ${getStatusBadge(po.status)}
+                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-100 text-purple-900 border border-purple-300 shadow-2xs inline-flex items-center gap-1" style="background-color: ${poCategoryColor}18; color: ${poCategoryColor}; border-color: ${poCategoryColor}40;">
+                            <span>🌸</span><span>${poCategory}</span>
+                        </span>
                     </div>
                     <div class="flex items-center gap-1.5 sm:gap-2">
                         <a href="/print-po.html?id=${po.id}" target="_blank" class="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-[11px] sm:text-xs font-bold transition inline-flex items-center gap-1 shadow-xs" title="Open Full Sheet Printable Version">
@@ -18536,9 +18545,15 @@ function renderPOMonitorReceipts(orders) {
 
                 <!-- Company Header -->
                 <div class="text-center mb-3 sm:mb-4">
-                    <h1 class="text-lg sm:text-2xl font-black uppercase text-slate-950 tracking-wider">Vyuceutical OPC</h1>
-                    <p class="text-[11px] sm:text-xs font-bold text-slate-700">B4 L5 Twig St., Sampaguita Village, Mambog II, Bacoor City, 4102 Cavite, Philippines</p>
-                    <p class="text-[11px] sm:text-xs font-bold text-slate-700 font-mono">TIN: 800-189-847-00000</p>
+                    <h1 class="text-lg sm:text-2xl font-black uppercase text-slate-950 tracking-wider">
+                        ${isVyuceutical ? 'Vyuceutical OPC' : 'NKB MANUFACTURING CORPORATION'}
+                    </h1>
+                    <p class="text-[11px] sm:text-xs font-bold text-slate-700">
+                        ${isVyuceutical ? 'B4 L5 Twig St., Sampaguita Village, Mambog II, Bacoor City, 4102 Cavite, Philippines' : 'Blk 4, Lot 5, Twig St., Sampaguita Village, Mambog II, Bacoor City, Cavite'}
+                    </p>
+                    <p class="text-[11px] sm:text-xs font-bold text-slate-700 font-mono">
+                        ${isVyuceutical ? 'TIN: 800-189-847-00000' : 'TIN: 686-950-421-00000'}
+                    </p>
                 </div>
 
                 <!-- Document Title -->
@@ -18552,7 +18567,16 @@ function renderPOMonitorReceipts(orders) {
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4 mb-4 sm:mb-6 text-xs text-slate-800 bg-slate-50/90 p-3 sm:p-4 rounded-xl border border-slate-200/80">
                     <div class="space-y-1">
                         <div class="text-[10px] font-black uppercase tracking-wider text-slate-500">Customer Details</div>
-                        <div class="text-xs sm:text-sm font-black text-slate-950 uppercase">${clientName}</div>
+                        ${isVyuceutical ? `
+                            <div class="flex flex-wrap items-center gap-1.5">
+                                <span class="text-xs sm:text-sm font-black text-purple-950 uppercase">${vyuceuticalClientName || 'Vyuceutical Client'}</span>
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-purple-100 text-purple-900 border border-purple-300">Vyuceutical Client</span>
+                            </div>
+                            <div class="text-[11px] sm:text-xs font-bold text-purple-700 uppercase">Vyuceutical OPC</div>
+                        ` : `
+                            <div class="text-xs sm:text-sm font-black text-slate-950 uppercase">${clientName}</div>
+                            ${po.contact_person ? `<div class="text-[11px] sm:text-xs text-slate-700 font-semibold">Contact: ${po.contact_person}</div>` : ''}
+                        `}
                         <div class="text-[11px] sm:text-xs text-slate-700 font-medium flex items-start gap-1">
                             <span class="text-slate-400">📍</span><span>${clientAddress}</span>
                         </div>
