@@ -14798,11 +14798,34 @@ function populateITQuickActionSelects() {
 function onITStatusTableChange() {
     const tableSelect = document.getElementById('it-quick-status-table');
     const valSelect = document.getElementById('it-quick-status-val');
+    const datalist = document.getElementById('it-quick-status-datalist');
+    const idInput = document.getElementById('it-quick-status-id');
     if (!tableSelect || !valSelect || !itLookups || !itLookups.statuses) return;
 
     const tbl = tableSelect.value;
     const statuses = itLookups.statuses[tbl] || [];
     valSelect.innerHTML = statuses.map(s => `<option value="${s}">${s}</option>`).join('');
+
+    // Dynamic autocomplete suggestions for Target Document ID / No.
+    if (datalist) {
+        let options = [];
+        if (tbl === 'purchase_orders' && itLookups.orders) {
+            options = itLookups.orders.map(o => `<option value="${o.po_number}">${o.po_number} (${o.status})</option>`);
+            if (idInput) idInput.placeholder = 'e.g. PO-2026-000021';
+        } else if (tbl === 'delivery_receipts' && itLookups.deliveryReceipts) {
+            options = itLookups.deliveryReceipts.map(d => `<option value="${d.dr_number}">${d.dr_number} (${d.status})</option>`);
+            if (idInput) idInput.placeholder = 'e.g. DR-2026-000001';
+        } else if (tbl === 'job_orders' && itLookups.jobOrders) {
+            options = itLookups.jobOrders.map(j => `<option value="${j.jo_number}">${j.jo_number} (${j.status})</option>`);
+            if (idInput) idInput.placeholder = 'e.g. JO-2026-000001';
+        } else if (tbl === 'production_batches' && itLookups.batches) {
+            options = itLookups.batches.map(b => `<option value="${b.batch_number}">${b.batch_number} (${b.status})</option>`);
+            if (idInput) idInput.placeholder = 'e.g. B2026-001';
+        } else {
+            if (idInput) idInput.placeholder = 'Document ID or Number';
+        }
+        datalist.innerHTML = options.join('');
+    }
 }
 
 async function fetchAndRenderITRecords() {
@@ -15521,7 +15544,7 @@ async function executeQuickStatusOverride() {
             return;
         }
 
-        const msg = `⚡ Status updated to ${newStatus}!`;
+        const msg = res.message || `⚡ Status of ${docId} updated to ${newStatus}!`;
         if (typeof NKB.showToast === 'function') {
             NKB.showToast(msg, 'success');
         } else if (typeof NKB.toast === 'function') {

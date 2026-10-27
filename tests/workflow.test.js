@@ -3099,7 +3099,7 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.strictEqual(updateRes.body.success, true);
         assert.ok(updateRes.body.data.notes.includes('[Verified by IT Management]'));
 
-        // 7. Test Quick Status Override endpoint
+        // 7. Test Quick Status Override endpoint (via UUID)
         const overrideRes = await request(app)
             .post('/api/it-management/quick-actions/override-status')
             .set('Authorization', `Bearer ${adminToken}`)
@@ -3111,6 +3111,20 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
             });
         assert.strictEqual(overrideRes.status, 200);
         assert.strictEqual(overrideRes.body.success, true);
+
+        // 7b. Test Quick Status Override using document number (e.g. PO-2026-000021)
+        const overrideByNumRes = await request(app)
+            .post('/api/it-management/quick-actions/override-status')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                table: 'purchase_orders',
+                id: po21.po_number,
+                newStatus: 'IN_PRODUCTION',
+                reason: 'Document number resolution test'
+            });
+        assert.strictEqual(overrideByNumRes.status, 200);
+        assert.strictEqual(overrideByNumRes.body.success, true);
+        assert.strictEqual(overrideByNumRes.body.data.newStatus, 'IN_PRODUCTION');
 
         // 8. Test RBAC protection: non-admins must be rejected with 403
         const forbiddenRes = await request(app)

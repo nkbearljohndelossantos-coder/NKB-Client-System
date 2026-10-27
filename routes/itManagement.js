@@ -282,6 +282,91 @@ function maskSensitiveFields(obj) {
     return masked;
 }
 
+/**
+ * Robust record locator supporting Primary Key UUID or human-readable document number
+ */
+function findRecordByIdOrIdentifier(table, idOrNumber) {
+    const def = TABLE_DEFINITIONS[table];
+    if (!def || !idOrNumber) return null;
+    const clean = String(idOrNumber).trim();
+    if (!clean) return null;
+
+    // 1. Exact primary key match
+    let record = db.prepare(`SELECT * FROM ${def.tableName} WHERE ${def.primaryKey} = ?`).get(clean);
+    if (record) return record;
+
+    // 2. Case-insensitive primary key match
+    record = db.prepare(`SELECT * FROM ${def.tableName} WHERE LOWER(${def.primaryKey}) = LOWER(?)`).get(clean);
+    if (record) return record;
+
+    // 3. Display field match (e.g. po_number, jo_number, dr_number, batch_number, invoice_number, payment_number, request_number)
+    if (def.displayField && def.displayField !== def.primaryKey) {
+        record = db.prepare(`SELECT * FROM ${def.tableName} WHERE LOWER(${def.displayField}) = LOWER(?)`).get(clean);
+        if (record) return record;
+    }
+
+    // 4. Specific table identifier fields
+    if (def.tableName === 'purchase_orders') {
+        record = db.prepare(`
+            SELECT * FROM purchase_orders 
+            WHERE LOWER(po_number) = LOWER(?) 
+               OR LOWER(so_number) = LOWER(?) 
+               OR LOWER(customer_po_number) = LOWER(?)
+               OR po_number LIKE ?
+               OR so_number LIKE ?
+        `).get(clean, clean, clean, `%${clean}%`, `%${clean}%`);
+        if (record) return record;
+    } else if (def.tableName === 'delivery_receipts') {
+        record = db.prepare(`
+            SELECT * FROM delivery_receipts 
+            WHERE LOWER(dr_number) = LOWER(?)
+               OR dr_number LIKE ?
+        `).get(clean, `%${clean}%`);
+        if (record) return record;
+    } else if (def.tableName === 'sales_invoices') {
+        record = db.prepare(`
+            SELECT * FROM sales_invoices 
+            WHERE LOWER(invoice_number) = LOWER(?)
+               OR invoice_number LIKE ?
+        `).get(clean, `%${clean}%`);
+        if (record) return record;
+    } else if (def.tableName === 'job_orders') {
+        record = db.prepare(`
+            SELECT * FROM job_orders 
+            WHERE LOWER(jo_number) = LOWER(?)
+               OR jo_number LIKE ?
+        `).get(clean, `%${clean}%`);
+        if (record) return record;
+    } else if (def.tableName === 'production_batches') {
+        record = db.prepare(`
+            SELECT * FROM production_batches 
+            WHERE LOWER(batch_number) = LOWER(?)
+               OR batch_number LIKE ?
+        `).get(clean, `%${clean}%`);
+        if (record) return record;
+    } else if (def.tableName === 'payments') {
+        record = db.prepare(`
+            SELECT * FROM payments 
+            WHERE LOWER(payment_number) = LOWER(?)
+               OR LOWER(check_number) = LOWER(?)
+               OR LOWER(reference_number) = LOWER(?)
+               OR payment_number LIKE ?
+        `).get(clean, clean, clean, `%${clean}%`);
+        if (record) return record;
+    } else if (def.tableName === 'cheque_payables') {
+        record = db.prepare(`
+            SELECT * FROM cheque_payables 
+            WHERE LOWER(request_number) = LOWER(?)
+               OR LOWER(cheque_number) = LOWER(?)
+               OR LOWER(invoice_reference) = LOWER(?)
+               OR request_number LIKE ?
+        `).get(clean, clean, clean, `%${clean}%`);
+        if (record) return record;
+    }
+
+    return null;
+}
+
 // Access Control: Super Admin and IT Admin (and Admin) only
 const authorizeITAdmin = [authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN)];
 
@@ -450,12 +535,17 @@ router.get('/records/:table/:id', ...authorizeITAdmin, (req, res) => {
     }
 
     try {
+        const found = findRecordByIdOrIdentifier(table, id);
+        if (!found) {
+            return res.status(404).json({ success: false, error: `Record not found in ${def.label}.` });
+        }
+
         const row = db.prepare(`
             SELECT ${def.selectFields}
             FROM ${def.tableName}
             ${def.joins}
             WHERE ${def.tableName}.${def.primaryKey} = ?
-        `).get(id);
+        `).get(found[def.primaryKey]);
 
         if (!row) {
             return res.status(404).json({ success: false, error: `Record not found in ${def.label}.` });
@@ -497,10 +587,12 @@ router.put('/records/:table/:id', ...authorizeITAdmin, (req, res) => {
         return res.status(400).json({ success: false, error: 'No valid editable fields provided in update payload.' });
     }
 
-    const currentRecord = db.prepare(`SELECT * FROM ${def.tableName} WHERE ${def.primaryKey} = ?`).get(id);
+    const currentRecord = findRecordByIdOrIdentifier(table, id);
     if (!currentRecord) {
         return res.status(404).json({ success: false, error: `Record not found in ${def.label}.` });
     }
+
+    const actualId = currentRecord[def.primaryKey];
 
     for (const key of Object.keys(updates)) {
         previousValues[key] = currentRecord[key];
@@ -524,16 +616,16 @@ router.put('/records/:table/:id', ...authorizeITAdmin, (req, res) => {
             }
         } catch (_) {}
 
-        setParams.push(id);
+        setParams.push(actualId);
 
         const sql = `UPDATE ${def.tableName} SET ${setClauses.join(', ')} WHERE ${def.primaryKey} = ?`;
         db.prepare(sql).run(...setParams);
 
         // Special handling: if purchase_orders.client_id changed, cascade to DRs, Invoices, and Payments
         if (table === 'purchase_orders' && updates.client_id && updates.client_id !== currentRecord.client_id) {
-            db.prepare('UPDATE delivery_receipts SET client_id = ? WHERE po_id = ?').run(updates.client_id, id);
-            db.prepare('UPDATE sales_invoices SET client_id = ? WHERE po_id = ?').run(updates.client_id, id);
-            db.prepare('UPDATE payments SET client_id = ? WHERE invoice_id IN (SELECT id FROM sales_invoices WHERE po_id = ?)').run(updates.client_id, id);
+            db.prepare('UPDATE delivery_receipts SET client_id = ? WHERE po_id = ?').run(updates.client_id, actualId);
+            db.prepare('UPDATE sales_invoices SET client_id = ? WHERE po_id = ?').run(updates.client_id, actualId);
+            db.prepare('UPDATE payments SET client_id = ? WHERE invoice_id IN (SELECT id FROM sales_invoices WHERE po_id = ?)').run(updates.client_id, actualId);
         }
 
         // Special handling: if delivery_items changed, sync purchase_order_items.delivered_quantity
@@ -696,15 +788,20 @@ router.post('/quick-actions/override-status', ...authorizeITAdmin, (req, res) =>
         return res.status(400).json({ success: false, error: 'New status is required.' });
     }
 
-    const currentRecord = db.prepare(`SELECT * FROM ${def.tableName} WHERE ${def.primaryKey} = ?`).get(id);
+    const currentRecord = findRecordByIdOrIdentifier(table, id);
     if (!currentRecord) {
-        return res.status(404).json({ success: false, error: 'Record not found.' });
+        return res.status(404).json({ 
+            success: false, 
+            error: `Record '${id}' not found in table '${def.label || table}'. Please verify the document number or ID.` 
+        });
     }
 
+    const actualId = currentRecord[def.primaryKey];
     const oldStatus = currentRecord.status;
+    const identifier = currentRecord[def.displayField] || actualId;
 
     try {
-        db.prepare(`UPDATE ${def.tableName} SET status = ?, updated_at = datetime('now', 'localtime') WHERE ${def.primaryKey} = ?`).run(newStatus.trim(), id);
+        db.prepare(`UPDATE ${def.tableName} SET status = ?, updated_at = datetime('now', 'localtime') WHERE ${def.primaryKey} = ?`).run(newStatus.trim(), actualId);
 
         logAudit({
             userId: req.user.id,
@@ -712,11 +809,11 @@ router.post('/quick-actions/override-status', ...authorizeITAdmin, (req, res) =>
             userRole: req.user.role,
             action: 'IT_MANAGEMENT_OVERRIDE_STATUS',
             entityType: table.toUpperCase(),
-            entityId: id,
+            entityId: actualId,
             details: {
                 table,
-                id,
-                identifier: currentRecord[def.displayField] || id,
+                id: actualId,
+                identifier,
                 oldStatus,
                 newStatus: newStatus.trim(),
                 reason: reason || 'IT Management Status Override',
@@ -726,8 +823,8 @@ router.post('/quick-actions/override-status', ...authorizeITAdmin, (req, res) =>
 
         return res.json({
             success: true,
-            message: `Status updated from "${oldStatus}" to "${newStatus.trim()}".`,
-            data: { id, oldStatus, newStatus: newStatus.trim() }
+            message: `Status of ${identifier} updated from "${oldStatus}" to "${newStatus.trim()}".`,
+            data: { id: actualId, identifier, oldStatus, newStatus: newStatus.trim() }
         });
     } catch (err) {
         return res.status(500).json({ success: false, error: err.message });
@@ -745,10 +842,12 @@ router.delete('/records/:table/:id', ...authorizeITAdmin, (req, res) => {
         return res.status(400).json({ success: false, error: `Table '${table}' is not registered.` });
     }
 
-    const currentRecord = db.prepare(`SELECT * FROM ${def.tableName} WHERE ${def.primaryKey} = ?`).get(id);
+    const currentRecord = findRecordByIdOrIdentifier(table, id);
     if (!currentRecord) {
         return res.status(404).json({ success: false, error: 'Record not found.' });
     }
+
+    const actualId = currentRecord[def.primaryKey];
 
     try {
         let poIdToSync = null;
@@ -757,7 +856,7 @@ router.delete('/records/:table/:id', ...authorizeITAdmin, (req, res) => {
             if (dr) poIdToSync = dr.po_id;
         }
 
-        db.prepare(`DELETE FROM ${def.tableName} WHERE ${def.primaryKey} = ?`).run(id);
+        db.prepare(`DELETE FROM ${def.tableName} WHERE ${def.primaryKey} = ?`).run(actualId);
 
         if (poIdToSync) {
             db.prepare(`
