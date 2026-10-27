@@ -392,7 +392,8 @@ router.post('/orders', requireScope('orders:write'), (req, res) => {
                 min_allowed_quantity: minAllowedQty,
                 max_allowed_quantity: maxAllowedQty,
                 unit_price: unitPrice,
-                subtotal: lineSubtotal
+                subtotal: lineSubtotal,
+                delivery_date: (item.delivery_date || item.expected_delivery_date || '').trim() || null
             });
         }
 
@@ -425,12 +426,12 @@ router.post('/orders', requireScope('orders:write'), (req, res) => {
 
             const itemStmt = db.prepare(`
                 INSERT INTO purchase_order_items (
-                    id, po_id, product_id, item_name, target_quantity, min_allowed_quantity, max_allowed_quantity, unit_price, subtotal
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    id, po_id, product_id, item_name, target_quantity, min_allowed_quantity, max_allowed_quantity, unit_price, subtotal, delivery_date
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `);
 
             for (const pi of preparedItems) {
-                itemStmt.run(uuidv4(), orderId, pi.product_id, pi.item_name, pi.target_quantity, pi.min_allowed_quantity, pi.max_allowed_quantity, pi.unit_price, pi.subtotal);
+                itemStmt.run(uuidv4(), orderId, pi.product_id, pi.item_name, pi.target_quantity, pi.min_allowed_quantity, pi.max_allowed_quantity, pi.unit_price, pi.subtotal, pi.delivery_date || null);
             }
         });
 

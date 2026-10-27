@@ -318,7 +318,7 @@ router.get('/export', authenticateToken, (req, res) => {
                    po.status, po.subtotal, po.tax_amount, po.grand_total,
                    COALESCE(po.payment_made, 0) as payment_made,
                    po.notes, po.created_at, po.updated_at,
-                   (SELECT GROUP_CONCAT(COALESCE(poi.item_name, p.name) || ' (' || poi.target_quantity || ' ' || COALESCE(p.unit, 'pcs') || ')', '; ')
+                   (SELECT GROUP_CONCAT(COALESCE(poi.item_name, p.name) || ' (' || poi.target_quantity || ' ' || COALESCE(p.unit, 'pcs') || CASE WHEN poi.delivery_date IS NOT NULL AND poi.delivery_date != '' THEN ', Due: ' || poi.delivery_date ELSE '' END || ')', '; ')
                     FROM purchase_order_items poi
                     LEFT JOIN products p ON poi.product_id = p.id
                     WHERE poi.po_id = po.id) as items_summary
@@ -578,6 +578,9 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
             const maxQty = Math.ceil(targetQty * (1 + tolerance / 100));
 
             let finalItemName = (item.item_name && item.item_name.trim()) ? item.item_name.trim() : product.name;
+            const itemDeliveryDate = (item.delivery_date !== undefined && item.delivery_date !== null && String(item.delivery_date).trim() !== '')
+                ? String(item.delivery_date).trim()
+                : ((item.expected_delivery_date !== undefined && item.expected_delivery_date !== null && String(item.expected_delivery_date).trim() !== '') ? String(item.expected_delivery_date).trim() : null);
 
             processedItems.push({
                 id: uuidv4(),
@@ -588,7 +591,8 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
                 minAllowedQuantity: minQty,
                 maxAllowedQuantity: maxQty,
                 unitPrice,
-                subtotal: lineSubtotal
+                subtotal: lineSubtotal,
+                deliveryDate: itemDeliveryDate
             });
         }
 
@@ -661,8 +665,8 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
 
         const insertItemStmt = db.prepare(`
             INSERT INTO purchase_order_items
-            (id, po_id, product_id, item_name, target_quantity, min_allowed_quantity, max_allowed_quantity, unit_price, subtotal)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (id, po_id, product_id, item_name, target_quantity, min_allowed_quantity, max_allowed_quantity, unit_price, subtotal, delivery_date)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
         for (const it of processedItems) {
@@ -675,7 +679,8 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
                 it.minAllowedQuantity,
                 it.maxAllowedQuantity,
                 it.unitPrice,
-                it.subtotal
+                it.subtotal,
+                it.deliveryDate || null
             );
         }
 
@@ -829,6 +834,9 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
                 const maxQty = Math.ceil(targetQty * (1 + tolerance / 100));
 
                 let finalItemName = (item.item_name && item.item_name.trim()) ? item.item_name.trim() : product.name;
+                const itemDeliveryDate = (item.delivery_date !== undefined && item.delivery_date !== null && String(item.delivery_date).trim() !== '')
+                    ? String(item.delivery_date).trim()
+                    : ((item.expected_delivery_date !== undefined && item.expected_delivery_date !== null && String(item.expected_delivery_date).trim() !== '') ? String(item.expected_delivery_date).trim() : null);
 
                 processedItems.push({
                     id: uuidv4(),
@@ -839,7 +847,8 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
                     minAllowedQuantity: minQty,
                     maxAllowedQuantity: maxQty,
                     unitPrice,
-                    subtotal: lineSubtotal
+                    subtotal: lineSubtotal,
+                    deliveryDate: itemDeliveryDate
                 });
             }
         } else {
@@ -860,13 +869,14 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
 
             const insertItemStmt = db.prepare(`
                 INSERT INTO purchase_order_items
-                (id, po_id, product_id, item_name, target_quantity, min_allowed_quantity, max_allowed_quantity, unit_price, subtotal)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (id, po_id, product_id, item_name, target_quantity, min_allowed_quantity, max_allowed_quantity, unit_price, subtotal, delivery_date)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `);
 
             // Synchronize existing Job Orders for items in this PO (supporting multiple occurrences of same product)
             const syncedJoIds = new Set();
             for (const it of processedItems) {
+                const itDelDate = (it.deliveryDate !== undefined) ? it.deliveryDate : (it.delivery_date || null);
                 insertItemStmt.run(
                     it.id,
                     it.poId,
@@ -876,7 +886,8 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
                     it.minAllowedQuantity || it.min_allowed_quantity,
                     it.maxAllowedQuantity || it.max_allowed_quantity,
                     it.unitPrice || it.unit_price,
-                    it.subtotal
+                    it.subtotal,
+                    itDelDate
                 );
 
                 const availableJOs = db.prepare('SELECT id FROM job_orders WHERE po_id = ? AND product_id = ? ORDER BY created_at ASC').all(id, it.productId);
@@ -885,9 +896,11 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
                     syncedJoIds.add(targetJO.id);
                     db.prepare(`
                         UPDATE job_orders
-                        SET target_quantity = ?, updated_at = datetime('now', 'localtime')
+                        SET target_quantity = ?,
+                            scheduled_end_date = COALESCE(?, scheduled_end_date),
+                            updated_at = datetime('now', 'localtime')
                         WHERE id = ?
-                    `).run(it.targetQuantity || it.target_quantity, targetJO.id);
+                    `).run(it.targetQuantity || it.target_quantity, itDelDate, targetJO.id);
 
                     // Sync target_quantity on active production batches
                     db.prepare(`

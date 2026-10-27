@@ -76,6 +76,9 @@ function runMigrations(dbInstance, isMysql) {
             dbInstance.exec(`ALTER TABLE purchase_order_items ADD COLUMN item_name ${textType};`);
         } catch (_) {}
         try {
+            dbInstance.exec(`ALTER TABLE purchase_order_items ADD COLUMN delivery_date ${textType};`);
+        } catch (_) {}
+        try {
             dbInstance.exec(`ALTER TABLE purchase_orders ADD COLUMN form_of_payment ${textType} DEFAULT 'COD / Bank Transfer';`);
         } catch (_) {}
         try {

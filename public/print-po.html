@@ -1220,6 +1220,7 @@
                         <tr>
                             <td class="td-desc cell-editable" contenteditable="false">
                                 <div class="prod-name">${escapeHtml(desc)}</div>
+                                ${item.delivery_date ? `<div class="item-delivery-date" style="font-size: 8pt; color: #047857; font-weight: bold; margin-top: 2px;">🚚 Delivery Date: ${formatDateMMDDYYYY(item.delivery_date)}</div>` : ''}
                                 ${itemNote ? `<div style="font-size: 8pt; color: #374151; font-style: italic; margin-top: 1px; font-weight: 600;">Note: ${escapeHtml(itemNote)}</div>` : ''}
                             </td>
                             <td class="td-size cell-editable" contenteditable="false">${escapeHtml(itemSize)}</td>

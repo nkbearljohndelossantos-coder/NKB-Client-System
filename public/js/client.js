@@ -288,12 +288,14 @@ function addToClientCart(productId) {
     const qtyInput = document.getElementById(`catalog-qty-${productId}`);
     const qty = qtyInput ? (parseInt(qtyInput.value) || 500) : 500;
 
+    const defaultDeliveryDate = document.getElementById('client-delivery-date')?.value || null;
     clientCartItems.push({
         product_id: prod.id,
         name: prod.name,
         sku: prod.effective_sku || prod.sku,
         unit_price: Number(prod.default_price || 0),
-        target_quantity: qty
+        target_quantity: qty,
+        delivery_date: defaultDeliveryDate
     });
 
     NKB.showToast(`Added ${NKB.formatNumber(qty)} pcs of ${prod.name} to order!`, 'success');
@@ -315,6 +317,13 @@ function updateClientCartQty(index, newQty) {
     }
 }
 
+function updateClientCartDeliveryDate(index, value) {
+    if (clientCartItems[index]) {
+        clientCartItems[index].delivery_date = value ? value.trim() : null;
+    }
+}
+window.updateClientCartDeliveryDate = updateClientCartDeliveryDate;
+
 function renderClientCart() {
     const tbody = document.getElementById('client-po-items-table-body');
     const countEl = document.getElementById('cart-item-count');
@@ -330,7 +339,7 @@ function renderClientCart() {
     if (!tbody) return;
 
     if (clientCartItems.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-slate-400 font-medium">No products added yet. Click "+ Add to PO" on any product to the left.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-slate-400 font-medium">No products added yet. Click "+ Add to PO" on any product to the left.</td></tr>`;
     } else {
         tbody.innerHTML = clientCartItems.map((item, idx) => {
             const lineSubtotal = (item.target_quantity || 0) * (item.unit_price || 0);
@@ -352,6 +361,13 @@ function renderClientCart() {
                     <td class="py-2.5 px-2 whitespace-nowrap font-mono">
                         <span class="font-bold text-indigo-950">₱${Number(item.unit_price || 0).toFixed(2)}</span>
                         <span class="text-[9px] uppercase px-1 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold ml-1">Fixed</span>
+                    </td>
+                    <td class="py-2.5 px-2">
+                        <input type="date" 
+                               value="${item.delivery_date || ''}" 
+                               onchange="updateClientCartDeliveryDate(${idx}, this.value)" 
+                               class="w-32 px-1.5 py-1 border border-slate-300 rounded-lg text-xs font-medium text-slate-900 focus:ring-2 focus:ring-indigo-500"
+                               title="Optional delivery date for this product">
                     </td>
                     <td class="py-2.5 px-2 font-extrabold text-indigo-900 font-mono">
                         ${NKB.formatCurrency(lineSubtotal)}
@@ -382,7 +398,8 @@ function duplicateClientCartItem(index) {
         name: item.name,
         sku: item.sku,
         unit_price: item.unit_price,
-        target_quantity: item.target_quantity
+        target_quantity: item.target_quantity,
+        delivery_date: item.delivery_date || null
     });
     renderClientCart();
     NKB.showToast(`Added another line item for ${item.name}!`, 'success');
@@ -409,7 +426,8 @@ async function submitClientPO(e) {
         items: clientCartItems.map(item => ({
             product_id: item.product_id,
             target_quantity: item.target_quantity,
-            unit_price: Math.round(Number(item.unit_price || 0) * 100) / 100
+            unit_price: Math.round(Number(item.unit_price || 0) * 100) / 100,
+            delivery_date: item.delivery_date ? item.delivery_date.trim() : undefined
         }))
     };
 

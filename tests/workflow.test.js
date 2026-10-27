@@ -4769,7 +4769,8 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
                         product_id: prodRow.id,
                         item_name: `${prodRow.name} - Batch 1`,
                         target_quantity: 600,
-                        unit_price: 150.00
+                        unit_price: 150.00,
+                        delivery_date: '2026-11-20'
                     },
                     {
                         product_id: prodRow.id,
@@ -4785,6 +4786,8 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         const orderId = createRes.body.data.id;
         assert.ok(orderId);
         assert.strictEqual(createRes.body.data.expected_delivery_date, deliveryDate);
+        assert.strictEqual(createRes.body.data.items[0].delivery_date, '2026-11-20');
+        assert.strictEqual(createRes.body.data.items[1].delivery_date, null);
 
         // 2. Fetch order via GET /api/orders/:id and verify both line items exist
         const fetchRes = await request(app)
@@ -4798,6 +4801,8 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.strictEqual(fetchRes.body.data.items[1].product_id, prodRow.id);
         assert.strictEqual(fetchRes.body.data.items[0].target_quantity, 600);
         assert.strictEqual(fetchRes.body.data.items[1].target_quantity, 900);
+        assert.strictEqual(fetchRes.body.data.items[0].delivery_date, '2026-11-20');
+        assert.strictEqual(fetchRes.body.data.items[1].delivery_date, null);
 
         // 3. Update order via PUT /api/orders/:id with duplicate products and updated delivery date
         const updatedDeliveryDate = '2026-12-01';
@@ -4811,7 +4816,8 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
                         product_id: prodRow.id,
                         item_name: `${prodRow.name} - Revised Batch 1`,
                         target_quantity: 700,
-                        unit_price: 150.00
+                        unit_price: 150.00,
+                        delivery_date: '2026-12-05'
                     },
                     {
                         product_id: prodRow.id,
@@ -4828,6 +4834,8 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.strictEqual(updateRes.body.data.items.length, 2);
         assert.strictEqual(updateRes.body.data.items[0].target_quantity, 700);
         assert.strictEqual(updateRes.body.data.items[1].target_quantity, 1100);
+        assert.strictEqual(updateRes.body.data.items[0].delivery_date, '2026-12-05');
+        assert.strictEqual(updateRes.body.data.items[1].delivery_date, null);
 
         // 4. Batch Job Order creation for PO with duplicate product lines
         const joBatchRes = await request(app)

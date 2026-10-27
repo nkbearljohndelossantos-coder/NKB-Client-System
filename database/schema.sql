@@ -208,6 +208,7 @@ CREATE TABLE IF NOT EXISTS purchase_order_items (
     unit_price REAL NOT NULL CHECK (unit_price >= 0),
     subtotal REAL NOT NULL,
     delivered_quantity INTEGER NOT NULL DEFAULT 0,
+    delivery_date TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     FOREIGN KEY (po_id) REFERENCES purchase_orders(id) ON DELETE CASCADE,
     FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT

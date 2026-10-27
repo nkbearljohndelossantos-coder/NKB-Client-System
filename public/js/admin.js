@@ -8089,6 +8089,7 @@ async function openCreatePOModal(options = {}) {
                                             <th class="py-3 px-3.5">Product</th>
                                             <th class="py-3 px-3.5 w-32">Target Qty (pcs)</th>
                                             <th class="py-3 px-3.5 w-36">Unit Price (₱)</th>
+                                            <th class="py-3 px-3.5 w-36">Delivery Date</th>
                                             <th class="py-3 px-3.5 w-32">Subtotal (₱)</th>
                                             <th class="py-3 px-2 w-12 text-center">Action</th>
                                         </tr>
@@ -8374,15 +8375,18 @@ function selectPOSuggestion(productId) {
     if (!prod) return;
 
     // If single initial line item that hasn't been touched, replace it; otherwise add as a new line item (allowing same product multiple times)
+    const orderDeliveryDate = document.getElementById('create-po-delivery-date')?.value || null;
     if (adminPOLineItems.length === 1 && adminPOLineItems[0].target_quantity === 1000 && adminPOLineItems[0].product_id === adminPOCatalog[0]?.id && !adminPOLineItems[0]._userEdited) {
         adminPOLineItems[0].product_id = prod.id;
         adminPOLineItems[0].unit_price = Number(prod.default_price || 0);
+        adminPOLineItems[0].delivery_date = orderDeliveryDate;
         adminPOLineItems[0]._userEdited = true;
     } else {
         adminPOLineItems.push({
             product_id: prod.id,
             target_quantity: 1000,
             unit_price: Number(prod.default_price || 0),
+            delivery_date: orderDeliveryDate,
             _userEdited: true
         });
     }
@@ -8405,10 +8409,12 @@ function selectPOSuggestion(productId) {
 function addAdminPOLineItem() {
     if (adminPOCatalog.length === 0) return;
     const defaultProd = adminPOCatalog[0];
+    const orderDeliveryDate = document.getElementById('create-po-delivery-date')?.value || null;
     adminPOLineItems.push({
         product_id: defaultProd.id,
         target_quantity: 1000,
-        unit_price: Number(defaultProd.default_price || 0)
+        unit_price: Number(defaultProd.default_price || 0),
+        delivery_date: orderDeliveryDate
     });
     renderAdminPOLineItems();
 }
@@ -8438,6 +8444,9 @@ function updateAdminPOLineItem(index, field, value) {
     } else if (field === 'unit_price') {
         adminPOLineItems[index].unit_price = Math.max(0, parseFloat(value) || 0);
         adminPOLineItems[index]._customPriceEntered = true;
+    } else if (field === 'delivery_date') {
+        adminPOLineItems[index].delivery_date = value ? value.trim() : null;
+        return;
     }
 
     // Update line total and summary totals
@@ -8465,7 +8474,7 @@ function renderAdminPOLineItems() {
     if (!tbody) return;
 
     if (adminPOCatalog.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-amber-600 font-medium bg-amber-50/50 rounded-lg">⚠️ No products available in this client's catalog.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="py-6 text-center text-amber-600 font-medium bg-amber-50/50 rounded-lg">⚠️ No products available in this client's catalog.</td></tr>`;
         const elTotalItems = document.getElementById('admin-po-total-items');
         if (elTotalItems) elTotalItems.textContent = '0';
         const elTotalQty = document.getElementById('admin-po-total-qty');
@@ -8511,6 +8520,13 @@ function renderAdminPOLineItems() {
                                placeholder="0.00"
                                title="Custom Unit Price for this client">
                     </div>
+                </td>
+                <td class="py-3 px-3.5">
+                    <input type="date" 
+                           value="${item.delivery_date ? (item.delivery_date.includes('T') ? item.delivery_date.split('T')[0] : item.delivery_date) : ''}" 
+                           onchange="updateAdminPOLineItem(${idx}, 'delivery_date', this.value)" 
+                           class="w-full px-2.5 py-2 border border-slate-200 hover:border-slate-300 rounded-xl text-xs font-normal text-slate-800 tracking-normal focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm"
+                           title="Delivery Date for this product (Optional)">
                 </td>
                 <td id="admin-po-line-total-${idx}" class="py-3 px-3.5 font-semibold text-slate-900 font-mono text-xs tracking-tight">
                     ${NKB.formatCurrency(lineSubtotal)}
@@ -8589,6 +8605,7 @@ async function submitCreatePO(e) {
                         item_name: prod ? prod.name : undefined,
                         target_quantity: item.target_quantity,
                         unit_price: Math.round(Number(item.unit_price || 0) * 100) / 100,
+                        delivery_date: item.delivery_date ? item.delivery_date.trim() : undefined,
                         save_custom_price: true
                     };
                 })
@@ -18478,6 +18495,7 @@ function renderPOMonitorReceipts(orders) {
                         <div class="text-[10px] text-slate-500 font-mono mt-0.5 flex flex-wrap gap-1 items-center">
                             <span class="bg-slate-100 px-1 py-0.2 rounded border border-slate-200">${it.sku || 'SKU'}</span>
                             ${it.formula_code ? `<span class="bg-indigo-50 text-indigo-700 px-1 py-0.2 rounded border border-indigo-200">FC: ${it.formula_code}</span>` : ''}
+                            ${it.delivery_date ? `<span class="bg-emerald-50 text-emerald-800 px-1.5 py-0.5 rounded border border-emerald-200 font-bold" title="Product Delivery Date">🚚 Due: ${NKB.formatDate(it.delivery_date)}</span>` : ''}
                         </div>
                     </td>
                     <td class="py-2.5 px-3 text-center align-top font-bold text-xs text-slate-700 whitespace-nowrap">${size}</td>
@@ -18516,6 +18534,7 @@ function renderPOMonitorReceipts(orders) {
                                 <span class="bg-white px-1.5 py-0.5 rounded border border-slate-300 font-bold text-slate-700">SKU: ${it.sku || 'N/A'}</span>
                                 ${it.formula_code ? `<span class="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-200 font-bold">FC: ${it.formula_code}</span>` : ''}
                                 ${size && size !== '-' ? `<span class="bg-amber-50 text-amber-800 px-1.5 py-0.5 rounded border border-amber-200 font-bold">Size: ${size}</span>` : ''}
+                                ${it.delivery_date ? `<span class="bg-emerald-50 text-emerald-800 px-1.5 py-0.5 rounded border border-emerald-200 font-bold">🚚 Due: ${NKB.formatDate(it.delivery_date)}</span>` : ''}
                             </div>
                         </div>
                         <div class="text-right flex-shrink-0">

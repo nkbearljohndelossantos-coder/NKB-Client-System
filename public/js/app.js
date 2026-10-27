@@ -1382,11 +1382,17 @@ async function openViewPOModal(poId) {
                 </div>
 
                 <!-- Specifications Badges -->
-                <div class="grid grid-cols-1 sm:grid-cols-4 gap-2.5 text-xs">
+                <div class="grid grid-cols-1 sm:grid-cols-5 gap-2.5 text-xs">
                     <div class="p-2.5 bg-slate-50 rounded-xl border border-slate-200/70 space-y-0.5">
                         <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Net Content</span>
                         <div class="font-bold text-slate-900 flex items-center gap-1.5">
                             <span>🧴</span><span>${item.size || '—'}</span>
+                        </div>
+                    </div>
+                    <div class="p-2.5 bg-slate-50 rounded-xl border border-slate-200/70 space-y-0.5">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Delivery Date</span>
+                        <div class="font-bold ${item.delivery_date ? 'text-emerald-700' : 'text-slate-500'} flex items-center gap-1.5 truncate" title="${item.delivery_date ? NKB.formatDate(item.delivery_date) : (po.expected_delivery_date ? `${NKB.formatDate(po.expected_delivery_date)} (Order Default)` : 'Optional / Standard')}">
+                            <span>🚚</span><span>${item.delivery_date ? NKB.formatDate(item.delivery_date) : (po.expected_delivery_date ? NKB.formatDate(po.expected_delivery_date) : 'Optional')}</span>
                         </div>
                     </div>
                     <div class="p-2.5 bg-slate-50 rounded-xl border border-slate-200/70 space-y-0.5">
@@ -1929,14 +1935,16 @@ async function openEditPOModal(poId) {
     editPOLineItems = (po.items || []).map(it => ({
         product_id: it.product_id,
         target_quantity: it.target_quantity,
-        unit_price: Number(it.unit_price || 0)
+        unit_price: Number(it.unit_price || 0),
+        delivery_date: it.delivery_date ? (it.delivery_date.includes('T') ? it.delivery_date.split('T')[0] : it.delivery_date) : ''
     }));
 
     if (editPOLineItems.length === 0 && editPOCatalog.length > 0) {
         editPOLineItems.push({
             product_id: editPOCatalog[0].id,
             target_quantity: 1000,
-            unit_price: Number(editPOCatalog[0].default_price || 0)
+            unit_price: Number(editPOCatalog[0].default_price || 0),
+            delivery_date: deliveryDateFormatted || ''
         });
     }
 
@@ -2102,6 +2110,7 @@ async function openEditPOModal(poId) {
                                             <th class="py-3 px-3.5">Product</th>
                                             <th class="py-3 px-3.5 w-32">Target Qty (pcs)</th>
                                             <th class="py-3 px-3.5 w-36">Unit Price (₱)</th>
+                                            <th class="py-3 px-3.5 w-36">Delivery Date</th>
                                             <th class="py-3 px-3.5 w-32">Subtotal (₱)</th>
                                             <th class="py-3 px-2 w-12 text-center">Action</th>
                                         </tr>
@@ -2350,10 +2359,12 @@ function selectEditPOSuggestion(productId) {
     const prod = editPOCatalog.find(p => p.id === productId);
     if (!prod) return;
 
+    const orderDeliveryDate = document.getElementById('edit-po-delivery-date')?.value || '';
     editPOLineItems.push({
         product_id: prod.id,
         target_quantity: 1000,
-        unit_price: Number(prod.default_price || 0)
+        unit_price: Number(prod.default_price || 0),
+        delivery_date: orderDeliveryDate
     });
     renderEditPOLineItems();
     NKB.showToast(`Added ${prod.display_name} [${prod.brand}] to order!`, 'success');
@@ -2376,7 +2387,7 @@ function renderEditPOLineItems() {
     if (!tbody) return;
 
     if (editPOCatalog.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-amber-600 font-medium bg-amber-50/50 rounded-lg">⚠️ No products available in this client's catalog.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="py-6 text-center text-amber-600 font-medium bg-amber-50/50 rounded-lg">⚠️ No products available in this client's catalog.</td></tr>`;
         const elTotalItems = document.getElementById('edit-po-total-items');
         if (elTotalItems) elTotalItems.textContent = '0';
         const elTotalQty = document.getElementById('edit-po-total-qty');
@@ -2423,6 +2434,13 @@ function renderEditPOLineItems() {
                                title="Custom Unit Price for this client">
                     </div>
                 </td>
+                <td class="py-3 px-3.5">
+                    <input type="date" 
+                           value="${item.delivery_date ? (item.delivery_date.includes('T') ? item.delivery_date.split('T')[0] : item.delivery_date) : ''}" 
+                           onchange="updateEditPOLineItem(${idx}, 'delivery_date', this.value)" 
+                           class="w-full px-2.5 py-2 border border-slate-200 hover:border-slate-300 rounded-xl text-xs font-normal text-slate-800 tracking-normal focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm"
+                           title="Delivery Date for this product (Optional)">
+                </td>
                 <td id="edit-po-line-total-${idx}" class="py-3 px-3.5 font-semibold text-slate-900 font-mono text-xs tracking-tight">
                     ${NKB.formatCurrency(lineSubtotal)}
                 </td>
@@ -2446,10 +2464,12 @@ function renderEditPOLineItems() {
 function addEditPOLineItem() {
     if (editPOCatalog.length === 0) return;
     const defaultProd = editPOCatalog[0];
+    const orderDeliveryDate = document.getElementById('edit-po-delivery-date')?.value || '';
     editPOLineItems.push({
         product_id: defaultProd.id,
         target_quantity: 1000,
-        unit_price: Number(defaultProd.default_price || 0)
+        unit_price: Number(defaultProd.default_price || 0),
+        delivery_date: orderDeliveryDate
     });
     renderEditPOLineItems();
 }
@@ -2478,6 +2498,9 @@ function updateEditPOLineItem(index, field, value) {
     } else if (field === 'unit_price') {
         editPOLineItems[index].unit_price = Math.max(0, parseFloat(value) || 0);
         editPOLineItems[index]._customPriceEntered = true;
+    } else if (field === 'delivery_date') {
+        editPOLineItems[index].delivery_date = value ? value.trim() : null;
+        return;
     }
 
     const lineSubtotal = (editPOLineItems[index].target_quantity || 0) * (editPOLineItems[index].unit_price || 0);
@@ -2577,6 +2600,7 @@ async function submitEditPO(e) {
                     item_name: prod ? prod.name : undefined,
                     target_quantity: item.target_quantity,
                     unit_price: item.unit_price !== undefined ? Number(item.unit_price) : undefined,
+                    delivery_date: item.delivery_date ? item.delivery_date.trim() : undefined,
                     save_custom_price: true
                 };
             })

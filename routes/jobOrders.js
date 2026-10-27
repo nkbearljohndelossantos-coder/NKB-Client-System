@@ -395,7 +395,7 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'COMPOUN
                     item.product_id,
                     item.target_quantity,
                     scheduled_start_date || getManilaDate(),
-                    scheduled_end_date || null,
+                    scheduled_end_date || item.delivery_date || po.expected_delivery_date || null,
                     assigned_team || 'Formulation & Bottling Team Alpha',
                     notes || null,
                     req.user.id
@@ -452,6 +452,7 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'COMPOUN
 
     const joId = uuidv4();
     const joNumber = getNextDocumentNumber('JO');
+    const poItemRow = db.prepare('SELECT delivery_date FROM purchase_order_items WHERE po_id = ? AND product_id = ? LIMIT 1').get(po_id, product_id);
 
     const tx = db.transaction(() => {
         db.prepare(`
@@ -465,7 +466,7 @@ router.post('/', authenticateToken, requireRoles('ADMIN', 'PRODUCTION', 'COMPOUN
             product_id,
             parseInt(target_quantity),
             scheduled_start_date || getManilaDate(),
-            scheduled_end_date || null,
+            scheduled_end_date || poItemRow?.delivery_date || po.expected_delivery_date || null,
             assigned_team || 'Formulation & Bottling Team Alpha',
             notes || null,
             req.user.id

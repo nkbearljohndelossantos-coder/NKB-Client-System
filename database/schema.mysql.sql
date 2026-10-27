@@ -158,6 +158,7 @@ CREATE TABLE IF NOT EXISTS purchase_order_items (
     unit_price DECIMAL(12,2) NOT NULL,
     subtotal DECIMAL(14,2) NOT NULL,
     delivered_quantity INT NOT NULL DEFAULT 0,
+    delivery_date VARCHAR(50) NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_poi_po FOREIGN KEY (po_id) REFERENCES purchase_orders(id) ON DELETE CASCADE,
     CONSTRAINT fk_poi_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT
