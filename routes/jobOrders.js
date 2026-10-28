@@ -14,7 +14,7 @@ router.get('/', authenticateToken, (req, res) => {
     const { poId, status } = req.query;
 
     let query = `
-        SELECT jo.*, po.po_number, po.so_number, po.po_date, po.created_at as po_created_at, po.client_id, c.company_name, c.contact_person, c.is_vyuceutical_ops,
+        SELECT jo.*, po.po_number, po.so_number, po.po_date, po.created_at as po_created_at, po.client_id, po.is_revisioned, po.revision_count, po.revision_notes, po.revisioned_at, c.company_name, c.contact_person, c.is_vyuceutical_ops,
                p.name as product_name, 
                p.sku, p.unit,
                (SELECT COUNT(*) FROM production_batches WHERE jo_id = jo.id) as batch_count,
@@ -182,10 +182,15 @@ function getClientConsolidatedJOData(clientId, specificPoId = null, specificJoId
         so_number: clientSO,
         jo_number: clientJO,
         po_number: uniquePONumbers.length > 0 ? uniquePONumbers.join(', ') : (primaryPO ? primaryPO.po_number : ''),
+        customer_po_number: primaryPO ? (primaryPO.customer_po_number || null) : null,
         po_date: (primaryPO && primaryPO.po_date) ? primaryPO.po_date : (targetJO ? targetJO.scheduled_start_date : getManilaDate()),
         created_at: primaryPO ? primaryPO.created_at : (targetJO ? targetJO.created_at : null),
         expected_delivery_date: primaryPO ? primaryPO.expected_delivery_date : null,
         notes: (primaryPO && primaryPO.notes) || (targetJO && targetJO.notes) || '',
+        is_revisioned: primaryPO ? (primaryPO.is_revisioned || 0) : 0,
+        revision_count: primaryPO ? (primaryPO.revision_count || 0) : 0,
+        revision_notes: primaryPO ? (primaryPO.revision_notes || null) : null,
+        revisioned_at: primaryPO ? (primaryPO.revisioned_at || null) : null,
         items: items
     };
 }

@@ -941,6 +941,11 @@ async function loadOrders() {
                         <button type="button" onclick="openViewPOModal('${po.id}')" class="font-mono font-black text-indigo-600 hover:text-indigo-800 hover:underline text-left block text-sm tracking-tight" title="Click to view full PO details">
                             ${po.po_number}
                         </button>
+                        ${po.is_revisioned === 1 ? `
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-300 inline-flex items-center gap-1 shadow-2xs" title="${po.revision_notes ? NKB.escapeHtml(po.revision_notes) : 'Revised Purchase Order'}">
+                                <span>🔄</span> REV ${po.revision_count || 1}
+                            </span>
+                        ` : ''}
                         ${po.customer_po_number ? `
                             <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 inline-flex items-center gap-1 shadow-2xs" title="Customer PO Number: ${po.customer_po_number}">
                                 🏷️ ${po.customer_po_number}

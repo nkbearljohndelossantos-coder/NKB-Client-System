@@ -5877,6 +5877,159 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         db.prepare("UPDATE system_settings SET setting_value = ? WHERE setting_key = 'default_purchasing_fund_limit'").run(String(originalFundLimit));
     });
 
+    test('69. Client Merge & PO Revisioning: Unified Vyuceutical OPC - Online Platforms & SO Receipt Revision Badging', async () => {
+        // 1. Verify single canonical client for Vyuceutical OPC - Online Platforms
+        const primaryId = '0d68514b-2b7f-42d2-a211-cfbdc0855d3a';
+        const dupId = '880a7615-0c98-4867-890b-bbbf7f031e86';
+
+        let primaryClient = db.prepare('SELECT * FROM clients WHERE id = ?').get(primaryId);
+        if (!primaryClient) {
+            db.prepare(`
+                INSERT INTO clients (id, company_name, contact_person, email, phone, address, is_vyuceutical_ops)
+                VALUES (?, 'Vyuceutical OPC', 'Online Platforms', 'online@vyuceutical.com', '09123456789', 'Phils.', 1)
+            `).run(primaryId);
+            primaryClient = db.prepare('SELECT * FROM clients WHERE id = ?').get(primaryId);
+        }
+
+        assert.ok(primaryClient, 'Primary Vyuceutical client must exist');
+        assert.strictEqual(primaryClient.company_name, 'Vyuceutical OPC');
+        assert.strictEqual(primaryClient.contact_person, 'Online Platforms');
+        assert.strictEqual(primaryClient.is_vyuceutical_ops, 1);
+
+        // Test merge mechanics if duplicate exists or when simulated
+        db.prepare(`
+            INSERT OR REPLACE INTO clients (id, company_name, contact_person, email, phone, address, is_vyuceutical_ops)
+            VALUES (?, 'Vyuceutical OPC', 'Online Platforms', 'angelica@opc.com', '09987654321', 'Phils.', 1)
+        `).run(dupId);
+
+        const adminUser = db.prepare("SELECT id FROM users WHERE role IN ('ADMIN', 'SUPER_ADMIN') LIMIT 1").get();
+        const adminUserId = adminUser ? adminUser.id : 'a0000000-0000-0000-0000-000000000001';
+
+        const dupPoId = 'po-dup-test-' + Date.now();
+        db.prepare(`
+            INSERT INTO purchase_orders (id, po_number, client_id, status, created_by)
+            VALUES (?, 'PO-TEST-DUP-01', ?, 'APPROVED', ?)
+        `).run(dupPoId, dupId, adminUserId);
+
+        // Run merge logic
+        db.prepare('UPDATE purchase_orders SET client_id = ? WHERE client_id = ?').run(primaryId, dupId);
+        db.prepare('UPDATE users SET client_id = ? WHERE client_id = ?').run(primaryId, dupId);
+        db.prepare('DELETE FROM clients WHERE id = ?').run(dupId);
+
+        const dupClient = db.prepare('SELECT * FROM clients WHERE id = ?').get(dupId);
+        assert.strictEqual(dupClient, undefined, 'Duplicate Vyuceutical client must be removed from clients table');
+
+        // Verify the PO originally under duplicate is now unified under primary
+        const unifiedPo = db.prepare('SELECT id, client_id FROM purchase_orders WHERE id = ?').get(dupPoId);
+        assert.strictEqual(unifiedPo.client_id, primaryId, 'Purchase order must now point to primary client ID');
+        db.prepare('DELETE FROM purchase_orders WHERE id = ?').run(dupPoId);
+
+        const dupPoCheck = db.prepare('SELECT COUNT(*) as cnt FROM purchase_orders WHERE client_id = ?').get(dupId);
+        assert.strictEqual(dupPoCheck.cnt, 0, 'No purchase orders should point to the old duplicate client ID');
+
+        // 2. Test PO Revision marking workflow via PUT /api/orders/:id
+        // Create a test PO
+        const testPoRes = await request(app)
+            .post('/api/orders')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                client_id: primaryId,
+                tolerance_percent: 10.0,
+                billing_policy: 'ACTUAL_DELIVERY',
+                form_of_payment: 'COD',
+                items: [{ product_id: lotionProduct.id, target_quantity: 500, unit_price: 150.0 }]
+            });
+        assert.strictEqual(testPoRes.status, 201);
+        const testPoId = testPoRes.body.data.id;
+
+        // Verify initial state is not revisioned
+        let poRow = db.prepare('SELECT is_revisioned, revision_count, revision_notes FROM purchase_orders WHERE id = ?').get(testPoId);
+        assert.strictEqual(poRow.is_revisioned, 0);
+        assert.strictEqual(poRow.revision_count, 0);
+
+        // Update PO and mark as Revisioned (Rev 1)
+        const rev1Res = await request(app)
+            .put(`/api/orders/${testPoId}`)
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                is_revisioned: true,
+                revision_notes: 'Revision 1: Adjusted quantity and added expedited handling note',
+                items: [{ product_id: lotionProduct.id, target_quantity: 600, unit_price: 150.0 }]
+            });
+        assert.strictEqual(rev1Res.status, 200);
+
+        poRow = db.prepare('SELECT is_revisioned, revision_count, revision_notes, revisioned_at FROM purchase_orders WHERE id = ?').get(testPoId);
+        assert.strictEqual(poRow.is_revisioned, 1);
+        assert.strictEqual(poRow.revision_count, 1);
+        assert.strictEqual(poRow.revision_notes, 'Revision 1: Adjusted quantity and added expedited handling note');
+        assert.ok(poRow.revisioned_at, 'revisioned_at must be populated');
+
+        // Verify GET /api/orders/:id returns the revision properties
+        const getPoRes = await request(app)
+            .get(`/api/orders/${testPoId}`)
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(getPoRes.status, 200);
+        assert.strictEqual(getPoRes.body.data.is_revisioned, 1);
+        assert.strictEqual(getPoRes.body.data.revision_count, 1);
+        assert.strictEqual(getPoRes.body.data.revision_notes, 'Revision 1: Adjusted quantity and added expedited handling note');
+
+        // Update PO again and verify revision_count increments to 2
+        const rev2Res = await request(app)
+            .put(`/api/orders/${testPoId}`)
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                is_revisioned: true,
+                revision_notes: 'Revision 2: Updated terms to 30d per client agreement',
+                form_of_payment: '30d'
+            });
+        assert.strictEqual(rev2Res.status, 200);
+
+        poRow = db.prepare('SELECT is_revisioned, revision_count, revision_notes FROM purchase_orders WHERE id = ?').get(testPoId);
+        assert.strictEqual(poRow.is_revisioned, 1);
+        assert.strictEqual(poRow.revision_count, 2);
+        assert.strictEqual(poRow.revision_notes, 'Revision 2: Updated terms to 30d per client agreement');
+
+        // Verify job orders print consolidation route returns revision data for SO print
+        const joPoPrintRes = await request(app)
+            .get(`/api/job-orders/po/${testPoId}`)
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(joPoPrintRes.status, 200);
+        assert.strictEqual(joPoPrintRes.body.data.is_revisioned, 1);
+        assert.strictEqual(joPoPrintRes.body.data.revision_count, 2);
+        assert.strictEqual(joPoPrintRes.body.data.revision_notes, 'Revision 2: Updated terms to 30d per client agreement');
+
+        // Verify unchecking revisioning resets is_revisioned = 0
+        const unrevRes = await request(app)
+            .put(`/api/orders/${testPoId}`)
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                is_revisioned: false
+            });
+        assert.strictEqual(unrevRes.status, 200);
+        poRow = db.prepare('SELECT is_revisioned FROM purchase_orders WHERE id = ?').get(testPoId);
+        assert.strictEqual(poRow.is_revisioned, 0);
+
+        // Verify UI template files contain the revision markings
+        const printPoHtml = fs.readFileSync(path.join(__dirname, '../public/print-po.html'), 'utf8');
+        assert.ok(printPoHtml.includes('id="hdr-revision-badge"'), 'print-po.html must have hdr-revision-badge');
+        assert.ok(printPoHtml.includes('id="meta-revision-row"'), 'print-po.html must have meta-revision-row');
+
+        const printJoHtml = fs.readFileSync(path.join(__dirname, '../public/print-jo.html'), 'utf8');
+        assert.ok(printJoHtml.includes('rev-badge'), 'print-jo.html must contain rev-badge');
+        assert.ok(printJoHtml.includes('Revision:'), 'print-jo.html must display Revision in metadata');
+
+        const appJs = fs.readFileSync(path.join(__dirname, '../public/js/app.js'), 'utf8');
+        assert.ok(appJs.includes('edit-po-is-revisioned'), 'app.js must have edit-po-is-revisioned checkbox');
+        assert.ok(appJs.includes('edit-po-revision-notes'), 'app.js must have edit-po-revision-notes input');
+
+        const adminJs = fs.readFileSync(path.join(__dirname, '../public/js/admin.js'), 'utf8');
+        assert.ok(adminJs.includes('REV ${po.revision_count'), 'admin.js must display revision badge on PO table');
+
+        // Cleanup test PO
+        db.prepare('DELETE FROM purchase_order_items WHERE po_id = ?').run(testPoId);
+        db.prepare('DELETE FROM purchase_orders WHERE id = ?').run(testPoId);
+    });
+
     after(() => {
         try {
             realtimeSyncService.closeAllClients();

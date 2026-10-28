@@ -927,7 +927,7 @@ function runMigrations(dbInstance, isMysql) {
             console.warn('Item name cleaning note:', cleanErr.message);
         }
 
-        // Schema Upgrades: Purchase Orders Confirmation & Raw Materials Management
+        // Schema Upgrades: Purchase Orders Confirmation, Raw Materials & Revision Tracking
         const poCols = [
             { name: 'accounting_confirmed', type: `${intType} DEFAULT 0` },
             { name: 'accounting_confirmed_at', type: textType },
@@ -937,7 +937,11 @@ function runMigrations(dbInstance, isMysql) {
             { name: 'inventory_confirmed_by', type: textType },
             { name: 'raw_materials_status', type: `${textType} DEFAULT 'PENDING_CHECK'` },
             { name: 'formulation_converted', type: `${intType} DEFAULT 0` },
-            { name: 'formulation_converted_at', type: textType }
+            { name: 'formulation_converted_at', type: textType },
+            { name: 'is_revisioned', type: `${intType} DEFAULT 0` },
+            { name: 'revision_count', type: `${intType} DEFAULT 0` },
+            { name: 'revision_notes', type: textType },
+            { name: 'revisioned_at', type: textType }
         ];
         for (const col of poCols) {
             try {
@@ -2063,6 +2067,42 @@ if (useMysql) {
         db.prepare("UPDATE document_sequences SET last_sequence = ? WHERE doc_type = 'BAT'").run(batSeqVal);
     } catch (cleanErr) {
         console.error('Error PO cleanup migration error:', cleanErr.message);
+    }
+
+    // Migration: Merge duplicate Vyuceutical OPC - Online Platforms client records into canonical client record
+    try {
+        const primaryId = '0d68514b-2b7f-42d2-a211-cfbdc0855d3a';
+        const dupId = '880a7615-0c98-4867-890b-bbbf7f031e86';
+        const primaryClient = db.prepare('SELECT id FROM clients WHERE id = ?').get(primaryId);
+        const dupClient = db.prepare('SELECT id FROM clients WHERE id = ?').get(dupId);
+
+        if (primaryClient && dupClient) {
+            db.prepare('UPDATE purchase_orders SET client_id = ? WHERE client_id = ?').run(primaryId, dupId);
+            db.prepare('UPDATE users SET client_id = ? WHERE client_id = ?').run(primaryId, dupId);
+            db.prepare('UPDATE delivery_receipts SET client_id = ? WHERE client_id = ?').run(primaryId, dupId);
+            db.prepare('UPDATE sales_invoices SET client_id = ? WHERE client_id = ?').run(primaryId, dupId);
+            db.prepare('UPDATE payments SET client_id = ? WHERE client_id = ?').run(primaryId, dupId);
+            db.prepare('UPDATE client_buffer_stock SET client_id = ? WHERE client_id = ?').run(primaryId, dupId);
+            db.prepare('DELETE FROM client_product_prices WHERE client_id = ?').run(dupId);
+            db.prepare('DELETE FROM clients WHERE id = ?').run(dupId);
+            console.log(`✅ Merged duplicate Vyuceutical OPC Online Platforms client (${dupId}) into primary client (${primaryId})`);
+        } else if (primaryClient) {
+            db.prepare('UPDATE purchase_orders SET client_id = ? WHERE client_id = ?').run(primaryId, dupId);
+            db.prepare('UPDATE users SET client_id = ? WHERE client_id = ?').run(primaryId, dupId);
+        }
+
+        // Canonicalize company_name and contact_person
+        if (primaryClient) {
+            db.prepare(`
+                UPDATE clients 
+                SET company_name = 'Vyuceutical OPC', 
+                    contact_person = 'Online Platforms', 
+                    is_vyuceutical_ops = 1 
+                WHERE id = ?
+            `).run(primaryId);
+        }
+    } catch (mergeErr) {
+        console.error('Vyuceutical Online Platforms client merge error:', mergeErr.message);
     }
 
     // Auto-initialize Document Sequences

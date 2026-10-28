@@ -366,6 +366,24 @@
             color: #000000;
         }
 
+        .revision-badge {
+            display: inline-block;
+            margin-left: 8px;
+            padding: 1px 6px;
+            font-size: 8.5pt;
+            font-weight: 800;
+            color: #92400e;
+            background-color: #fef3c7;
+            border: 1.5px solid #d97706;
+            border-radius: 4px;
+            vertical-align: middle;
+            text-transform: uppercase;
+            text-decoration: none !important;
+            letter-spacing: 0.5px;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
+
         /* Customer & Order Metadata Row */
         .metadata-grid {
             display: flex;
@@ -799,6 +817,7 @@
         <!-- Document Title: Centered & Underlined -->
         <div class="doc-title-container">
             <span class="doc-title" id="hdr-doc-title" contenteditable="false">SALES ORDER</span>
+            <span id="hdr-revision-badge" class="revision-badge" style="display: none;">[REVISED - <span id="hdr-revision-tag">REV 1</span>]</span>
         </div>
 
         <!-- Metadata Grid: Customer on Left, Order info on Right -->
@@ -810,10 +829,16 @@
             </div>
             <div class="meta-order-col">
                 <div class="order-number" id="meta-doc-number" contenteditable="false">SO-1271</div>
+                <div id="meta-revision-row" style="display: none; color: #b45309; font-weight: bold; font-size: 8.5pt;">
+                    Revision: <span id="meta-revision-text">REV 1</span>
+                </div>
                 <div id="meta-cust-po-row" style="display: none;">Customer PO #: <span id="meta-customer-po-number" contenteditable="false"></span></div>
                 <div>Date: <span id="meta-doc-date" contenteditable="false">08/20/2026</span></div>
                 <div>Terms: <span id="meta-doc-terms" contenteditable="false">COD</span></div>
                 <div>Delivery Date: <span id="meta-doc-due-date" contenteditable="false">08/20/2026</span></div>
+                <div id="meta-revision-notes-row" style="display: none; color: #78350f; font-size: 7.5pt; font-style: italic; max-width: 220px; margin-top: 1px;">
+                    Rev Note: <span id="meta-revision-notes-text"></span>
+                </div>
             </div>
         </div>
 
@@ -1196,6 +1221,39 @@
             document.getElementById('meta-doc-date').textContent = formatDateMMDDYYYY(po.po_date || po.created_at || new Date());
             document.getElementById('meta-doc-terms').textContent = po.form_of_payment || po.terms || 'COD';
             document.getElementById('meta-doc-due-date').textContent = po.expected_delivery_date ? formatDateMMDDYYYY(po.expected_delivery_date) : (isEditMode ? '' : '—');
+
+            // Revision Metadata & Header Badge
+            const revBadge = document.getElementById('hdr-revision-badge');
+            const revTag = document.getElementById('hdr-revision-tag');
+            const revRow = document.getElementById('meta-revision-row');
+            const revText = document.getElementById('meta-revision-text');
+            const revNotesRow = document.getElementById('meta-revision-notes-row');
+            const revNotesText = document.getElementById('meta-revision-notes-text');
+
+            if (po.is_revisioned === 1 || po.is_revisioned === true || (po.revision_count && po.revision_count > 0)) {
+                const revCount = po.revision_count || 1;
+                const revDateStr = po.revisioned_at ? formatDateMMDDYYYY(po.revisioned_at) : '';
+                if (revBadge) {
+                    revBadge.style.display = 'inline-block';
+                    if (revTag) revTag.textContent = `REV ${revCount}`;
+                }
+                if (revRow) {
+                    revRow.style.display = '';
+                    if (revText) revText.textContent = `REV ${revCount}${revDateStr ? ' (' + revDateStr + ')' : ''}`;
+                }
+                if (revNotesRow && revNotesText) {
+                    if (po.revision_notes) {
+                        revNotesText.textContent = po.revision_notes;
+                        revNotesRow.style.display = '';
+                    } else {
+                        revNotesRow.style.display = 'none';
+                    }
+                }
+            } else {
+                if (revBadge) revBadge.style.display = 'none';
+                if (revRow) revRow.style.display = 'none';
+                if (revNotesRow) revNotesRow.style.display = 'none';
+            }
 
             // Items Table
             const items = po.items && po.items.length > 0 ? po.items : [];

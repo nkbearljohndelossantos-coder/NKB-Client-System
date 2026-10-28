@@ -1485,6 +1485,11 @@ async function openViewPOModal(poId) {
                                 ${po.so_number ? `<span class="badge bg-slate-100 text-slate-700 font-mono text-xs">SO: ${po.so_number}</span>` : ''}
                                 ${po.customer_po_number ? `<span class="badge bg-indigo-100 text-indigo-800 font-mono text-xs font-bold border border-indigo-200">🏷️ Customer PO: ${po.customer_po_number}</span>` : ''}
                                 ${NKB.renderStatusBadge(po.status)}
+                                ${po.is_revisioned === 1 ? `
+                                    <span class="px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs inline-flex items-center gap-1" title="${po.revision_notes ? NKB.escapeHtml(po.revision_notes) : 'Revised Order'}">
+                                        <span>🔄</span><span>REVISION ${po.revision_count || 1}</span>
+                                    </span>
+                                ` : ''}
                                 ${po.category ? `
                                     <span class="px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-wider border shadow-2xs inline-flex items-center gap-1.5" style="background-color: ${po.effective_category_color || po.category_color || '#8b5cf6'}18; color: ${po.effective_category_color || po.category_color || '#8b5cf6'}; border-color: ${po.effective_category_color || po.category_color || '#8b5cf6'}40;" title="Order Category: ${po.category}">
                                         <span class="w-2 h-2 rounded-full" style="background-color: ${po.effective_category_color || po.category_color || '#8b5cf6'}"></span>${po.category}
@@ -1532,6 +1537,16 @@ async function openViewPOModal(poId) {
                             ${po.target_bank_name ? `<div>Target Bank: <strong class="text-slate-800">${po.target_bank_name}</strong></div>` : ''}
                         </div>
                     </div>
+
+                    ${po.is_revisioned === 1 ? `
+                        <div class="p-3 bg-amber-50/80 border border-amber-200 rounded-xl text-slate-800 space-y-1">
+                            <div class="flex items-center justify-between text-amber-950 font-black">
+                                <span class="flex items-center gap-1.5 text-xs"><span>🔄</span><span>Order Revision #${po.revision_count || 1}</span></span>
+                                ${po.revisioned_at ? `<span class="text-[11px] text-amber-800 font-semibold">Revised on: ${NKB.formatDate(po.revisioned_at)}</span>` : ''}
+                            </div>
+                            ${po.revision_notes ? `<p class="text-xs text-amber-900 leading-relaxed font-medium"><strong>Revision Notes / Scope:</strong> ${NKB.escapeHtml(po.revision_notes)}</p>` : ''}
+                        </div>
+                    ` : ''}
 
                     ${po.notes ? `
                         <div class="p-3.5 bg-amber-50/60 border border-amber-200 rounded-xl text-slate-700">
@@ -2149,6 +2164,36 @@ async function openEditPOModal(poId) {
                                 </div>
                                 <p class="text-[10px] text-slate-400">Enter advance payment, downpayment, or check collection to lessen the total bill of this PO.</p>
                             </div>
+
+                            <!-- PO Revision Option -->
+                            <div class="p-3 bg-amber-50/70 rounded-xl border border-amber-200/90 shadow-2xs space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <label class="flex items-center gap-2 cursor-pointer select-none">
+                                        <input type="checkbox" 
+                                               id="edit-po-is-revisioned" 
+                                               ${po.is_revisioned ? 'checked' : ''} 
+                                               onchange="document.getElementById('edit-po-revision-details-box').classList.toggle('hidden', !this.checked)" 
+                                               class="w-4 h-4 text-amber-600 rounded border-amber-300 focus:ring-amber-500">
+                                        <span class="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                                            <span>🔄</span><span>Label as Revisioned Order</span>
+                                        </span>
+                                    </label>
+                                    <span class="text-[10px] px-2 py-0.5 rounded-full font-bold ${po.is_revisioned ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-slate-100 text-slate-500'}">
+                                        ${po.is_revisioned ? `Rev. ${po.revision_count || 1}` : 'Initial PO'}
+                                    </span>
+                                </div>
+                                <div id="edit-po-revision-details-box" class="${po.is_revisioned ? '' : 'hidden'} space-y-1.5 pt-1.5 border-t border-amber-200/80">
+                                    <label class="block text-[10.5px] font-semibold text-amber-900">
+                                        Revision Note / Reason (Displays on SO Receipts):
+                                    </label>
+                                    <input type="text" 
+                                           id="edit-po-revision-notes" 
+                                           value="${(po.revision_notes || '').replace(/"/g, '&quot;')}" 
+                                           placeholder="e.g. Adjusted quantities and terms per client agreement" 
+                                           class="w-full px-2.5 py-1.5 border border-amber-200 rounded-lg text-xs bg-white text-slate-800 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition shadow-2xs">
+                                    <p class="text-[10px] text-amber-700/90 leading-tight">Checking this will mark this order as revisioned and print a prominent <strong>[REVISED]</strong> badge on the official Sales Order receipt.</p>
+                                </div>
+                            </div>
                         </div>
                         <div class="space-y-2 text-right flex flex-col justify-center">
                             <div class="text-xs text-slate-500 font-normal flex justify-between sm:justify-end gap-3">
@@ -2582,6 +2627,11 @@ async function submitEditPO(e) {
     const paymentMadeInput = document.getElementById('edit-po-payment-made');
     const paymentMade = paymentMadeInput ? Math.max(0, parseFloat(paymentMadeInput.value) || 0) : 0;
 
+    const isRevisionedCheckbox = document.getElementById('edit-po-is-revisioned');
+    const isRevisioned = isRevisionedCheckbox ? isRevisionedCheckbox.checked : undefined;
+    const revisionNotesInput = document.getElementById('edit-po-revision-notes');
+    const revisionNotes = revisionNotesInput ? revisionNotesInput.value.trim() : undefined;
+
     const res = await NKB.api(`/api/orders/${editingPOId}`, {
         method: 'PUT',
         body: JSON.stringify({
@@ -2593,6 +2643,8 @@ async function submitEditPO(e) {
             category: document.getElementById('edit-po-category')?.value || null,
             notes,
             payment_made: paymentMade,
+            is_revisioned: isRevisioned,
+            revision_notes: revisionNotes,
             items: editPOLineItems.map(item => {
                 const prod = editPOCatalog.find(p => p.id === item.product_id);
                 return {

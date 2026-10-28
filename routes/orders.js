@@ -728,7 +728,7 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
  */
 router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
     const { id } = req.params;
-    let { po_date, expected_delivery_date, tolerance_percent, billing_policy, notes, form_of_payment, items, tax_percent, category, category_color, is_buffer_stock, payment_made } = req.body;
+    let { po_date, expected_delivery_date, tolerance_percent, billing_policy, notes, form_of_payment, items, tax_percent, category, category_color, is_buffer_stock, payment_made, is_revisioned, revision_notes } = req.body;
     if (form_of_payment === undefined && req.body.terms !== undefined) {
         form_of_payment = req.body.terms;
     }
@@ -954,6 +954,26 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
             ? Math.max(0, parseFloat(payment_made))
             : (po.payment_made !== undefined && po.payment_made !== null ? parseFloat(po.payment_made) : 0.0);
 
+        let newIsRevisioned = po.is_revisioned || 0;
+        let newRevisionCount = po.revision_count || 0;
+        let newRevisionNotes = po.revision_notes || null;
+        let newRevisionedAt = po.revisioned_at || null;
+
+        if (is_revisioned !== undefined) {
+            const isRevBool = (is_revisioned === true || is_revisioned === 1 || is_revisioned === '1' || is_revisioned === 'true');
+            if (isRevBool) {
+                newIsRevisioned = 1;
+                newRevisionCount = (po.revision_count ? po.revision_count + 1 : 1);
+                newRevisionNotes = revision_notes !== undefined ? (revision_notes ? String(revision_notes).trim() : null) : po.revision_notes;
+                newRevisionedAt = new Date().toISOString();
+            } else {
+                newIsRevisioned = 0;
+                newRevisionNotes = revision_notes !== undefined ? (revision_notes ? String(revision_notes).trim() : null) : null;
+            }
+        } else if (revision_notes !== undefined) {
+            newRevisionNotes = revision_notes ? String(revision_notes).trim() : null;
+        }
+
         db.prepare(`
             UPDATE purchase_orders
             SET po_date = ?,
@@ -971,6 +991,10 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
                 grand_total = ?,
                 is_buffer_stock = ?,
                 payment_made = ?,
+                is_revisioned = ?,
+                revision_count = ?,
+                revision_notes = ?,
+                revisioned_at = ?,
                 updated_at = datetime('now', 'localtime')
             WHERE id = ?
         `).run(
@@ -989,6 +1013,10 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
             grandTotal,
             newIsBufferStock,
             newPaymentMade,
+            newIsRevisioned,
+            newRevisionCount,
+            newRevisionNotes,
+            newRevisionedAt,
             id
         );
 
@@ -1007,7 +1035,10 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
                 grandTotal,
                 tolerance,
                 policy,
-                itemCount: processedItems.length
+                itemCount: processedItems.length,
+                isRevisioned: newIsRevisioned,
+                revisionCount: newRevisionCount,
+                revisionNotes: newRevisionNotes
             }
         });
 

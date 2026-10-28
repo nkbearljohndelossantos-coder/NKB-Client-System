@@ -1570,6 +1570,11 @@
                         <!-- Underlined Document Title -->
                         <div class="doc-title-row">
                             <span class="doc-title-text title-display">${escapeHtml(docTitle)}</span>
+                            ${(client.is_revisioned === 1 || (client.revision_count && client.revision_count > 0)) ? `
+                                <span class="rev-badge" style="display:inline-block; margin-left:8px; padding:1px 6px; font-size:8.5pt; font-weight:800; text-transform:uppercase; background:#fef3c7; color:#92400e; border:1.5px solid #d97706; border-radius:4px; vertical-align:middle; text-decoration:none;">
+                                    [REVISED - REV ${client.revision_count || 1}]
+                                </span>
+                            ` : ''}
                             ${totalPages > 1 ? `<span style="font-size: 8.5pt; font-weight: bold; margin-left: 6px; text-decoration: none; display: inline-block;">(Page ${pageIndex} of ${totalPages})</span>` : ''}
                         </div>
 
@@ -1581,6 +1586,12 @@
                             </div>
                             <div class="meta-right">
                                 <div class="doc-no doc-no-display" data-client-idx="${clientIdx}" data-raw-no="${escapeHtml(rawDocNo)}">${escapeHtml(formattedDocNo)}</div>
+                                ${(client.is_revisioned === 1 || (client.revision_count && client.revision_count > 0)) ? `
+                                    <div class="meta-line" style="color:#b45309; font-weight:bold; font-size:8.5pt;">
+                                        Revision: <strong>REV ${client.revision_count || 1}</strong>${client.revisioned_at ? ` (${formatDateMMDDYYYY(client.revisioned_at)})` : ''}
+                                    </div>
+                                    ${client.revision_notes ? `<div class="meta-line" style="color:#78350f; font-style:italic; font-size:7.5pt; max-width:220px;">Rev Note: ${escapeHtml(client.revision_notes)}</div>` : ''}
+                                ` : ''}
                                 ${client.customer_po_number ? `<div class="meta-line">Customer PO #: <strong>${escapeHtml(client.customer_po_number)}</strong></div>` : ''}
                                 <div class="meta-line">Date: <span class="doc-date-display">${escapeHtml(docDate)}</span></div>
                                 <div class="meta-line">Delivery Date: <span class="doc-duedate-display">${escapeHtml(dueDate)}</span></div>
