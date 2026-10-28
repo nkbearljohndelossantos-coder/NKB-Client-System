@@ -3175,6 +3175,19 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.ok(adminHtml.includes('••••••••••••••••'), 'admin.html must contain masked API keys');
         assert.ok(adminJs.includes('toggleApiKeyVisibility'), 'admin.js must implement toggleApiKeyVisibility');
         assert.ok(adminJs.includes('toggleHeaderApiKey'), 'admin.js must implement toggleHeaderApiKey');
+
+        // 11. Verify raw_materials and raw_materials_inventory table resolution in IT Management
+        const rawMatsKeyRes = await request(app)
+            .get('/api/it-management/records/raw_materials?page=1&limit=50')
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(rawMatsKeyRes.status, 200, 'raw_materials key must return 200 OK');
+        assert.strictEqual(rawMatsKeyRes.body.success, true);
+
+        const rawMatsTableRes = await request(app)
+            .get('/api/it-management/records/raw_materials_inventory?page=1&limit=50')
+            .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(rawMatsTableRes.status, 200, 'raw_materials_inventory table name must return 200 OK');
+        assert.strictEqual(rawMatsTableRes.body.success, true);
     });
 
     test('41. Role-Based Navigation Restrictions, Production Supervisor Interactive Dashboard & Warehouse Raw Materials Inventory', async () => {

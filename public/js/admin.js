@@ -14763,12 +14763,13 @@ function renderITTablePills() {
     if (!pillsContainer || !itTablesMetadata.length) return;
 
     pillsContainer.innerHTML = itTablesMetadata.map(t => {
-        const isActive = t.tableName === itCurrentTable;
+        const tableKey = t.key || t.tableName;
+        const isActive = t.tableName === itCurrentTable || t.key === itCurrentTable;
         const activeCls = isActive
             ? 'bg-rose-600 text-white font-bold shadow-md shadow-rose-600/30 border-rose-600'
             : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200';
         return `
-            <button type="button" onclick="selectITTable('${t.tableName}')" class="px-3 py-1.5 rounded-xl text-xs border transition flex items-center gap-1.5 ${activeCls}">
+            <button type="button" onclick="selectITTable('${tableKey}')" class="px-3 py-1.5 rounded-xl text-xs border transition flex items-center gap-1.5 ${activeCls}">
                 <span>${t.icon || '📄'}</span>
                 <span>${t.label}</span>
             </button>
@@ -14948,6 +14949,7 @@ function getITTableHeaderHTML(table) {
         case 'products':
             return baseHeader(['SKU', 'Product Name', 'Category', 'Unit', 'Price', 'Formula Code', 'Stock', 'Status']);
         case 'raw_materials':
+        case 'raw_materials_inventory':
             return baseHeader(['Code', 'Material Name', 'Category', 'Current Stock', 'Unit', 'Min Level', 'Cost']);
         case 'users':
             return baseHeader(['Name', 'Email', 'Role', 'Linked Client', 'Phone', 'Plain Pwd', 'Status']);
@@ -15133,6 +15135,7 @@ function getITTableRowHTML(table, r) {
                 </tr>
             `;
         case 'raw_materials':
+        case 'raw_materials_inventory':
             return `
                 <tr class="hover:bg-slate-50 transition border-b border-slate-100">
                     <td class="py-2.5 px-3 font-mono font-bold text-emerald-700">${r.material_code || '-'}</td>

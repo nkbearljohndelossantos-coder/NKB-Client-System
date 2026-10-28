@@ -270,6 +270,16 @@ const TABLE_DEFINITIONS = {
     }
 };
 
+// Aliases and robust lookup helper
+TABLE_DEFINITIONS.raw_materials_inventory = TABLE_DEFINITIONS.raw_materials;
+
+function getTableDef(table) {
+    if (!table) return null;
+    const clean = String(table).trim();
+    if (TABLE_DEFINITIONS[clean]) return TABLE_DEFINITIONS[clean];
+    return Object.values(TABLE_DEFINITIONS).find(d => d.tableName === clean || (d.key && d.key === clean)) || null;
+}
+
 // Mask sensitive security columns (API keys, hashes, secrets)
 function maskSensitiveFields(obj) {
     if (!obj || typeof obj !== 'object') return obj;
@@ -286,7 +296,7 @@ function maskSensitiveFields(obj) {
  * Robust record locator supporting Primary Key UUID or human-readable document number
  */
 function findRecordByIdOrIdentifier(table, idOrNumber) {
-    const def = TABLE_DEFINITIONS[table];
+    const def = getTableDef(table);
     if (!def || !idOrNumber) return null;
     const clean = String(idOrNumber).trim();
     if (!clean) return null;
@@ -375,15 +385,21 @@ const authorizeITAdmin = [authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROL
  * List registered tables and their editable fields
  */
 router.get('/tables', ...authorizeITAdmin, (req, res) => {
-    const list = Object.keys(TABLE_DEFINITIONS).map(key => ({
-        key,
-        label: TABLE_DEFINITIONS[key].label,
-        icon: TABLE_DEFINITIONS[key].icon,
-        tableName: TABLE_DEFINITIONS[key].tableName,
-        primaryKey: TABLE_DEFINITIONS[key].primaryKey,
-        displayField: TABLE_DEFINITIONS[key].displayField,
-        editableColumns: TABLE_DEFINITIONS[key].editableColumns
-    }));
+    const seen = new Set();
+    const list = [];
+    for (const [key, def] of Object.entries(TABLE_DEFINITIONS)) {
+        if (seen.has(def.tableName)) continue;
+        seen.add(def.tableName);
+        list.push({
+            key,
+            label: def.label,
+            icon: def.icon,
+            tableName: def.tableName,
+            primaryKey: def.primaryKey,
+            displayField: def.displayField,
+            editableColumns: def.editableColumns
+        });
+    }
     return res.json({ success: true, data: list });
 });
 
@@ -447,7 +463,7 @@ router.get('/lookups', ...authorizeITAdmin, (req, res) => {
  */
 router.get('/records/:table', ...authorizeITAdmin, (req, res) => {
     const { table } = req.params;
-    const def = TABLE_DEFINITIONS[table];
+    const def = getTableDef(table);
     if (!def) {
         return res.status(400).json({ success: false, error: `Table '${table}' is not registered in IT Management.` });
     }
@@ -529,7 +545,7 @@ router.get('/records/:table', ...authorizeITAdmin, (req, res) => {
  */
 router.get('/records/:table/:id', ...authorizeITAdmin, (req, res) => {
     const { table, id } = req.params;
-    const def = TABLE_DEFINITIONS[table];
+    const def = getTableDef(table);
     if (!def) {
         return res.status(400).json({ success: false, error: `Table '${table}' is not registered.` });
     }
@@ -567,7 +583,7 @@ router.get('/records/:table/:id', ...authorizeITAdmin, (req, res) => {
  */
 router.put('/records/:table/:id', ...authorizeITAdmin, (req, res) => {
     const { table, id } = req.params;
-    const def = TABLE_DEFINITIONS[table];
+    const def = getTableDef(table);
     if (!def) {
         return res.status(400).json({ success: false, error: `Table '${table}' is not registered.` });
     }
@@ -779,7 +795,7 @@ router.post('/quick-actions/reassign-po-client', ...authorizeITAdmin, (req, res)
  */
 router.post('/quick-actions/override-status', ...authorizeITAdmin, (req, res) => {
     const { table, id, newStatus, reason } = req.body || {};
-    const def = TABLE_DEFINITIONS[table];
+    const def = getTableDef(table);
     if (!def) {
         return res.status(400).json({ success: false, error: `Table '${table}' is not registered.` });
     }
@@ -837,7 +853,7 @@ router.post('/quick-actions/override-status', ...authorizeITAdmin, (req, res) =>
  */
 router.delete('/records/:table/:id', ...authorizeITAdmin, (req, res) => {
     const { table, id } = req.params;
-    const def = TABLE_DEFINITIONS[table];
+    const def = getTableDef(table);
     if (!def) {
         return res.status(400).json({ success: false, error: `Table '${table}' is not registered.` });
     }
