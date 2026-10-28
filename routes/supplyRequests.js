@@ -4,6 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 const db = require('../database/db');
 const { authenticateToken, requireRoles, ROLES } = require('../middleware/auth');
 const { logAudit } = require('../services/auditService');
+const { getNextDocumentNumber } = require('../services/documentNumberService');
 
 function getEnrichedSupplyRequest(id) {
     return db.prepare(`
@@ -18,12 +19,14 @@ function getEnrichedSupplyRequest(id) {
                u.whatsapp_number as requested_by_whatsapp,
                qcu.name as qc_inspector_name,
                qcu.phone as qc_inspector_phone,
-               qcu.whatsapp_number as qc_inspector_whatsapp
+               qcu.whatsapp_number as qc_inspector_whatsapp,
+               rec_u.name as received_by_name
         FROM supply_requests sr
         LEFT JOIN purchase_orders po ON sr.po_id = po.id
         LEFT JOIN clients c ON po.client_id = c.id
         LEFT JOIN users u ON sr.requested_by = u.id
         LEFT JOIN users qcu ON sr.qc_inspected_by = qcu.id
+        LEFT JOIN users rec_u ON sr.received_by = rec_u.id
         WHERE sr.id = ?
     `).get(id);
 }
@@ -78,6 +81,59 @@ function restockBomMaterialsIfPresent(bomItemsJson, notesPrefix = '') {
         console.warn('restockBomMaterials error:', e.message);
     }
 }
+
+/**
+ * GET /api/supply-requests/fund-limit
+ * Retrieve global purchasing fund limit
+ */
+router.get('/fund-limit', authenticateToken, (req, res) => {
+    try {
+        const row = db.prepare("SELECT setting_value FROM system_settings WHERE setting_key = 'default_purchasing_fund_limit'").get();
+        const limit = row ? parseFloat(row.setting_value) || 500000.0 : 500000.0;
+        return res.json({ success: true, data: { fund_limit: limit }, fund_limit: limit });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * PUT /api/supply-requests/fund-limit
+ * Update default purchasing fund limit (budget ceiling)
+ */
+router.put('/fund-limit', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.PURCHASING, ROLES.CEO), (req, res) => {
+    try {
+        const { fund_limit } = req.body || {};
+        const val = parseFloat(fund_limit);
+        if (isNaN(val) || val < 0) {
+            return res.status(400).json({ success: false, error: 'Fund limit must be a positive number.' });
+        }
+        db.prepare(`
+            INSERT INTO system_settings (setting_key, setting_value, updated_at) 
+            VALUES ('default_purchasing_fund_limit', ?, datetime('now', 'localtime'))
+            ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value, updated_at = excluded.updated_at
+        `).run(String(val));
+
+        logAudit({
+            userId: req.user.id,
+            userName: req.user.name,
+            userRole: req.user.role,
+            action: 'UPDATE_PURCHASING_FUND_LIMIT',
+            entityType: 'SYSTEM_SETTINGS',
+            entityId: 'default_purchasing_fund_limit',
+            details: { newFundLimit: val },
+            ipAddress: req.ip
+        });
+
+        return res.json({
+            success: true,
+            message: `Purchasing fund limit updated to ₱${val.toLocaleString('en-US', { minimumFractionDigits: 2 })}.`,
+            data: { fund_limit: val },
+            fund_limit: val
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
 
 /**
  * GET /api/supply-requests
@@ -141,18 +197,52 @@ router.get('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_ADMI
  */
 router.post('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.PURCHASING, ROLES.INVENTORY, ROLES.COMPOUNDING), (req, res) => {
     try {
-        const { po_id, materials_needed, urgency = 'NORMAL', target_date, notes, affected_products, bom_items } = req.body || {};
+        const { po_id, materials_needed, urgency = 'NORMAL', target_date, notes, affected_products, bom_items, fund_limit } = req.body || {};
 
-        const parsedBomItems = Array.isArray(bom_items)
+        const rawBom = Array.isArray(bom_items)
             ? bom_items.filter(it => it && (it.material_name || it.material_code) && Number(it.requested_qty) > 0)
             : [];
+
+        // Enrich items with catalog costs if not specified
+        let totalCost = 0.0;
+        const parsedBomItems = rawBom.map(it => {
+            let cost = parseFloat(it.unit_cost);
+            let supplier = it.supplier;
+            if (isNaN(cost) || cost <= 0) {
+                if (it.raw_material_id) {
+                    const rm = db.prepare('SELECT unit_cost, supplier FROM raw_materials_inventory WHERE id = ?').get(it.raw_material_id);
+                    if (rm) {
+                        cost = parseFloat(rm.unit_cost) || 0.0;
+                        if (!supplier || supplier === 'None') supplier = rm.supplier || 'None';
+                    }
+                } else if (it.material_code) {
+                    const rm = db.prepare('SELECT unit_cost, supplier FROM raw_materials_inventory WHERE UPPER(material_code) = UPPER(?)').get(it.material_code);
+                    if (rm) {
+                        cost = parseFloat(rm.unit_cost) || 0.0;
+                        if (!supplier || supplier === 'None') supplier = rm.supplier || 'None';
+                    }
+                }
+            }
+            if (isNaN(cost)) cost = 0.0;
+            const qty = parseFloat(it.requested_qty) || 0.0;
+            const lineTotal = Math.round(qty * cost * 100) / 100;
+            totalCost += lineTotal;
+            return {
+                ...it,
+                unit_cost: cost,
+                total_cost: lineTotal,
+                supplier: supplier || 'None'
+            };
+        });
+        totalCost = Math.round(totalCost * 100) / 100;
 
         let finalMaterialsNeeded = (materials_needed || '').trim();
         if (!finalMaterialsNeeded && parsedBomItems.length > 0) {
             finalMaterialsNeeded = parsedBomItems.map(it => {
                 const codePart = it.material_code && it.material_code !== 'None' ? `[${it.material_code}] ` : '';
                 const supPart = it.supplier && it.supplier !== 'None' ? ` (Supplier: ${it.supplier})` : '';
-                return `• ${codePart}${it.material_name || 'Raw Material'}: ${it.requested_qty} ${it.unit || 'kg'}${supPart}`;
+                const costPart = it.unit_cost > 0 ? ` @ ₱${it.unit_cost.toFixed(2)}` : '';
+                return `• ${codePart}${it.material_name || 'Raw Material'}: ${it.requested_qty} ${it.unit || 'kg'}${costPart}${supPart}`;
             }).join('\n');
         }
 
@@ -170,6 +260,17 @@ router.post('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_ADM
             if (!linkedPo) targetPoId = 'WAREHOUSE-STOCK';
         }
 
+        // Resolve active fund limit
+        let activeFundLimit = parseFloat(fund_limit);
+        if (isNaN(activeFundLimit) || activeFundLimit <= 0) {
+            try {
+                const sysLim = db.prepare("SELECT setting_value FROM system_settings WHERE setting_key = 'default_purchasing_fund_limit'").get();
+                activeFundLimit = sysLim ? (parseFloat(sysLim.setting_value) || 500000.0) : 500000.0;
+            } catch (_) {
+                activeFundLimit = 500000.0;
+            }
+        }
+
         const reqId = uuidv4();
         const formattedNotes = [
             affected_products ? `Formula / Affected Products: ${affected_products}` : null,
@@ -179,8 +280,8 @@ router.post('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_ADM
 
         db.prepare(`
             INSERT INTO supply_requests
-            (id, po_id, requested_by, department, materials_needed, urgency, target_date, notes, bom_items, status, created_at, updated_at)
-            VALUES (?, ?, ?, 'Purchasing Department', ?, ?, ?, ?, ?, 'SUBMITTED', datetime('now', 'localtime'), datetime('now', 'localtime'))
+            (id, po_id, requested_by, department, materials_needed, urgency, target_date, notes, bom_items, fund_limit, total_cost, status, created_at, updated_at)
+            VALUES (?, ?, ?, 'Purchasing Department', ?, ?, ?, ?, ?, ?, ?, 'SUBMITTED', datetime('now', 'localtime'), datetime('now', 'localtime'))
         `).run(
             reqId,
             targetPoId,
@@ -189,7 +290,9 @@ router.post('/', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_ADM
             urgency || 'NORMAL',
             target_date || null,
             formattedNotes || null,
-            bomJson
+            bomJson,
+            activeFundLimit,
+            totalCost
         );
 
         if (linkedPo) {
@@ -536,6 +639,338 @@ router.post('/:id/purchasing-response', authenticateToken, requireRoles(ROLES.SU
         });
     } catch (err) {
         console.error('Error recording purchasing response:', err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * PUT /api/supply-requests/:id/budget-bom
+ * Purchasing manages and edits BOM quantities and unit costs based on the Fund Limit,
+ * and issues/generates the Supplier Purchase Order (SPO).
+ */
+router.put('/:id/budget-bom', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.PURCHASING), (req, res) => {
+    try {
+        const { id } = req.params;
+        const {
+            bom_items,
+            fund_limit,
+            supplier_name,
+            supplier_address,
+            supplier_contact,
+            payment_terms,
+            target_date,
+            notes,
+            generate_spo = false
+        } = req.body || {};
+
+        const existing = db.prepare('SELECT * FROM supply_requests WHERE id = ?').get(id);
+        if (!existing) {
+            return res.status(404).json({ success: false, error: 'Requisition not found.' });
+        }
+
+        const items = Array.isArray(bom_items) ? bom_items : [];
+        let totalCost = 0.0;
+        const processedBom = items.map(it => {
+            const qty = parseFloat(it.requested_qty !== undefined ? it.requested_qty : (it.order_qty || it.quantity || 0)) || 0;
+            const unitCost = parseFloat(it.unit_cost || 0) || 0;
+            const lineTotal = Math.round(qty * unitCost * 100) / 100;
+            totalCost += lineTotal;
+            return {
+                raw_material_id: it.raw_material_id || null,
+                material_code: it.material_code || '',
+                material_name: it.material_name || '',
+                category: it.category || 'General',
+                current_stock: parseFloat(it.current_stock || 0),
+                requested_qty: qty,
+                unit: it.unit || 'kg',
+                unit_cost: unitCost,
+                total_cost: lineTotal,
+                supplier: it.supplier || supplier_name || 'None'
+            };
+        });
+
+        totalCost = Math.round(totalCost * 100) / 100;
+        const effectiveFundLimit = fund_limit !== undefined && !isNaN(parseFloat(fund_limit))
+            ? parseFloat(fund_limit)
+            : (existing.fund_limit || 500000.0);
+
+        let supplierPoNumber = existing.supplier_po_number;
+        let newStatus = existing.status;
+        if (generate_spo) {
+            if (!supplierPoNumber || supplierPoNumber.trim() === '') {
+                supplierPoNumber = getNextDocumentNumber('SPO');
+            }
+            if (newStatus === 'SUBMITTED') {
+                newStatus = 'ORDERED';
+            }
+        }
+
+        // Summary text of materials
+        const materialsSummary = processedBom.map(it => {
+            const codePart = it.material_code && it.material_code !== 'None' ? `[${it.material_code}] ` : '';
+            return `• ${codePart}${it.material_name}: ${it.requested_qty} ${it.unit} @ ₱${it.unit_cost.toFixed(2)} = ₱${it.total_cost.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+        }).join('\n');
+
+        db.prepare(`
+            UPDATE supply_requests
+            SET bom_items = ?,
+                fund_limit = ?,
+                total_cost = ?,
+                supplier_po_number = ?,
+                supplier_name = ?,
+                supplier_address = ?,
+                supplier_contact = ?,
+                payment_terms = ?,
+                target_date = ?,
+                notes = ?,
+                materials_needed = ?,
+                status = ?,
+                updated_at = datetime('now', 'localtime')
+            WHERE id = ?
+        `).run(
+            JSON.stringify(processedBom),
+            effectiveFundLimit,
+            totalCost,
+            supplierPoNumber || null,
+            supplier_name !== undefined ? supplier_name : existing.supplier_name,
+            supplier_address !== undefined ? supplier_address : existing.supplier_address,
+            supplier_contact !== undefined ? supplier_contact : existing.supplier_contact,
+            payment_terms !== undefined ? payment_terms : (existing.payment_terms || 'Net 30'),
+            target_date !== undefined ? target_date : existing.target_date,
+            notes !== undefined ? notes : existing.notes,
+            materialsSummary || existing.materials_needed,
+            newStatus,
+            id
+        );
+
+        logAudit({
+            userId: req.user.id,
+            userName: req.user.name,
+            userRole: req.user.role,
+            action: generate_spo ? 'GENERATE_SUPPLIER_PO' : 'UPDATE_BOM_BUDGET',
+            entityType: 'SUPPLY_REQUEST',
+            entityId: supplierPoNumber || id,
+            details: {
+                requestId: id,
+                supplierPoNumber,
+                totalCost,
+                fundLimit: effectiveFundLimit,
+                exceedsFundLimit: totalCost > effectiveFundLimit,
+                itemCount: processedBom.length
+            },
+            ipAddress: req.ip
+        });
+
+        const updated = getEnrichedSupplyRequest(id);
+        const exceeds = totalCost > effectiveFundLimit;
+        return res.json({
+            success: true,
+            message: generate_spo
+                ? `Supplier PO ${supplierPoNumber} issued successfully! Total: ₱${totalCost.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+                : `BOM numbers and budget updated. Total: ₱${totalCost.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+            data: updated,
+            is_within_budget: !exceeds,
+            exceeds_fund_limit: exceeds,
+            over_amount: exceeds ? Math.round((totalCost - effectiveFundLimit) * 100) / 100 : 0
+        });
+    } catch (err) {
+        console.error('Error updating BOM budget:', err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/supply-requests/:id/receive-delivery
+ * Inventory Officer confirms received shipment quantities.
+ * Automatically stocks items into raw_materials_inventory list and marks request DELIVERED.
+ */
+router.post('/:id/receive-delivery', authenticateToken, requireRoles(ROLES.SUPER_ADMIN, ROLES.IT_ADMIN, ROLES.ADMIN, ROLES.INVENTORY, ROLES.PURCHASING), (req, res) => {
+    try {
+        const { id } = req.params;
+        const { received_items, receiving_notes } = req.body || {};
+
+        const existing = db.prepare('SELECT * FROM supply_requests WHERE id = ?').get(id);
+        if (!existing) {
+            return res.status(404).json({ success: false, error: 'Requisition not found.' });
+        }
+
+        const itemsToProcess = Array.isArray(received_items) && received_items.length > 0
+            ? received_items
+            : (existing.bom_items ? JSON.parse(existing.bom_items) : []);
+
+        if (itemsToProcess.length === 0) {
+            return res.status(400).json({ success: false, error: 'No items to receive in this requisition.' });
+        }
+
+        const confirmedItems = [];
+
+        const receiveTx = db.transaction(() => {
+            for (const item of itemsToProcess) {
+                const receivedQty = parseFloat(item.received_qty !== undefined ? item.received_qty : item.requested_qty) || 0;
+                const rawMatId = item.raw_material_id;
+                const code = (item.material_code || '').trim();
+                const name = (item.material_name || '').trim();
+                const unit = item.unit || 'kg';
+                const unitCost = parseFloat(item.unit_cost) || 0;
+                const batchLot = item.batch_lot_number || null;
+                const expiry = item.expiry_date || null;
+
+                if (receivedQty > 0) {
+                    let target = null;
+                    if (rawMatId) target = db.prepare('SELECT * FROM raw_materials_inventory WHERE id = ?').get(rawMatId);
+                    if (!target && code && code !== 'None' && code !== 'PO-BOM') {
+                        target = db.prepare('SELECT * FROM raw_materials_inventory WHERE UPPER(material_code) = UPPER(?)').get(code);
+                    }
+                    if (!target && name) {
+                        target = db.prepare('SELECT * FROM raw_materials_inventory WHERE LOWER(material_name) = LOWER(?)').get(name);
+                    }
+
+                    if (target) {
+                        const newStock = Number((Number(target.current_stock || 0) + receivedQty).toFixed(4));
+                        const newStatus = (newStock <= 0) ? 'OUT_OF_STOCK' : ((target.minimum_stock_level > 0 && newStock <= target.minimum_stock_level) ? 'LOW_STOCK' : 'IN_STOCK');
+                        const noteAdd = `[Stocked via ${existing.supplier_po_number || 'SPO'} +${receivedQty} ${target.unit || unit}]`;
+                        const updatedNotes = target.notes ? `${target.notes} | ${noteAdd}` : noteAdd;
+
+                        db.prepare(`
+                            UPDATE raw_materials_inventory
+                            SET current_stock = ?,
+                                status = ?,
+                                unit_cost = CASE WHEN ? > 0 THEN ? ELSE unit_cost END,
+                                batch_lot_number = COALESCE(?, batch_lot_number),
+                                expiry_date = COALESCE(?, expiry_date),
+                                notes = ?,
+                                updated_by = ?,
+                                updated_at = datetime('now', 'localtime')
+                            WHERE id = ?
+                        `).run(newStock, newStatus, unitCost, unitCost, batchLot, expiry, updatedNotes, req.user.name, target.id);
+                    } else if (name) {
+                        // Brand new raw material requested in BOM: auto-register in inventory list
+                        const newId = uuidv4();
+                        const genCode = code && code !== 'None' && code !== 'PO-BOM' ? code : `RM-${Date.now().toString().slice(-6)}`;
+                        const newStatus = receivedQty > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK';
+                        db.prepare(`
+                            INSERT INTO raw_materials_inventory
+                            (id, material_code, material_name, category, supplier, current_stock, unit, minimum_stock_level, unit_cost, batch_lot_number, expiry_date, status, notes, updated_by, created_at, updated_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, 10.0, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
+                        `).run(
+                            newId,
+                            genCode,
+                            name,
+                            item.category || 'Active Ingredients',
+                            item.supplier || existing.supplier_name || 'Vendor',
+                            receivedQty,
+                            unit,
+                            unitCost,
+                            batchLot,
+                            expiry,
+                            newStatus,
+                            `[Initial Stock from Supplier PO ${existing.supplier_po_number || 'SPO'}]`,
+                            req.user.name
+                        );
+                    }
+                }
+
+                confirmedItems.push({
+                    raw_material_id: rawMatId,
+                    material_code: code,
+                    material_name: name,
+                    ordered_qty: parseFloat(item.requested_qty || item.order_qty || 0),
+                    received_qty: receivedQty,
+                    unit,
+                    unit_cost: unitCost,
+                    batch_lot_number: batchLot,
+                    expiry_date: expiry
+                });
+            }
+
+            const now = db.prepare("SELECT datetime('now', 'localtime') as now").get().now;
+            const finalNotes = receiving_notes
+                ? (existing.notes ? `${existing.notes}\n[Received by ${req.user.name}]: ${receiving_notes}` : `[Received by ${req.user.name}]: ${receiving_notes}`)
+                : existing.notes;
+
+            db.prepare(`
+                UPDATE supply_requests
+                SET status = 'DELIVERED',
+                    received_items = ?,
+                    received_by = ?,
+                    received_at = ?,
+                    notes = ?,
+                    updated_at = ?
+                WHERE id = ?
+            `).run(
+                JSON.stringify(confirmedItems),
+                req.user.id,
+                now,
+                finalNotes,
+                now,
+                id
+            );
+
+            // If linked to active customer PO, check and fulfill materials status
+            checkAndFulfillPoRawMaterials(existing.po_id);
+        });
+
+        receiveTx();
+
+        logAudit({
+            userId: req.user.id,
+            userName: req.user.name,
+            userRole: req.user.role,
+            action: 'INVENTORY_CONFIRM_BOM_RECEIPT',
+            entityType: 'SUPPLY_REQUEST',
+            entityId: existing.supplier_po_number || id,
+            details: {
+                requestId: id,
+                supplierPoNumber: existing.supplier_po_number,
+                itemCount: confirmedItems.length,
+                stockedItems: confirmedItems.map(c => `${c.material_name} (+${c.received_qty} ${c.unit})`)
+            },
+            ipAddress: req.ip
+        });
+
+        const updated = getEnrichedSupplyRequest(id);
+        return res.json({
+            success: true,
+            message: `Shipment received and confirmed by Inventory! Raw materials have been stocked into warehouse inventory.`,
+            data: updated
+        });
+    } catch (err) {
+        console.error('Error confirming BOM delivery:', err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * GET /api/supply-requests/:id/printable-spo
+ * Retrieve full printable Supplier Purchase Order payload
+ */
+router.get('/:id/printable-spo', authenticateToken, (req, res) => {
+    try {
+        const { id } = req.params;
+        const sr = getEnrichedSupplyRequest(id);
+        if (!sr) {
+            return res.status(404).json({ success: false, error: 'Supplier PO not found.' });
+        }
+        let items = [];
+        try {
+            items = sr.bom_items ? JSON.parse(sr.bom_items) : [];
+        } catch (_) {}
+
+        let received = [];
+        try {
+            received = sr.received_items ? JSON.parse(sr.received_items) : [];
+        } catch (_) {}
+
+        return res.json({
+            success: true,
+            data: {
+                ...sr,
+                items,
+                bom_items: items,
+                received_items: received
+            }
+        });
+    } catch (err) {
         return res.status(500).json({ success: false, error: err.message });
     }
 });

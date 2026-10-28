@@ -5,7 +5,7 @@ const { getManilaYear } = require('../helpers/timezone');
  * Generate a sequential, human-readable document number
  * e.g., PO-2026-000001, JO-2026-000001, DR-2026-000001, SI-2026-000001, BAT-2026-000001
  * 
- * @param {string} docType - 'PO', 'JO', 'BATCH', 'DR', 'SI', 'PAY'
+ * @param {string} docType - 'PO', 'SPO', 'JO', 'BATCH', 'DR', 'SI', 'PAY'
  * @param {object} [customDb] - Optional database instance override
  * @returns {string} The next formatted document number
  */

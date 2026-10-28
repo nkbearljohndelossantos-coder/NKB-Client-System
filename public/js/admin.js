@@ -546,7 +546,10 @@ function switchTab(tabId) {
     else if (tabId === 'products') loadProducts();
     else if (tabId === 'formulations') loadFormulations();
     else if (tabId === 'users') loadUsers();
-    else if (tabId === 'purchasing') loadPurchasingRequisitions();
+    else if (tabId === 'purchasing') {
+        loadPurchasingRequisitions();
+        loadPurchasingFundLimit();
+    }
     else if (tabId === 'reports') loadReports();
     else if (tabId === 'audit') loadAuditLogs();
     else if (tabId === 'apikeys') loadApiKeys();
@@ -1923,6 +1926,8 @@ function formatRequisitionBomHtml(bomItemsRaw) {
     }
     if (!Array.isArray(parsed) || parsed.length === 0) return '';
 
+    const hasPricing = parsed.some(it => Number(it.unit_cost) > 0 || Number(it.line_total) > 0);
+
     return `
         <div class="mt-2 border border-amber-200 rounded-xl overflow-hidden bg-white">
             <div class="px-3 py-1.5 bg-amber-50 border-b border-amber-200 flex items-center justify-between">
@@ -1936,17 +1941,26 @@ function formatRequisitionBomHtml(bomItemsRaw) {
                         <th class="py-1.5 px-2.5">Material Name</th>
                         <th class="py-1.5 px-2.5">Section</th>
                         <th class="py-1.5 px-2.5 text-right">Requested Qty</th>
+                        ${hasPricing ? '<th class="py-1.5 px-2.5 text-right">Unit Cost</th><th class="py-1.5 px-2.5 text-right">Amount</th>' : ''}
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
-                    ${parsed.map(item => `
+                    ${parsed.map(item => {
+                        const unitCost = Number(item.unit_cost || 0);
+                        const lineTotal = Number(item.line_total || (Number(item.requested_qty || 0) * unitCost) || 0);
+                        return `
                         <tr>
                             <td class="py-1.5 px-2.5 font-mono font-bold text-slate-700">${item.material_code || 'None'}</td>
                             <td class="py-1.5 px-2.5 font-bold text-slate-900">${item.material_name || '-'}</td>
                             <td class="py-1.5 px-2.5 text-slate-500">${item.category || '-'}</td>
                             <td class="py-1.5 px-2.5 text-right font-mono font-black text-amber-800">${item.requested_qty || 0} ${item.unit || 'kg'}</td>
+                            ${hasPricing ? `
+                                <td class="py-1.5 px-2.5 text-right font-mono text-slate-600">₱${NKB.formatNumber(unitCost)}</td>
+                                <td class="py-1.5 px-2.5 text-right font-mono font-bold text-emerald-700">₱${NKB.formatNumber(lineTotal)}</td>
+                            ` : ''}
                         </tr>
-                    `).join('')}
+                        `;
+                    }).join('')}
                 </tbody>
             </table>
         </div>
@@ -12389,8 +12403,77 @@ document.addEventListener('click', (e) => {
 });
 
 // -------------------------------------------------------------
-// PURCHASING & RAW MATERIALS REQUISITIONS
+// PURCHASING & RAW MATERIALS REQUISITIONS & FUND LIMIT CONTROL
 // -------------------------------------------------------------
+let currentPurchasingFundLimit = 500000;
+
+async function loadPurchasingFundLimit() {
+    try {
+        const res = await NKB.api('/api/supply-requests/fund-limit');
+        if (res && res.success && res.data) {
+            currentPurchasingFundLimit = Number(res.data.fund_limit || 500000);
+            const el = document.getElementById('purchasing-fund-limit-display');
+            if (el) el.innerText = `₱${NKB.formatNumber(currentPurchasingFundLimit)}`;
+            updatePurchasingBudgetHeadroom();
+        }
+    } catch (e) {
+        console.error('Error loading purchasing fund limit:', e);
+    }
+}
+
+async function editPurchasingFundLimit() {
+    const newLimitStr = prompt('Enter new default Purchasing Fund Limit (₱):', currentPurchasingFundLimit);
+    if (newLimitStr === null) return;
+    const newLimit = parseFloat(newLimitStr.replace(/,/g, ''));
+    if (isNaN(newLimit) || newLimit < 0) {
+        alert('Please enter a valid positive fund limit amount.');
+        return;
+    }
+
+    try {
+        const res = await NKB.api('/api/supply-requests/fund-limit', {
+            method: 'PUT',
+            body: { fund_limit: newLimit }
+        });
+        if (res && res.success) {
+            NKB.showToast(res.message || 'Fund limit updated successfully!', 'success');
+            currentPurchasingFundLimit = newLimit;
+            const el = document.getElementById('purchasing-fund-limit-display');
+            if (el) el.innerText = `₱${NKB.formatNumber(currentPurchasingFundLimit)}`;
+            updatePurchasingBudgetHeadroom();
+            loadPurchasingRequisitions();
+        } else {
+            NKB.showToast((res && res.error) || 'Failed to update fund limit.', 'error');
+        }
+    } catch (e) {
+        NKB.showToast('Network error updating fund limit.', 'error');
+    }
+}
+
+function updatePurchasingBudgetHeadroom(activeTotalCost = null) {
+    if (activeTotalCost === null) {
+        const costEl = document.getElementById('purchasing-active-cost-display');
+        const text = costEl ? costEl.innerText.replace(/[^\d.]/g, '') : '0';
+        activeTotalCost = parseFloat(text) || 0;
+    }
+    const headroom = currentPurchasingFundLimit - activeTotalCost;
+    const remainingEl = document.getElementById('purchasing-remaining-fund-display');
+    const badgeEl = document.getElementById('purchasing-budget-badge');
+    if (!remainingEl || !badgeEl) return;
+
+    if (headroom >= 0) {
+        remainingEl.className = 'text-2xl font-black tracking-tight font-mono text-emerald-600';
+        remainingEl.innerText = `₱${NKB.formatNumber(headroom)}`;
+        badgeEl.className = 'text-[11px] text-emerald-600 font-semibold mt-0.5';
+        badgeEl.innerText = '🟢 Within Fund Limit';
+    } else {
+        remainingEl.className = 'text-2xl font-black tracking-tight font-mono text-rose-600';
+        remainingEl.innerText = `-₱${NKB.formatNumber(Math.abs(headroom))}`;
+        badgeEl.className = 'text-[11px] text-rose-600 font-bold mt-0.5';
+        badgeEl.innerText = `🔴 Exceeds Limit by ₱${NKB.formatNumber(Math.abs(headroom))}`;
+    }
+}
+
 async function loadPurchasingRequisitions() {
     const status = document.getElementById('filter-purchasing-status')?.value || '';
     const urgency = document.getElementById('filter-purchasing-urgency')?.value || '';
@@ -12398,7 +12481,7 @@ async function loadPurchasingRequisitions() {
     const tbody = document.getElementById('table-purchasing-body');
     if (!tbody) return;
 
-    tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-slate-400">Loading supply requisitions...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="py-6 text-center text-slate-400">Loading supply requisitions...</td></tr>';
 
     let url = `/api/supply-requests?search=${encodeURIComponent(search)}`;
     if (status) url += `&status=${encodeURIComponent(status)}`;
@@ -12406,14 +12489,35 @@ async function loadPurchasingRequisitions() {
 
     const res = await NKB.api(url);
     if (!res.success || !res.data || res.data.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-slate-400">No supply requisitions found.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="py-6 text-center text-slate-400">No supply requisitions found.</td></tr>';
+        updatePurchasingBudgetHeadroom(0);
+        const costEl = document.getElementById('purchasing-active-cost-display');
+        const countEl = document.getElementById('purchasing-active-count-display');
+        if (costEl) costEl.innerText = '₱0.00';
+        if (countEl) countEl.innerText = '0 Active Requisitions';
         return;
     }
 
+    // Tally active requisitions for budget overview
+    let activeTotalCost = 0;
+    let activeCount = 0;
+    res.data.forEach(r => {
+        if (r.status !== 'DELIVERED' && r.status !== 'CANCELLED' && r.status !== 'REJECTED') {
+            activeTotalCost += Number(r.total_cost || 0);
+            activeCount++;
+        }
+    });
+
+    const costEl = document.getElementById('purchasing-active-cost-display');
+    const countEl = document.getElementById('purchasing-active-count-display');
+    if (costEl) costEl.innerText = `₱${NKB.formatNumber(activeTotalCost)}`;
+    if (countEl) countEl.innerText = `${activeCount} Active Requisition${activeCount === 1 ? '' : 's'}`;
+    updatePurchasingBudgetHeadroom(activeTotalCost);
+
     const statusBadges = {
-        'SUBMITTED': 'bg-amber-100 text-amber-800 border-amber-200',
-        'ORDERED': 'bg-blue-100 text-blue-800 border-blue-200',
-        'IN_TRANSIT': 'bg-purple-100 text-purple-800 border-purple-200',
+        'SUBMITTED': 'bg-amber-100 text-amber-800 border-amber-200 font-bold',
+        'ORDERED': 'bg-blue-100 text-blue-800 border-blue-200 font-bold',
+        'IN_TRANSIT': 'bg-purple-100 text-purple-800 border-purple-200 font-bold',
         'PENDING_QC': 'bg-indigo-100 text-indigo-800 border-indigo-200 font-bold',
         'QC_DECLINED': 'bg-rose-100 text-rose-800 border-rose-200 font-extrabold',
         'REORDERED': 'bg-sky-100 text-sky-800 border-sky-200',
@@ -12437,15 +12541,29 @@ async function loadPurchasingRequisitions() {
         let statusLabel = r.status;
         if (r.status === 'PENDING_QC') statusLabel = '🔬 PENDING QC';
         else if (r.status === 'QC_DECLINED') statusLabel = '⚠️ QC DECLINED';
-        else if (r.status === 'DELIVERED' && r.qc_status === 'PASSED') statusLabel = '✅ QC PASSED';
+        else if (r.status === 'DELIVERED') statusLabel = '✅ DELIVERED & STOCKED';
         else if (r.status === 'RETURNED_TO_SUPPLIER') statusLabel = '↩️ RETURNED TO SUPPLIER';
         else if (r.status === 'REJECTED') statusLabel = '🚫 REJECTED';
+
+        const totalCostNum = Number(r.total_cost || 0);
+        const fundLimitNum = Number(r.fund_limit || 0);
+        const isOverBudget = fundLimitNum > 0 && totalCostNum > fundLimitNum;
 
         return `
         <tr class="hover:bg-slate-50 transition">
             <td class="py-3 px-4">
                 <div class="font-black text-indigo-700 font-mono">${r.po_number}</div>
                 <div class="text-[11px] text-slate-500 font-medium">${r.client_name}</div>
+            </td>
+            <td class="py-3 px-4">
+                ${r.supplier_po_number ? `
+                    <div class="font-mono font-black text-xs text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-lg inline-flex items-center gap-1 shadow-sm">
+                        <span>📄</span> ${r.supplier_po_number}
+                    </div>
+                    ${r.supplier_name ? `<div class="text-[10px] text-slate-500 font-semibold truncate max-w-[130px] mt-0.5" title="${r.supplier_name}">🏢 ${r.supplier_name}</div>` : ''}
+                ` : `
+                    <span class="text-[11px] text-slate-400 font-mono italic">Not Issued</span>
+                `}
             </td>
             <td class="py-3 px-4 max-w-sm">
                 <div class="text-xs font-bold text-slate-800 line-clamp-2">${r.materials_needed}</div>
@@ -12454,13 +12572,21 @@ async function loadPurchasingRequisitions() {
                 ${r.purchasing_response_notes ? `<div class="text-[10px] text-indigo-600 bg-indigo-50/60 p-1.5 rounded-lg border border-indigo-100 mt-1 line-clamp-2"><b>Purchasing (${r.purchasing_response}):</b> ${r.purchasing_response_notes}</div>` : ''}
                 ${r.notes && !r.qc_notes && !r.purchasing_response_notes ? `<div class="text-[10px] text-slate-400 truncate mt-1">${r.notes}</div>` : ''}
             </td>
+            <td class="py-3 px-4 text-right">
+                <div class="font-mono font-black ${isOverBudget ? 'text-rose-600' : 'text-slate-900'} text-xs">
+                    ₱${NKB.formatNumber(totalCostNum)}
+                </div>
+                ${fundLimitNum > 0 ? `
+                    <div class="text-[10px] ${isOverBudget ? 'text-rose-500 font-bold' : 'text-slate-400'} font-mono">
+                        Limit: ₱${NKB.formatNumber(fundLimitNum)}
+                    </div>
+                ` : ''}
+            </td>
             <td class="py-3 px-4">
                 <span class="inline-block px-2.5 py-0.5 rounded-full text-[10px] border ${urgencyBadges[r.urgency] || 'bg-slate-100 text-slate-700'}">
                     ${r.urgency}
                 </span>
-            </td>
-            <td class="py-3 px-4 font-mono text-slate-600 text-xs">
-                ${r.target_date || 'ASAP'}
+                <div class="text-[10px] font-mono text-slate-400 mt-0.5">${r.target_date || 'ASAP'}</div>
             </td>
             <td class="py-3 px-4">
                 <div class="flex flex-col gap-1 items-start">
@@ -12487,7 +12613,22 @@ async function loadPurchasingRequisitions() {
                 <div class="text-[10px] text-slate-400 font-mono">${NKB.formatDate(r.created_at)}</div>
             </td>
             <td class="py-3 px-4 text-right whitespace-nowrap">
-                <div class="flex items-center justify-end gap-1.5">
+                <div class="flex items-center justify-end gap-1.5 flex-wrap">
+                    ${r.status === 'SUBMITTED' ? `
+                        <button onclick="openManageBomBudgetModal('${r.id}')" class="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-bold shadow-sm transition inline-flex items-center gap-1 cursor-pointer" title="Manage Quantities, Unit Costs, Supplier & Fund Limit">
+                            <span>✏️</span> Budget BOM
+                        </button>
+                    ` : ''}
+                    ${r.supplier_po_number ? `
+                        <button onclick="openPrintSupplierPO('${r.id}')" class="px-2.5 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold shadow-sm transition inline-flex items-center gap-1 cursor-pointer" title="Print Supplier Purchase Order (SPO)">
+                            <span>🖨️</span> Print PO
+                        </button>
+                    ` : ''}
+                    ${(r.status === 'ORDERED' || r.status === 'IN_TRANSIT') ? `
+                        <button onclick="openReceiveShipmentModal('${r.id}')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold shadow-sm transition inline-flex items-center gap-1 cursor-pointer" title="Receive Delivery & Stock into Inventory">
+                            <span>📥</span> Receive
+                        </button>
+                    ` : ''}
                     ${r.status === 'PENDING_QC' ? `
                         <button onclick="openQcInspectionModal('${r.id}')" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold shadow-sm transition inline-flex items-center gap-1 cursor-pointer">
                             <span>🔬</span> Inspect (QC)
@@ -12498,13 +12639,8 @@ async function loadPurchasingRequisitions() {
                             <span>⚠️</span> Respond to QC
                         </button>
                     ` : ''}
-                    ${qcWa ? `
-                        <a href="${formatWhatsAppUrl(qcWa, `Hello QC, regarding Raw Material Requisition for PO ${r.po_number}: `)}" target="_blank" title="WhatsApp QC Inspector (${r.qc_inspector_name || 'QC'})" class="p-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 rounded-lg text-xs font-bold transition inline-flex items-center">
-                            💬
-                        </a>
-                    ` : ''}
                     <button onclick="openUpdateRequisitionModal('${r.id}')" class="px-2.5 py-1 bg-teal-50 border border-teal-200 hover:bg-teal-100 text-teal-700 rounded-lg text-xs font-bold shadow-sm transition inline-flex items-center gap-1 cursor-pointer">
-                        <span>✏️</span> Manage
+                        <span>⚙️</span> Manage
                     </button>
                 </div>
             </td>
@@ -12512,6 +12648,738 @@ async function loadPurchasingRequisitions() {
         `;
     }).join('');
 }
+
+function openPrintSupplierPO(reqId) {
+    window.open(`/print-supplier-po.html?id=${encodeURIComponent(reqId)}`, '_blank');
+}
+
+// -------------------------------------------------------------
+// MANAGE & BUDGET BOM MODAL (PURCHASING)
+// -------------------------------------------------------------
+let manageBomState = {
+    reqId: null,
+    req: null,
+    fundLimit: 500000,
+    items: []
+};
+
+async function openManageBomBudgetModal(reqId) {
+    const res = await NKB.api(`/api/supply-requests/${reqId}`);
+    if (!res.success || !res.data) {
+        NKB.showToast('Failed to load requisition details.', 'error');
+        return;
+    }
+    const r = res.data;
+
+    if (typeof cachedRawMaterials === 'undefined' || !cachedRawMaterials || cachedRawMaterials.length === 0) {
+        const rmRes = await NKB.api('/api/raw-materials');
+        if (rmRes && rmRes.success && Array.isArray(rmRes.data)) {
+            cachedRawMaterials = rmRes.data;
+        }
+    }
+
+    let parsed = [];
+    try {
+        parsed = typeof r.bom_items === 'string' ? JSON.parse(r.bom_items) : (r.bom_items || []);
+    } catch (_) {
+        parsed = [];
+    }
+
+    const rmList = typeof cachedRawMaterials !== 'undefined' && Array.isArray(cachedRawMaterials) ? cachedRawMaterials : [];
+    parsed = parsed.map(item => {
+        let uc = Number(item.unit_cost || 0);
+        if (uc <= 0 && rmList.length > 0) {
+            const matched = rmList.find(rm => rm.id === item.raw_material_id || (rm.material_name && rm.material_name.toLowerCase() === (item.material_name || '').toLowerCase()));
+            if (matched && Number(matched.unit_cost) > 0) {
+                uc = Number(matched.unit_cost);
+            }
+        }
+        const qty = Number(item.requested_qty || 0);
+        return {
+            raw_material_id: item.raw_material_id || null,
+            material_code: item.material_code || 'BOM-MAT',
+            material_name: item.material_name || '',
+            category: item.category || 'Raw Materials',
+            requested_qty: qty,
+            unit: item.unit || 'kg',
+            unit_cost: uc,
+            line_total: Number(item.line_total || (qty * uc) || 0),
+            supplier: item.supplier || r.supplier_name || ''
+        };
+    });
+
+    const activeFundLimit = Number(r.fund_limit) > 0 ? Number(r.fund_limit) : currentPurchasingFundLimit;
+
+    manageBomState = {
+        reqId: reqId,
+        req: r,
+        fundLimit: activeFundLimit,
+        items: parsed
+    };
+
+    const root = document.getElementById('modals-root');
+    if (!root) return;
+
+    root.innerHTML = `
+        <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+            <div class="bg-white rounded-3xl max-w-4xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 my-auto max-h-[92vh] overflow-y-auto">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-9 h-9 rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-800 text-lg font-bold">🛒</div>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h3 class="text-base font-extrabold text-slate-900">Purchasing BOM Management & Budgeting</h3>
+                                <span class="px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 font-mono text-[10px] font-black">${r.po_number}</span>
+                            </div>
+                            <p class="text-[11px] text-slate-500">Edit item quantities, unit costs, vendor details, and verify budget against fund limit before issuing Supplier PO.</p>
+                        </div>
+                    </div>
+                    <button onclick="closeModal()" class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 font-bold flex items-center justify-center transition cursor-pointer">✕</button>
+                </div>
+
+                <!-- FUND LIMIT & LIVE BUDGET STATUS -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-inner">
+                    <div>
+                        <label class="block text-[10px] uppercase font-bold text-indigo-300 mb-1">Requisition Fund Limit (₱)</label>
+                        <input type="number" id="mbom-fund-limit" step="any" min="0" value="${activeFundLimit}" oninput="onManageBomFundLimitChange(this.value)" class="w-full px-3 py-1.5 bg-white/10 border border-white/20 rounded-xl text-white font-mono font-black text-sm focus:bg-white/20 focus:outline-none focus:ring-2 focus:ring-teal-400 transition">
+                        <span class="text-[10px] text-indigo-300">Editable budget cap for this purchase</span>
+                    </div>
+                    <div>
+                        <div class="text-[10px] uppercase font-bold text-indigo-300 mb-1">Calculated BOM Total Cost</div>
+                        <div class="text-xl font-black font-mono tracking-tight text-white" id="mbom-total-cost">₱0.00</div>
+                        <span class="text-[10px] text-slate-300" id="mbom-item-count">0 line items</span>
+                    </div>
+                    <div>
+                        <div class="text-[10px] uppercase font-bold text-indigo-300 mb-1">Budget Balance / Status</div>
+                        <div class="text-xl font-black font-mono tracking-tight" id="mbom-remaining-fund">₱0.00</div>
+                        <div class="mt-0.5" id="mbom-status-badge">
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">Within Budget</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SUPPLIER PROCUREMENT DETAILS -->
+                <div class="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                    <div class="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                        <span>🏢</span> Supplier & Procurement Information
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                        <div class="sm:col-span-2">
+                            <label class="block font-bold text-slate-700 mb-1">Supplier / Vendor Name <span class="text-rose-500">*</span></label>
+                            <input type="text" id="mbom-supplier-name" value="${r.supplier_name || r.supplier_details || ''}" placeholder="e.g. Croda Chemicals Philippines Inc." class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white font-semibold text-slate-800 focus:ring-2 focus:ring-teal-500 transition">
+                        </div>
+                        <div>
+                            <label class="block font-bold text-slate-700 mb-1">Contact / Phone / Email</label>
+                            <input type="text" id="mbom-supplier-contact" value="${r.supplier_contact || ''}" placeholder="e.g. +63 917 123 4567 / sales@croda.com" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white text-slate-800 focus:ring-2 focus:ring-teal-500 transition">
+                        </div>
+                        <div>
+                            <label class="block font-bold text-slate-700 mb-1">Payment Terms</label>
+                            <input type="text" id="mbom-payment-terms" value="${r.payment_terms || '30 Days Net'}" placeholder="e.g. 30 Days Net, COD, 50% DP" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white text-slate-800 focus:ring-2 focus:ring-teal-500 transition">
+                        </div>
+                        <div class="sm:col-span-3">
+                            <label class="block font-bold text-slate-700 mb-1">Supplier Address</label>
+                            <input type="text" id="mbom-supplier-address" value="${r.supplier_address || ''}" placeholder="e.g. Unit 402 Chemical Plaza, Pasig City, Metro Manila" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white text-slate-800 focus:ring-2 focus:ring-teal-500 transition">
+                        </div>
+                        <div>
+                            <label class="block font-bold text-slate-700 mb-1">Expected Delivery Date</label>
+                            <input type="date" id="mbom-target-date" value="${r.target_date || ''}" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white text-slate-800 focus:ring-2 focus:ring-teal-500 transition">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BOM LINE ITEMS EDITING TABLE -->
+                <div class="space-y-2">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div class="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                            <span>📋</span> Bill of Materials (BOM) Items & Pricing
+                        </div>
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <select id="mbom-catalog-select" class="px-2.5 py-1.5 border border-slate-300 rounded-xl text-xs max-w-xs truncate">
+                                <option value="">-- Choose Raw Material to Add --</option>
+                                ${(typeof cachedRawMaterials !== 'undefined' ? cachedRawMaterials : []).map(rm =>
+                                    `<option value="${rm.id}">[${rm.material_code}] ${rm.material_name} (${rm.category} • Cost: ₱${rm.unit_cost || 0})</option>`
+                                ).join('')}
+                            </select>
+                            <button type="button" onclick="addRawMaterialToManageBom()" class="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer">
+                                <span>➕ Add Material</span>
+                            </button>
+                            <button type="button" onclick="addCustomItemToManageBom()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer">
+                                <span>✨ Custom Line</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                        <div class="overflow-x-auto max-h-[36vh]">
+                            <table class="w-full text-left text-xs border-collapse">
+                                <thead class="bg-slate-50 text-slate-600 font-bold uppercase tracking-wider text-[10px] sticky top-0 border-b border-slate-200">
+                                    <tr>
+                                        <th class="py-2 px-3">Code</th>
+                                        <th class="py-2 px-3">Material Name</th>
+                                        <th class="py-2 px-2 text-right w-24">Order Qty</th>
+                                        <th class="py-2 px-2 w-16">Unit</th>
+                                        <th class="py-2 px-2 text-right w-28">Unit Cost (₱)</th>
+                                        <th class="py-2 px-3 text-right w-32">Line Total (₱)</th>
+                                        <th class="py-2 px-3">Item Supplier</th>
+                                        <th class="py-2 px-2 text-center w-10"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="mbom-items-body" class="divide-y divide-slate-100 bg-white">
+                                    <!-- Rendered dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FOOTER ACTIONS -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-100">
+                    <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition">
+                        Cancel
+                    </button>
+                    <div class="flex items-center gap-2 flex-wrap justify-end">
+                        <button type="button" onclick="saveManageBomBudget(false)" id="mbom-save-btn" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold transition shadow-sm flex items-center gap-1.5 cursor-pointer">
+                            <span>💾</span> Save Numbers & Budget
+                        </button>
+                        <button type="button" onclick="saveManageBomBudget(true)" id="mbom-spo-btn" class="px-5 py-2 bg-purple-700 hover:bg-purple-600 text-white rounded-xl font-extrabold transition shadow-md shadow-purple-700/25 flex items-center gap-1.5 cursor-pointer">
+                            <span>🖨️</span> Issue Supplier PO (SPO) & Order
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    renderManageBomTable();
+    recalcManageBomTotals();
+}
+
+function renderManageBomTable() {
+    const tbody = document.getElementById('mbom-items-body');
+    if (!tbody) return;
+
+    if (!manageBomState.items || manageBomState.items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="py-6 text-center text-slate-400">No BOM items in this requisition. Add materials above.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = manageBomState.items.map((item, idx) => {
+        const lineTotal = Number((item.requested_qty || 0) * (item.unit_cost || 0));
+        return `
+        <tr class="hover:bg-slate-50 transition">
+            <td class="py-2 px-3 font-mono font-bold text-slate-700">${item.material_code || 'None'}</td>
+            <td class="py-2 px-3">
+                <input type="text" value="${(item.material_name || '').replace(/"/g, '&quot;')}" oninput="updateManageBomName(${idx}, this.value)" class="w-full px-2 py-1 border border-slate-200 rounded-lg text-xs font-semibold text-slate-900 focus:bg-white focus:ring-1 focus:ring-teal-500">
+            </td>
+            <td class="py-2 px-2 text-right">
+                <input type="number" step="any" min="0" value="${item.requested_qty || 0}" oninput="updateManageBomQty(${idx}, this.value)" class="w-20 px-2 py-1 border border-slate-200 rounded-lg text-xs font-mono font-black text-right text-slate-800 focus:bg-white focus:ring-1 focus:ring-teal-500">
+            </td>
+            <td class="py-2 px-2">
+                <input type="text" value="${item.unit || 'kg'}" oninput="updateManageBomUnit(${idx}, this.value)" class="w-14 px-2 py-1 border border-slate-200 rounded-lg text-xs text-center text-slate-600 focus:bg-white">
+            </td>
+            <td class="py-2 px-2 text-right">
+                <input type="number" step="any" min="0" value="${item.unit_cost || 0}" oninput="updateManageBomUnitCost(${idx}, this.value)" class="w-24 px-2 py-1 border border-slate-200 rounded-lg text-xs font-mono font-bold text-right text-slate-800 focus:bg-white focus:ring-1 focus:ring-teal-500">
+            </td>
+            <td class="py-2 px-3 text-right font-mono font-black text-emerald-700" id="mbom-row-total-${idx}">
+                ₱${NKB.formatNumber(lineTotal)}
+            </td>
+            <td class="py-2 px-3">
+                <input type="text" value="${(item.supplier || '').replace(/"/g, '&quot;')}" oninput="updateManageBomSupplier(${idx}, this.value)" placeholder="Optional Supplier" class="w-full px-2 py-1 border border-slate-200 rounded-lg text-xs text-slate-600 focus:bg-white">
+            </td>
+            <td class="py-2 px-2 text-center">
+                <button type="button" onclick="removeManageBomItem(${idx})" class="text-rose-500 hover:text-rose-700 p-1 hover:bg-rose-50 rounded-lg transition" title="Remove Item">🗑️</button>
+            </td>
+        </tr>
+        `;
+    }).join('');
+}
+
+function updateManageBomName(idx, val) {
+    if (manageBomState.items[idx]) manageBomState.items[idx].material_name = val;
+}
+
+function updateManageBomQty(idx, val) {
+    const qty = parseFloat(val) || 0;
+    if (manageBomState.items[idx]) {
+        manageBomState.items[idx].requested_qty = qty;
+        manageBomState.items[idx].line_total = qty * (manageBomState.items[idx].unit_cost || 0);
+        const el = document.getElementById(`mbom-row-total-${idx}`);
+        if (el) el.innerText = `₱${NKB.formatNumber(manageBomState.items[idx].line_total)}`;
+        recalcManageBomTotals();
+    }
+}
+
+function updateManageBomUnit(idx, val) {
+    if (manageBomState.items[idx]) manageBomState.items[idx].unit = val;
+}
+
+function updateManageBomUnitCost(idx, val) {
+    const uc = parseFloat(val) || 0;
+    if (manageBomState.items[idx]) {
+        manageBomState.items[idx].unit_cost = uc;
+        manageBomState.items[idx].line_total = (manageBomState.items[idx].requested_qty || 0) * uc;
+        const el = document.getElementById(`mbom-row-total-${idx}`);
+        if (el) el.innerText = `₱${NKB.formatNumber(manageBomState.items[idx].line_total)}`;
+        recalcManageBomTotals();
+    }
+}
+
+function updateManageBomSupplier(idx, val) {
+    if (manageBomState.items[idx]) manageBomState.items[idx].supplier = val;
+}
+
+function removeManageBomItem(idx) {
+    manageBomState.items.splice(idx, 1);
+    renderManageBomTable();
+    recalcManageBomTotals();
+}
+
+function addRawMaterialToManageBom() {
+    const sel = document.getElementById('mbom-catalog-select');
+    if (!sel || !sel.value) return;
+    const rmId = sel.value;
+    const rmList = typeof cachedRawMaterials !== 'undefined' ? cachedRawMaterials : [];
+    const rm = rmList.find(r => r.id === rmId);
+    if (!rm) return;
+
+    manageBomState.items.push({
+        raw_material_id: rm.id,
+        material_code: rm.material_code || 'BOM-MAT',
+        material_name: rm.material_name,
+        category: rm.category || 'Raw Materials',
+        requested_qty: 25,
+        unit: rm.unit || 'kg',
+        unit_cost: Number(rm.unit_cost || 0),
+        line_total: 25 * Number(rm.unit_cost || 0),
+        supplier: rm.supplier || ''
+    });
+
+    sel.value = '';
+    renderManageBomTable();
+    recalcManageBomTotals();
+}
+
+function addCustomItemToManageBom() {
+    manageBomState.items.push({
+        raw_material_id: null,
+        material_code: 'CUSTOM',
+        material_name: 'New Raw Material / Packaging',
+        category: 'Custom',
+        requested_qty: 1,
+        unit: 'pcs',
+        unit_cost: 0,
+        line_total: 0,
+        supplier: ''
+    });
+    renderManageBomTable();
+    recalcManageBomTotals();
+}
+
+function onManageBomFundLimitChange(val) {
+    manageBomState.fundLimit = parseFloat(val) || 0;
+    recalcManageBomTotals();
+}
+
+function recalcManageBomTotals() {
+    let totalCost = 0;
+    (manageBomState.items || []).forEach(it => {
+        const qty = Number(it.requested_qty || 0);
+        const uc = Number(it.unit_cost || 0);
+        totalCost += (qty * uc);
+    });
+
+    const fundLimit = Number(manageBomState.fundLimit || 0);
+    const balance = fundLimit - totalCost;
+
+    const totalEl = document.getElementById('mbom-total-cost');
+    const remEl = document.getElementById('mbom-remaining-fund');
+    const badgeEl = document.getElementById('mbom-status-badge');
+    const countEl = document.getElementById('mbom-item-count');
+
+    if (totalEl) totalEl.innerText = `₱${NKB.formatNumber(totalCost)}`;
+    if (countEl) countEl.innerText = `${(manageBomState.items || []).length} line items`;
+
+    if (remEl && badgeEl) {
+        if (balance >= 0) {
+            remEl.className = 'text-xl font-black font-mono tracking-tight text-emerald-400';
+            remEl.innerText = `₱${NKB.formatNumber(balance)}`;
+            badgeEl.innerHTML = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">🟢 Within Budget (₱${NKB.formatNumber(balance)} Left)</span>`;
+        } else {
+            remEl.className = 'text-xl font-black font-mono tracking-tight text-rose-400';
+            remEl.innerText = `-₱${NKB.formatNumber(Math.abs(balance))}`;
+            badgeEl.innerHTML = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40">🔴 Over Budget by ₱${NKB.formatNumber(Math.abs(balance))}</span>`;
+        }
+    }
+}
+
+async function saveManageBomBudget(generateSpo = false) {
+    if (!manageBomState.reqId) return;
+
+    if (!manageBomState.items || manageBomState.items.length === 0) {
+        alert('Please add at least one line item to the Bill of Materials.');
+        return;
+    }
+
+    const supplierName = document.getElementById('mbom-supplier-name')?.value.trim();
+    if (generateSpo && !supplierName) {
+        alert('Please provide the Supplier / Vendor Name to issue an official Supplier PO.');
+        document.getElementById('mbom-supplier-name')?.focus();
+        return;
+    }
+
+    const supplierAddress = document.getElementById('mbom-supplier-address')?.value.trim();
+    const supplierContact = document.getElementById('mbom-supplier-contact')?.value.trim();
+    const paymentTerms = document.getElementById('mbom-payment-terms')?.value.trim();
+    const targetDate = document.getElementById('mbom-target-date')?.value || null;
+    const fundLimit = parseFloat(document.getElementById('mbom-fund-limit')?.value) || manageBomState.fundLimit;
+
+    let totalCost = 0;
+    manageBomState.items.forEach(it => { totalCost += (Number(it.requested_qty || 0) * Number(it.unit_cost || 0)); });
+    if (fundLimit > 0 && totalCost > fundLimit && generateSpo) {
+        const proceed = confirm(`⚠️ Warning: BOM Total Cost (₱${NKB.formatNumber(totalCost)}) exceeds the Fund Limit (₱${NKB.formatNumber(fundLimit)}) by ₱${NKB.formatNumber(totalCost - fundLimit)}.\n\nDo you want to proceed and issue the Supplier PO anyway?`);
+        if (!proceed) return;
+    }
+
+    const btn = document.getElementById(generateSpo ? 'mbom-spo-btn' : 'mbom-save-btn');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = generateSpo ? 'Generating Supplier PO...' : 'Saving...';
+    }
+
+    try {
+        const payload = {
+            bom_items: manageBomState.items,
+            fund_limit: fundLimit,
+            supplier_name: supplierName,
+            supplier_address: supplierAddress,
+            supplier_contact: supplierContact,
+            payment_terms: paymentTerms,
+            target_date: targetDate,
+            generate_spo: generateSpo
+        };
+
+        const res = await NKB.api(`/api/supply-requests/${manageBomState.reqId}/budget-bom`, {
+            method: 'PUT',
+            body: payload
+        });
+
+        if (res && res.success) {
+            NKB.showToast(res.message || 'BOM budgeting saved successfully!', 'success');
+            const reqId = manageBomState.reqId;
+            closeModal();
+            loadPurchasingRequisitions();
+            if (typeof loadOrders === 'function') loadOrders();
+
+            if (generateSpo && res.data && res.data.supplier_po_number) {
+                setTimeout(() => {
+                    openPrintSupplierPO(reqId);
+                }, 300);
+            }
+        } else {
+            NKB.showToast((res && (res.message || res.error)) || 'Failed to save BOM budget.', 'error');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerText = generateSpo ? '🖨️ Issue Supplier PO (SPO) & Order' : '💾 Save Numbers & Budget';
+            }
+        }
+    } catch (err) {
+        console.error('Error saving BOM budget:', err);
+        NKB.showToast('Network error saving BOM budget.', 'error');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = generateSpo ? '🖨️ Issue Supplier PO (SPO) & Order' : '💾 Save Numbers & Budget';
+        }
+    }
+}
+
+// -------------------------------------------------------------
+// RECEIVE & CONFIRM SHIPMENT DELIVERY (INVENTORY & PURCHASING)
+// -------------------------------------------------------------
+async function openReceiveShipmentModal(reqId) {
+    const res = await NKB.api(`/api/supply-requests/${reqId}`);
+    if (!res.success || !res.data) {
+        NKB.showToast('Failed to load requisition details for shipment receipt.', 'error');
+        return;
+    }
+    const r = res.data;
+    let items = [];
+    try {
+        items = typeof r.bom_items === 'string' ? JSON.parse(r.bom_items) : (r.bom_items || []);
+    } catch (_) {
+        items = [];
+    }
+
+    const root = document.getElementById('modals-root');
+    if (!root) return;
+
+    root.innerHTML = `
+        <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+            <div class="bg-white rounded-3xl max-w-3xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 my-auto max-h-[92vh] overflow-y-auto">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-9 h-9 rounded-xl bg-emerald-100 border border-emerald-300 flex items-center justify-center text-emerald-800 text-lg font-bold">📥</div>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h3 class="text-base font-extrabold text-slate-900">Receive & Stock Raw Materials Delivery</h3>
+                                ${r.supplier_po_number ? `<span class="px-2 py-0.5 rounded-md bg-purple-50 border border-purple-200 text-purple-700 font-mono text-[10px] font-black">${r.supplier_po_number}</span>` : ''}
+                            </div>
+                            <p class="text-[11px] text-slate-500">Confirm received quantities to automatically update stock in Raw Materials Inventory.</p>
+                        </div>
+                    </div>
+                    <button onclick="closeModal()" class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 font-bold flex items-center justify-center transition cursor-pointer">✕</button>
+                </div>
+
+                <div class="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-2xl text-xs grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                        <span class="text-emerald-800 font-bold">PO Reference:</span>
+                        <span class="font-mono font-extrabold text-slate-900 ml-1">${r.po_number}</span>
+                    </div>
+                    <div>
+                        <span class="text-emerald-800 font-bold">Supplier:</span>
+                        <span class="font-bold text-slate-900 ml-1">${r.supplier_name || r.supplier_details || 'Vendor'}</span>
+                    </div>
+                    <div>
+                        <span class="text-emerald-800 font-bold">Procurement Status:</span>
+                        <span class="font-mono font-bold text-emerald-700 ml-1">${r.status}</span>
+                    </div>
+                </div>
+
+                <form onsubmit="submitReceiveDelivery(event, '${r.id}')" class="space-y-4 text-xs">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-slate-700 font-bold mb-1">Delivery Receipt / Invoice Ref</label>
+                            <input type="text" id="recv-dr-ref" placeholder="e.g. DR-2026-98124 or Inv #4401" class="w-full px-3.5 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 transition">
+                        </div>
+                        <div>
+                            <label class="block text-slate-700 font-bold mb-1">Receiving Remarks / Storage Location</label>
+                            <input type="text" id="recv-notes" placeholder="e.g. Received in good condition, stored at Bay 4" class="w-full px-3.5 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 transition">
+                        </div>
+                    </div>
+
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between text-xs">
+                            <span class="font-black uppercase tracking-wider text-slate-700">📦 Delivered Items & Stock Confirmation</span>
+                            <span class="text-[11px] text-slate-500">Edit quantities received if different from ordered</span>
+                        </div>
+
+                        <div class="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                            <table class="w-full text-left text-xs border-collapse">
+                                <thead class="bg-slate-50 text-slate-600 font-bold uppercase tracking-wider text-[10px] border-b border-slate-200">
+                                    <tr>
+                                        <th class="py-2.5 px-3">Code</th>
+                                        <th class="py-2.5 px-3">Material Name</th>
+                                        <th class="py-2.5 px-2 text-right">Ordered</th>
+                                        <th class="py-2.5 px-2 text-right w-28">Received Qty <span class="text-rose-500">*</span></th>
+                                        <th class="py-2.5 px-2 w-16">Unit</th>
+                                        <th class="py-2.5 px-3 w-32">Batch / Lot #</th>
+                                        <th class="py-2.5 px-3 w-36">Expiry Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100 bg-white">
+                                    ${items.map((it, idx) => `
+                                        <tr class="hover:bg-slate-50 transition" data-row-idx="${idx}">
+                                            <td class="py-2 px-3 font-mono font-bold text-slate-700">
+                                                ${it.material_code || 'BOM-MAT'}
+                                                <input type="hidden" class="recv-item-id" value="${it.raw_material_id || ''}">
+                                                <input type="hidden" class="recv-item-code" value="${it.material_code || ''}">
+                                                <input type="hidden" class="recv-item-name" value="${(it.material_name || '').replace(/"/g, '&quot;')}">
+                                                <input type="hidden" class="recv-item-cost" value="${it.unit_cost || 0}">
+                                                <input type="hidden" class="recv-item-category" value="${it.category || 'Raw Materials'}">
+                                                <input type="hidden" class="recv-item-supplier" value="${(it.supplier || r.supplier_name || '').replace(/"/g, '&quot;')}">
+                                            </td>
+                                            <td class="py-2 px-3 font-bold text-slate-900">${it.material_name}</td>
+                                            <td class="py-2 px-2 text-right font-mono text-slate-500">${it.requested_qty || 0}</td>
+                                            <td class="py-2 px-2 text-right">
+                                                <input type="number" step="any" min="0" required class="recv-item-qty w-24 px-2.5 py-1.5 border border-emerald-300 rounded-xl font-mono font-black text-right text-emerald-900 bg-emerald-50/50 focus:bg-white focus:ring-2 focus:ring-emerald-500" value="${it.requested_qty || 0}">
+                                            </td>
+                                            <td class="py-2 px-2 font-mono text-slate-600">
+                                                <input type="text" class="recv-item-unit w-14 px-2 py-1 border border-slate-200 rounded-lg text-center" value="${it.unit || 'kg'}">
+                                            </td>
+                                            <td class="py-2 px-3">
+                                                <input type="text" class="recv-item-lot w-full px-2 py-1 border border-slate-200 rounded-lg font-mono text-slate-700" placeholder="Batch #" value="${it.batch_lot_number || ''}">
+                                            </td>
+                                            <td class="py-2 px-3">
+                                                <input type="date" class="recv-item-expiry w-full px-2 py-1 border border-slate-200 rounded-lg text-slate-700" value="${it.expiry_date || ''}">
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="p-3 bg-amber-50 rounded-2xl border border-amber-200 text-[11px] text-amber-900 flex items-center gap-2">
+                        <span>ℹ️</span>
+                        <span><b>Automatic Inventory Update:</b> Upon confirmation, received quantities will directly increment the warehouse stock of each raw material, update its status to <b>IN_STOCK</b>, and update this requisition to <b>DELIVERED</b>.</span>
+                    </div>
+
+                    <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition">Cancel</button>
+                        <button type="submit" id="btn-recv-confirm" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-extrabold shadow-lg shadow-emerald-600/25 transition cursor-pointer">
+                            📥 Confirm Quantities & Stock into Inventory
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+}
+
+async function submitReceiveDelivery(e, reqId) {
+    e.preventDefault();
+    const btn = document.getElementById('btn-recv-confirm');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = 'Stocking into Inventory...';
+    }
+
+    const rows = document.querySelectorAll('#modals-root tr[data-row-idx]');
+    const received_items = [];
+
+    rows.forEach(tr => {
+        const id = tr.querySelector('.recv-item-id')?.value || null;
+        const code = tr.querySelector('.recv-item-code')?.value || '';
+        const name = tr.querySelector('.recv-item-name')?.value || '';
+        const cost = parseFloat(tr.querySelector('.recv-item-cost')?.value) || 0;
+        const category = tr.querySelector('.recv-item-category')?.value || 'Raw Materials';
+        const supplier = tr.querySelector('.recv-item-supplier')?.value || '';
+        const qty = parseFloat(tr.querySelector('.recv-item-qty')?.value) || 0;
+        const unit = tr.querySelector('.recv-item-unit')?.value || 'kg';
+        const lot = tr.querySelector('.recv-item-lot')?.value.trim() || '';
+        const expiry = tr.querySelector('.recv-item-expiry')?.value || '';
+
+        received_items.push({
+            raw_material_id: id,
+            material_code: code,
+            material_name: name,
+            category: category,
+            received_qty: qty,
+            unit: unit,
+            unit_cost: cost,
+            batch_lot_number: lot,
+            expiry_date: expiry,
+            supplier: supplier
+        });
+    });
+
+    const delivery_receipt_ref = document.getElementById('recv-dr-ref')?.value.trim();
+    const notes = document.getElementById('recv-notes')?.value.trim();
+
+    try {
+        const res = await NKB.api(`/api/supply-requests/${reqId}/receive-delivery`, {
+            method: 'POST',
+            body: { received_items, delivery_receipt_ref, notes }
+        });
+
+        if (res && res.success) {
+            NKB.showToast(res.message || 'Shipment received and stocked into inventory successfully!', 'success');
+            closeModal();
+            loadPurchasingRequisitions();
+            if (typeof loadRawMaterials === 'function') loadRawMaterials();
+            if (typeof loadOrders === 'function') loadOrders();
+            if (window.NKB_Agents && window.NKB_Agents.refreshPendingNotifications) {
+                window.NKB_Agents.refreshPendingNotifications();
+            }
+        } else {
+            NKB.showToast((res && (res.message || res.error)) || 'Failed to confirm delivery.', 'error');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerText = '📥 Confirm Quantities & Stock into Inventory';
+            }
+        }
+    } catch (err) {
+        console.error('Error confirming delivery:', err);
+        NKB.showToast('Network error confirming delivery.', 'error');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = '📥 Confirm Quantities & Stock into Inventory';
+        }
+    }
+}
+
+async function openReceiveShipmentSelectorModal() {
+    const res = await NKB.api('/api/supply-requests');
+    if (!res || !res.success || !Array.isArray(res.data)) {
+        NKB.showToast('Failed to load pending shipments.', 'error');
+        return;
+    }
+
+    const pending = res.data.filter(r => r.status === 'ORDERED' || r.status === 'IN_TRANSIT' || (r.supplier_po_number && r.status !== 'DELIVERED' && r.status !== 'CANCELLED' && r.status !== 'REJECTED'));
+
+    if (pending.length === 0) {
+        NKB.showToast('No pending supplier shipments awaiting delivery.', 'info');
+        return;
+    }
+
+    if (pending.length === 1) {
+        openReceiveShipmentModal(pending[0].id);
+        return;
+    }
+
+    const root = document.getElementById('modals-root');
+    if (!root) return;
+
+    root.innerHTML = `
+        <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+            <div class="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 my-auto">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 text-base font-bold">📥</div>
+                        <div>
+                            <h3 class="text-base font-extrabold text-slate-900">Select Incoming Shipment to Receive</h3>
+                            <p class="text-[11px] text-slate-500">${pending.length} pending supplier orders awaiting inventory confirmation</p>
+                        </div>
+                    </div>
+                    <button onclick="closeModal()" class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 font-bold flex items-center justify-center transition">✕</button>
+                </div>
+
+                <div class="space-y-2.5 max-h-[60vh] overflow-y-auto">
+                    ${pending.map(p => `
+                        <div class="p-3.5 rounded-2xl border border-slate-200 hover:border-emerald-300 bg-slate-50/50 hover:bg-emerald-50/20 transition flex items-center justify-between gap-3">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <span class="font-mono font-black text-xs text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-lg">${p.supplier_po_number || 'SPO'}</span>
+                                    <span class="font-bold text-slate-900 text-xs">${p.po_number}</span>
+                                </div>
+                                <div class="text-[11px] text-slate-600 mt-1 font-semibold">🏢 ${p.supplier_name || p.supplier_details || 'Vendor'} • <span class="font-mono text-emerald-700">₱${NKB.formatNumber(p.total_cost || 0)}</span></div>
+                                <div class="text-[10px] text-slate-400 mt-0.5 truncate max-w-md">${p.materials_needed}</div>
+                            </div>
+                            <button onclick="closeModal(); openReceiveShipmentModal('${p.id}')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-sm transition whitespace-nowrap cursor-pointer">
+                                Receive 📥
+                            </button>
+                        </div>
+                    `).join('')}
+                </div>
+
+                <div class="flex justify-end pt-2 border-t border-slate-100">
+                    <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition">Close</button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+window.loadPurchasingFundLimit = loadPurchasingFundLimit;
+window.editPurchasingFundLimit = editPurchasingFundLimit;
+window.updatePurchasingBudgetHeadroom = updatePurchasingBudgetHeadroom;
+window.loadPurchasingRequisitions = loadPurchasingRequisitions;
+window.openPrintSupplierPO = openPrintSupplierPO;
+window.openManageBomBudgetModal = openManageBomBudgetModal;
+window.renderManageBomTable = renderManageBomTable;
+window.updateManageBomName = updateManageBomName;
+window.updateManageBomQty = updateManageBomQty;
+window.updateManageBomUnit = updateManageBomUnit;
+window.updateManageBomUnitCost = updateManageBomUnitCost;
+window.updateManageBomSupplier = updateManageBomSupplier;
+window.removeManageBomItem = removeManageBomItem;
+window.addRawMaterialToManageBom = addRawMaterialToManageBom;
+window.addCustomItemToManageBom = addCustomItemToManageBom;
+window.onManageBomFundLimitChange = onManageBomFundLimitChange;
+window.recalcManageBomTotals = recalcManageBomTotals;
+window.saveManageBomBudget = saveManageBomBudget;
+window.openReceiveShipmentModal = openReceiveShipmentModal;
+window.submitReceiveDelivery = submitReceiveDelivery;
+window.openReceiveShipmentSelectorModal = openReceiveShipmentSelectorModal;
 
 async function openUpdateRequisitionModal(reqId) {
     const res = await NKB.api(`/api/supply-requests/${reqId}`);

@@ -1220,10 +1220,47 @@ function runMigrations(dbInstance, isMysql) {
             try { dbInstance.exec(`ALTER TABLE supply_requests ADD COLUMN purchasing_response TEXT;`); } catch (_) {}
             try { dbInstance.exec(`ALTER TABLE supply_requests ADD COLUMN purchasing_response_notes TEXT;`); } catch (_) {}
             try { dbInstance.exec(`ALTER TABLE supply_requests ADD COLUMN purchasing_responded_at TEXT;`); } catch (_) {}
+            try { dbInstance.exec(`ALTER TABLE supply_requests ADD COLUMN supplier_po_number TEXT;`); } catch (_) {}
+            try { dbInstance.exec(`ALTER TABLE supply_requests ADD COLUMN supplier_name TEXT;`); } catch (_) {}
+            try { dbInstance.exec(`ALTER TABLE supply_requests ADD COLUMN supplier_address TEXT;`); } catch (_) {}
+            try { dbInstance.exec(`ALTER TABLE supply_requests ADD COLUMN supplier_contact TEXT;`); } catch (_) {}
+            try { dbInstance.exec(`ALTER TABLE supply_requests ADD COLUMN payment_terms TEXT;`); } catch (_) {}
+            try { dbInstance.exec(`ALTER TABLE supply_requests ADD COLUMN fund_limit REAL DEFAULT 0.0;`); } catch (_) {}
+            try { dbInstance.exec(`ALTER TABLE supply_requests ADD COLUMN total_cost REAL DEFAULT 0.0;`); } catch (_) {}
+            try { dbInstance.exec(`ALTER TABLE supply_requests ADD COLUMN received_items TEXT;`); } catch (_) {}
+            try { dbInstance.exec(`ALTER TABLE supply_requests ADD COLUMN received_by TEXT;`); } catch (_) {}
+            try { dbInstance.exec(`ALTER TABLE supply_requests ADD COLUMN received_at TEXT;`); } catch (_) {}
             try { dbInstance.exec(`ALTER TABLE users ADD COLUMN whatsapp_number TEXT;`); } catch (_) {}
             try { dbInstance.exec(`ALTER TABLE users ADD COLUMN phone TEXT;`); } catch (_) {}
         } catch (srErr) {
             console.warn('Supply requests table init note:', srErr.message);
+        }
+
+        // Initialize system_settings table (Fund limits, purchasing configs)
+        try {
+            if (isMysql) {
+                dbInstance.exec(`
+                    CREATE TABLE IF NOT EXISTS system_settings (
+                        setting_key VARCHAR(100) NOT NULL PRIMARY KEY,
+                        setting_value TEXT NOT NULL,
+                        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+                `);
+            } else {
+                dbInstance.exec(`
+                    CREATE TABLE IF NOT EXISTS system_settings (
+                        setting_key TEXT PRIMARY KEY,
+                        setting_value TEXT NOT NULL,
+                        updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+                    );
+                `);
+            }
+            const existingFundLimit = dbInstance.prepare("SELECT setting_value FROM system_settings WHERE setting_key = 'default_purchasing_fund_limit'").get();
+            if (!existingFundLimit) {
+                dbInstance.prepare("INSERT INTO system_settings (setting_key, setting_value) VALUES ('default_purchasing_fund_limit', '500000')").run();
+            }
+        } catch (settingsErr) {
+            console.warn('system_settings table init note:', settingsErr.message);
         }
 
         // Existing active orders are marked as confirmed

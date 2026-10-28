@@ -5645,6 +5645,238 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.ok(adminJs.includes('po.contact_person'), 'admin.js must include contact_person in search filter and jump-to selector');
     });
 
+    test('103. End-to-End BOM Requisition, Purchasing Fund Limit, Supplier PO (SPO), and Inventory Stocking Workflow', async () => {
+        const inventoryToken = getAuthToken('INVENTORY');
+        const purchasingToken = getAuthToken('PURCHASING');
+        const superAdminToken = getAuthToken('SUPER_ADMIN');
+        assert.ok(inventoryToken && purchasingToken && superAdminToken, 'Role tokens must be available');
+
+        // 1. Verify Purchasing Fund Limit API (GET & PUT)
+        const getFlRes = await request(app)
+            .get('/api/supply-requests/fund-limit')
+            .set('Authorization', `Bearer ${purchasingToken}`);
+        assert.strictEqual(getFlRes.status, 200);
+        assert.ok(getFlRes.body.success, 'Must successfully return fund limit');
+        const originalFundLimit = Number(getFlRes.body.data.fund_limit || 500000);
+
+        const updateFlRes = await request(app)
+            .put('/api/supply-requests/fund-limit')
+            .set('Authorization', `Bearer ${purchasingToken}`)
+            .send({ fund_limit: 750000 });
+        assert.strictEqual(updateFlRes.status, 200);
+        assert.strictEqual(Number(updateFlRes.body.data.fund_limit), 750000);
+
+        // 2. Prepare test raw material in raw_materials_inventory
+        const testRmCode = 'RM-TEST-BOM-103';
+        db.prepare('DELETE FROM raw_materials_inventory WHERE material_code = ?').run(testRmCode);
+        const testRmId = 'rm-bom-test-' + Date.now();
+        db.prepare(`
+            INSERT INTO raw_materials_inventory (
+                id, material_code, material_name, category, current_stock, minimum_stock_level,
+                unit, unit_cost, location, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(testRmId, testRmCode, 'Test Premium Fragrance Oil 103', 'Fragrance & Scents', 15.0, 50.0, 'kg', 250.0, 'Bay A-1', 'LOW_STOCK');
+
+        // 3. Phase 1: Inventory requests raw materials via BOM Requisition
+        const bomItems = [
+            {
+                raw_material_id: testRmId,
+                material_code: testRmCode,
+                material_name: 'Test Premium Fragrance Oil 103',
+                category: 'Fragrance & Scents',
+                requested_qty: 40,
+                unit: 'kg',
+                unit_cost: 250.0,
+                supplier: 'Croda International'
+            },
+            {
+                raw_material_id: null,
+                material_code: 'PKG-CUSTOM-BOM',
+                material_name: 'Custom Glass Dropper 50ml',
+                category: 'Packaging',
+                requested_qty: 100,
+                unit: 'pcs',
+                unit_cost: 15.0,
+                supplier: 'Packaging Express'
+            }
+        ];
+
+        const createReqRes = await request(app)
+            .post('/api/supply-requests')
+            .set('Authorization', `Bearer ${inventoryToken}`)
+            .send({
+                po_id: 'WAREHOUSE-STOCK',
+                materials_needed: 'Warehouse Restock for Fragrance Oil 103 & Glass Droppers',
+                urgency: 'HIGH',
+                target_date: '2026-11-15',
+                notes: 'Stock is currently below minimum safety levels.',
+                bom_items: bomItems
+            });
+
+        assert.strictEqual(createReqRes.status, 201);
+        assert.ok(createReqRes.body.success);
+        const reqId = createReqRes.body.data.id;
+        assert.ok(reqId, 'Requisition ID must be generated');
+        assert.strictEqual(createReqRes.body.data.status, 'SUBMITTED');
+        assert.strictEqual(Number(createReqRes.body.data.fund_limit), 750000);
+        assert.strictEqual(Number(createReqRes.body.data.total_cost), (40 * 250) + (100 * 15)); // 10000 + 1500 = 11500
+
+        // 4. Verify Notifications Endpoint includes this stock replenishment BOM
+        const notifRes = await request(app)
+            .get('/api/notifications/pending')
+            .set('Authorization', `Bearer ${purchasingToken}`);
+        assert.strictEqual(notifRes.status, 200);
+        const hasReqNotif = (notifRes.body.items || []).some(it => it.target?.reqId === reqId || it.id === `sr-sub-${reqId}`);
+        assert.ok(hasReqNotif, 'Purchasing pending notifications must include WAREHOUSE-STOCK BOM requisition');
+
+        // 5. Phase 2 & 3: Purchasing manages BOM numbers, budget, and issues formal Supplier PO (SPO)
+        const updatedBomItems = [
+            {
+                raw_material_id: testRmId,
+                material_code: testRmCode,
+                material_name: 'Test Premium Fragrance Oil 103',
+                category: 'Fragrance & Scents',
+                requested_qty: 50, // Negotiated bulk volume
+                unit: 'kg',
+                unit_cost: 230.0, // Discounted vendor unit cost
+                line_total: 11500.0,
+                supplier: 'Croda Chemicals Inc.'
+            },
+            {
+                raw_material_id: null,
+                material_code: 'PKG-CUSTOM-BOM',
+                material_name: 'Custom Glass Dropper 50ml',
+                category: 'Packaging',
+                requested_qty: 120,
+                unit: 'pcs',
+                unit_cost: 14.5,
+                line_total: 1740.0,
+                supplier: 'Packaging Express'
+            }
+        ];
+
+        const budgetBomRes = await request(app)
+            .put(`/api/supply-requests/${reqId}/budget-bom`)
+            .set('Authorization', `Bearer ${purchasingToken}`)
+            .send({
+                bom_items: updatedBomItems,
+                fund_limit: 500000,
+                supplier_name: 'Croda Chemicals Philippines Inc.',
+                supplier_address: 'Km 19 Ortigas Ave Ext, Pasig City',
+                supplier_contact: '+63 917 888 9999 / sales@croda.com.ph',
+                payment_terms: '30 Days Net',
+                target_date: '2026-11-20',
+                generate_spo: true
+            });
+
+        assert.strictEqual(budgetBomRes.status, 200);
+        assert.ok(budgetBomRes.body.success);
+        assert.strictEqual(budgetBomRes.body.data.status, 'ORDERED');
+        const spoNumber = budgetBomRes.body.data.supplier_po_number;
+        assert.ok(spoNumber && spoNumber.startsWith('SPO-2026-'), 'Must issue sequential SPO number e.g. SPO-2026-000001');
+        assert.strictEqual(Number(budgetBomRes.body.data.total_cost), 11500 + 1740); // 13240
+        assert.strictEqual(budgetBomRes.body.is_within_budget, true);
+
+        // 6. Verify Printable Supplier PO payload endpoint
+        const printRes = await request(app)
+            .get(`/api/supply-requests/${reqId}/printable-spo`)
+            .set('Authorization', `Bearer ${purchasingToken}`);
+        assert.strictEqual(printRes.status, 200);
+        assert.ok(printRes.body.success);
+        assert.strictEqual(printRes.body.data.supplier_po_number, spoNumber);
+        assert.strictEqual(printRes.body.data.supplier_name, 'Croda Chemicals Philippines Inc.');
+        assert.strictEqual(printRes.body.data.payment_terms, '30 Days Net');
+        assert.strictEqual(printRes.body.data.bom_items.length, 2);
+
+        // 7. Phase 4: Delivery Arrives & Confirmed by Inventory Officer -> Auto-Stocked into Raw Materials Inventory
+        const receivedItems = [
+            {
+                raw_material_id: testRmId,
+                material_code: testRmCode,
+                material_name: 'Test Premium Fragrance Oil 103',
+                category: 'Fragrance & Scents',
+                received_qty: 50,
+                unit: 'kg',
+                unit_cost: 230.0,
+                batch_lot_number: 'LOT-CR-2026-991',
+                expiry_date: '2028-11-20',
+                supplier: 'Croda Chemicals Philippines Inc.'
+            },
+            {
+                raw_material_id: null,
+                material_code: 'PKG-CUSTOM-BOM',
+                material_name: 'Custom Glass Dropper 50ml',
+                category: 'Packaging',
+                received_qty: 120,
+                unit: 'pcs',
+                unit_cost: 14.5,
+                batch_lot_number: 'LOT-DRP-881',
+                expiry_date: '2030-01-01',
+                supplier: 'Packaging Express'
+            }
+        ];
+
+        const receiveRes = await request(app)
+            .post(`/api/supply-requests/${reqId}/receive-delivery`)
+            .set('Authorization', `Bearer ${inventoryToken}`)
+            .send({
+                received_items: receivedItems,
+                delivery_receipt_ref: 'DR-CRODA-2026-4401',
+                notes: 'All containers inspected and stored in Bay A-1.'
+            });
+
+        assert.strictEqual(receiveRes.status, 200);
+        assert.ok(receiveRes.body.success);
+        assert.strictEqual(receiveRes.body.data.status, 'DELIVERED');
+
+        // 8. Verify Raw Materials Inventory updated stock levels and statuses
+        const updatedRm = db.prepare('SELECT * FROM raw_materials_inventory WHERE id = ?').get(testRmId);
+        assert.ok(updatedRm, 'Raw material must exist in database');
+        // Initial stock was 15.0, received 50.0 -> must now be 65.0
+        assert.strictEqual(Number(updatedRm.current_stock), 65.0);
+        assert.strictEqual(updatedRm.status, 'IN_STOCK');
+        assert.strictEqual(Number(updatedRm.unit_cost), 230.0);
+        assert.strictEqual(updatedRm.batch_lot_number, 'LOT-CR-2026-991');
+        assert.strictEqual(updatedRm.expiry_date, '2028-11-20');
+
+        // Verify the brand new packaging material was auto-created in raw_materials_inventory
+        const newPkgRm = db.prepare("SELECT * FROM raw_materials_inventory WHERE material_name = 'Custom Glass Dropper 50ml'").get();
+        assert.ok(newPkgRm, 'Brand new material must be auto-created in raw materials inventory');
+        assert.strictEqual(Number(newPkgRm.current_stock), 120.0);
+        assert.strictEqual(newPkgRm.status, 'IN_STOCK');
+        assert.strictEqual(Number(newPkgRm.unit_cost), 14.5);
+
+        // 9. Verify Frontend & Printable Template Integrity
+        const adminHtml = fs.readFileSync(path.join(__dirname, '../public/admin.html'), 'utf8');
+        assert.ok(adminHtml.includes('id="purchasing-fund-limit-display"'), 'admin.html must have fund limit display');
+        assert.ok(adminHtml.includes('id="purchasing-remaining-fund-display"'), 'admin.html must have remaining budget headroom display');
+        assert.ok(adminHtml.includes('id="purchasing-budget-badge"'), 'admin.html must have budget status badge');
+        assert.ok(adminHtml.includes('openReceiveShipmentSelectorModal()'), 'admin.html must have receive shipment button');
+
+        const adminJs = fs.readFileSync(path.join(__dirname, '../public/js/admin.js'), 'utf8');
+        assert.ok(adminJs.includes('window.loadPurchasingFundLimit = loadPurchasingFundLimit;'), 'admin.js must export loadPurchasingFundLimit');
+        assert.ok(adminJs.includes('window.editPurchasingFundLimit = editPurchasingFundLimit;'), 'admin.js must export editPurchasingFundLimit');
+        assert.ok(adminJs.includes('window.openManageBomBudgetModal = openManageBomBudgetModal;'), 'admin.js must export openManageBomBudgetModal');
+        assert.ok(adminJs.includes('window.openPrintSupplierPO = openPrintSupplierPO;'), 'admin.js must export openPrintSupplierPO');
+        assert.ok(adminJs.includes('window.openReceiveShipmentModal = openReceiveShipmentModal;'), 'admin.js must export openReceiveShipmentModal');
+        assert.ok(adminJs.includes('window.saveManageBomBudget = saveManageBomBudget;'), 'admin.js must export saveManageBomBudget');
+        assert.ok(adminJs.includes('window.submitReceiveDelivery = submitReceiveDelivery;'), 'admin.js must export submitReceiveDelivery');
+
+        const printSpoHtml = fs.readFileSync(path.join(__dirname, '../public/print-supplier-po.html'), 'utf8');
+        assert.ok(printSpoHtml.includes('SUPPLIER PURCHASE ORDER'), 'print-supplier-po.html must display SUPPLIER PURCHASE ORDER');
+        assert.ok(printSpoHtml.includes('disp-spo-no'), 'print-supplier-po.html must contain disp-spo-no');
+        assert.ok(printSpoHtml.includes('disp-items-tbody'), 'print-supplier-po.html must contain disp-items-tbody');
+        assert.ok(printSpoHtml.includes('Purchasing Officer'), 'print-supplier-po.html must contain Purchasing signature block');
+        assert.ok(printSpoHtml.includes('Warehouse / Inventory'), 'print-supplier-po.html must contain Warehouse / Inventory signature block');
+
+        // Cleanup test entries
+        db.prepare('DELETE FROM supply_requests WHERE id = ?').run(reqId);
+        db.prepare('DELETE FROM raw_materials_inventory WHERE id = ?').run(testRmId);
+        if (newPkgRm) db.prepare('DELETE FROM raw_materials_inventory WHERE id = ?').run(newPkgRm.id);
+        // Reset fund limit back
+        db.prepare("UPDATE system_settings SET setting_value = ? WHERE setting_key = 'default_purchasing_fund_limit'").run(String(originalFundLimit));
+    });
+
     after(() => {
         try {
             realtimeSyncService.closeAllClients();

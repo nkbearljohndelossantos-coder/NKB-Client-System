@@ -307,22 +307,25 @@ router.get('/pending', authenticateToken, (req, res) => {
         // 4. Purchasing Department: Raw Materials Supply Requisitions
         if (role === ROLES.SUPER_ADMIN || role === ROLES.IT_ADMIN || role === ROLES.ADMIN || role === ROLES.PURCHASING) {
             const pendingRequisitions = db.prepare(`
-                SELECT sr.id, sr.materials_needed, sr.urgency, sr.target_date, po.po_number, c.company_name,
+                SELECT sr.id, sr.materials_needed, sr.urgency, sr.target_date, 
+                       COALESCE(po.po_number, 'WH-STOCK-BOM') as po_number, 
+                       COALESCE(c.company_name, 'Warehouse Inventory') as company_name,
                        u.name as requester_name, u.phone as requester_phone, u.whatsapp_number as requester_whatsapp
                 FROM supply_requests sr
-                JOIN purchase_orders po ON sr.po_id = po.id
-                JOIN clients c ON po.client_id = c.id
+                LEFT JOIN purchase_orders po ON sr.po_id = po.id
+                LEFT JOIN clients c ON po.client_id = c.id
                 LEFT JOIN users u ON sr.requested_by = u.id
                 WHERE sr.status = 'SUBMITTED'
                 ORDER BY sr.created_at DESC
             `).all();
 
             for (const sr of pendingRequisitions) {
+                const poRef = sr.po_number || 'Warehouse Stock BOM';
                 items.push(createActionItem({
                     id: `sr-sub-${sr.id}`,
                     category: 'PURCHASING',
-                    title: `Requisition for PO ${sr.po_number}`,
-                    description: `Procure: ${sr.materials_needed.slice(0, 70)}${sr.materials_needed.length > 70 ? '...' : ''}`,
+                    title: `BOM Requisition: ${poRef}`,
+                    description: `${sr.company_name} - Procure: ${sr.materials_needed.slice(0, 70)}${sr.materials_needed.length > 70 ? '...' : ''}`,
                     urgency: sr.urgency === 'CRITICAL' ? 'CRITICAL' : 'HIGH',
                     icon: '🛒',
                     recipient_name: staffDirectory[ROLES.PURCHASING]?.name || 'Purchasing Officer',
@@ -331,7 +334,7 @@ router.get('/pending', authenticateToken, (req, res) => {
                     target: {
                         tab: 'purchasing',
                         reqId: sr.id,
-                        poNumber: sr.po_number,
+                        poNumber: poRef,
                         action: 'ORDER_SUPPLIES'
                     }
                 }));

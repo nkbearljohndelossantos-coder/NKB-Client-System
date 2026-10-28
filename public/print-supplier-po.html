@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supplier Purchase Order (BOM) - NKB Manufacturing Corporation</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Lato', 'Segoe UI', Arial, Helvetica, sans-serif;
+            color: #0f172a;
+            background: #ffffff;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        @page {
+            size: A4 portrait;
+            margin: 0;
+        }
+
+        @media print {
+            html, body {
+                width: 210mm !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: #ffffff !important;
+                font-size: 9.5pt !important;
+                color: #000000 !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            .no-print {
+                display: none !important;
+            }
+
+            .print-sheet {
+                width: 210mm !important;
+                max-width: 210mm !important;
+                min-height: 297mm !important;
+                margin: 0 auto !important;
+                padding: 14mm 16mm !important;
+                box-sizing: border-box !important;
+                border: none !important;
+                box-shadow: none !important;
+                background: transparent !important;
+            }
+
+            .avoid-break {
+                break-inside: avoid !important;
+                page-break-inside: avoid !important;
+            }
+        }
+
+        @media screen {
+            body {
+                background: #f1f5f9;
+                padding: 20px 16px 60px 16px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                min-height: 100vh;
+            }
+
+            .print-sheet {
+                width: 210mm;
+                min-height: 297mm;
+                background: #ffffff;
+                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+                border: 1px solid #cbd5e1;
+                border-radius: 4px;
+                padding: 16mm 18mm;
+                margin: 0 auto;
+            }
+
+            .control-bar {
+                width: 210mm;
+                margin-bottom: 16px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                background: #0f172a;
+                color: #ffffff;
+                padding: 12px 18px;
+                border-radius: 12px;
+                box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+            }
+        }
+
+        .header-title {
+            font-size: 19pt;
+            font-weight: 900;
+            color: #047857;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .header-subtitle {
+            font-size: 8pt;
+            color: #475569;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 1px;
+        }
+
+        .doc-badge {
+            background: #047857;
+            color: #ffffff;
+            font-size: 11pt;
+            font-weight: 900;
+            padding: 5px 14px;
+            border-radius: 6px;
+            display: inline-block;
+            letter-spacing: 0.8px;
+            text-align: right;
+        }
+
+        .meta-box {
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 8.5pt;
+            background: #f8fafc;
+        }
+
+        .meta-label {
+            font-weight: 700;
+            color: #475569;
+            width: 110px;
+            display: inline-block;
+        }
+
+        .meta-val {
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 8.5pt;
+            margin-top: 14px;
+        }
+
+        .items-table th {
+            background: #0f172a;
+            color: #ffffff;
+            font-weight: 700;
+            text-transform: uppercase;
+            padding: 7px 8px;
+            font-size: 8pt;
+            letter-spacing: 0.5px;
+            border: 1px solid #0f172a;
+        }
+
+        .items-table td {
+            border: 1px solid #cbd5e1;
+            padding: 6px 8px;
+            vertical-align: middle;
+        }
+
+        .items-table tr:nth-child(even) td {
+            background: #f8fafc;
+        }
+
+        .tot-box {
+            float: right;
+            width: 250px;
+            margin-top: 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            overflow: hidden;
+            font-size: 9pt;
+        }
+
+        .tot-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 12px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .tot-row.grand {
+            background: #047857;
+            color: #ffffff;
+            font-weight: 900;
+            font-size: 10.5pt;
+            border-bottom: none;
+        }
+
+        .sig-block {
+            margin-top: 40px;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            font-size: 8pt;
+        }
+
+        .sig-box {
+            border-top: 1px solid #0f172a;
+            padding-top: 5px;
+            text-align: center;
+        }
+
+        .sig-role {
+            font-weight: 700;
+            color: #475569;
+            text-transform: uppercase;
+            font-size: 7.5pt;
+        }
+
+        .sig-name {
+            font-weight: 900;
+            color: #0f172a;
+            margin-top: 16px;
+        }
+
+        .btn {
+            padding: 7px 16px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            border: none;
+            transition: all 0.15s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-print { background: #10b981; color: #ffffff; }
+        .btn-print:hover { background: #059669; }
+        .btn-back { background: #334155; color: #f8fafc; }
+        .btn-back:hover { background: #475569; }
+    </style>
+</head>
+<body>
+
+    <div class="control-bar no-print">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <a href="javascript:history.back()" class="btn btn-back">← Back</a>
+            <span style="font-size: 13px; font-weight: 700;">Supplier Purchase Order (BOM Procurement)</span>
+        </div>
+        <div style="display: flex; gap: 8px;">
+            <button onclick="window.print()" class="btn btn-print">🖨️ Print Purchase Order</button>
+        </div>
+    </div>
+
+    <div class="print-sheet">
+        <!-- HEADER -->
+        <table style="width: 100%; border-bottom: 2px solid #047857; padding-bottom: 10px; margin-bottom: 12px;">
+            <tr>
+                <td style="vertical-align: top; width: 60%;">
+                    <div class="header-title">NKB MANUFACTURING CORP.</div>
+                    <div class="header-subtitle">Cosmetics, Skincare & Chemical Formulation Solutions</div>
+                    <div style="font-size: 8pt; color: #334155; margin-top: 4px; line-height: 1.4;">
+                        Factory & Warehouse: Bulacan, Philippines<br>
+                        TIN: 000-000-000-000 | Purchasing Dept: purchasing@nkbmanufacturing.com<br>
+                        Phone: (+63) 917 123 4567 | Landline: (02) 8-NKB-CORP
+                    </div>
+                </td>
+                <td style="vertical-align: top; text-align: right; width: 40%;">
+                    <div class="doc-badge">SUPPLIER PURCHASE ORDER</div>
+                    <div style="margin-top: 8px; font-size: 12pt; font-weight: 900; color: #047857; font-family: monospace;" id="disp-spo-no">
+                        SPO-2026-000000
+                    </div>
+                    <div style="font-size: 8pt; color: #64748b; margin-top: 2px;">
+                        Requisition Ref: <span id="disp-req-id" style="font-weight: 700; color: #0f172a;">-</span>
+                    </div>
+                </td>
+            </tr>
+        </table>
+
+        <!-- METADATA & VENDOR DETAILS -->
+        <table style="width: 100%; margin-bottom: 12px; border-collapse: separate; border-spacing: 8px 0;">
+            <tr>
+                <!-- VENDOR INFO -->
+                <td style="width: 50%; vertical-align: top;">
+                    <div class="meta-box" style="min-height: 95px;">
+                        <div style="font-weight: 900; color: #047857; font-size: 9pt; text-transform: uppercase; margin-bottom: 4px; border-bottom: 1px solid #cbd5e1; padding-bottom: 3px;">
+                            🏢 Vendor / Supplier Details
+                        </div>
+                        <div><span class="meta-label">Vendor Name:</span> <span class="meta-val" id="disp-vendor-name">-</span></div>
+                        <div><span class="meta-label">Address:</span> <span class="meta-val" id="disp-vendor-address">-</span></div>
+                        <div><span class="meta-label">Contact Person:</span> <span class="meta-val" id="disp-vendor-contact">-</span></div>
+                        <div><span class="meta-label">Payment Terms:</span> <span class="meta-val" id="disp-payment-terms">Net 30 Days</span></div>
+                    </div>
+                </td>
+                <!-- ORDER SPECS -->
+                <td style="width: 50%; vertical-align: top;">
+                    <div class="meta-box" style="min-height: 95px;">
+                        <div style="font-weight: 900; color: #047857; font-size: 9pt; text-transform: uppercase; margin-bottom: 4px; border-bottom: 1px solid #cbd5e1; padding-bottom: 3px;">
+                            📋 Procurement Specifications
+                        </div>
+                        <div><span class="meta-label">PO Issue Date:</span> <span class="meta-val" id="disp-po-date">-</span></div>
+                        <div><span class="meta-label">Target Delivery:</span> <span class="meta-val" id="disp-target-date" style="color: #b91c1c;">ASAP</span></div>
+                        <div><span class="meta-label">Allocation:</span> <span class="meta-val" id="disp-allocation">Warehouse Stock BOM</span></div>
+                        <div><span class="meta-label">Urgency:</span> <span class="meta-val" id="disp-urgency">NORMAL</span></div>
+                        <div><span class="meta-label">Fund Budget:</span> <span class="meta-val" id="disp-fund-limit" style="font-family: monospace;">₱500,000.00</span></div>
+                    </div>
+                </td>
+            </tr>
+        </table>
+
+        <!-- BILL OF MATERIALS ITEMS TABLE -->
+        <table class="items-table">
+            <thead>
+                <tr>
+                    <th style="width: 5%; text-align: center;">#</th>
+                    <th style="width: 15%; text-align: left;">Item Code</th>
+                    <th style="width: 40%; text-align: left;">Raw Material Description & Specs</th>
+                    <th style="width: 12%; text-align: right;">Quantity</th>
+                    <th style="width: 8%; text-align: center;">Unit</th>
+                    <th style="width: 10%; text-align: right;">Unit Cost (₱)</th>
+                    <th style="width: 10%; text-align: right;">Amount (₱)</th>
+                </tr>
+            </thead>
+            <tbody id="disp-items-tbody">
+                <tr>
+                    <td colspan="7" style="text-align: center; padding: 20px; color: #94a3b8;">Loading Bill of Materials items...</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- TOTALS & NOTES -->
+        <div style="margin-top: 10px; display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;">
+            <div style="flex: 1; font-size: 8pt; color: #475569; border: 1px dashed #cbd5e1; border-radius: 6px; padding: 8px 12px; background: #fafafa;">
+                <div style="font-weight: 700; color: #0f172a; margin-bottom: 2px;">Special Instructions & Terms:</div>
+                <div id="disp-notes">1. Please deliver in sealed, tamper-evident containers with Certificate of Analysis (COA) attached.<br>2. Containers must be clearly labelled with Batch/Lot No. and Expiry Date.<br>3. Discrepancies or damaged containers upon warehouse receiving will be reported to Purchasing within 24 hours.</div>
+            </div>
+
+            <div class="tot-box">
+                <div class="tot-row">
+                    <span style="color: #64748b;">Subtotal:</span>
+                    <span style="font-weight: 700; font-family: monospace;" id="disp-subtotal">₱0.00</span>
+                </div>
+                <div class="tot-row">
+                    <span style="color: #64748b;">Tax / VAT (0%):</span>
+                    <span style="font-weight: 700; font-family: monospace;" id="disp-tax">₱0.00</span>
+                </div>
+                <div class="tot-row grand">
+                    <span>GRAND TOTAL:</span>
+                    <span style="font-family: monospace;" id="disp-grand-total">₱0.00</span>
+                </div>
+            </div>
+        </div>
+
+        <div style="clear: both;"></div>
+
+        <!-- SIGNATURES -->
+        <div class="sig-block avoid-break">
+            <div class="sig-box">
+                <div class="sig-name" id="disp-prepared-by">Purchasing Officer</div>
+                <div class="sig-role">Prepared By (Purchasing)</div>
+            </div>
+            <div class="sig-box">
+                <div class="sig-name" id="disp-verified-by">Inventory Officer</div>
+                <div class="sig-role">Requested / Verified By (Warehouse / Inventory)</div>
+            </div>
+            <div class="sig-box">
+                <div class="sig-name">Executive Approver</div>
+                <div class="sig-role">Authorized Management</div>
+            </div>
+            <div class="sig-box">
+                <div class="sig-name" style="color: #94a3b8;">Signature & Date</div>
+                <div class="sig-role">Supplier Conforme</div>
+            </div>
+        </div>
+
+        <div style="margin-top: 24px; text-align: center; font-size: 7.5pt; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 6px;">
+            This document is an official Purchase Order generated via NKB Manufacturing Corporation ERP Management System.
+        </div>
+    </div>
+
+    <script>
+        function getQueryParam(param) {
+            const params = new URLSearchParams(window.location.search);
+            return params.get(param);
+        }
+
+        function formatCurrency(num) {
+            const n = parseFloat(num) || 0;
+            return '₱' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        async function loadSupplierPO() {
+            const reqId = getQueryParam('id');
+            if (!reqId) {
+                alert('Missing Requisition ID in query parameters.');
+                return;
+            }
+
+            try {
+                const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+                const headers = {};
+                if (token) headers['Authorization'] = `Bearer ${token}`;
+
+                const res = await fetch(`/api/supply-requests/${reqId}/printable-spo`, { headers });
+                const json = await res.json();
+
+                if (!json.success || !json.data) {
+                    alert('Failed to load Supplier PO: ' + (json.error || 'Record not found.'));
+                    return;
+                }
+
+                const d = json.data;
+
+                // Bind Headers
+                document.getElementById('disp-spo-no').textContent = d.supplier_po_number || `SPO-${d.id.slice(0, 8).toUpperCase()}`;
+                document.getElementById('disp-req-id').textContent = d.po_number || d.id.slice(0, 8);
+                document.getElementById('disp-vendor-name').textContent = d.supplier_name || 'Official Raw Material Vendor';
+                document.getElementById('disp-vendor-address').textContent = d.supplier_address || 'Philippines';
+                document.getElementById('disp-vendor-contact').textContent = d.supplier_contact || 'Purchasing Contact';
+                document.getElementById('disp-payment-terms').textContent = d.payment_terms || 'Net 30 Days';
+
+                document.getElementById('disp-po-date').textContent = (d.updated_at || d.created_at || '').slice(0, 10);
+                document.getElementById('disp-target-date').textContent = d.target_date || 'ASAP';
+                document.getElementById('disp-allocation').textContent = d.po_number === 'WH-STOCK-BOM' ? '🏭 Warehouse Stock Replenishment' : `PO Ref: ${d.po_number} (${d.client_name || 'Client'})`;
+                document.getElementById('disp-urgency').textContent = d.urgency || 'NORMAL';
+                document.getElementById('disp-fund-limit').textContent = formatCurrency(d.fund_limit || 500000);
+
+                if (d.notes) {
+                    document.getElementById('disp-notes').innerHTML = d.notes.replace(/\n/g, '<br>');
+                }
+
+                document.getElementById('disp-prepared-by').textContent = 'Purchasing Department';
+                document.getElementById('disp-verified-by').textContent = d.requested_by_name || 'Inventory Officer';
+
+                // Items
+                const tbody = document.getElementById('disp-items-tbody');
+                const items = Array.isArray(d.items) && d.items.length > 0 ? d.items : [];
+
+                if (items.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 15px; color: #94a3b8;">No line items in this BOM requisition.</td></tr>';
+                } else {
+                    let total = 0;
+                    tbody.innerHTML = items.map((it, idx) => {
+                        const qty = parseFloat(it.requested_qty || it.order_qty || 0);
+                        const unitCost = parseFloat(it.unit_cost || 0);
+                        const lineTotal = Math.round(qty * unitCost * 100) / 100;
+                        total += lineTotal;
+
+                        return `
+                            <tr>
+                                <td style="text-align: center; font-weight: 700;">${idx + 1}</td>
+                                <td style="font-family: monospace; font-weight: 700; color: #047857;">${it.material_code || 'None'}</td>
+                                <td>
+                                    <div style="font-weight: 700; color: #0f172a;">${it.material_name || '-'}</div>
+                                    <div style="font-size: 7.5pt; color: #64748b;">Category: ${it.category || 'General'} | Current Stock: ${it.current_stock || 0} ${it.unit || 'kg'}</div>
+                                </td>
+                                <td style="text-align: right; font-weight: 900; font-family: monospace;">${qty.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                                <td style="text-align: center; color: #475569;">${it.unit || 'kg'}</td>
+                                <td style="text-align: right; font-family: monospace;">${formatCurrency(unitCost)}</td>
+                                <td style="text-align: right; font-weight: 700; font-family: monospace;">${formatCurrency(lineTotal)}</td>
+                            </tr>
+                        `;
+                    }).join('');
+
+                    document.getElementById('disp-subtotal').textContent = formatCurrency(total);
+                    document.getElementById('disp-grand-total').textContent = formatCurrency(total);
+                }
+
+                if (getQueryParam('autoprint') === '1') {
+                    setTimeout(() => window.print(), 500);
+                }
+
+            } catch (err) {
+                console.error('Error loading printable Supplier PO:', err);
+                alert('Error loading Supplier PO: ' + err.message);
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', loadSupplierPO);
+    </script>
+</body>
+</html>
