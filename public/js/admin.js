@@ -20816,14 +20816,17 @@ async function submitAddOnlineSku(e) {
     }
 
     try {
-        const res = await NKB.api('/api/online-platforms/inventory', 'POST', {
-            product_name: productName,
-            sku: sku || undefined,
-            platform,
-            stock_quantity: stockOnHand,
-            unit,
-            reorder_point: reorderPoint,
-            notes
+        const res = await NKB.api('/api/online-platforms/inventory', {
+            method: 'POST',
+            body: {
+                product_name: productName,
+                sku: sku || undefined,
+                platform,
+                stock_quantity: stockOnHand,
+                unit,
+                reorder_point: reorderPoint,
+                notes
+            }
         });
 
         if (res.success) {
@@ -20869,11 +20872,14 @@ async function submitOnlineMovement(e) {
     }
 
     try {
-        const res = await NKB.api(`/api/online-platforms/inventory/${invId}/movement`, 'POST', {
-            movement_type: movementType,
-            quantity,
-            reference_no: reference,
-            notes: reference
+        const res = await NKB.api(`/api/online-platforms/inventory/${invId}/movement`, {
+            method: 'POST',
+            body: {
+                movement_type: movementType,
+                quantity,
+                reference_no: reference,
+                notes: reference
+            }
         });
 
         if (res.success) {
@@ -21120,7 +21126,10 @@ async function submitCreateProductRequisition(e) {
             items
         };
 
-        const res = await NKB.api('/api/online-platforms/requisitions', 'POST', payload);
+        const res = await NKB.api('/api/online-platforms/requisitions', {
+            method: 'POST',
+            body: payload
+        });
         if (res.success) {
             NKB.toast(`Requisition ${res.data.requisition_number} created successfully!`, 'success');
             closeCreateRequisitionModal();
@@ -21128,7 +21137,8 @@ async function submitCreateProductRequisition(e) {
 
             // Ask if user wants to print immediately
             if (confirm(`Finished Product Requisition ${res.data.requisition_number} generated successfully!\n\nWould you like to open the printable FPR Excel replica form now?`)) {
-                window.open(`/print-product-requisition.html?id=${res.data.id}`, '_blank');
+                const tokenParam = NKB.token ? `&token=${encodeURIComponent(NKB.token)}` : '';
+                window.open(`/print-product-requisition.html?id=${res.data.id}${tokenParam}`, '_blank');
             }
         } else {
             NKB.toast(res.message || 'Failed to create requisition', 'error');
@@ -21249,8 +21259,9 @@ async function openViewRequisitionModal(reqId) {
 
         // Render Action Buttons
         if (actions) {
+            const tokenParam = NKB.token ? `&token=${encodeURIComponent(NKB.token)}` : '';
             let actHtml = `
-                <button type="button" onclick="window.open('/print-product-requisition.html?id=${req.id}', '_blank')" class="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-xl text-xs shadow-sm flex items-center gap-1.5 cursor-pointer">
+                <button type="button" onclick="window.open('/print-product-requisition.html?id=${req.id}${tokenParam}', '_blank')" class="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-xl text-xs shadow-sm flex items-center gap-1.5 cursor-pointer">
                     🖨️ Print Requisition Form
                 </button>
             `;
@@ -21287,7 +21298,10 @@ function closeViewRequisitionModal() {
 async function promptIssueRequisition(reqId) {
     if (!confirm('Confirm warehouse issuance for all requested items on this Requisition?')) return;
     try {
-        const res = await NKB.api(`/api/online-platforms/requisitions/${reqId}/issue`, 'POST', {});
+        const res = await NKB.api(`/api/online-platforms/requisitions/${reqId}/issue`, {
+            method: 'POST',
+            body: {}
+        });
         if (res.success) {
             NKB.toast('Requisition items successfully issued by warehouse!', 'success');
             openViewRequisitionModal(reqId);
@@ -21303,7 +21317,10 @@ async function promptIssueRequisition(reqId) {
 async function confirmRequisitionReceiving(reqId) {
     if (!confirm('Confirm that you have physically received these finished products?\n\nThis will automatically restock your Online Platform Inventory.')) return;
     try {
-        const res = await NKB.api(`/api/online-platforms/requisitions/${reqId}/receive`, 'POST', {});
+        const res = await NKB.api(`/api/online-platforms/requisitions/${reqId}/receive`, {
+            method: 'POST',
+            body: {}
+        });
         if (res.success) {
             NKB.toast('Items received and added to Online Platform Inventory!', 'success');
             closeViewRequisitionModal();

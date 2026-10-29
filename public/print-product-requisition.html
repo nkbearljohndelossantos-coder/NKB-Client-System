@@ -288,30 +288,42 @@
         let currentRequisitions = [];
         let currentReq = null;
 
+        function getAuthHeaders() {
+            const token = localStorage.getItem('nkb_token') || new URLSearchParams(window.location.search).get('token');
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+            return headers;
+        }
+
         async function init() {
             document.getElementById('footer-timestamp').textContent = 'Official Record — ' + new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
             const urlParams = new URLSearchParams(window.location.search);
             const reqId = urlParams.get('id') || urlParams.get('req_no');
 
+            // If a specific ID is provided, load its details directly first
+            if (reqId) {
+                await loadRequisitionDetails(reqId);
+            }
+
             try {
-                const res = await fetch('/api/online-platforms/requisitions?limit=100');
+                const res = await fetch('/api/online-platforms/requisitions?limit=100', {
+                    headers: getAuthHeaders()
+                });
                 const data = await res.json();
-                if (data.success && data.data) {
+                if (data.success && Array.isArray(data.data)) {
                     currentRequisitions = data.data;
                     const picker = document.getElementById('req-picker');
                     picker.innerHTML = currentRequisitions.map(r => `
-                        <option value="${r.id}" ${r.id === reqId || r.request_number === reqId ? 'selected' : ''}>
+                        <option value="${r.id}" ${String(r.id) === String(reqId) || r.request_number === reqId ? 'selected' : ''}>
                             ${r.request_number} — ${r.department} (${r.request_date || ''})
                         </option>
                     `).join('');
 
-                    const target = reqId 
-                        ? currentRequisitions.find(r => r.id === reqId || r.request_number === reqId)
-                        : currentRequisitions[0];
-
-                    if (target) {
-                        await loadRequisitionDetails(target.id);
+                    if (!reqId && currentRequisitions.length > 0) {
+                        await loadRequisitionDetails(currentRequisitions[0].id);
                     }
                 }
             } catch (err) {
@@ -328,8 +340,11 @@
         }
 
         async function loadRequisitionDetails(id) {
+            if (!id || id === 'undefined' || id === 'null') return;
             try {
-                const res = await fetch(`/api/online-platforms/requisitions/${id}`);
+                const res = await fetch(`/api/online-platforms/requisitions/${encodeURIComponent(id)}`, {
+                    headers: getAuthHeaders()
+                });
                 const json = await res.json();
                 if (!json.success || !json.data) return;
 

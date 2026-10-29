@@ -36,7 +36,15 @@ const NKB = {
     },
 
     // API Helper
-    api: async function(url, options = {}) {
+    api: async function(url, options = {}, maybeBody = undefined) {
+        if (typeof options === 'string') {
+            options = {
+                method: options.toUpperCase(),
+                body: maybeBody
+            };
+        } else {
+            options = Object.assign({}, options);
+        }
         options.headers = options.headers || {};
         options.credentials = options.credentials || 'same-origin';
         if (this.token) {

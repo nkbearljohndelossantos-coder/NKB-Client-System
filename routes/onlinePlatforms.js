@@ -491,10 +491,11 @@ router.post('/requisitions', authenticateToken, (req, res) => {
 function handleWarehouseIssuance(req, res) {
     try {
         const { id } = req.params;
-        const requisition = db.prepare('SELECT * FROM finished_product_requisitions WHERE id = ?').get(id);
+        const requisition = db.prepare('SELECT * FROM finished_product_requisitions WHERE id = ? OR request_number = ?').get(id, id);
         if (!requisition) {
             return res.status(404).json({ success: false, error: 'Requisition not found.' });
         }
+        const reqPk = requisition.id;
 
         const {
             issuance_prepared_by = req.user.name || 'MARK DALANON',
@@ -519,7 +520,7 @@ function handleWarehouseIssuance(req, res) {
                             it.remaining_stock_notes || null,
                             it.batch_lot_no || null,
                             it.id,
-                            id
+                            reqPk
                         );
                     }
                 }
@@ -529,7 +530,7 @@ function handleWarehouseIssuance(req, res) {
                     UPDATE finished_product_requisition_items
                     SET qty_issued = required_qty
                     WHERE requisition_id = ?
-                `).run(id);
+                `).run(reqPk);
             }
 
             db.prepare(`
@@ -537,7 +538,7 @@ function handleWarehouseIssuance(req, res) {
                 SET issuance_prepared_by = ?, issuance_verified_by = ?, issuance_date = ?,
                     status = 'ISSUED', updated_at = datetime('now', 'localtime')
                 WHERE id = ?
-            `).run(issuance_prepared_by, issuance_verified_by, issuance_date, id);
+            `).run(issuance_prepared_by, issuance_verified_by, issuance_date, reqPk);
         });
 
         tx();
@@ -560,10 +561,11 @@ router.post('/requisitions/:id/issue', authenticateToken, handleWarehouseIssuanc
 function handleOperatorReceiving(req, res) {
     try {
         const { id } = req.params;
-        const requisition = db.prepare('SELECT * FROM finished_product_requisitions WHERE id = ?').get(id);
+        const requisition = db.prepare('SELECT * FROM finished_product_requisitions WHERE id = ? OR request_number = ?').get(id, id);
         if (!requisition) {
             return res.status(404).json({ success: false, error: 'Requisition not found.' });
         }
+        const reqPk = requisition.id;
 
         const {
             receiving_reviewed_by = req.user.name || 'ANGELICA TAMANO',
@@ -572,7 +574,7 @@ function handleOperatorReceiving(req, res) {
             auto_restock = true
         } = req.body;
 
-        const items = db.prepare('SELECT * FROM finished_product_requisition_items WHERE requisition_id = ?').all(id);
+        const items = db.prepare('SELECT * FROM finished_product_requisition_items WHERE requisition_id = ?').all(reqPk);
 
         const tx = db.transaction(() => {
             db.prepare(`
@@ -580,7 +582,7 @@ function handleOperatorReceiving(req, res) {
                 SET receiving_reviewed_by = ?, receiving_verified_by = ?, receiving_date = ?,
                     status = 'RECEIVED', updated_at = datetime('now', 'localtime')
                 WHERE id = ?
-            `).run(receiving_reviewed_by, receiving_verified_by, receiving_date, id);
+            `).run(receiving_reviewed_by, receiving_verified_by, receiving_date, reqPk);
 
             // If auto_restock is enabled, increment the online inventory stock
             if (auto_restock && items.length > 0) {
