@@ -8185,8 +8185,15 @@ async function openCreatePOModal(options = {}) {
                             <input type="date" id="create-po-date-created" value="${todayDate}" readonly class="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-slate-50 text-slate-600 text-xs cursor-not-allowed">
                         </div>
                         <div>
-                            <label class="block text-slate-600 font-semibold text-[11px] mb-1">Sales Order Number</label>
-                            <input type="text" id="create-po-customer-po-number" placeholder="SO-XXXX / PO-XXXX" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white text-slate-800 text-xs font-mono focus:ring-1 focus:ring-indigo-500">
+                            <label class="block text-slate-600 font-semibold text-[11px] mb-1 flex items-center justify-between">
+                                <span>Sales Order / PO Number</span>
+                                <span class="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded font-bold">🔒 Locked</span>
+                            </label>
+                            <div class="relative">
+                                <input type="text" id="create-po-number-preview" value="Generating..." readonly class="w-full pl-2.5 pr-7 py-1.5 border border-slate-200 rounded-lg bg-slate-50 text-slate-800 font-mono font-bold text-xs cursor-not-allowed select-all" title="Auto-generated sequential number (Locked)">
+                                <span class="absolute right-2.5 top-1.5 text-slate-400 text-xs">🔒</span>
+                            </div>
+                            <input type="hidden" id="create-po-customer-po-number" value="">
                         </div>
 
                         <!-- Row 2 -->
@@ -8371,6 +8378,17 @@ async function openCreatePOModal(options = {}) {
             </div>
         </div>
     `;
+    // Fetch and display next sequential PO/SO number in locked input
+    NKB.api('/api/orders/next-number').then(numRes => {
+        if (numRes && numRes.success && numRes.data) {
+            const el = document.getElementById('create-po-number-preview');
+            if (el) el.value = `${numRes.data.so_number} / ${numRes.data.po_number}`;
+        }
+    }).catch(() => {
+        const el = document.getElementById('create-po-number-preview');
+        if (el) el.value = 'Auto-Generated (Locked)';
+    });
+
     await onAdminPOClientChanged();
 }
 
@@ -8894,7 +8912,15 @@ function renderAdminPOLineItems() {
 function previewCurrentPOPrint() {
     const clientSelect = document.getElementById('po-client-id');
     const clientId = clientSelect ? clientSelect.value : '';
-    const poNum = document.getElementById('create-po-customer-po-number')?.value || 'DRAFT';
+    const poNumEl = document.getElementById('create-po-number-preview') || document.getElementById('create-po-customer-po-number');
+    let poNum = 'DRAFT';
+    if (poNumEl && poNumEl.value && !poNumEl.value.includes('Generating')) {
+        if (poNumEl.value.includes('/')) {
+            poNum = poNumEl.value.split('/')[1].trim();
+        } else {
+            poNum = poNumEl.value.trim();
+        }
+    }
     window.open(`/print-po.html?preview=1&poNumber=${encodeURIComponent(poNum)}&clientId=${encodeURIComponent(clientId)}`, '_blank');
 }
 window.previewCurrentPOPrint = previewCurrentPOPrint;

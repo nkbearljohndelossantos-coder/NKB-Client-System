@@ -4,7 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 const db = require('../database/db');
 const { authenticateToken, requireRoles, enforceClientIsolation } = require('../middleware/auth');
 const { canViewOrderPrices } = require('../middleware/rbac');
-const { getNextDocumentNumber } = require('../services/documentNumberService');
+const { getNextDocumentNumber, previewNextDocumentNumber } = require('../services/documentNumberService');
 const { logAudit } = require('../services/auditService');
 const { getManilaDate, getManilaDateTime, getManilaYear } = require('../helpers/timezone');
 
@@ -335,6 +335,26 @@ router.get('/export', authenticateToken, (req, res) => {
         });
     } catch (err) {
         return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * GET /api/orders/next-number
+ * Retrieve next auto-generated sequential PO & SO number for creation preview
+ */
+router.get('/next-number', authenticateToken, (req, res) => {
+    try {
+        const poNumber = previewNextDocumentNumber('PO');
+        const soNumber = poNumber.replace('PO-', 'SO-');
+        return res.json({
+            success: true,
+            data: {
+                po_number: poNumber,
+                so_number: soNumber
+            }
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: 'Failed to preview next PO number' });
     }
 });
 

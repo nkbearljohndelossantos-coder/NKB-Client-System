@@ -79,6 +79,55 @@ function getNextDocumentNumber(docType, customDb) {
     return `${docType}-${year}-${formattedSeq}`;
 }
 
+/**
+ * Preview the next sequential document number without updating the database sequence
+ */
+function previewNextDocumentNumber(docType, customDb) {
+    const db = customDb || defaultDb;
+    const year = getManilaYear();
+    
+    if (docType === 'PO') {
+        const activeRows = db.prepare(`
+            SELECT po_number FROM purchase_orders 
+            WHERE status != 'VOIDED' AND po_number LIKE ?
+        `).all(`PO-${year}-%`);
+        
+        let maxSeq = 0;
+        for (const row of activeRows) {
+            const parts = row.po_number.split('-');
+            if (parts.length === 3) {
+                const seq = parseInt(parts[2], 10);
+                if (!isNaN(seq) && seq > maxSeq) {
+                    maxSeq = seq;
+                }
+            }
+        }
+        
+        const nextSeq = maxSeq + 1;
+        const formattedSeq = String(nextSeq).padStart(6, '0');
+        return `PO-${year}-${formattedSeq}`;
+    }
+
+    if (docType === 'FPR') {
+        const row = db.prepare('SELECT last_sequence FROM document_sequences WHERE doc_type = ?').get('FPR');
+        const nextSeq = ((row && row.last_sequence) || 0) + 1;
+        return `FPR -FORM ${String(nextSeq).padStart(3, '0')}`;
+    }
+
+    const row = db.prepare('SELECT current_year, last_sequence FROM document_sequences WHERE doc_type = ?').get(docType);
+    let nextSeq = 1;
+    if (row) {
+        if (row.current_year === year) {
+            nextSeq = row.last_sequence + 1;
+        } else {
+            nextSeq = 1;
+        }
+    }
+    const formattedSeq = String(nextSeq).padStart(6, '0');
+    return `${docType}-${year}-${formattedSeq}`;
+}
+
 module.exports = {
-    getNextDocumentNumber
+    getNextDocumentNumber,
+    previewNextDocumentNumber
 };
