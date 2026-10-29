@@ -17410,6 +17410,8 @@ function renderProductionSalesOrderBoard() {
         list = list.filter(o => Number(o.is_active_today) === 1);
     } else if (filterVal === 'HAS_REMINDER') {
         list = list.filter(o => o.reminder_at && String(o.reminder_at).trim() !== '');
+    } else if (filterVal === 'COMPLETED') {
+        list = list.filter(o => o.status === 'COMPLETED');
     } else if (filterVal) {
         list = list.filter(o => (o.priority_status || 'NORMAL') === filterVal);
     }
@@ -17425,11 +17427,15 @@ function renderProductionSalesOrderBoard() {
         });
     }
 
-    // Sort: Active Today first -> Priority Status weight (RUSH > PRIORITIZED > NORMAL > ON_HOLD) -> priority_order ASC -> created_at DESC
+    // Sort: Active Today first -> Open vs Completed (open orders first) -> Priority Status weight (RUSH > PRIORITIZED > NORMAL > ON_HOLD) -> priority_order ASC -> created_at DESC
     list.sort((a, b) => {
         const actA = Number(a.is_active_today) ? 0 : 1;
         const actB = Number(b.is_active_today) ? 0 : 1;
         if (actA !== actB) return actA - actB;
+
+        const compA = a.status === 'COMPLETED' ? 1 : 0;
+        const compB = b.status === 'COMPLETED' ? 1 : 0;
+        if (compA !== compB) return compA - compB;
 
         const pA = priorityRankWeight[a.priority_status || 'NORMAL'] || 3;
         const pB = priorityRankWeight[b.priority_status || 'NORMAL'] || 3;
@@ -17464,6 +17470,7 @@ function renderProductionSalesOrderBoard() {
         const soNum = po.so_number || po.po_number.replace('PO-', 'SO-');
         const pStatus = po.priority_status || 'NORMAL';
         const isActiveToday = Number(po.is_active_today) === 1;
+        const isCompleted = po.status === 'COMPLETED';
         const totalQty = po.total_target_quantity || (po.items || []).reduce((s, i) => s + (Number(i.target_quantity) || 0), 0);
         const totalDelivered = (po.items || []).reduce((s, i) => s + Number(i.delivered_quantity != null ? i.delivered_quantity : (i.total_delivered || 0)), 0);
 
@@ -17476,7 +17483,7 @@ function renderProductionSalesOrderBoard() {
                     <div class="flex items-center justify-between text-[11px] gap-2 py-0.5 border-b border-slate-100/80 last:border-b-0">
                         <span class="font-bold text-slate-800 truncate text-[11px]" title="${it.product_name}">${it.product_name}</span>
                         <div class="flex items-center gap-1 shrink-0">
-                            <span class="px-1.5 py-0.2 rounded font-mono text-[9.5px] font-bold ${isFullDel ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : (del > 0 ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-slate-100 text-slate-600')}">
+                            <span class="px-1.5 py-0.2 rounded font-mono text-[9.5px] font-bold ${isCompleted ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : (isFullDel ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : (del > 0 ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-slate-100 text-slate-600'))}">
                                 🚚 ${NKB.formatNumber(del)} / ${NKB.formatNumber(target)} pcs
                             </span>
                         </div>
@@ -17524,19 +17531,32 @@ function renderProductionSalesOrderBoard() {
             `;
         }
 
+        const rowBgClass = isCompleted
+            ? 'bg-emerald-100/70 hover:bg-emerald-200/60 border-b border-emerald-300 transition'
+            : (isActiveToday
+                ? 'bg-emerald-50/40 hover:bg-emerald-50/70 border-b border-slate-100 transition'
+                : (pStatus === 'RUSH'
+                    ? 'bg-rose-50/25 hover:bg-rose-50/50 border-b border-slate-100 transition'
+                    : 'hover:bg-slate-50/80 border-b border-slate-100 transition'));
+
         return `
-            <tr class="${isActiveToday ? 'bg-emerald-50/40' : (pStatus === 'RUSH' ? 'bg-rose-50/25' : 'hover:bg-slate-50/80')} transition border-b border-slate-100">
+            <tr class="${rowBgClass}">
                 <!-- Col 1: Queue Rank & Order Details -->
                 <td class="py-2.5 px-3 w-32 sm:w-36 align-top">
                     <div class="flex flex-col gap-1.5">
                         <div class="flex items-center gap-1">
-                            <span class="w-6 h-6 rounded-full ${idx === 0 ? 'bg-indigo-600 text-white font-black' : 'bg-slate-200 text-slate-700 font-bold'} flex items-center justify-center text-[11px] shrink-0">#${idx + 1}</span>
+                            <span class="w-6 h-6 rounded-full ${isCompleted ? 'bg-emerald-600 text-white font-black' : (idx === 0 ? 'bg-indigo-600 text-white font-black' : 'bg-slate-200 text-slate-700 font-bold')} flex items-center justify-center text-[11px] shrink-0" title="${isCompleted ? 'Order Completed & Delivered' : `Queue Position #${idx + 1}`}">${isCompleted ? '✓' : `#${idx + 1}`}</span>
                             <button onclick="updateOrderProductionSchedule('${po.id}', { move_direction: 'FIRST' })" title="Move to Top (#1 in Queue)" class="text-[9.5px] px-1 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded font-bold border border-indigo-200 cursor-pointer">⏫</button>
                             <button onclick="updateOrderProductionSchedule('${po.id}', { move_direction: 'UP' })" title="Move Up in Queue" class="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-bold cursor-pointer">↑</button>
                             <button onclick="updateOrderProductionSchedule('${po.id}', { move_direction: 'DOWN' })" title="Move Down in Queue" class="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-bold cursor-pointer">↓</button>
                         </div>
                             <div class="flex items-center gap-1.5 flex-wrap">
-                                <button onclick="openViewPOModal('${po.id}')" class="font-black text-indigo-600 hover:underline text-xs cursor-pointer block leading-tight text-left">${soNum}</button>
+                                <button onclick="openViewPOModal('${po.id}')" class="font-black ${isCompleted ? 'text-emerald-800' : 'text-indigo-600'} hover:underline text-xs cursor-pointer block leading-tight text-left">${soNum}</button>
+                                ${isCompleted ? `
+                                    <span class="px-1.5 py-0.2 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-600 text-white inline-flex items-center gap-0.5 shadow-2xs" title="Order Completed and Fully Delivered">
+                                        <span>✓</span> DONE
+                                    </span>
+                                ` : ''}
                                 ${(po.is_buffer_stock === 1 || po.billing_policy === 'FIXED_PO_BUFFER') ? `
                                     <span class="px-1.5 py-0.2 rounded-full text-[9px] font-black uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-300 inline-flex items-center gap-1 shadow-2xs" title="Manufactured for Client Buffer Stock Reserve">
                                         <span>🛡️</span> Buffer
@@ -17558,9 +17578,11 @@ function renderProductionSalesOrderBoard() {
                     <div class="space-y-1">
                         <div class="flex items-center justify-between gap-1">
                             <span class="font-black text-slate-900 text-xs truncate max-w-[200px] sm:max-w-xs" title="${po.company_name}">${po.company_name}</span>
-                            <span class="text-[10px] font-extrabold text-slate-600 font-mono bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 shrink-0">Total: ${NKB.formatNumber(totalQty)} pcs</span>
+                            <span class="text-[10px] font-extrabold ${isCompleted ? 'text-emerald-900 font-black bg-emerald-200/90 border-emerald-400' : 'text-slate-600 bg-slate-100 border-slate-200'} font-mono px-1.5 py-0.5 rounded border shrink-0">
+                                ${isCompleted ? '✓ Done: ' : 'Total: '}${NKB.formatNumber(totalQty)} pcs
+                            </span>
                         </div>
-                        <div class="bg-slate-50/80 rounded-xl p-1.5 border border-slate-200/70 max-h-24 overflow-y-auto">
+                        <div class="${isCompleted ? 'bg-white/80 border-emerald-200' : 'bg-slate-50/80 border-slate-200/70'} rounded-xl p-1.5 border max-h-24 overflow-y-auto">
                             ${itemsHtml}
                         </div>
                     </div>
@@ -17570,34 +17592,46 @@ function renderProductionSalesOrderBoard() {
                 <td class="py-2.5 px-3 w-48 text-center align-top">
                     <div class="flex flex-col items-center gap-1">
                         <div class="flex items-center gap-1.5">
-                            <span class="px-2 py-0.5 rounded-lg text-[9.5px] font-bold ${po.status === 'PARTIALLY_DELIVERED' ? 'bg-purple-50 text-purple-700 border border-purple-200' : 'bg-blue-50 text-blue-700 border border-blue-200'}">${po.status}</span>
+                            <span class="px-2 py-0.5 rounded-lg text-[9.5px] font-bold ${isCompleted ? 'bg-emerald-600 text-white border border-emerald-700 font-black shadow-2xs' : (po.status === 'PARTIALLY_DELIVERED' ? 'bg-purple-50 text-purple-700 border border-purple-200' : 'bg-blue-50 text-blue-700 border border-blue-200')}">
+                                ${isCompleted ? '✓ COMPLETED' : po.status}
+                            </span>
                             <span class="text-[9.5px] text-slate-500 font-medium">${po.jo_count || 0} JOs · ${po.dr_count || 0} DRs</span>
                         </div>
-                        <select onchange="updateOrderProductionSchedule('${po.id}', { priority_status: this.value })" class="w-full text-[10.5px] px-2 py-1 border rounded-lg cursor-pointer transition ${prioritySelectStyleMap[pStatus] || prioritySelectStyleMap['NORMAL']}">
+                        <select onchange="updateOrderProductionSchedule('${po.id}', { priority_status: this.value })" class="w-full text-[10.5px] px-2 py-1 border rounded-lg cursor-pointer transition ${isCompleted ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-bold' : (prioritySelectStyleMap[pStatus] || prioritySelectStyleMap['NORMAL'])}">
                             <option value="RUSH" ${pStatus === 'RUSH' ? 'selected' : ''}>🔥 Rush</option>
                             <option value="PRIORITIZED" ${pStatus === 'PRIORITIZED' ? 'selected' : ''}>⚡ Prioritized</option>
                             <option value="NORMAL" ${pStatus === 'NORMAL' ? 'selected' : ''}>📋 Normal</option>
                             <option value="ON_HOLD" ${pStatus === 'ON_HOLD' ? 'selected' : ''}>⏸️ On Hold</option>
                         </select>
                         <div class="w-full">
-                            ${reminderCellHtml}
+                            ${isCompleted ? `
+                                <div class="mt-1 text-[9.5px] font-bold text-emerald-800 flex items-center justify-center gap-1 bg-emerald-200/70 px-2 py-0.5 rounded-lg border border-emerald-300">
+                                    <span>✅ All Work Done</span>
+                                </div>
+                            ` : reminderCellHtml}
                         </div>
                     </div>
                 </td>
 
                 <!-- Col 4: Factory Today Floor Assignment -->
                 <td class="py-2.5 px-2 w-32 text-center align-middle">
-                    <button onclick="updateOrderProductionSchedule('${po.id}', { is_active_today: ${isActiveToday ? 0 : 1} })"
-                        class="w-full py-1.5 px-2 rounded-xl text-[10.5px] font-black transition shadow-2xs cursor-pointer ${isActiveToday ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 border border-slate-300'}">
-                        ${isActiveToday ? '🏭 ACTIVE ✓' : 'Set Active'}
-                    </button>
+                    ${isCompleted ? `
+                        <span class="w-full py-1.5 px-2 rounded-xl text-[10.5px] font-black inline-flex items-center justify-center gap-1 bg-emerald-200 text-emerald-950 border border-emerald-400 shadow-2xs" title="Order is finished and completed">
+                            <span>✅</span> FINISHED
+                        </span>
+                    ` : `
+                        <button onclick="updateOrderProductionSchedule('${po.id}', { is_active_today: ${isActiveToday ? 0 : 1} })"
+                            class="w-full py-1.5 px-2 rounded-xl text-[10.5px] font-black transition shadow-2xs cursor-pointer ${isActiveToday ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 border border-slate-300'}">
+                            ${isActiveToday ? '🏭 ACTIVE ✓' : 'Set Active'}
+                        </button>
+                    `}
                 </td>
 
                 <!-- Col 5: Actions -->
                 <td class="py-2.5 px-3 w-36 text-right align-middle">
                     <div class="flex items-center justify-end gap-1.5 whitespace-nowrap">
-                        <button onclick="openViewPOModal('${po.id}')" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition cursor-pointer inline-flex items-center gap-1" title="View Full Details">
-                            <span>👁️ View</span>
+                        <button onclick="openViewPOModal('${po.id}')" class="px-2.5 py-1.5 ${isCompleted ? 'bg-emerald-600 hover:bg-emerald-700 text-white font-black shadow-xs' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold'} rounded-xl text-xs transition cursor-pointer inline-flex items-center gap-1" title="View Full Details">
+                            <span>${isCompleted ? '✓ View Done' : '👁️ View'}</span>
                         </button>
                         ${(po.status !== 'COMPLETED' && po.status !== 'CANCELLED' && po.status !== 'VOIDED' && po.status !== 'DRAFT') ? `
                             ${(!po.jo_count || po.jo_count === 0) ? `
