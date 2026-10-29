@@ -17427,15 +17427,15 @@ function renderProductionSalesOrderBoard() {
         });
     }
 
-    // Sort: Active Today first -> Open vs Completed (open orders first) -> Priority Status weight (RUSH > PRIORITIZED > NORMAL > ON_HOLD) -> priority_order ASC -> created_at DESC
+    // Sort: All unfinished POs above vs all finished POs below -> Active Today first -> Priority Status weight (RUSH > PRIORITIZED > NORMAL > ON_HOLD) -> priority_order ASC -> created_at DESC
     list.sort((a, b) => {
+        const isFinA = (a.status === 'COMPLETED') ? 1 : 0;
+        const isFinB = (b.status === 'COMPLETED') ? 1 : 0;
+        if (isFinA !== isFinB) return isFinA - isFinB;
+
         const actA = Number(a.is_active_today) ? 0 : 1;
         const actB = Number(b.is_active_today) ? 0 : 1;
         if (actA !== actB) return actA - actB;
-
-        const compA = a.status === 'COMPLETED' ? 1 : 0;
-        const compB = b.status === 'COMPLETED' ? 1 : 0;
-        if (compA !== compB) return compA - compB;
 
         const pA = priorityRankWeight[a.priority_status || 'NORMAL'] || 3;
         const pB = priorityRankWeight[b.priority_status || 'NORMAL'] || 3;
@@ -17466,11 +17466,19 @@ function renderProductionSalesOrderBoard() {
     const isExecAdmin = userRole === 'ADMIN' || userRole === 'SUPERADMIN';
     const canEditOrder = isExecAdmin || (typeof NKB !== 'undefined' && NKB.hasPermission && (NKB.hasPermission('orders:edit') || NKB.hasPermission('orders:manage')));
 
+    let unfinishedIdx = 0;
+    const firstCompletedIndex = list.findIndex(o => o.status === 'COMPLETED');
+
     tbody.innerHTML = list.map((po, idx) => {
         const soNum = po.so_number || po.po_number.replace('PO-', 'SO-');
         const pStatus = po.priority_status || 'NORMAL';
         const isActiveToday = Number(po.is_active_today) === 1;
         const isCompleted = po.status === 'COMPLETED';
+        let queueNum = '';
+        if (!isCompleted) {
+            unfinishedIdx++;
+            queueNum = `#${unfinishedIdx}`;
+        }
         const totalQty = po.total_target_quantity || (po.items || []).reduce((s, i) => s + (Number(i.target_quantity) || 0), 0);
         const totalDelivered = (po.items || []).reduce((s, i) => s + Number(i.delivered_quantity != null ? i.delivered_quantity : (i.total_delivered || 0)), 0);
 
@@ -17539,16 +17547,33 @@ function renderProductionSalesOrderBoard() {
                     ? 'bg-rose-50/25 hover:bg-rose-50/50 border-b border-slate-100 transition'
                     : 'hover:bg-slate-50/80 border-b border-slate-100 transition'));
 
+        const dividerHtml = (idx === firstCompletedIndex && firstCompletedIndex > 0) ? `
+            <tr class="bg-slate-100/90 border-y border-slate-300">
+                <td colspan="5" class="py-2.5 px-4 text-left">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs">✅</span>
+                        <span class="text-[11px] font-black uppercase tracking-wider text-slate-700">Finished & Completed Orders</span>
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">${list.length - firstCompletedIndex} Done</span>
+                    </div>
+                </td>
+            </tr>
+        ` : '';
+
         return `
+            ${dividerHtml}
             <tr class="${rowBgClass}">
                 <!-- Col 1: Queue Rank & Order Details -->
                 <td class="py-2.5 px-3 w-32 sm:w-36 align-top">
                     <div class="flex flex-col gap-1.5">
                         <div class="flex items-center gap-1">
-                            <span class="w-6 h-6 rounded-full ${isCompleted ? 'bg-emerald-600 text-white font-black' : (idx === 0 ? 'bg-indigo-600 text-white font-black' : 'bg-slate-200 text-slate-700 font-bold')} flex items-center justify-center text-[11px] shrink-0" title="${isCompleted ? 'Order Completed & Delivered' : `Queue Position #${idx + 1}`}">${isCompleted ? '✓' : `#${idx + 1}`}</span>
-                            <button onclick="updateOrderProductionSchedule('${po.id}', { move_direction: 'FIRST' })" title="Move to Top (#1 in Queue)" class="text-[9.5px] px-1 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded font-bold border border-indigo-200 cursor-pointer">⏫</button>
-                            <button onclick="updateOrderProductionSchedule('${po.id}', { move_direction: 'UP' })" title="Move Up in Queue" class="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-bold cursor-pointer">↑</button>
-                            <button onclick="updateOrderProductionSchedule('${po.id}', { move_direction: 'DOWN' })" title="Move Down in Queue" class="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-bold cursor-pointer">↓</button>
+                            <span class="w-6 h-6 rounded-full ${isCompleted ? 'bg-emerald-600 text-white font-black' : (queueNum === '#1' ? 'bg-indigo-600 text-white font-black' : 'bg-slate-200 text-slate-700 font-bold')} flex items-center justify-center text-[11px] shrink-0" title="${isCompleted ? 'Order Completed & Delivered' : `Queue Position ${queueNum}`}">${isCompleted ? '✓' : queueNum}</span>
+                            ${!isCompleted ? `
+                                <button onclick="updateOrderProductionSchedule('${po.id}', { move_direction: 'FIRST' })" title="Move to Top (#1 in Queue)" class="text-[9.5px] px-1 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded font-bold border border-indigo-200 cursor-pointer">⏫</button>
+                                <button onclick="updateOrderProductionSchedule('${po.id}', { move_direction: 'UP' })" title="Move Up in Queue" class="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-bold cursor-pointer">↑</button>
+                                <button onclick="updateOrderProductionSchedule('${po.id}', { move_direction: 'DOWN' })" title="Move Down in Queue" class="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-bold cursor-pointer">↓</button>
+                            ` : `
+                                <span class="text-[9.5px] font-black text-emerald-800 bg-emerald-200/90 px-1.5 py-0.5 rounded border border-emerald-300">DONE</span>
+                            `}
                         </div>
                             <div class="flex items-center gap-1.5 flex-wrap">
                                 <button onclick="openViewPOModal('${po.id}')" class="font-black ${isCompleted ? 'text-emerald-800' : 'text-indigo-600'} hover:underline text-xs cursor-pointer block leading-tight text-left">${soNum}</button>
