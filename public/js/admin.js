@@ -20,6 +20,29 @@ window.cachedOrders = cachedOrders;
 window.cachedDeliveries = cachedDeliveries;
 window.cachedInvoices = cachedInvoices;
 
+// HTML Escaping Utility
+if (typeof window !== 'undefined') {
+    if (typeof window.NKB === 'undefined') {
+        window.NKB = {};
+    }
+    if (!window.NKB.escapeHTML) {
+        window.NKB.escapeHTML = function(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        };
+    }
+    if (!window.NKB.escapeHtml) {
+        window.NKB.escapeHtml = window.NKB.escapeHTML;
+    }
+    if (!window.escapeHTML) window.escapeHTML = window.NKB.escapeHTML;
+    if (!window.escapeHtml) window.escapeHtml = window.NKB.escapeHtml;
+}
+
 function formatWhatsAppUrl(rawPhone, message = '') {
     if (!rawPhone) return '#';
     let clean = String(rawPhone).replace(/[^\d+]/g, '');

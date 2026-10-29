@@ -180,6 +180,20 @@ const NKB = {
         return dateObj.toLocaleString('en-PH', { timeZone: 'Asia/Manila' });
     },
 
+    // HTML Escaper for safe string insertion in innerHTML / attributes
+    escapeHTML: function(str) {
+        if (str === null || str === undefined) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    },
+    escapeHtml: function(str) {
+        return this.escapeHTML(str);
+    },
+
     // High-Efficiency Client-Side Image Optimizer
     // Scales large camera photos (e.g. 5MB–12MB) to high-resolution ~200KB–350KB JPEG
     compressImage: function(file, options = {}) {
@@ -2688,6 +2702,8 @@ window.openViewPOModal = openViewPOModal;
 window.openEditPOModal = openEditPOModal;
 window.closeModal = closeModal;
 window.NKB = NKB;
+window.escapeHTML = NKB.escapeHTML;
+window.escapeHtml = NKB.escapeHtml;
 
 if (!window.voidPO) {
     window.voidPO = async function(id, poNumber) {
