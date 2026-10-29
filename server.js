@@ -116,6 +116,14 @@ app.get(['/login', '/staff', '/staff-login'], (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Prevent stale browser caching for development and immediate UI updates
+app.use((req, res, next) => {
+    if (req.path.endsWith('.js') || req.path.endsWith('.html') || req.path.endsWith('.css')) {
+        res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    }
+    next();
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 const uploadsPath = path.join(__dirname, 'uploads');
 if (!require('fs').existsSync(uploadsPath)) {

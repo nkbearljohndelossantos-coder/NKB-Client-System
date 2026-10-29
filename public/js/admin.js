@@ -281,6 +281,7 @@ function applyRoleBasedUI() {
         hideTab('dashboard');
         hideTab('job-orders');
         hideTab('production');
+        hideTab('production-dashboard');
         hideTab('deliveries');
         hideTab('invoices');
         hideTab('payments');
@@ -302,6 +303,7 @@ function applyRoleBasedUI() {
         hideTab('dashboard');
         hideTab('job-orders');
         hideTab('production');
+        hideTab('production-dashboard');
         hideTab('deliveries');
         hideTab('invoices');
         hideTab('payments');
@@ -332,6 +334,7 @@ function applyRoleBasedUI() {
         hideTab('audit');
         hideTab('purchasing');
         hideTab('it-management');
+        hideTab('production-dashboard');
         showTab('po-monitor');
         switchTab('production');
     } else if (role === 'PRODUCTION') {
@@ -353,6 +356,7 @@ function applyRoleBasedUI() {
         hideTab('audit');
         hideTab('it-management');
         showTab('po-monitor');
+        showTab('production-dashboard');
         const soLabel = document.getElementById('sidebar-label-orders');
         if (soLabel) soLabel.textContent = 'Sales Orders';
     } else if (role === 'WAREHOUSE') {
@@ -364,6 +368,7 @@ function applyRoleBasedUI() {
         hideTab('purchasing');
         hideTab('job-orders');
         hideTab('production');
+        hideTab('production-dashboard');
         hideTab('invoices');
         hideTab('payments');
         hideTab('payables');
@@ -557,26 +562,76 @@ function switchTab(tabId) {
 }
 
 // -------------------------------------------------------------
-// 1. DASHBOARD LOADER
+// HELPER: ORDER FINISHED / COMPLETED CHECKER
 // -------------------------------------------------------------
-async function loadDashboard() {
+function isFinishedPO(po) {
+    if (!po) return false;
+    const st = String(po.status || '').trim().toUpperCase();
+    if (st === 'COMPLETED' || st === 'DELIVERED') return true;
+    if (Number(po.is_delivered) === 1) return true;
+    const totalQty = po.total_target_quantity || (po.items || []).reduce((s, i) => s + (Number(i.target_quantity) || 0), 0);
+    const totalDel = (po.items || []).reduce((s, i) => s + Number(i.delivered_quantity != null ? i.delivered_quantity : (i.total_delivered || 0)), 0);
+    if (totalQty > 0 && totalDel >= totalQty) return true;
+    return false;
+}
+window.isFinishedPO = isFinishedPO;
+
+// -------------------------------------------------------------
+// 1. DASHBOARD LOADER & VIEW MODE SWITCHER
+// -------------------------------------------------------------
+let currentDashboardViewMode = '';
+
+async function switchDashboardView(mode) {
     const role = NKB.user ? NKB.user.role : '';
+    if (!mode) {
+        mode = sessionStorage.getItem('nkb_dash_view_mode') || ((role === 'PRODUCTION') ? 'production' : 'executive');
+    }
+    currentDashboardViewMode = mode;
+    sessionStorage.setItem('nkb_dash_view_mode', mode);
+
     const prodDash = document.getElementById('production-supervisor-dashboard');
     const execDash = document.getElementById('executive-dashboard-content');
+    const btnExec = document.getElementById('btn-dash-view-exec');
+    const btnProd = document.getElementById('btn-dash-view-prod');
     const dashTitle = document.getElementById('dashboard-main-title');
     const dashSub = document.getElementById('dashboard-main-subtitle');
 
-    if (role === 'PRODUCTION') {
+    if (mode === 'production') {
         if (prodDash) prodDash.classList.remove('hidden');
         if (execDash) execDash.classList.add('hidden');
+        if (btnProd) {
+            btnProd.className = 'px-3.5 py-1.5 rounded-xl text-xs font-black transition bg-slate-900 text-white shadow-xs cursor-pointer';
+        }
+        if (btnExec) {
+            btnExec.className = 'px-3.5 py-1.5 rounded-xl text-xs font-black transition text-slate-600 hover:text-slate-900 cursor-pointer';
+        }
         if (dashTitle) dashTitle.textContent = 'Production Supervisor — Factory Floor & Sales Orders';
         if (dashSub) dashSub.textContent = 'Assign Sales Order queue priority, decide what is active today in the factory, and monitor live batches & deliveries.';
         await loadProductionSupervisorDashboard();
-        return;
     } else {
         if (prodDash) prodDash.classList.add('hidden');
         if (execDash) execDash.classList.remove('hidden');
+        if (btnExec) {
+            btnExec.className = 'px-3.5 py-1.5 rounded-xl text-xs font-black transition bg-slate-900 text-white shadow-xs cursor-pointer';
+        }
+        if (btnProd) {
+            btnProd.className = 'px-3.5 py-1.5 rounded-xl text-xs font-black transition text-slate-600 hover:text-slate-900 cursor-pointer';
+        }
+        if (dashTitle) dashTitle.textContent = 'Manufacturing & Billing Overview';
+        if (dashSub) dashSub.textContent = 'Live operational metrics, production batches, and unbilled delivery status.';
+        await loadExecutiveDashboard();
     }
+}
+window.switchDashboardView = switchDashboardView;
+
+async function loadDashboard() {
+    const role = NKB.user ? NKB.user.role : '';
+    const savedMode = sessionStorage.getItem('nkb_dash_view_mode');
+    const defaultMode = (role === 'PRODUCTION') ? 'production' : (savedMode || 'executive');
+    await switchDashboardView(defaultMode);
+}
+
+async function loadExecutiveDashboard() {
 
     const [kpiRes, unbilledRes, arRes, yieldRes] = await Promise.all([
         NKB.api('/api/reports/overview'),
@@ -874,6 +929,17 @@ async function loadOrders() {
     if (res.success && res.data && res.data.length > 0) {
         cachedOrders = res.data;
         window.cachedOrders = cachedOrders;
+
+        // Sort: unfinished POs above vs finished/completed POs below (when viewing All orders)
+        if (!status) {
+            res.data.sort((a, b) => {
+                const isFinA = isFinishedPO(a) ? 1 : 0;
+                const isFinB = isFinishedPO(b) ? 1 : 0;
+                if (isFinA !== isFinB) return isFinA - isFinB;
+                return String(b.po_number || '').localeCompare(String(a.po_number || ''));
+            });
+        }
+
         const userRole = NKB.user ? NKB.user.role : '';
         const isExecAdmin = ['ADMIN', 'SUPER_ADMIN', 'IT_ADMIN'].includes(userRole);
         const canViewPrices = isExecAdmin || ['CEO', 'ACCOUNTING'].includes(userRole);
@@ -882,7 +948,10 @@ async function loadOrders() {
         const canConfirmInventory = isExecAdmin || userRole === 'INVENTORY';
         const canManageProduction = isExecAdmin || userRole === 'PRODUCTION' || userRole === 'WAREHOUSE';
 
-        tbody.innerHTML = res.data.map(po => {
+        const firstOrdersCompletedIndex = (!status) ? res.data.findIndex(o => isFinishedPO(o)) : -1;
+
+        tbody.innerHTML = res.data.map((po, idx) => {
+            const isCompleted = isFinishedPO(po);
             const itemsList = (po.items && po.items.length > 0)
                 ? po.items.map(it => {
                     const hasJO = it.jo_number;
@@ -923,24 +992,48 @@ async function loadOrders() {
             const isVoided = po.status === 'VOIDED';
 
             const statusBorderColor = isVoided ? 'border-l-rose-500' :
-                po.status === 'COMPLETED' ? 'border-l-emerald-600' :
+                isCompleted ? 'border-l-emerald-600' :
                 po.status === 'APPROVED' ? 'border-l-indigo-600' :
                 po.status === 'IN_PRODUCTION' ? 'border-l-blue-600' :
                 po.status === 'PARTIALLY_DELIVERED' ? 'border-l-purple-600' :
                 (po.status === 'PENDING_APPROVAL' || po.status === 'DRAFT') ? 'border-l-amber-500' :
                 'border-l-slate-400';
 
+            const rowBgClass = isCompleted
+                ? 'bg-emerald-100/90 hover:bg-emerald-200/90 border-y border-r border-emerald-300 transition shadow-xs rounded-2xl group'
+                : (isVoided
+                    ? 'opacity-60 bg-rose-50/20 hover:bg-rose-50/30 transition shadow-xs rounded-2xl group'
+                    : 'bg-white hover:bg-slate-50/90 transition shadow-xs rounded-2xl group');
+
+            const orderDividerHtml = (idx === firstOrdersCompletedIndex && firstOrdersCompletedIndex > 0) ? `
+                <tr class="bg-emerald-50 border-y-2 border-emerald-400">
+                    <td colspan="7" class="py-2.5 px-4 text-left">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm">✅</span>
+                            <span class="text-xs font-black uppercase tracking-wider text-emerald-950">Finished & Completed Purchase Orders</span>
+                            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-600 text-white shadow-2xs">${res.data.length - firstOrdersCompletedIndex} Done</span>
+                        </div>
+                    </td>
+                </tr>
+            ` : '';
+
             return `
-            <tr class="bg-white hover:bg-slate-50/90 transition shadow-xs rounded-2xl group ${isVoided ? 'opacity-60 bg-rose-50/20' : ''}">
-                <td class="py-3.5 px-4 whitespace-nowrap rounded-l-2xl border-y border-l border-slate-200/90 border-l-4 ${statusBorderColor}">
+            ${orderDividerHtml}
+            <tr class="${rowBgClass}">
+                <td class="py-3.5 px-4 whitespace-nowrap rounded-l-2xl border-y border-l ${isCompleted ? 'border-emerald-300' : 'border-slate-200/90'} border-l-4 ${statusBorderColor}">
                     <div class="text-[11px] text-slate-500 font-semibold leading-none mb-1">
                         <span>${NKB.formatDate(po.po_date)}</span>
                         ${po.expected_delivery_date ? `<span class="text-[10px] text-emerald-700 font-bold ml-1.5" title="Delivery Date">· 🚚 Due: ${NKB.formatDate(po.expected_delivery_date)}</span>` : ''}
                     </div>
                     <div class="flex items-center gap-1.5 flex-wrap">
-                        <button type="button" onclick="openViewPOModal('${po.id}')" class="font-mono font-black text-indigo-600 hover:text-indigo-800 hover:underline text-left block text-sm tracking-tight" title="Click to view full PO details">
+                        <button type="button" onclick="openViewPOModal('${po.id}')" class="font-mono font-black ${isCompleted ? 'text-emerald-900' : 'text-indigo-600'} hover:underline text-left block text-sm tracking-tight" title="Click to view full PO details">
                             ${po.po_number}
                         </button>
+                        ${isCompleted ? `
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-600 text-white inline-flex items-center gap-1 shadow-2xs" title="Order is Finished & Completed">
+                                <span>✓</span> DONE
+                            </span>
+                        ` : ''}
                         ${po.is_revisioned === 1 ? `
                             <span class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-300 inline-flex items-center gap-1 shadow-2xs" title="${po.revision_notes ? NKB.escapeHtml(po.revision_notes) : 'Revised Purchase Order'}">
                                 <span>🔄</span> REV ${po.revision_count || 1}
@@ -992,6 +1085,13 @@ async function loadOrders() {
                 </td>
                 <td class="py-3.5 px-4 whitespace-nowrap border-y border-slate-200/90">
                     <div>${NKB.renderStatusBadge(po.status)}</div>
+                    ${isCompleted ? `
+                        <div class="mt-1">
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-600 text-white inline-flex items-center gap-1 shadow-2xs">
+                                <span>✅</span> All Work Done
+                            </span>
+                        </div>
+                    ` : ''}
                     ${po.accounting_confirmed === 1 ? `
                         <div class="mt-1">
                             <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 inline-flex items-center gap-1" title="Confirmed by Accounting on ${po.accounting_confirmed_at ? NKB.formatDate(po.accounting_confirmed_at) : 'N/A'}">
@@ -17411,7 +17511,7 @@ function renderProductionSalesOrderBoard() {
     } else if (filterVal === 'HAS_REMINDER') {
         list = list.filter(o => o.reminder_at && String(o.reminder_at).trim() !== '');
     } else if (filterVal === 'COMPLETED') {
-        list = list.filter(o => o.status === 'COMPLETED');
+        list = list.filter(o => isFinishedPO(o));
     } else if (filterVal) {
         list = list.filter(o => (o.priority_status || 'NORMAL') === filterVal);
     }
@@ -17429,8 +17529,8 @@ function renderProductionSalesOrderBoard() {
 
     // Sort: All unfinished POs above vs all finished POs below -> Active Today first -> Priority Status weight (RUSH > PRIORITIZED > NORMAL > ON_HOLD) -> priority_order ASC -> created_at DESC
     list.sort((a, b) => {
-        const isFinA = (a.status === 'COMPLETED') ? 1 : 0;
-        const isFinB = (b.status === 'COMPLETED') ? 1 : 0;
+        const isFinA = isFinishedPO(a) ? 1 : 0;
+        const isFinB = isFinishedPO(b) ? 1 : 0;
         if (isFinA !== isFinB) return isFinA - isFinB;
 
         const actA = Number(a.is_active_today) ? 0 : 1;
@@ -17467,13 +17567,13 @@ function renderProductionSalesOrderBoard() {
     const canEditOrder = isExecAdmin || (typeof NKB !== 'undefined' && NKB.hasPermission && (NKB.hasPermission('orders:edit') || NKB.hasPermission('orders:manage')));
 
     let unfinishedIdx = 0;
-    const firstCompletedIndex = list.findIndex(o => o.status === 'COMPLETED');
+    const firstCompletedIndex = list.findIndex(o => isFinishedPO(o));
 
     tbody.innerHTML = list.map((po, idx) => {
         const soNum = po.so_number || po.po_number.replace('PO-', 'SO-');
         const pStatus = po.priority_status || 'NORMAL';
         const isActiveToday = Number(po.is_active_today) === 1;
-        const isCompleted = po.status === 'COMPLETED';
+        const isCompleted = isFinishedPO(po);
         let queueNum = '';
         if (!isCompleted) {
             unfinishedIdx++;
@@ -17540,7 +17640,7 @@ function renderProductionSalesOrderBoard() {
         }
 
         const rowBgClass = isCompleted
-            ? 'bg-emerald-100/70 hover:bg-emerald-200/60 border-b border-emerald-300 transition'
+            ? 'bg-emerald-100/90 hover:bg-emerald-200/90 border-b-2 border-emerald-300 transition'
             : (isActiveToday
                 ? 'bg-emerald-50/40 hover:bg-emerald-50/70 border-b border-slate-100 transition'
                 : (pStatus === 'RUSH'
@@ -17548,12 +17648,12 @@ function renderProductionSalesOrderBoard() {
                     : 'hover:bg-slate-50/80 border-b border-slate-100 transition'));
 
         const dividerHtml = (idx === firstCompletedIndex && firstCompletedIndex > 0) ? `
-            <tr class="bg-slate-100/90 border-y border-slate-300">
+            <tr class="bg-emerald-50 border-y-2 border-emerald-400">
                 <td colspan="5" class="py-2.5 px-4 text-left">
                     <div class="flex items-center gap-2">
-                        <span class="text-xs">✅</span>
-                        <span class="text-[11px] font-black uppercase tracking-wider text-slate-700">Finished & Completed Orders</span>
-                        <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">${list.length - firstCompletedIndex} Done</span>
+                        <span class="text-sm">✅</span>
+                        <span class="text-xs font-black uppercase tracking-wider text-emerald-950">Finished & Completed Orders</span>
+                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-600 text-white shadow-2xs">${list.length - firstCompletedIndex} Done</span>
                     </div>
                 </td>
             </tr>
