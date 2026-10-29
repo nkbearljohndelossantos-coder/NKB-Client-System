@@ -1155,6 +1155,20 @@ function toggleTableActionMenu(e, menuId) {
     document.querySelectorAll('.table-action-menu, [id^="po-menu-"]').forEach(m => m.classList.add('hidden'));
     if (isHidden) {
         menu.classList.remove('hidden');
+        try {
+            const rect = menu.getBoundingClientRect();
+            if (rect.bottom > window.innerHeight && rect.top > rect.height) {
+                menu.style.bottom = '100%';
+                menu.style.top = 'auto';
+                menu.style.marginBottom = '4px';
+                menu.style.marginTop = '0';
+            } else {
+                menu.style.bottom = 'auto';
+                menu.style.top = '';
+                menu.style.marginBottom = '';
+                menu.style.marginTop = '';
+            }
+        } catch (_) {}
     }
 }
 window.toggleTableActionMenu = toggleTableActionMenu;
@@ -17442,6 +17456,10 @@ function renderProductionSalesOrderBoard() {
         'ON_HOLD': 'bg-slate-200 text-slate-600 border-slate-300 font-extrabold'
     };
 
+    const userRole = (typeof NKB !== 'undefined' && NKB.user && NKB.user.role) || '';
+    const isExecAdmin = userRole === 'ADMIN' || userRole === 'SUPERADMIN';
+    const canEditOrder = isExecAdmin || (typeof NKB !== 'undefined' && NKB.hasPermission && (NKB.hasPermission('orders:edit') || NKB.hasPermission('orders:manage')));
+
     tbody.innerHTML = list.map((po, idx) => {
         const soNum = po.so_number || po.po_number.replace('PO-', 'SO-');
         const pStatus = po.priority_status || 'NORMAL';
@@ -17576,17 +17594,99 @@ function renderProductionSalesOrderBoard() {
                 </td>
 
                 <!-- Col 5: Actions -->
-                <td class="py-2.5 px-3 w-28 text-right align-middle">
-                    <div class="flex flex-col gap-1 items-end">
-                        <button onclick="openViewPOModal('${po.id}')" class="w-full px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold text-[10.5px] transition cursor-pointer text-center">👁️ View</button>
+                <td class="py-2.5 px-3 w-36 text-right align-middle">
+                    <div class="flex items-center justify-end gap-1.5 whitespace-nowrap">
+                        <button onclick="openViewPOModal('${po.id}')" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition cursor-pointer inline-flex items-center gap-1" title="View Full Details">
+                            <span>👁️ View</span>
+                        </button>
                         ${(po.status !== 'COMPLETED' && po.status !== 'CANCELLED' && po.status !== 'VOIDED' && po.status !== 'DRAFT') ? `
                             ${(!po.jo_count || po.jo_count === 0) ? `
-                                <button onclick="openCreateJOModal('${po.id}', '${po.po_number}', '${(po.company_name || '').replace(/'/g, "\\'")}')" class="w-full px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-[10.5px] transition shadow-xs cursor-pointer text-center">🏭 Start JO</button>
-                            ` : ''}
-                            <button onclick="openCreateAllBatchesModal('${po.client_id}', '${po.id}', '${(po.company_name || '').replace(/'/g, "\\'")}')" class="w-full px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold text-[10.5px] transition shadow-xs cursor-pointer text-center">⚗️ Batch</button>
-                            <button onclick="openCreateAllDRModal('${po.client_id}', '${po.id}', '${(po.company_name || '').replace(/'/g, "\\'")}')" class="w-full px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[10.5px] transition shadow-xs cursor-pointer text-center">🚚 Deliver</button>
-                            <button onclick="promptDeclareOrderFinished('${po.id}', '${po.po_number}')" class="w-full px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg font-bold text-[9.5px] transition cursor-pointer text-center" title="Declare Order Finished">✓ Finish</button>
+                                <button onclick="openCreateJOModal('${po.id}', '${po.po_number}', '${(po.company_name || '').replace(/'/g, "\\'")}')" class="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs transition shadow-xs cursor-pointer inline-flex items-center gap-1" title="Start Job Order">
+                                    <span>🏭 JO</span>
+                                </button>
+                            ` : `
+                                <button onclick="openCreateAllBatchesModal('${po.client_id}', '${po.id}', '${(po.company_name || '').replace(/'/g, "\\'")}')" class="px-2.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-xs transition shadow-xs cursor-pointer inline-flex items-center gap-1" title="Batch Products">
+                                    <span>⚗️ Batch</span>
+                                </button>
+                            `}
                         ` : ''}
+
+                        <!-- Option's Toggle Button (•••) -->
+                        <div class="relative inline-block text-left">
+                            <button type="button" onclick="togglePOActionMenu(event, 'prod-${po.id}')" class="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl border border-slate-200 transition focus:outline-none cursor-pointer" title="Options / More Actions">
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"/></svg>
+                            </button>
+                            <div id="po-menu-prod-${po.id}" class="table-action-menu hidden absolute right-0 mt-1 w-56 bg-white rounded-2xl shadow-2xl border border-slate-200 py-1.5 z-50 text-left animate-fade-in font-medium text-xs divide-y divide-slate-100">
+                                <div class="py-1">
+                                    <div class="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Order Info & Docs</div>
+                                    <button onclick="openViewPOModal('${po.id}')" class="w-full flex items-center gap-2 px-3 py-1.5 text-slate-700 hover:bg-slate-50 transition text-left cursor-pointer">
+                                        <span>👁️</span><span>View Full Details</span>
+                                    </button>
+                                    <a href="/print-po.html?id=${po.id}" target="_blank" class="flex items-center gap-2 px-3 py-1.5 text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 transition">
+                                        <span>🖨️</span><span>Print Purchase Order</span>
+                                    </a>
+                                    <a href="/print-jo.html?po_id=${po.id}" target="_blank" class="flex items-center gap-2 px-3 py-1.5 text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 transition">
+                                        <span>📄</span><span>Print SO Slip Copy</span>
+                                    </a>
+                                    ${(po.accounting_confirmed === 1 || po.formulation_converted === 1) ? `
+                                        <a href="/print-formulation-receipt.html?id=${po.id}" target="_blank" class="flex items-center gap-2 px-3 py-1.5 text-amber-800 hover:bg-amber-50 transition">
+                                            <span>🧪</span><span>Formulation Receipt</span>
+                                        </a>
+                                    ` : ''}
+                                </div>
+                                ${(po.status !== 'COMPLETED' && po.status !== 'CANCELLED' && po.status !== 'VOIDED' && po.status !== 'DRAFT') ? `
+                                    <div class="py-1">
+                                        <div class="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Production Floor</div>
+                                        ${(!po.jo_count || po.jo_count === 0) ? `
+                                            <button onclick="openCreateJOModal('${po.id}', '${po.po_number}', '${(po.company_name || '').replace(/'/g, "\\'")}')" class="w-full flex items-center gap-2 px-3 py-1.5 text-indigo-700 hover:bg-indigo-50 transition text-left font-bold cursor-pointer">
+                                                <span>🏭</span><span>Start Job Order (JO)</span>
+                                            </button>
+                                        ` : `
+                                            <button onclick="openCreateJOModal('${po.id}', '${po.po_number}', '${(po.company_name || '').replace(/'/g, "\\'")}')" class="w-full flex items-center gap-2 px-3 py-1.5 text-indigo-700 hover:bg-indigo-50 transition text-left cursor-pointer">
+                                                <span>🏭</span><span>Create Another JO</span>
+                                            </button>
+                                        `}
+                                        <button onclick="openCreateAllBatchesModal('${po.client_id}', '${po.id}', '${(po.company_name || '').replace(/'/g, "\\'")}')" class="w-full flex items-center gap-2 px-3 py-1.5 text-purple-700 hover:bg-purple-50 transition text-left font-bold cursor-pointer">
+                                            <span>⚗️</span><span>Batch Products</span>
+                                        </button>
+                                        <button onclick="openCreateAllDRModal('${po.client_id}', '${po.id}', '${(po.company_name || '').replace(/'/g, "\\'")}')" class="w-full flex items-center gap-2 px-3 py-1.5 text-emerald-700 hover:bg-emerald-50 transition text-left font-bold cursor-pointer">
+                                            <span>🚚</span><span>Deliver Products (DR)</span>
+                                        </button>
+                                        <button onclick="openSOReminderModal('${po.id}')" class="w-full flex items-center gap-2 px-3 py-1.5 text-indigo-700 hover:bg-indigo-50 transition text-left cursor-pointer">
+                                            <span>⏰</span><span>Set Priority Reminder</span>
+                                        </button>
+                                        <button onclick="openSupplyRequestModal('${po.id}', '${po.po_number}', '${(po.company_name || '').replace(/'/g, "\\'")}')" class="w-full flex items-center gap-2 px-3 py-1.5 text-slate-700 hover:bg-slate-50 transition text-left cursor-pointer">
+                                            <span>📋</span><span>Request Supplies</span>
+                                        </button>
+                                        ${(po.supply_requests_count > 0) ? `
+                                            <button onclick="viewSupplyRequestsModal('${po.id}', '${po.po_number}')" class="w-full flex items-center gap-2 px-3 py-1.5 text-rose-700 hover:bg-rose-50 transition text-left font-bold cursor-pointer">
+                                                <span>📜</span><span>View Requisitions (${po.supply_requests_count})</span>
+                                            </button>
+                                        ` : ''}
+                                        <button onclick="promptDeclareOrderFinished('${po.id}', '${po.po_number}')" class="w-full flex items-center gap-2 px-3 py-1.5 text-indigo-700 hover:bg-indigo-50 transition text-left font-bold cursor-pointer">
+                                            <span>✓</span><span>Declare Order Finished</span>
+                                        </button>
+                                    </div>
+                                ` : ''}
+                                <div class="py-1">
+                                    <div class="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Queue Order</div>
+                                    <button onclick="updateOrderProductionSchedule('${po.id}', { move_direction: 'FIRST' })" class="w-full flex items-center gap-2 px-3 py-1.5 text-slate-700 hover:bg-slate-50 transition text-left cursor-pointer">
+                                        <span>⏫</span><span>Move to Top (#1)</span>
+                                    </button>
+                                    <button onclick="updateOrderProductionSchedule('${po.id}', { move_direction: 'UP' })" class="w-full flex items-center gap-2 px-3 py-1.5 text-slate-700 hover:bg-slate-50 transition text-left cursor-pointer">
+                                        <span>↑</span><span>Move Up in Queue</span>
+                                    </button>
+                                    <button onclick="updateOrderProductionSchedule('${po.id}', { move_direction: 'DOWN' })" class="w-full flex items-center gap-2 px-3 py-1.5 text-slate-700 hover:bg-slate-50 transition text-left cursor-pointer">
+                                        <span>↓</span><span>Move Down in Queue</span>
+                                    </button>
+                                    ${(canEditOrder && po.status !== 'COMPLETED' && po.status !== 'CANCELLED' && po.status !== 'VOIDED' && (!po.dr_count || po.dr_count === 0)) ? `
+                                        <button onclick="openEditPOModal('${po.id}')" class="w-full flex items-center gap-2 px-3 py-1.5 text-amber-700 hover:bg-amber-50 transition text-left font-bold cursor-pointer">
+                                            <span>✏️</span><span>Update Order Details</span>
+                                        </button>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </td>
             </tr>
