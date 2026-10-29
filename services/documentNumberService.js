@@ -44,6 +44,20 @@ function getNextDocumentNumber(docType, customDb) {
         return `PO-${year}-${formattedSeq}`;
     }
 
+    if (docType === 'FPR') {
+        const getSeq = db.prepare('SELECT current_year, last_sequence FROM document_sequences WHERE doc_type = ?');
+        const row = getSeq.get('FPR');
+        let nextSeq = 1;
+        if (row) {
+            nextSeq = (row.last_sequence || 0) + 1;
+            db.prepare('UPDATE document_sequences SET last_sequence = ? WHERE doc_type = ?').run(nextSeq, 'FPR');
+        } else {
+            db.prepare('INSERT INTO document_sequences (doc_type, current_year, last_sequence) VALUES (?, ?, ?)').run('FPR', year, 1);
+            nextSeq = 1;
+        }
+        return `FPR -FORM ${String(nextSeq).padStart(3, '0')}`;
+    }
+
     const getSeq = db.prepare('SELECT current_year, last_sequence FROM document_sequences WHERE doc_type = ?');
     const row = getSeq.get(docType);
     

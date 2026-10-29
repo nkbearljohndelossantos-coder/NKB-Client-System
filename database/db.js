@@ -737,10 +737,10 @@ function runMigrations(dbInstance, isMysql) {
         }
 
         // Migrate users table to support IT_ADMIN and INVENTORY roles
-        // Migrate users table to support PURCHASING, INVENTORY, and COMPOUNDING roles and plain_password
+        // Migrate users table to support PURCHASING, INVENTORY, COMPOUNDING, and VYUCEUTICAL_OPERATOR roles and plain_password
         if (isMysql) {
             try {
-                dbInstance.exec("ALTER TABLE users MODIFY COLUMN role ENUM('SUPER_ADMIN', 'IT_ADMIN', 'ADMIN', 'CEO', 'QC', 'PURCHASING', 'PRODUCTION', 'WAREHOUSE', 'ACCOUNTING', 'INVENTORY', 'COMPOUNDING', 'CLIENT') NOT NULL;");
+                dbInstance.exec("ALTER TABLE users MODIFY COLUMN role ENUM('SUPER_ADMIN', 'IT_ADMIN', 'ADMIN', 'CEO', 'QC', 'PURCHASING', 'PRODUCTION', 'WAREHOUSE', 'ACCOUNTING', 'INVENTORY', 'COMPOUNDING', 'CLIENT', 'VYUCEUTICAL_OPERATOR') NOT NULL;");
             } catch (_) {}
             try {
                 dbInstance.exec("ALTER TABLE users ADD COLUMN plain_password VARCHAR(255) NULL;");
@@ -755,7 +755,7 @@ function runMigrations(dbInstance, isMysql) {
                 }
 
                 const userSql = dbInstance.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'users'").get()?.sql || '';
-                if (userSql && (!userSql.includes('CEO') || !userSql.includes('QC') || !userSql.includes('PURCHASING') || !userSql.includes('IT_ADMIN') || !userSql.includes('INVENTORY') || !userSql.includes('COMPOUNDING'))) {
+                if (userSql && (!userSql.includes('CEO') || !userSql.includes('QC') || !userSql.includes('PURCHASING') || !userSql.includes('IT_ADMIN') || !userSql.includes('INVENTORY') || !userSql.includes('COMPOUNDING') || !userSql.includes('VYUCEUTICAL_OPERATOR'))) {
                     const freshCols = dbInstance.prepare("PRAGMA table_info(users)").all().map(c => c.name);
                     const colsList = freshCols.join(', ');
                     dbInstance.exec(`
@@ -766,7 +766,7 @@ function runMigrations(dbInstance, isMysql) {
                             email TEXT UNIQUE NOT NULL,
                             password_hash TEXT NOT NULL,
                             plain_password TEXT,
-                            role TEXT NOT NULL CHECK (role IN ('SUPER_ADMIN', 'IT_ADMIN', 'ADMIN', 'CEO', 'QC', 'PURCHASING', 'PRODUCTION', 'WAREHOUSE', 'ACCOUNTING', 'INVENTORY', 'COMPOUNDING', 'CLIENT')),
+                            role TEXT NOT NULL CHECK (role IN ('SUPER_ADMIN', 'IT_ADMIN', 'ADMIN', 'CEO', 'QC', 'PURCHASING', 'PRODUCTION', 'WAREHOUSE', 'ACCOUNTING', 'INVENTORY', 'COMPOUNDING', 'CLIENT', 'VYUCEUTICAL_OPERATOR')),
                             client_id TEXT,
                             phone TEXT,
                             whatsapp_number TEXT,
@@ -789,7 +789,7 @@ function runMigrations(dbInstance, isMysql) {
                         CREATE INDEX IF NOT EXISTS idx_users_client ON users(client_id);
                         PRAGMA foreign_keys = ON;
                     `);
-                    console.log('✅ SQLite users table upgraded with CEO, QC, PURCHASING, INVENTORY, and COMPOUNDING roles');
+                    console.log('✅ SQLite users table upgraded with VYUCEUTICAL_OPERATOR role');
                 }
             } catch (uMigErr) {
                 console.warn('SQLite users table migration note:', uMigErr.message);
@@ -1733,6 +1733,177 @@ function runMigrations(dbInstance, isMysql) {
                 console.warn('Timezone historical migration note:', tzErr.message);
             }
         }
+
+        // Online Platform Inventory & Requisitions
+        try {
+            if (isMysql) {
+                dbInstance.exec(`
+                    CREATE TABLE IF NOT EXISTS online_platform_inventory (
+                        id VARCHAR(36) PRIMARY KEY,
+                        product_id VARCHAR(36) NULL,
+                        sku VARCHAR(100) NOT NULL,
+                        product_name VARCHAR(255) NOT NULL,
+                        platform VARCHAR(50) NOT NULL DEFAULT 'TIKTOK',
+                        stock_quantity DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+                        reserved_quantity DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+                        unit VARCHAR(50) NOT NULL DEFAULT 'PCS',
+                        reorder_point DECIMAL(14,2) NOT NULL DEFAULT 100.00,
+                        status ENUM('IN_STOCK', 'LOW_STOCK', 'OUT_OF_STOCK') NOT NULL DEFAULT 'IN_STOCK',
+                        notes TEXT NULL,
+                        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        INDEX idx_opi_platform (platform),
+                        INDEX idx_opi_sku (sku)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+                    CREATE TABLE IF NOT EXISTS online_inventory_movements (
+                        id VARCHAR(36) PRIMARY KEY,
+                        inventory_id VARCHAR(36) NOT NULL,
+                        movement_type VARCHAR(50) NOT NULL,
+                        quantity DECIMAL(14,2) NOT NULL,
+                        reference_no VARCHAR(100) NULL,
+                        platform VARCHAR(50) NOT NULL,
+                        performed_by VARCHAR(36) NULL,
+                        performed_by_name VARCHAR(255) NULL,
+                        notes TEXT NULL,
+                        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        INDEX idx_oim_inv (inventory_id)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+                    CREATE TABLE IF NOT EXISTS finished_product_requisitions (
+                        id VARCHAR(36) PRIMARY KEY,
+                        request_number VARCHAR(50) UNIQUE NOT NULL,
+                        document_code VARCHAR(50) NOT NULL,
+                        revision_no VARCHAR(20) DEFAULT '00',
+                        effective_date VARCHAR(50) NULL,
+                        request_date VARCHAR(50) NOT NULL,
+                        category_type VARCHAR(50) NOT NULL DEFAULT 'FINISHED PRODUCT',
+                        department VARCHAR(100) NOT NULL DEFAULT 'TIKTOK',
+                        requested_by VARCHAR(36) NOT NULL,
+                        requested_by_name VARCHAR(255) NOT NULL,
+                        designation VARCHAR(100) NOT NULL DEFAULT 'OFFICER',
+                        status ENUM('PENDING', 'APPROVED', 'ISSUED', 'RECEIVED', 'CANCELLED') NOT NULL DEFAULT 'PENDING',
+                        urgency VARCHAR(50) NOT NULL DEFAULT 'REGULAR',
+                        purpose TEXT NULL,
+                        checked_by VARCHAR(255) NULL,
+                        checked_at VARCHAR(50) NULL,
+                        issuance_prepared_by VARCHAR(255) NULL,
+                        issuance_verified_by VARCHAR(255) NULL,
+                        issuance_date VARCHAR(50) NULL,
+                        receiving_reviewed_by VARCHAR(255) NULL,
+                        receiving_verified_by VARCHAR(255) NULL,
+                        receiving_date VARCHAR(50) NULL,
+                        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        INDEX idx_fpr_status (status),
+                        INDEX idx_fpr_dept (department)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+                    CREATE TABLE IF NOT EXISTS finished_product_requisition_items (
+                        id VARCHAR(36) PRIMARY KEY,
+                        requisition_id VARCHAR(36) NOT NULL,
+                        item_no INT NOT NULL,
+                        product_id VARCHAR(36) NULL,
+                        material_name TEXT NOT NULL,
+                        batch_lot_no VARCHAR(100) NULL,
+                        required_qty DECIMAL(14,2) NOT NULL,
+                        qty_issued DECIMAL(14,2) DEFAULT 0.00,
+                        remaining_stock DECIMAL(14,2) DEFAULT 0.00,
+                        remaining_stock_notes VARCHAR(255) NULL,
+                        unit_of_measure VARCHAR(50) NOT NULL DEFAULT 'PCS',
+                        urgency VARCHAR(50) DEFAULT 'REGULAR',
+                        purpose_remarks TEXT NULL,
+                        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        INDEX idx_fpri_req (requisition_id)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+                `);
+            } else {
+                dbInstance.exec(`
+                    CREATE TABLE IF NOT EXISTS online_platform_inventory (
+                        id TEXT PRIMARY KEY,
+                        product_id TEXT,
+                        sku TEXT NOT NULL,
+                        product_name TEXT NOT NULL,
+                        platform TEXT NOT NULL DEFAULT 'TIKTOK',
+                        stock_quantity REAL NOT NULL DEFAULT 0,
+                        reserved_quantity REAL NOT NULL DEFAULT 0,
+                        unit TEXT NOT NULL DEFAULT 'PCS',
+                        reorder_point REAL NOT NULL DEFAULT 100,
+                        status TEXT NOT NULL DEFAULT 'IN_STOCK' CHECK (status IN ('IN_STOCK', 'LOW_STOCK', 'OUT_OF_STOCK')),
+                        notes TEXT,
+                        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                        updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_opi_platform ON online_platform_inventory(platform);
+                    CREATE INDEX IF NOT EXISTS idx_opi_sku ON online_platform_inventory(sku);
+
+                    CREATE TABLE IF NOT EXISTS online_inventory_movements (
+                        id TEXT PRIMARY KEY,
+                        inventory_id TEXT NOT NULL,
+                        movement_type TEXT NOT NULL,
+                        quantity REAL NOT NULL,
+                        reference_no TEXT,
+                        platform TEXT NOT NULL,
+                        performed_by TEXT,
+                        performed_by_name TEXT,
+                        notes TEXT,
+                        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_oim_inv ON online_inventory_movements(inventory_id);
+
+                    CREATE TABLE IF NOT EXISTS finished_product_requisitions (
+                        id TEXT PRIMARY KEY,
+                        request_number TEXT UNIQUE NOT NULL,
+                        document_code TEXT NOT NULL,
+                        revision_no TEXT DEFAULT '00',
+                        effective_date TEXT,
+                        request_date TEXT NOT NULL,
+                        category_type TEXT NOT NULL DEFAULT 'FINISHED PRODUCT',
+                        department TEXT NOT NULL DEFAULT 'TIKTOK',
+                        requested_by TEXT NOT NULL,
+                        requested_by_name TEXT NOT NULL,
+                        designation TEXT NOT NULL DEFAULT 'OFFICER',
+                        status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPROVED', 'ISSUED', 'RECEIVED', 'CANCELLED')),
+                        urgency TEXT NOT NULL DEFAULT 'REGULAR',
+                        purpose TEXT,
+                        checked_by TEXT,
+                        checked_at TEXT,
+                        issuance_prepared_by TEXT,
+                        issuance_verified_by TEXT,
+                        issuance_date TEXT,
+                        receiving_reviewed_by TEXT,
+                        receiving_verified_by TEXT,
+                        receiving_date TEXT,
+                        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                        updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_fpr_req_no ON finished_product_requisitions(request_number);
+                    CREATE INDEX IF NOT EXISTS idx_fpr_status ON finished_product_requisitions(status);
+                    CREATE INDEX IF NOT EXISTS idx_fpr_dept ON finished_product_requisitions(department);
+
+                    CREATE TABLE IF NOT EXISTS finished_product_requisition_items (
+                        id TEXT PRIMARY KEY,
+                        requisition_id TEXT NOT NULL,
+                        item_no INTEGER NOT NULL,
+                        product_id TEXT,
+                        material_name TEXT NOT NULL,
+                        batch_lot_no TEXT,
+                        required_qty REAL NOT NULL,
+                        qty_issued REAL DEFAULT 0,
+                        remaining_stock REAL DEFAULT 0,
+                        remaining_stock_notes TEXT,
+                        unit_of_measure TEXT NOT NULL DEFAULT 'PCS',
+                        urgency TEXT DEFAULT 'REGULAR',
+                        purpose_remarks TEXT,
+                        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                        FOREIGN KEY (requisition_id) REFERENCES finished_product_requisitions(id) ON DELETE CASCADE
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_fpri_req ON finished_product_requisition_items(requisition_id);
+                `);
+            }
+        } catch (opErr) {
+            console.warn('Online platform tables migration note:', opErr.message);
+        }
     } catch (migErr) {
         console.warn('Migration note:', migErr.message);
     }
@@ -1914,7 +2085,8 @@ if (useMysql) {
             { id: 'e0000000-0000-0000-0000-000000000001', name: 'Inventory Officer', email: 'inventory@nkbmanufacturing.com', role: 'INVENTORY', hash: '$2b$10$4sevv4zs6rfH/jwtBabcPeAFyGSkvf/1tJ5DGlAfVnZkrQsftdKvC', plain: 'Staff123!', phone: '+639170000005', whatsapp_number: '+639170000005' },
             { id: 'f0000000-0000-0000-0000-000000000001', name: 'Purchasing Officer', email: 'purchasing@nkbmanufacturing.com', role: 'PURCHASING', hash: staffPassHash, plain: 'Staff123!', phone: '+639170000006', whatsapp_number: '+639170000006' },
             { id: 'g0000000-0000-0000-0000-000000000001', name: 'Quality Control Inspector', email: 'qc@nkbmanufacturing.com', role: 'QC', hash: staffPassHash, plain: 'Staff123!', phone: '+639170000007', whatsapp_number: '+639170000007' },
-            { id: 'h0000000-0000-0000-0000-000000000001', name: 'Compounding Specialist', email: 'compounding@nkbmanufacturing.com', role: 'COMPOUNDING', hash: staffPassHash, plain: 'Staff123!', phone: '+639170000010', whatsapp_number: '+639170000010' }
+            { id: 'h0000000-0000-0000-0000-000000000001', name: 'Compounding Specialist', email: 'compounding@nkbmanufacturing.com', role: 'COMPOUNDING', hash: staffPassHash, plain: 'Staff123!', phone: '+639170000010', whatsapp_number: '+639170000010' },
+            { id: 'i0000000-0000-0000-0000-000000000001', name: 'Angelica Tamano (Online Platform Operator)', email: 'online.operator@vyuceutical.com', role: 'VYUCEUTICAL_OPERATOR', hash: staffPassHash, plain: 'Staff123!', phone: '+639170000011', whatsapp_number: '+639170000011', client_id: '0d68514b-2b7f-42d2-a211-cfbdc0855d3a' }
         ];
 
         for (const staff of defaultStaff) {
@@ -1922,14 +2094,19 @@ if (useMysql) {
             const useHash = staff.hash || staffPassHash;
             if (!existing) {
                 db.prepare(`
-                    INSERT INTO users (id, name, email, password_hash, plain_password, role, phone, whatsapp_number, is_active)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
-                `).run(staff.id, staff.name, staff.email, useHash, staff.plain || 'Staff123!', staff.role, staff.phone, staff.whatsapp_number);
+                    INSERT INTO users (id, name, email, password_hash, plain_password, role, phone, whatsapp_number, is_active, client_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+                `).run(staff.id, staff.name, staff.email, useHash, staff.plain || 'Staff123!', staff.role, staff.phone, staff.whatsapp_number, staff.client_id || null);
                 console.log(`👷 Auto-provisioned Staff: ${staff.name} (${staff.email})`);
             } else {
-                db.prepare("UPDATE users SET password_hash = ?, plain_password = COALESCE(plain_password, ?), role = ?, phone = COALESCE(phone, ?), whatsapp_number = COALESCE(whatsapp_number, ?), is_active = 1 WHERE id = ?").run(useHash, staff.plain || 'Staff123!', staff.role, staff.phone, staff.whatsapp_number, existing.id);
+                db.prepare("UPDATE users SET password_hash = ?, plain_password = COALESCE(plain_password, ?), role = ?, phone = COALESCE(phone, ?), whatsapp_number = COALESCE(whatsapp_number, ?), client_id = COALESCE(client_id, ?), is_active = 1 WHERE id = ?").run(useHash, staff.plain || 'Staff123!', staff.role, staff.phone, staff.whatsapp_number, staff.client_id || null, existing.id);
             }
         }
+
+        // Also ensure online@vyuceutical.com and angelica@opc.com have role VYUCEUTICAL_OPERATOR
+        try {
+            db.prepare("UPDATE users SET role = 'VYUCEUTICAL_OPERATOR', plain_password = 'Staff123!', is_active = 1 WHERE LOWER(email) IN ('online@vyuceutical.com', 'angelica@opc.com')").run();
+        } catch (_) {}
 
         // Backfill plain_password for any remaining accounts without one
         try {
@@ -2108,12 +2285,16 @@ if (useMysql) {
     // Auto-initialize Document Sequences
     try {
         const year = new Date().getFullYear();
-        const docTypes = ['PO', 'JO', 'BAT', 'DR', 'SI', 'PAY'];
-        const checkSeq = db.prepare('SELECT doc_type FROM document_sequences WHERE doc_type = ?');
-        const insertSeq = db.prepare('INSERT INTO document_sequences (doc_type, current_year, last_sequence) VALUES (?, ?, 0)');
+        const docTypes = ['PO', 'JO', 'BAT', 'DR', 'SI', 'PAY', 'FPR'];
+        const checkSeq = db.prepare('SELECT doc_type, last_sequence FROM document_sequences WHERE doc_type = ?');
+        const insertSeq = db.prepare('INSERT INTO document_sequences (doc_type, current_year, last_sequence) VALUES (?, ?, ?)');
         for (const type of docTypes) {
-            if (!checkSeq.get(type)) {
-                insertSeq.run(type, year);
+            const row = checkSeq.get(type);
+            const initialSeq = type === 'FPR' ? 31 : 0;
+            if (!row) {
+                insertSeq.run(type, year, initialSeq);
+            } else if (type === 'FPR' && row.last_sequence < 31) {
+                db.prepare("UPDATE document_sequences SET last_sequence = 31 WHERE doc_type = 'FPR'").run();
             }
         }
     } catch (err) {}

@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finished Product Requisition Form - NKB & Vyuceutical</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @page {
+            size: portrait;
+            margin: 8mm 10mm;
+        }
+
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            color: #111827;
+            background-color: #f3f4f6;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .req-sheet {
+            background-color: #ffffff;
+            width: 100%;
+            max-width: 860px;
+            margin: 20px auto;
+            padding: 24px 30px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+            border: 1px solid #e5e7eb;
+        }
+
+        .sheet-border {
+            border: 1.5px solid #0f172a;
+        }
+
+        .table-grid {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        .table-grid th, .table-grid td {
+            border: 1px solid #1e293b;
+            padding: 5px 8px;
+            font-size: 11px;
+            line-height: 1.35;
+        }
+
+        .table-grid th {
+            background-color: #f1f5f9;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+        }
+
+        .section-header {
+            background-color: #e2e8f0;
+            font-weight: 900;
+            font-size: 11px;
+            letter-spacing: 0.04em;
+            padding: 5px 8px;
+            border: 1px solid #1e293b;
+        }
+
+        .meta-label {
+            font-weight: 700;
+            color: #334155;
+            width: 130px;
+        }
+
+        .checkbox-box {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 14px;
+            height: 14px;
+            border: 1.5px solid #0f172a;
+            margin-right: 6px;
+            font-size: 11px;
+            font-weight: 900;
+            line-height: 1;
+        }
+
+        @media print {
+            body {
+                background-color: #ffffff;
+                margin: 0;
+                padding: 0;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .req-sheet {
+                box-shadow: none;
+                margin: 0;
+                max-width: 100%;
+                padding: 0;
+                border: none;
+            }
+            .table-grid th {
+                background-color: #f1f5f9 !important;
+            }
+            .section-header {
+                background-color: #e2e8f0 !important;
+            }
+        }
+    </style>
+</head>
+<body class="p-2 sm:p-6 text-slate-900">
+
+    <!-- Action Bar (Hidden in Print) -->
+    <div class="no-print max-w-[860px] mx-auto mb-4 bg-white p-3 sm:p-4 rounded-xl shadow-sm border border-slate-200 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+            <a href="/admin.html" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition flex items-center gap-1.5">
+                <span>←</span> Back to Dashboard
+            </a>
+            <div>
+                <span class="text-xs text-slate-500 font-semibold block">Official Printable Document</span>
+                <h1 class="text-sm font-black text-slate-800" id="top-title">Product Requisition Form</h1>
+            </div>
+        </div>
+        <div class="flex items-center gap-2">
+            <select id="req-picker" onchange="switchRequisition(this.value)" class="px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg font-bold text-slate-700">
+                <option value="">Loading requisitions...</option>
+            </select>
+            <button onclick="window.print()" class="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-black text-xs rounded-lg shadow-sm transition flex items-center gap-1.5 cursor-pointer">
+                <span>🖨️</span> Print / Save PDF
+            </button>
+        </div>
+    </div>
+
+    <!-- Official Requisition Sheet (A4 / Letter Portrait) -->
+    <div class="req-sheet" id="print-sheet">
+        
+        <!-- Document Title Banner -->
+        <div class="text-center py-2.5 mb-2 border-2 border-slate-900 bg-white">
+            <h1 class="text-xl sm:text-2xl font-black tracking-wider text-slate-950 uppercase" style="letter-spacing: 0.1em;">
+                PRODUCT REQUISITION FORM
+            </h1>
+        </div>
+
+        <!-- Material Category Checkboxes -->
+        <div class="flex items-center justify-around py-1.5 mb-2 border border-slate-900 text-xs font-bold bg-slate-50">
+            <div class="flex items-center">
+                <span class="checkbox-box" id="cb-raw"></span>
+                <span>RAW MATERIAL</span>
+            </div>
+            <div class="flex items-center">
+                <span class="checkbox-box" id="cb-pack"></span>
+                <span>PACKAGING</span>
+            </div>
+            <div class="flex items-center">
+                <span class="checkbox-box bg-slate-900 text-white" id="cb-fin">✓</span>
+                <span class="font-black text-slate-950">FINISHED PRODUCT</span>
+            </div>
+        </div>
+
+        <!-- Document Control Header -->
+        <table class="table-grid mb-3">
+            <tbody>
+                <tr>
+                    <td class="meta-label">Document Code</td>
+                    <td class="font-extrabold text-slate-900" id="doc-code">PRO-FM-003</td>
+                </tr>
+                <tr>
+                    <td class="meta-label">Revision No.</td>
+                    <td class="font-semibold text-slate-700" id="doc-rev">00</td>
+                </tr>
+                <tr>
+                    <td class="meta-label">Effective Date</td>
+                    <td class="font-semibold text-slate-700" id="doc-effective-date">-</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- SECTION 1: REQUEST DETAILS -->
+        <div class="section-header">SECTION 1: REQUEST DETAILS</div>
+        <table class="table-grid mb-3">
+            <tbody>
+                <tr>
+                    <td class="meta-label">Request No.</td>
+                    <td class="font-black text-slate-900 text-xs" id="req-no">FPR -FORM 031</td>
+                    <td class="meta-label" style="width: 110px;">Date of Request</td>
+                    <td class="font-bold text-slate-900" id="req-date">-</td>
+                </tr>
+                <tr>
+                    <td class="meta-label">Department</td>
+                    <td class="font-extrabold text-rose-800" id="req-dept">TIKTOK</td>
+                    <td class="meta-label">Urgency</td>
+                    <td class="font-bold text-slate-900" id="req-urgency">RUSH</td>
+                </tr>
+                <tr>
+                    <td class="meta-label">Requested By</td>
+                    <td class="font-bold text-slate-900" id="req-by">ANGELICA TAMANO</td>
+                    <td class="meta-label">Designation</td>
+                    <td class="font-semibold text-slate-800" id="req-designation">OFFICER</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- SECTION 2 & 3: REQUISITION ITEMS TABLE -->
+        <table class="table-grid mb-2" id="items-table">
+            <thead>
+                <tr>
+                    <th style="width: 5%;">Item No</th>
+                    <th style="width: 38%;">Material Name (Scents / Variant)</th>
+                    <th style="width: 14%;">Batch/Lot No/Material Code</th>
+                    <th style="width: 10%;">Required Qty</th>
+                    <th style="width: 8%;">Unit of Measure</th>
+                    <th style="width: 10%;">RUSH / REGULAR</th>
+                    <th style="width: 15%;">Purpose/Remarks & Suggested QTY</th>
+                </tr>
+            </thead>
+            <tbody id="items-tbody">
+                <tr>
+                    <td colspan="7" class="text-center py-6 text-slate-400">Loading requisition items...</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Checked by Signoff -->
+        <div class="py-2 px-3 border border-slate-900 mb-3 text-xs flex items-center justify-between bg-slate-50/50">
+            <div>
+                <span class="font-bold text-slate-800">Checked by (Name, signature, date):</span>
+                <span class="font-extrabold ml-2 text-slate-950 underline decoration-slate-400 decoration-1 underline-offset-4" id="checked-by-val">RODELLO LUY</span>
+            </div>
+            <div class="text-[10px] text-slate-400 font-mono">Status: Verified</div>
+        </div>
+
+        <!-- SECTION 4: ISSUANCE -->
+        <div class="section-header">SECTION 4: ISSUANCE</div>
+        <table class="table-grid mb-2" id="issuance-table">
+            <thead>
+                <tr>
+                    <th style="width: 6%;">Item No</th>
+                    <th style="width: 44%;">Material Name</th>
+                    <th style="width: 16%;">Batch/Lot No/Material Code</th>
+                    <th style="width: 11%;">Qty Issued</th>
+                    <th style="width: 9%;">Unit of Measure</th>
+                    <th style="width: 14%;">Remaining Stock</th>
+                </tr>
+            </thead>
+            <tbody id="issuance-tbody">
+                <tr>
+                    <td colspan="6" class="text-center py-4 text-slate-400">No issuance recorded yet.</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Issuance Signoffs -->
+        <div class="grid grid-cols-2 border border-slate-900 mb-3 text-xs bg-slate-50/50">
+            <div class="p-2 border-r border-slate-900">
+                <span class="text-slate-500 font-bold block mb-1">Prepared by:</span>
+                <div class="font-black text-slate-950 text-xs uppercase" id="iss-prep-by">MARK DALANON</div>
+                <div class="text-[10px] text-slate-500 mt-0.5">Warehouse Dispatch Officer</div>
+            </div>
+            <div class="p-2">
+                <span class="text-slate-500 font-bold block mb-1">Verified by:</span>
+                <div class="font-black text-slate-950 text-xs uppercase" id="iss-ver-by">RODELLO LUY</div>
+                <div class="text-[10px] text-slate-500 mt-0.5">Operations / Inventory Supervisor</div>
+            </div>
+        </div>
+
+        <!-- SECTION 5: RECEIVING -->
+        <div class="section-header">SECTION 5: RECEIVING</div>
+        <div class="grid grid-cols-2 border border-slate-900 text-xs bg-slate-50/50">
+            <div class="p-2 border-r border-slate-900">
+                <span class="text-slate-500 font-bold block mb-1">Reviewed by:</span>
+                <div class="font-black text-slate-950 text-xs uppercase" id="rec-rev-by">ANGELICA TAMANO</div>
+                <div class="text-[10px] text-slate-500 mt-0.5">Online Platform Officer (Recipient)</div>
+            </div>
+            <div class="p-2">
+                <span class="text-slate-500 font-bold block mb-1">Verified by:</span>
+                <div class="font-black text-slate-950 text-xs uppercase" id="rec-ver-by">SHARMAINE SANTOS</div>
+                <div class="text-[10px] text-slate-500 mt-0.5">Quality Assurance / Receiving Witness</div>
+            </div>
+        </div>
+
+        <!-- Footer Notice -->
+        <div class="mt-4 pt-2 border-t border-slate-200 flex justify-between text-[10px] text-slate-400">
+            <span>NKB Manufacturing & Trading Corp. — Vyuceutical OPC Online Platforms Operation</span>
+            <span id="footer-timestamp">Generated on 2026-10-29</span>
+        </div>
+
+    </div>
+
+    <script>
+        let currentRequisitions = [];
+        let currentReq = null;
+
+        async function init() {
+            document.getElementById('footer-timestamp').textContent = 'Official Record — ' + new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const reqId = urlParams.get('id') || urlParams.get('req_no');
+
+            try {
+                const res = await fetch('/api/online-platforms/requisitions?limit=100');
+                const data = await res.json();
+                if (data.success && data.data) {
+                    currentRequisitions = data.data;
+                    const picker = document.getElementById('req-picker');
+                    picker.innerHTML = currentRequisitions.map(r => `
+                        <option value="${r.id}" ${r.id === reqId || r.request_number === reqId ? 'selected' : ''}>
+                            ${r.request_number} — ${r.department} (${r.request_date || ''})
+                        </option>
+                    `).join('');
+
+                    const target = reqId 
+                        ? currentRequisitions.find(r => r.id === reqId || r.request_number === reqId)
+                        : currentRequisitions[0];
+
+                    if (target) {
+                        await loadRequisitionDetails(target.id);
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to load requisitions list:', err);
+            }
+        }
+
+        async function switchRequisition(id) {
+            if (!id) return;
+            const url = new URL(window.location);
+            url.searchParams.set('id', id);
+            window.history.replaceState({}, '', url);
+            await loadRequisitionDetails(id);
+        }
+
+        async function loadRequisitionDetails(id) {
+            try {
+                const res = await fetch(`/api/online-platforms/requisitions/${id}`);
+                const json = await res.json();
+                if (!json.success || !json.data) return;
+
+                const req = json.data;
+                currentReq = req;
+
+                document.title = `${req.request_number} - Product Requisition Form`;
+                document.getElementById('top-title').textContent = `${req.request_number} — ${req.department}`;
+
+                // Meta & Header
+                document.getElementById('doc-code').textContent = req.document_code || req.request_number;
+                document.getElementById('doc-rev').textContent = req.revision_no || '00';
+                document.getElementById('doc-effective-date').textContent = req.effective_date || req.request_date || '-';
+
+                // Section 1
+                document.getElementById('req-no').textContent = req.request_number;
+                document.getElementById('req-date').textContent = req.request_date || '-';
+                document.getElementById('req-dept').textContent = (req.department || 'TIKTOK').toUpperCase();
+                document.getElementById('req-urgency').textContent = (req.urgency || 'REGULAR').toUpperCase();
+                document.getElementById('req-by').textContent = (req.requested_by_name || 'ANGELICA TAMANO').toUpperCase();
+                document.getElementById('req-designation').textContent = (req.designation || 'OFFICER').toUpperCase();
+                document.getElementById('checked-by-val').textContent = req.checked_by || 'RODELLO LUY';
+
+                // Category Checkbox
+                const cat = (req.category_type || 'FINISHED PRODUCT').toUpperCase();
+                document.getElementById('cb-raw').textContent = cat.includes('RAW') ? '✓' : '';
+                document.getElementById('cb-pack').textContent = cat.includes('PACK') ? '✓' : '';
+                document.getElementById('cb-fin').textContent = cat.includes('FINISH') ? '✓' : '';
+
+                // Items Table
+                const tbody = document.getElementById('items-tbody');
+                const items = req.items || [];
+                if (items.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-slate-400">No items in this requisition.</td></tr>`;
+                } else {
+                    tbody.innerHTML = items.map((it, idx) => `
+                        <tr>
+                            <td class="text-center font-bold text-slate-600">${it.item_no || (idx + 1)}</td>
+                            <td class="font-bold text-slate-900">${it.material_name}</td>
+                            <td class="text-center text-slate-600 font-mono text-[10px]">${it.batch_lot_no || '-'}</td>
+                            <td class="text-center font-extrabold text-slate-950">${Number(it.required_qty).toLocaleString()}</td>
+                            <td class="text-center font-bold text-slate-700">${it.unit_of_measure || 'PCS'}</td>
+                            <td class="text-center font-bold ${it.urgency === 'RUSH' ? 'text-rose-700' : 'text-slate-700'}">${it.urgency || 'REGULAR'}</td>
+                            <td class="text-slate-800 text-[10.5px]">${it.purpose_remarks || req.purpose || '-'}</td>
+                        </tr>
+                    `).join('');
+                }
+
+                // Section 4: Issuance Table
+                const issTbody = document.getElementById('issuance-tbody');
+                if (items.length === 0) {
+                    issTbody.innerHTML = `<tr><td colspan="6" class="text-center py-3 text-slate-400">No issuance items.</td></tr>`;
+                } else {
+                    issTbody.innerHTML = items.map((it, idx) => {
+                        const issued = it.qty_issued !== undefined && it.qty_issued !== null ? it.qty_issued : it.required_qty;
+                        const remaining = it.remaining_stock !== undefined && it.remaining_stock !== null ? it.remaining_stock : 0;
+                        const notes = it.remaining_stock_notes ? `<span class="text-[10px] text-slate-500 block">${it.remaining_stock_notes}</span>` : '';
+                        const isZeroStock = Number(remaining) === 0;
+
+                        return `
+                            <tr>
+                                <td class="text-center font-bold text-slate-600">${it.item_no || (idx + 1)}</td>
+                                <td class="font-bold text-slate-900">${it.material_name}</td>
+                                <td class="text-center text-slate-600 font-mono text-[10px]">${it.batch_lot_no || '-'}</td>
+                                <td class="text-center font-extrabold text-slate-950">${Number(issued).toLocaleString()}</td>
+                                <td class="text-center font-bold text-slate-700">${it.unit_of_measure || 'PCS'}</td>
+                                <td class="text-center font-black ${isZeroStock ? 'text-rose-700' : 'text-slate-900'}">
+                                    ${Number(remaining).toLocaleString()} ${it.unit_of_measure || 'PCS'}
+                                    ${notes}
+                                </td>
+                            </tr>
+                        `;
+                    }).join('');
+                }
+
+                // Signoffs
+                document.getElementById('iss-prep-by').textContent = req.issuance_prepared_by || 'MARK DALANON';
+                document.getElementById('iss-ver-by').textContent = req.issuance_verified_by || 'RODELLO LUY';
+                document.getElementById('rec-rev-by').textContent = req.receiving_reviewed_by || req.requested_by_name || 'ANGELICA TAMANO';
+                document.getElementById('rec-ver-by').textContent = req.receiving_verified_by || 'SHARMAINE SANTOS';
+
+            } catch (err) {
+                console.error('Error loading requisition details:', err);
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

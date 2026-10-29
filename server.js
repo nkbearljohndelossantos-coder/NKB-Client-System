@@ -155,6 +155,11 @@ app.get(['/print-receipt', '/receipt'], (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'print-receipt.html'));
 });
 
+// Official Finished Product Requisition Form Printable
+app.get(['/print-requisition', '/print-product-requisition'], (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'print-product-requisition.html'));
+});
+
 // Developer Documentation Portal
 app.get(['/api/docs', '/docs', '/developers'], (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'api-docs.html'));
@@ -198,6 +203,7 @@ function mountApiRoutes() {
     app.use('/api/employees', require('./routes/employees'));
     app.use('/api/supply-requests', require('./routes/supplyRequests'));
     app.use('/api/notifications', require('./routes/notifications'));
+    app.use('/api/online-platforms', require('./routes/onlinePlatforms'));
     app.use('/api/chat', require('./routes/chat'));
     app.use('/api/formulations', require('./routes/formulations'));
     app.use('/api/api-keys', require('./routes/apiKeys'));

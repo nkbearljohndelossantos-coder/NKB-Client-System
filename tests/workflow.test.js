@@ -5488,17 +5488,21 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         const adminJs = fs.readFileSync(path.join(__dirname, '../public/js/admin.js'), 'utf8');
         const roleFunctionBody = adminJs.substring(adminJs.indexOf('function applyRoleBasedUI('), adminJs.indexOf('async function loadInitialData('));
 
-        // Ensure no operator role explicitly hides po-monitor
-        assert.strictEqual(roleFunctionBody.includes("hideTab('po-monitor')"), false, 'No role must have hideTab("po-monitor") in applyRoleBasedUI');
-
-        // Ensure key operators explicitly call showTab('po-monitor')
-        ['INVENTORY', 'PURCHASING', 'QC', 'PRODUCTION', 'WAREHOUSE', 'COMPOUNDING', 'ACCOUNTING'].forEach(r => {
+        // Ensure key factory operators explicitly call showTab('po-monitor')
+        ['INVENTORY', 'PURCHASING', 'QC', 'PRODUCTION', 'WAREHOUSE', 'COMPOUNDING'].forEach(r => {
             const roleBlockStart = roleFunctionBody.indexOf(`role === '${r}'`);
             assert.ok(roleBlockStart !== -1, `Role ${r} block must exist in applyRoleBasedUI`);
             const nextElse = roleFunctionBody.indexOf('} else', roleBlockStart);
             const blockContent = roleFunctionBody.substring(roleBlockStart, nextElse !== -1 ? nextElse : roleBlockStart + 500);
             assert.ok(blockContent.includes("showTab('po-monitor')"), `Role ${r} must explicitly show po-monitor`);
         });
+
+        // Ensure ACCOUNTING and Billing role has PO monitor access removed / hidden as requested
+        const acctStart = roleFunctionBody.indexOf("role === 'ACCOUNTING'");
+        assert.ok(acctStart !== -1, "ACCOUNTING role block must exist");
+        const acctNextElse = roleFunctionBody.indexOf('} else', acctStart);
+        const acctBlock = roleFunctionBody.substring(acctStart, acctNextElse !== -1 ? acctNextElse : acctStart + 500);
+        assert.ok(acctBlock.includes("hideTab('po-monitor')"), 'ACCOUNTING role must explicitly hideTab("po-monitor")');
 
         // 3. Verify price masking rules in renderPOMonitorReceipts
         assert.ok(adminJs.includes("canViewPrices = isExecAdmin || ['CEO', 'ACCOUNTING'].includes(userRole)"), 'renderPOMonitorReceipts must restrict commercial price display to authorized financial roles');
@@ -6028,6 +6032,99 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         // Cleanup test PO
         db.prepare('DELETE FROM purchase_order_items WHERE po_id = ?').run(testPoId);
         db.prepare('DELETE FROM purchase_orders WHERE id = ?').run(testPoId);
+    });
+
+    test('TEST 104: Vyuceutical Online Platform Operator, Finished Product Requisitions (Excel Replica), and Accounting PO Monitor Restriction', async () => {
+        const { ROLES } = require('../middleware/rbac');
+        assert.ok(ROLES.VYUCEUTICAL_OPERATOR, 'ROLES must include VYUCEUTICAL_OPERATOR');
+
+        // 1. Verify Online Operator account login
+        const loginRes = await request(app)
+            .post('/api/auth/login')
+            .send({ username: 'online.operator@vyuceutical.com', password: 'Staff123!' });
+        assert.strictEqual(loginRes.status, 200, 'Online operator must login successfully');
+        assert.strictEqual(loginRes.body.success, true);
+        assert.strictEqual(loginRes.body.user.role, 'VYUCEUTICAL_OPERATOR');
+        const operatorToken = loginRes.body.token;
+
+        // 2. Online Platform Inventory: GET and POST
+        const invListRes = await request(app)
+            .get('/api/online-platforms/inventory')
+            .set('Authorization', `Bearer ${operatorToken}`);
+        assert.strictEqual(invListRes.status, 200);
+        assert.strictEqual(invListRes.body.success, true);
+        assert.ok(Array.isArray(invListRes.body.data));
+
+        const addSkuRes = await request(app)
+            .post('/api/online-platforms/inventory')
+            .set('Authorization', `Bearer ${operatorToken}`)
+            .send({
+                product_name: 'TEST BELLA GLOW SERUM 30ML',
+                sku: 'TEST-BGS-30',
+                platform: 'TIKTOK',
+                stock_quantity: 120,
+                unit: 'PCS',
+                reorder_point: 40
+            });
+        assert.strictEqual(addSkuRes.status, 201);
+        assert.strictEqual(addSkuRes.body.success, true);
+        const createdSkuId = addSkuRes.body.data.id;
+
+        // 3. Stock Movement
+        const moveRes = await request(app)
+            .post(`/api/online-platforms/inventory/${createdSkuId}/movement`)
+            .set('Authorization', `Bearer ${operatorToken}`)
+            .send({
+                movement_type: 'ONLINE_SALE',
+                quantity: 20,
+                reference_no: 'TIKTOK-ORD-9999'
+            });
+        assert.strictEqual(moveRes.status, 200);
+        assert.strictEqual(moveRes.body.success, true);
+        assert.strictEqual(Number(moveRes.body.data.stock_quantity), 100);
+
+        // 4. Create Finished Product Requisition (FPR)
+        const fprRes = await request(app)
+            .post('/api/online-platforms/requisitions')
+            .set('Authorization', `Bearer ${operatorToken}`)
+            .send({
+                department: 'TIKTOK',
+                requisition_date: '2026-10-29',
+                urgency: 'RUSH',
+                requested_by: 'ANGELICA TAMANO',
+                designation: 'ONLINE PLATFORM OPERATOR',
+                purpose: 'TIKTOK SELLING',
+                items: [
+                    {
+                        online_inventory_id: createdSkuId,
+                        item_code: 'TEST-BGS-30',
+                        item_name: 'TEST BELLA GLOW SERUM 30ML',
+                        quantity_requested: 50,
+                        unit: 'PCS',
+                        remarks: 'TIKTOK LIVE CAMPAIGN'
+                    }
+                ]
+            });
+        assert.strictEqual(fprRes.status, 201);
+        assert.strictEqual(fprRes.body.success, true);
+        assert.ok(fprRes.body.data.requisition_number.startsWith('FPR -FORM '));
+        const createdReqId = fprRes.body.data.id;
+
+        // 5. Verify Printable Page and HTML UI
+        const printRes = await request(app).get(`/print-product-requisition.html?id=${createdReqId}`);
+        assert.strictEqual(printRes.status, 200);
+        assert.ok(printRes.text.includes('PRODUCT REQUISITION FORM'));
+        assert.ok(printRes.text.includes('PRO-FM-003'));
+
+        // 6. Verify Accounting has PO Monitor restricted in admin.js
+        const adminJs = fs.readFileSync(path.join(__dirname, '../public/js/admin.js'), 'utf8');
+        assert.ok(adminJs.includes("if (tabId === 'po-monitor' && NKB.user && NKB.user.role === 'ACCOUNTING')"));
+
+        // Cleanup
+        db.prepare('DELETE FROM finished_product_requisition_items WHERE requisition_id = ?').run(createdReqId);
+        db.prepare('DELETE FROM finished_product_requisitions WHERE id = ?').run(createdReqId);
+        db.prepare('DELETE FROM online_inventory_movements WHERE inventory_id = ?').run(createdSkuId);
+        db.prepare('DELETE FROM online_platform_inventory WHERE id = ?').run(createdSkuId);
     });
 
     after(() => {

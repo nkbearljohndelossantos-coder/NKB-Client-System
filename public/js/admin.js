@@ -210,7 +210,8 @@ function applyRoleBasedUI() {
         'WAREHOUSE': { title: 'Logistics & Warehouse', badge: 'bg-purple-900/80 text-purple-300 border-purple-700/50' },
         'ACCOUNTING': { title: 'Senior Accountant', badge: 'bg-emerald-900/80 text-emerald-300 border-emerald-700/50' },
         'INVENTORY': { title: 'Inventory Officer', badge: 'bg-teal-900/80 text-teal-300 border-teal-700/50' },
-        'COMPOUNDING': { title: 'Compounding Specialist', badge: 'bg-violet-900/80 text-violet-300 border-violet-700/50' }
+        'COMPOUNDING': { title: 'Compounding Specialist', badge: 'bg-violet-900/80 text-violet-300 border-violet-700/50' },
+        'VYUCEUTICAL_OPERATOR': { title: 'Online Platform Operator', badge: 'bg-rose-900/80 text-rose-300 border-rose-700/50' }
     };
 
     const config = roleMap[role] || { title: role };
@@ -243,7 +244,7 @@ function applyRoleBasedUI() {
     };
 
     // Operator accounts check: Operators must only see operation interface, hide client view link
-    const isOperator = ['PRODUCTION', 'WAREHOUSE', 'QC', 'INVENTORY', 'PURCHASING', 'COMPOUNDING'].includes(role);
+    const isOperator = ['PRODUCTION', 'WAREHOUSE', 'QC', 'INVENTORY', 'PURCHASING', 'COMPOUNDING', 'VYUCEUTICAL_OPERATOR'].includes(role);
     const clientViewLink = document.getElementById('nav-client-view') || document.querySelector('a[href="/client.html"]');
     if (clientViewLink) {
         if (isOperator) {
@@ -258,6 +259,9 @@ function applyRoleBasedUI() {
     if (!isSuperOrExecutive && role !== 'COMPOUNDING') {
         hideGroup('lab');
         hideTab('formulations');
+    }
+    if (!isSuperOrExecutive && role !== 'VYUCEUTICAL_OPERATOR') {
+        hideGroup('online-platforms');
     }
     if (!isSuperOrExecutive) {
         hideGroup('management');
@@ -401,13 +405,14 @@ function applyRoleBasedUI() {
         hideTab('it-management');
         switchTab('raw-materials');
     } else if (role === 'ACCOUNTING') {
-        // Senior Accountant: remove Requisitions, IT Management, and Lab & Formulations.
-        // Keep Clients and Cosmetic Products visible for Senior Accountant, while hiding Staff & Roles, Reports, Audit Trails, Developer API, and IT Management.
+        // Senior Accountant: remove Requisitions, IT Management, Lab & Formulations, and PO Monitor.
+        // Keep Clients and Cosmetic Products visible for Senior Accountant, while hiding Staff & Roles, Reports, Audit Trails, Developer API, IT Management, and PO Monitor.
         hideGroup('lab');
+        hideGroup('online-platforms');
         showGroup('management');
         showTab('clients');
         showTab('products');
-        showTab('po-monitor');
+        hideTab('po-monitor'); // Access strictly removed for billing and accounting
         hideTab('purchasing');
         hideTab('raw-materials');
         hideTab('it-management');
@@ -420,6 +425,38 @@ function applyRoleBasedUI() {
         hideTab('apikeys');
     } else if (role === 'CEO' || role === 'COO' || role === 'ADMIN' || role === 'SUPER_ADMIN') {
         // Full executive & superadmin oversight
+        showGroup('online-platforms');
+        showTab('online-inventory');
+        showTab('product-requisitions');
+    } else if (role === 'VYUCEUTICAL_OPERATOR') {
+        // Vyuceutical Online Platform Operator: manages online platforms inventory and finished product requisitions
+        hideGroup('finance');
+        hideGroup('management');
+        hideGroup('lab');
+        showGroup('online-platforms');
+        showTab('online-inventory');
+        showTab('product-requisitions');
+        hideTab('dashboard');
+        hideTab('orders');
+        hideTab('job-orders');
+        hideTab('production');
+        hideTab('production-dashboard');
+        hideTab('deliveries');
+        hideTab('purchasing');
+        hideTab('raw-materials');
+        hideTab('po-monitor');
+        hideTab('invoices');
+        hideTab('payments');
+        hideTab('payables');
+        hideTab('buffer');
+        hideTab('clients');
+        hideTab('products');
+        hideTab('users');
+        hideTab('reports');
+        hideTab('audit');
+        hideTab('apikeys');
+        hideTab('it-management');
+        switchTab('online-inventory');
     }
 }
 
@@ -535,6 +572,12 @@ function switchTab(tabId) {
         }
     }
 
+    if (tabId === 'po-monitor' && NKB.user && NKB.user.role === 'ACCOUNTING') {
+        NKB.toast('Access Denied: PO Monitor is restricted to operations staff.', 'error');
+        switchTab('invoices');
+        return;
+    }
+
     // Call tab-specific loader
     if (tabId === 'dashboard') loadDashboard();
     else if (tabId === 'orders') loadOrders();
@@ -559,6 +602,8 @@ function switchTab(tabId) {
     else if (tabId === 'audit') loadAuditLogs();
     else if (tabId === 'apikeys') loadApiKeys();
     else if (tabId === 'it-management') loadITManagement();
+    else if (tabId === 'online-inventory') loadOnlineInventory();
+    else if (tabId === 'product-requisitions') loadProductRequisitions();
 }
 
 // -------------------------------------------------------------
@@ -19454,6 +19499,10 @@ let poMonitorIntersectionObserver = null;
  * on the authentic clipboard stack.
  */
 async function loadPOMonitor() {
+    if (NKB.user && NKB.user.role === 'ACCOUNTING') {
+        console.warn('PO Monitor access blocked for ACCOUNTING role.');
+        return;
+    }
     const stack = document.getElementById('po-monitor-stack');
     if (!stack) return;
 
@@ -20429,5 +20478,676 @@ document.addEventListener('keydown', (e) => {
     }, { passive: true });
 })();
 
+// -------------------------------------------------------------
+// ONLINE PLATFORMS INVENTORY & FINISHED PRODUCT REQUISITIONS
+// -------------------------------------------------------------
+let onlineInventoryCache = [];
+let productRequisitionsCache = [];
+let onlineInvSearchTimer = null;
+let fprSearchTimer = null;
 
+async function loadOnlineInventory() {
+    const tbody = document.getElementById('table-online-inventory-body');
+    if (!tbody) return;
 
+    const platform = document.getElementById('online-inv-platform-filter')?.value || 'ALL';
+    const status = document.getElementById('online-inv-status-filter')?.value || '';
+    const search = (document.getElementById('online-inv-search')?.value || '').trim();
+
+    tbody.innerHTML = `<tr><td colspan="7" class="py-8 text-center text-slate-400"><span class="inline-block animate-spin text-xl mr-2">🔄</span>Loading online inventory...</td></tr>`;
+
+    try {
+        let url = `/api/online-platforms/inventory?platform=${encodeURIComponent(platform)}`;
+        if (search) url += `&search=${encodeURIComponent(search)}`;
+        if (status) url += `&status=${encodeURIComponent(status)}`;
+
+        const res = await NKB.api(url);
+        if (res.success && Array.isArray(res.data)) {
+            onlineInventoryCache = res.data;
+            renderOnlineInventoryTable(onlineInventoryCache);
+            updateOnlineInventoryMetrics(onlineInventoryCache);
+        } else {
+            tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-rose-500 font-bold">Failed to load inventory: ${res.message || 'Server error'}</td></tr>`;
+        }
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-rose-500 font-bold">Error loading online inventory: ${err.message}</td></tr>`;
+    }
+}
+
+function updateOnlineInventoryMetrics(items) {
+    const totalSkus = items.length;
+    let totalUnits = 0;
+    let lowCount = 0;
+    let outCount = 0;
+
+    items.forEach(item => {
+        const stock = Number(item.stock_quantity != null ? item.stock_quantity : (item.stock_on_hand || 0));
+        const reorder = Number(item.reorder_point) || 50;
+        totalUnits += stock;
+        if (stock <= 0) outCount++;
+        else if (stock <= reorder) lowCount++;
+    });
+
+    const elSkus = document.getElementById('metric-online-skus');
+    const elUnits = document.getElementById('metric-online-units');
+    const elLow = document.getElementById('metric-online-low');
+    const elOut = document.getElementById('metric-online-out');
+
+    if (elSkus) elSkus.textContent = totalSkus.toLocaleString();
+    if (elUnits) elUnits.textContent = totalUnits.toLocaleString();
+    if (elLow) elLow.textContent = lowCount.toLocaleString();
+    if (elOut) elOut.textContent = outCount.toLocaleString();
+}
+
+function renderOnlineInventoryTable(items) {
+    const tbody = document.getElementById('table-online-inventory-body');
+    if (!tbody) return;
+
+    if (!items || items.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="py-12 text-center text-slate-400">No online inventory SKUs found matching filters.</td></tr>`;
+        return;
+    }
+
+    const platformBadges = {
+        'TIKTOK': '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300">🎵 TikTok Shop</span>',
+        'SHOPEE': '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300">🟠 Shopee</span>',
+        'LAZADA': '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-800 border border-blue-300">🔵 Lazada</span>'
+    };
+
+    tbody.innerHTML = items.map(item => {
+        const stock = Number(item.stock_quantity != null ? item.stock_quantity : (item.stock_on_hand || 0));
+        const reorder = Number(item.reorder_point) || 50;
+        let statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">In Stock</span>';
+        if (stock <= 0) {
+            statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 animate-pulse">Out of Stock</span>';
+        } else if (stock <= reorder) {
+            statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">Low Stock</span>';
+        }
+
+        const platformBadge = platformBadges[item.platform] || `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">${item.platform || 'ONLINE'}</span>`;
+
+        return `
+            <tr class="hover:bg-slate-50/80 transition">
+                <td class="py-3 px-4 font-mono font-bold text-slate-900">${NKB.escapeHTML(item.sku || 'N/A')}</td>
+                <td class="py-3 px-4 font-bold text-slate-800">
+                    <div>${NKB.escapeHTML(item.product_name || '')}</div>
+                    ${item.notes ? `<div class="text-[11px] text-slate-400 font-normal mt-0.5">${NKB.escapeHTML(item.notes)}</div>` : ''}
+                </td>
+                <td class="py-3 px-4">${platformBadge}</td>
+                <td class="py-3 px-4 text-center font-black text-sm ${stock <= 0 ? 'text-rose-600' : (stock <= reorder ? 'text-amber-600' : 'text-slate-900')}">
+                    ${stock.toLocaleString()}
+                </td>
+                <td class="py-3 px-4 text-center text-slate-500 font-bold">${NKB.escapeHTML(item.unit || 'PCS')}</td>
+                <td class="py-3 px-4 text-center">${statusBadge}</td>
+                <td class="py-3 px-4 text-right">
+                    <div class="flex items-center justify-end gap-1.5">
+                        <button onclick="openOnlineMovementModal(${item.id})" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg transition text-[11px] cursor-pointer" title="Adjust / Record Movement">
+                            📦 Move
+                        </button>
+                        <button onclick="openQuickRequisitionForSku('${NKB.escapeHTML(item.product_name)}', '${NKB.escapeHTML(item.sku)}', '${item.platform}')" class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-lg transition text-[11px] cursor-pointer" title="Create Requisition">
+                            📋 Requisition
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function debounceOnlineInvSearch() {
+    clearTimeout(onlineInvSearchTimer);
+    onlineInvSearchTimer = setTimeout(loadOnlineInventory, 300);
+}
+
+// MODAL: ADD ONLINE SKU
+function openAddOnlineSkuModal() {
+    document.getElementById('form-add-online-sku')?.reset();
+    document.getElementById('modal-add-online-sku')?.classList.remove('hidden');
+}
+function closeAddOnlineSkuModal() {
+    document.getElementById('modal-add-online-sku')?.classList.add('hidden');
+}
+async function submitAddOnlineSku(e) {
+    e.preventDefault();
+    const productName = document.getElementById('new-sku-name')?.value?.trim();
+    const sku = document.getElementById('new-sku-code')?.value?.trim();
+    const platform = document.getElementById('new-sku-platform')?.value || 'TIKTOK';
+    const stockOnHand = Number(document.getElementById('new-sku-stock')?.value) || 0;
+    const unit = document.getElementById('new-sku-unit')?.value || 'PCS';
+    const reorderPoint = Number(document.getElementById('new-sku-reorder')?.value) || 50;
+    const notes = document.getElementById('new-sku-notes')?.value?.trim() || null;
+
+    if (!productName) {
+        NKB.toast('Product Name is required', 'error');
+        return;
+    }
+
+    try {
+        const res = await NKB.api('/api/online-platforms/inventory', 'POST', {
+            product_name: productName,
+            sku: sku || undefined,
+            platform,
+            stock_quantity: stockOnHand,
+            unit,
+            reorder_point: reorderPoint,
+            notes
+        });
+
+        if (res.success) {
+            NKB.toast('Online SKU added successfully!', 'success');
+            closeAddOnlineSkuModal();
+            loadOnlineInventory();
+        } else {
+            NKB.toast(res.message || 'Failed to add SKU', 'error');
+        }
+    } catch (err) {
+        NKB.toast(err.message, 'error');
+    }
+}
+
+// MODAL: RECORD STOCK MOVEMENT
+function openOnlineMovementModal(invId) {
+    const item = onlineInventoryCache.find(x => x.id === invId);
+    if (!item) return;
+
+    document.getElementById('movement-inv-id').value = item.id;
+    document.getElementById('movement-modal-title').textContent = `Record Movement - ${item.product_name}`;
+    document.getElementById('movement-modal-sku').textContent = `SKU: ${item.sku || 'N/A'} | Platform: ${item.platform}`;
+    const currStock = Number(item.stock_quantity != null ? item.stock_quantity : (item.stock_on_hand || 0));
+    document.getElementById('movement-current-stock').textContent = `${currStock.toLocaleString()} ${item.unit || 'PCS'}`;
+    document.getElementById('movement-qty').value = '';
+    document.getElementById('movement-ref').value = '';
+
+    document.getElementById('modal-online-movement')?.classList.remove('hidden');
+}
+function closeOnlineMovementModal() {
+    document.getElementById('modal-online-movement')?.classList.add('hidden');
+}
+async function submitOnlineMovement(e) {
+    e.preventDefault();
+    const invId = document.getElementById('movement-inv-id')?.value;
+    const movementType = document.getElementById('movement-type')?.value;
+    const quantity = Number(document.getElementById('movement-qty')?.value);
+    const reference = document.getElementById('movement-ref')?.value?.trim();
+
+    if (!invId || !quantity || quantity <= 0) {
+        NKB.toast('Valid quantity is required', 'error');
+        return;
+    }
+
+    try {
+        const res = await NKB.api(`/api/online-platforms/inventory/${invId}/movement`, 'POST', {
+            movement_type: movementType,
+            quantity,
+            reference_no: reference,
+            notes: reference
+        });
+
+        if (res.success) {
+            NKB.toast('Stock movement recorded!', 'success');
+            closeOnlineMovementModal();
+            loadOnlineInventory();
+        } else {
+            NKB.toast(res.message || 'Failed to record movement', 'error');
+        }
+    } catch (err) {
+        NKB.toast(err.message, 'error');
+    }
+}
+
+// -------------------------------------------------------------
+// FINISHED PRODUCT REQUISITIONS (FPR) CONTROLLER
+// -------------------------------------------------------------
+async function loadProductRequisitions() {
+    const tbody = document.getElementById('table-product-requisitions-body');
+    if (!tbody) return;
+
+    const status = document.getElementById('fpr-status-filter')?.value || '';
+    const dept = document.getElementById('fpr-dept-filter')?.value || 'ALL';
+    const search = (document.getElementById('fpr-search')?.value || '').trim();
+
+    tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-slate-400"><span class="inline-block animate-spin text-xl mr-2">🔄</span>Loading requisitions...</td></tr>`;
+
+    try {
+        let url = '/api/online-platforms/requisitions?';
+        if (status) url += `status=${encodeURIComponent(status)}&`;
+        if (dept && dept !== 'ALL') url += `department=${encodeURIComponent(dept)}&`;
+        if (search) url += `search=${encodeURIComponent(search)}&`;
+
+        const res = await NKB.api(url);
+        if (res.success && Array.isArray(res.data)) {
+            productRequisitionsCache = res.data;
+            renderProductRequisitionsTable(productRequisitionsCache);
+        } else {
+            tbody.innerHTML = `<tr><td colspan="9" class="py-6 text-center text-rose-500 font-bold">Failed to load requisitions: ${res.message || 'Server error'}</td></tr>`;
+        }
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="9" class="py-6 text-center text-rose-500 font-bold">Error loading requisitions: ${err.message}</td></tr>`;
+    }
+}
+
+function renderProductRequisitionsTable(items) {
+    const tbody = document.getElementById('table-product-requisitions-body');
+    if (!tbody) return;
+
+    if (!items || items.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9" class="py-12 text-center text-slate-400">No product requisitions found.</td></tr>`;
+        return;
+    }
+
+    const statusBadges = {
+        'PENDING': '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">⏳ Pending Issuance</span>',
+        'ISSUED': '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-300">📦 Issued by Whse</span>',
+        'RECEIVED': '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">✅ Received & Restocked</span>'
+    };
+
+    tbody.innerHTML = items.map(req => {
+        const statusBadge = statusBadges[req.status] || `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">${req.status}</span>`;
+        const dateStr = req.requisition_date ? req.requisition_date.split('T')[0] : '';
+        const isRush = req.urgency === 'RUSH';
+
+        return `
+            <tr class="hover:bg-slate-50/80 transition">
+                <td class="py-3 px-4 font-mono font-black text-indigo-600">
+                    <a href="javascript:void(0)" onclick="openViewRequisitionModal(${req.id})" class="hover:underline">${NKB.escapeHTML(req.requisition_number)}</a>
+                </td>
+                <td class="py-3 px-4 text-slate-600 font-semibold">${dateStr}</td>
+                <td class="py-3 px-4 font-bold text-slate-800">
+                    <span class="px-2 py-0.5 rounded-md text-[10px] bg-slate-100 text-slate-700 border border-slate-200">${NKB.escapeHTML(req.department || 'TIKTOK')}</span>
+                </td>
+                <td class="py-3 px-4 font-medium text-slate-700">
+                    <div>${NKB.escapeHTML(req.requested_by || 'Angelica Tamano')}</div>
+                    <div class="text-[10px] text-slate-400">${NKB.escapeHTML(req.designation || 'Operator')}</div>
+                </td>
+                <td class="py-3 px-4 text-center font-bold text-slate-700">${Number(req.item_count) || 0}</td>
+                <td class="py-3 px-4 text-center font-black text-slate-900">${(Number(req.total_quantity_requested) || 0).toLocaleString()}</td>
+                <td class="py-3 px-4 text-center">
+                    ${isRush ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300">🔴 RUSH</span>' : '<span class="text-slate-500 font-medium">Regular</span>'}
+                </td>
+                <td class="py-3 px-4 text-center">${statusBadge}</td>
+                <td class="py-3 px-4 text-right">
+                    <div class="flex items-center justify-end gap-1.5">
+                        <button onclick="window.open('/print-product-requisition.html?id=${req.id}', '_blank')" class="px-2.5 py-1 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-lg transition text-[11px] shadow-sm flex items-center gap-1 cursor-pointer" title="Print Official Excel Replica Form">
+                            🖨️ Print
+                        </button>
+                        <button onclick="openViewRequisitionModal(${req.id})" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-lg transition text-[11px] cursor-pointer" title="View details">
+                            👁️ View
+                        </button>
+                        ${req.status === 'ISSUED' ? `
+                            <button onclick="confirmRequisitionReceiving(${req.id})" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition text-[11px] shadow-sm cursor-pointer" title="Confirm Receipt and Restock Online Inventory">
+                                ✅ Receive
+                            </button>
+                        ` : ''}
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function debounceFPRSearch() {
+    clearTimeout(fprSearchTimer);
+    fprSearchTimer = setTimeout(loadProductRequisitions, 300);
+}
+
+// CREATE REQUISITION MODAL
+function openCreateRequisitionModal() {
+    const today = new Date().toISOString().split('T')[0];
+    const dateInput = document.getElementById('new-fpr-date');
+    if (dateInput) dateInput.value = today;
+
+    const reqBy = document.getElementById('new-fpr-requested-by');
+    if (reqBy) {
+        reqBy.value = (NKB.user && NKB.user.name) ? NKB.user.name.toUpperCase() : 'ANGELICA TAMANO';
+    }
+
+    const tbody = document.getElementById('new-fpr-items-tbody');
+    if (tbody) {
+        tbody.innerHTML = '';
+        addRequisitionItemRow(); // Add 1 blank row by default
+    }
+
+    document.getElementById('modal-create-product-requisition')?.classList.remove('hidden');
+}
+
+function closeCreateRequisitionModal() {
+    document.getElementById('modal-create-product-requisition')?.classList.add('hidden');
+}
+
+function openQuickRequisitionForSku(productName, sku, platform) {
+    openCreateRequisitionModal();
+    if (platform) {
+        const deptSelect = document.getElementById('new-fpr-dept');
+        if (deptSelect) deptSelect.value = platform;
+    }
+    const tbody = document.getElementById('new-fpr-items-tbody');
+    if (tbody) {
+        tbody.innerHTML = '';
+        addRequisitionItemRow({ item_name: productName, unit: 'PCS', remarks: 'RESTOCK ONLINE' });
+    }
+}
+
+function addRequisitionItemRow(item = {}) {
+    const tbody = document.getElementById('new-fpr-items-tbody');
+    if (!tbody) return;
+
+    const rowId = 'fpr-row-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+    const tr = document.createElement('tr');
+    tr.id = rowId;
+    tr.className = 'border-b border-slate-100 hover:bg-slate-50/50';
+
+    // Build suggestions datalist from cached online inventory or products
+    const datalistId = 'dl-' + rowId;
+    let datalistOptions = '';
+    if (Array.isArray(onlineInventoryCache) && onlineInventoryCache.length > 0) {
+        datalistOptions = onlineInventoryCache.map(p => `<option value="${NKB.escapeHTML(p.product_name)}">${p.sku ? `[${p.sku}] ` : ''}${NKB.escapeHTML(p.product_name)} (${p.platform})</option>`).join('');
+    }
+
+    tr.innerHTML = `
+        <td class="py-1.5 px-2">
+            <input type="text" list="${datalistId}" class="fpr-item-name w-full p-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:ring-1 focus:ring-rose-500" placeholder="Product name & variant..." value="${NKB.escapeHTML(item.item_name || '')}" required>
+            <datalist id="${datalistId}">${datalistOptions}</datalist>
+        </td>
+        <td class="py-1.5 px-2">
+            <input type="number" class="fpr-item-qty w-full p-1.5 border border-slate-300 rounded-lg text-xs font-bold text-center text-slate-900 focus:ring-1 focus:ring-rose-500" min="1" step="any" placeholder="Qty" value="${item.quantity_requested || ''}" required>
+        </td>
+        <td class="py-1.5 px-2">
+            <select class="fpr-item-unit w-full p-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:ring-1 focus:ring-rose-500">
+                <option value="PCS" ${item.unit === 'PCS' ? 'selected' : ''}>PCS</option>
+                <option value="SET" ${item.unit === 'SET' ? 'selected' : ''}>SET</option>
+                <option value="KG" ${item.unit === 'KG' ? 'selected' : ''}>KG</option>
+            </select>
+        </td>
+        <td class="py-1.5 px-2">
+            <input type="text" class="fpr-item-remarks w-full p-1.5 border border-slate-300 rounded-lg text-xs font-medium text-slate-700" placeholder="e.g. TIKTOK LIVE SELLING" value="${NKB.escapeHTML(item.remarks || '')}">
+        </td>
+        <td class="py-1.5 px-2 text-center">
+            <button type="button" onclick="removeRequisitionItemRow('${rowId}')" class="p-1 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50 transition cursor-pointer" title="Remove row">
+                ❌
+            </button>
+        </td>
+    `;
+    tbody.appendChild(tr);
+}
+
+function removeRequisitionItemRow(rowId) {
+    const row = document.getElementById(rowId);
+    if (row) row.remove();
+}
+
+async function submitCreateProductRequisition(e) {
+    e.preventDefault();
+
+    const department = document.getElementById('new-fpr-dept')?.value || 'TIKTOK';
+    const requisitionDate = document.getElementById('new-fpr-date')?.value;
+    const urgency = document.getElementById('new-fpr-urgency')?.value || 'REGULAR';
+    const requestedBy = document.getElementById('new-fpr-requested-by')?.value?.trim();
+    const designation = document.getElementById('new-fpr-designation')?.value?.trim() || 'OFFICER';
+    const purpose = document.getElementById('new-fpr-purpose')?.value?.trim() || '';
+
+    const rowEls = document.querySelectorAll('#new-fpr-items-tbody tr');
+    if (!rowEls || rowEls.length === 0) {
+        NKB.toast('Please add at least one item to the requisition', 'error');
+        return;
+    }
+
+    const items = [];
+    for (const row of rowEls) {
+        const name = row.querySelector('.fpr-item-name')?.value?.trim();
+        const qty = Number(row.querySelector('.fpr-item-qty')?.value);
+        const unit = row.querySelector('.fpr-item-unit')?.value || 'PCS';
+        const remarks = row.querySelector('.fpr-item-remarks')?.value?.trim() || '';
+
+        if (!name || !qty || qty <= 0) {
+            NKB.toast('Please provide valid product name and quantity for all rows', 'error');
+            return;
+        }
+
+        // Try to match with existing inventory item
+        const matchedInv = onlineInventoryCache.find(x => x.product_name && x.product_name.toUpperCase() === name.toUpperCase());
+
+        items.push({
+            online_inventory_id: matchedInv ? matchedInv.id : null,
+            item_code: matchedInv ? matchedInv.sku : null,
+            item_name: name,
+            quantity_requested: qty,
+            unit,
+            remarks
+        });
+    }
+
+    try {
+        const payload = {
+            department,
+            requisition_date: requisitionDate,
+            urgency,
+            requested_by: requestedBy,
+            designation,
+            purpose,
+            items
+        };
+
+        const res = await NKB.api('/api/online-platforms/requisitions', 'POST', payload);
+        if (res.success) {
+            NKB.toast(`Requisition ${res.data.requisition_number} created successfully!`, 'success');
+            closeCreateRequisitionModal();
+            loadProductRequisitions();
+
+            // Ask if user wants to print immediately
+            if (confirm(`Finished Product Requisition ${res.data.requisition_number} generated successfully!\n\nWould you like to open the printable FPR Excel replica form now?`)) {
+                window.open(`/print-product-requisition.html?id=${res.data.id}`, '_blank');
+            }
+        } else {
+            NKB.toast(res.message || 'Failed to create requisition', 'error');
+        }
+    } catch (err) {
+        NKB.toast(err.message, 'error');
+    }
+}
+
+// VIEW REQUISITION MODAL & RECEIVING
+async function openViewRequisitionModal(reqId) {
+    const modal = document.getElementById('modal-view-product-requisition');
+    const content = document.getElementById('view-fpr-content');
+    const actions = document.getElementById('view-fpr-actions');
+    if (!modal || !content) return;
+
+    modal.classList.remove('hidden');
+    content.innerHTML = `<div class="py-12 text-center text-slate-400"><span class="inline-block animate-spin text-xl mr-2">🔄</span>Loading requisition #${reqId}...</div>`;
+    if (actions) actions.innerHTML = '';
+
+    try {
+        const res = await NKB.api(`/api/online-platforms/requisitions/${reqId}`);
+        if (!res.success || !res.data) {
+            content.innerHTML = `<div class="py-8 text-center text-rose-500 font-bold">Failed to load requisition: ${res.message || 'Not found'}</div>`;
+            return;
+        }
+
+        const req = res.data;
+        document.getElementById('view-fpr-title').textContent = `Requisition ${req.requisition_number}`;
+        document.getElementById('view-fpr-subtitle').textContent = `Doc Code: ${req.document_code || 'PRO-FM-003'} | Rev: ${req.revision_no || '00'}`;
+
+        const isIssued = req.status === 'ISSUED';
+        const isReceived = req.status === 'RECEIVED';
+        const isPending = req.status === 'PENDING';
+
+        const statusBadges = {
+            'PENDING': '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300">⏳ Pending Warehouse Issuance</span>',
+            'ISSUED': '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-300">📦 Issued by Warehouse</span>',
+            'RECEIVED': '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">✅ Received & Stocked</span>'
+        };
+
+        content.innerHTML = `
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                <div>
+                    <span class="text-[10px] text-slate-400 font-bold uppercase block">Status</span>
+                    <div class="mt-1">${statusBadges[req.status] || req.status}</div>
+                </div>
+                <div>
+                    <span class="text-[10px] text-slate-400 font-bold uppercase block">Department / Platform</span>
+                    <div class="font-black text-slate-800 mt-1">${NKB.escapeHTML(req.department || 'TIKTOK')}</div>
+                </div>
+                <div>
+                    <span class="text-[10px] text-slate-400 font-bold uppercase block">Date of Request</span>
+                    <div class="font-bold text-slate-700 mt-1">${req.requisition_date ? req.requisition_date.split('T')[0] : ''}</div>
+                </div>
+                <div>
+                    <span class="text-[10px] text-slate-400 font-bold uppercase block">Urgency</span>
+                    <div class="font-black mt-1 ${req.urgency === 'RUSH' ? 'text-rose-600' : 'text-slate-700'}">${req.urgency}</div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 text-xs bg-white p-3 rounded-xl border border-slate-200">
+                <div>
+                    <span class="text-[10px] text-slate-400 font-bold uppercase block">Requested By</span>
+                    <div class="font-bold text-slate-900">${NKB.escapeHTML(req.requested_by || 'Angelica Tamano')} (${NKB.escapeHTML(req.designation || 'Officer')})</div>
+                </div>
+                <div>
+                    <span class="text-[10px] text-slate-400 font-bold uppercase block">Purpose / Remarks</span>
+                    <div class="font-semibold text-slate-700">${NKB.escapeHTML(req.purpose || 'None')}</div>
+                </div>
+            </div>
+
+            <!-- Items Table -->
+            <div class="space-y-2">
+                <span class="text-[11px] font-black uppercase tracking-wider text-slate-700 block">Requested Items</span>
+                <div class="overflow-x-auto border border-slate-200 rounded-xl">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
+                            <tr>
+                                <th class="py-2 px-3">Item #</th>
+                                <th class="py-2 px-3">Finished Product Description</th>
+                                <th class="py-2 px-3 text-center">Req Qty</th>
+                                <th class="py-2 px-3 text-center">Issued Qty</th>
+                                <th class="py-2 px-3 text-center">Unit</th>
+                                <th class="py-2 px-3">Remarks</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            ${(req.items || []).map((item, idx) => `
+                                <tr>
+                                    <td class="py-2 px-3 text-slate-400 font-mono font-bold">${idx + 1}</td>
+                                    <td class="py-2 px-3 font-bold text-slate-900">${NKB.escapeHTML(item.item_name)}</td>
+                                    <td class="py-2 px-3 text-center font-black text-slate-800">${Number(item.quantity_requested).toLocaleString()}</td>
+                                    <td class="py-2 px-3 text-center font-black ${Number(item.quantity_issued) > 0 ? 'text-indigo-600' : 'text-slate-400'}">${Number(item.quantity_issued || 0).toLocaleString()}</td>
+                                    <td class="py-2 px-3 text-center text-slate-500 font-bold">${NKB.escapeHTML(item.unit || 'PCS')}</td>
+                                    <td class="py-2 px-3 text-slate-500">${NKB.escapeHTML(item.remarks || '-')}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Issuance & Receiving Signoffs Section -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                    <span class="text-[10px] text-slate-400 font-bold uppercase block">Warehouse Issuance</span>
+                    <div class="font-bold text-slate-800">Issued By: <span class="text-slate-900 font-black">${NKB.escapeHTML(req.issued_by || 'Pending')}</span></div>
+                    ${req.date_issued ? `<div class="text-[11px] text-slate-500">Date Issued: ${req.date_issued.split('T')[0]}</div>` : ''}
+                </div>
+                <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                    <span class="text-[10px] text-slate-400 font-bold uppercase block">Platform Operator Receiving</span>
+                    <div class="font-bold text-slate-800">Received By: <span class="text-slate-900 font-black">${NKB.escapeHTML(req.received_by || 'Pending')}</span></div>
+                    ${req.date_received ? `<div class="text-[11px] text-slate-500">Date Received: ${req.date_received.split('T')[0]}</div>` : ''}
+                </div>
+            </div>
+        `;
+
+        // Render Action Buttons
+        if (actions) {
+            let actHtml = `
+                <button type="button" onclick="window.open('/print-product-requisition.html?id=${req.id}', '_blank')" class="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-xl text-xs shadow-sm flex items-center gap-1.5 cursor-pointer">
+                    🖨️ Print Requisition Form
+                </button>
+            `;
+
+            if (isPending) {
+                // If user is warehouse, admin, or executive, they can issue items
+                const canIssue = ['SUPER_ADMIN', 'ADMIN', 'CEO', 'COO', 'WAREHOUSE'].includes(NKB.user.role);
+                if (canIssue) {
+                    actHtml += `
+                        <button type="button" onclick="promptIssueRequisition(${req.id})" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-md shadow-indigo-600/20 cursor-pointer">
+                            📦 Issue Requisition Items
+                        </button>
+                    `;
+                }
+            } else if (isIssued) {
+                actHtml += `
+                    <button type="button" onclick="confirmRequisitionReceiving(${req.id})" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-md shadow-emerald-600/20 cursor-pointer">
+                        ✅ Confirm Receipt & Restock Online Inventory
+                    </button>
+                `;
+            }
+
+            actions.innerHTML = actHtml;
+        }
+    } catch (err) {
+        content.innerHTML = `<div class="py-8 text-center text-rose-500 font-bold">Error: ${err.message}</div>`;
+    }
+}
+
+function closeViewRequisitionModal() {
+    document.getElementById('modal-view-product-requisition')?.classList.add('hidden');
+}
+
+async function promptIssueRequisition(reqId) {
+    if (!confirm('Confirm warehouse issuance for all requested items on this Requisition?')) return;
+    try {
+        const res = await NKB.api(`/api/online-platforms/requisitions/${reqId}/issue`, 'POST', {});
+        if (res.success) {
+            NKB.toast('Requisition items successfully issued by warehouse!', 'success');
+            openViewRequisitionModal(reqId);
+            loadProductRequisitions();
+        } else {
+            NKB.toast(res.message || 'Issuance failed', 'error');
+        }
+    } catch (err) {
+        NKB.toast(err.message, 'error');
+    }
+}
+
+async function confirmRequisitionReceiving(reqId) {
+    if (!confirm('Confirm that you have physically received these finished products?\n\nThis will automatically restock your Online Platform Inventory.')) return;
+    try {
+        const res = await NKB.api(`/api/online-platforms/requisitions/${reqId}/receive`, 'POST', {});
+        if (res.success) {
+            NKB.toast('Items received and added to Online Platform Inventory!', 'success');
+            closeViewRequisitionModal();
+            loadProductRequisitions();
+            if (document.getElementById('view-online-inventory') && !document.getElementById('view-online-inventory').classList.contains('hidden')) {
+                loadOnlineInventory();
+            }
+        } else {
+            NKB.toast(res.message || 'Receiving failed', 'error');
+        }
+    } catch (err) {
+        NKB.toast(err.message, 'error');
+    }
+}
+
+// Expose globals for onclick handlers
+window.loadOnlineInventory = loadOnlineInventory;
+window.renderOnlineInventoryTable = renderOnlineInventoryTable;
+window.updateOnlineInventoryMetrics = updateOnlineInventoryMetrics;
+window.debounceOnlineInvSearch = debounceOnlineInvSearch;
+window.openAddOnlineSkuModal = openAddOnlineSkuModal;
+window.closeAddOnlineSkuModal = closeAddOnlineSkuModal;
+window.submitAddOnlineSku = submitAddOnlineSku;
+window.openOnlineMovementModal = openOnlineMovementModal;
+window.closeOnlineMovementModal = closeOnlineMovementModal;
+window.submitOnlineMovement = submitOnlineMovement;
+
+window.loadProductRequisitions = loadProductRequisitions;
+window.renderProductRequisitionsTable = renderProductRequisitionsTable;
+window.debounceFPRSearch = debounceFPRSearch;
+window.openCreateRequisitionModal = openCreateRequisitionModal;
+window.closeCreateRequisitionModal = closeCreateRequisitionModal;
+window.openQuickRequisitionForSku = openQuickRequisitionForSku;
+window.addRequisitionItemRow = addRequisitionItemRow;
+window.removeRequisitionItemRow = removeRequisitionItemRow;
+window.submitCreateProductRequisition = submitCreateProductRequisition;
+window.openViewRequisitionModal = openViewRequisitionModal;
+window.closeViewRequisitionModal = closeViewRequisitionModal;
+window.promptIssueRequisition = promptIssueRequisition;
+window.confirmRequisitionReceiving = confirmRequisitionReceiving;
