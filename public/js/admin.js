@@ -8120,44 +8120,67 @@ async function openCreatePOModal(options = {}) {
     adminPOCatalog = cachedProducts.slice();
 
     const isBufferStockInitial = !!(options && options.is_buffer_stock);
+    const todayDate = new Date().toISOString().split('T')[0];
+    const currentUserName = NKB.user?.full_name || NKB.user?.name || 'Staff User';
 
     root.innerHTML = `
-        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-2 sm:p-4 md:p-6 z-50 overflow-y-auto">
-            <div class="bg-white rounded-2xl max-w-4xl xl:max-w-5xl w-full p-4 sm:p-6 md:p-7 shadow-2xl space-y-4 max-h-[92vh] flex flex-col my-auto border border-slate-200">
-                <div class="flex justify-between items-center border-b border-slate-100 pb-3 flex-shrink-0">
-                    <div>
-                        <h3 class="text-base sm:text-lg font-bold text-slate-900">${isBufferStockInitial ? '🛡️ Create Buffer Stock Purchase Order' : 'Create Multi-Item Purchase Order (PO)'}</h3>
-                        <p class="text-xs text-slate-500">${isBufferStockInitial ? 'Manufacture inventory specifically for client buffer stock reserve' : 'Order multiple cosmetic products with client-specific pricing'}</p>
+        <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto">
+            <div class="bg-white rounded-2xl max-w-6xl xl:max-w-7xl w-full p-4 sm:p-6 shadow-2xl space-y-3.5 max-h-[95vh] flex flex-col my-auto border border-slate-200">
+                <!-- Modal Top Header -->
+                <div class="flex justify-between items-center border-b border-slate-200 pb-2.5 flex-shrink-0">
+                    <div class="flex items-center gap-3">
+                        <h3 class="text-sm sm:text-base font-semibold text-slate-700 tracking-tight">Creating Purchase Order</h3>
                     </div>
-                    <button onclick="closeModal()" title="Close (Esc)" class="text-slate-400 hover:text-slate-600 font-bold text-lg flex items-center gap-1.5 cursor-pointer">
-                        <kbd class="text-[10px] font-mono text-slate-400 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded font-normal">Esc</kbd>
-                        <span>&times;</span>
-                    </button>
+                    <div class="flex items-center gap-3">
+                        <button type="button" onclick="previewCurrentPOPrint()" title="Print Preview" class="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition text-base cursor-pointer">
+                            🖨️
+                        </button>
+                        <button type="button" onclick="closeModal()" title="Close (Esc)" class="text-slate-400 hover:text-slate-600 font-bold text-lg flex items-center gap-1.5 cursor-pointer">
+                            <kbd class="text-[10px] font-mono text-slate-400 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded font-normal">Esc</kbd>
+                            <span>&times;</span>
+                        </button>
+                    </div>
                 </div>
-                <form id="form-create-po" onsubmit="submitCreatePO(event)" class="space-y-4 text-xs font-normal flex-1 overflow-y-auto pr-1">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+
+                <form id="form-create-po" onsubmit="submitCreatePO(event, 'PENDING')" class="space-y-3 text-xs font-normal flex-1 overflow-y-auto pr-1">
+                    <!-- Upper 4-Column Metadata Grid matching Reference Layout -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-white p-3 rounded-xl border border-slate-200 text-xs">
+                        <!-- Row 1 -->
                         <div>
-                            <label class="block text-slate-500 font-medium text-xs mb-1.5 uppercase tracking-wider">Select Client *</label>
-                            <select id="po-client-id" onchange="onAdminPOClientChanged()" required class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white font-normal text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
+                            <label class="block text-slate-600 font-semibold text-[11px] mb-1">Company</label>
+                            <select id="create-po-company" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white text-slate-800 text-xs focus:ring-1 focus:ring-indigo-500">
+                                <option value="Vyuceutical OPC">Vyuceutical OPC</option>
+                                <option value="NKB Manufacturing Corporation" selected>NKB Manufacturing Corporation</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 font-semibold text-[11px] mb-1">Sales Order Date</label>
+                            <input type="date" id="create-po-date" value="${todayDate}" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white text-slate-800 text-xs focus:ring-1 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 font-semibold text-[11px] mb-1">Date Created</label>
+                            <input type="date" id="create-po-date-created" value="${todayDate}" readonly class="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-slate-50 text-slate-600 text-xs cursor-not-allowed">
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 font-semibold text-[11px] mb-1">Sales Order Number</label>
+                            <input type="text" id="create-po-customer-po-number" placeholder="SO-XXXX / PO-XXXX" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white text-slate-800 text-xs font-mono focus:ring-1 focus:ring-indigo-500">
+                        </div>
+
+                        <!-- Row 2 -->
+                        <div>
+                            <label class="block text-slate-600 font-semibold text-[11px] mb-1">Customer *</label>
+                            <select id="po-client-id" onchange="onAdminPOClientChanged()" required class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white text-slate-800 text-xs focus:ring-1 focus:ring-indigo-500">
                                 ${cachedClients.map(c => {
                                     const isVyu = c.is_vyuceutical_ops === 1 || (c.company_name && c.company_name.toLowerCase().includes('vyuceutical'));
-                                    const label = isVyu ? `Vyuceutical OPC - ${c.contact_person || c.company_name}` : c.company_name;
+                                    const label = isVyu ? `VYU - ${c.contact_person || c.company_name}` : c.company_name;
                                     return `<option value="${c.id}">${label}</option>`;
                                 }).join('')}
                             </select>
                         </div>
                         <div>
-                            <label class="block text-slate-500 font-medium text-xs mb-1.5 uppercase tracking-wider">Customer PO # (Optional)</label>
-                            <input type="text" id="create-po-customer-po-number" placeholder="e.g. PO-CUST-2026-001" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white font-normal text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
-                        </div>
-                        <div>
-                            <label class="block text-slate-500 font-medium text-xs mb-1.5 uppercase tracking-wider">Delivery Date (Optional)</label>
-                            <input type="date" id="create-po-delivery-date" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white font-normal text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
-                        </div>
-                        <div>
-                            <label class="block text-slate-500 font-medium text-xs mb-1.5 uppercase tracking-wider">Term of Payment *</label>
-                            <select id="create-po-form-of-payment" onchange="toggleCustomPOTerm('create')" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white font-normal text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
-                                <option value="COD" selected>COD (Cash on Delivery)</option>
+                            <label class="block text-slate-600 font-semibold text-[11px] mb-1">Terms *</label>
+                            <select id="create-po-form-of-payment" onchange="toggleCustomPOTerm('create')" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white text-slate-800 text-xs focus:ring-1 focus:ring-indigo-500">
+                                <option value="COD" selected>COD</option>
                                 <option value="7d">7d (7 Days)</option>
                                 <option value="15d">15d (15 Days)</option>
                                 <option value="30d">30d (30 Days)</option>
@@ -8167,144 +8190,159 @@ async function openCreatePOModal(options = {}) {
                                 <option value="105d">105d (105 Days)</option>
                                 <option value="CUSTOM">Custom Term...</option>
                             </select>
-                            <input type="text" id="create-po-form-of-payment-custom" placeholder="e.g. 50% DP, 50% upon delivery..." class="hidden mt-1.5 w-full px-3 py-2 border border-slate-200 rounded-xl bg-white text-xs font-normal text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
+                            <input type="text" id="create-po-form-of-payment-custom" placeholder="e.g. 50% DP, 50% on delivery..." class="hidden mt-1 w-full px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white text-xs">
                         </div>
                         <div>
-                            <label class="block text-slate-500 font-medium text-xs mb-1.5 uppercase tracking-wider">Order Category</label>
-                            <select id="create-po-category" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white font-normal text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
-                                <option value="">Auto-Detect from Items</option>
+                            <label class="block text-slate-600 font-semibold text-[11px] mb-1">Created By</label>
+                            <input type="text" id="create-po-created-by" value="${currentUserName}" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white text-slate-800 text-xs focus:ring-1 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 font-semibold text-[11px] mb-1">Status</label>
+                            <input type="text" id="create-po-status" value="Draft" readonly class="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-slate-50 text-slate-700 font-semibold text-xs cursor-not-allowed">
+                        </div>
+
+                        <!-- Row 3 -->
+                        <div>
+                            <label class="block text-slate-600 font-semibold text-[11px] mb-1">Description</label>
+                            <input type="text" id="create-po-description" placeholder="e.g. BELLA SKIN" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white text-slate-800 text-xs focus:ring-1 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 font-semibold text-[11px] mb-1">Due Date (Optional)</label>
+                            <input type="date" id="create-po-delivery-date" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white text-slate-800 text-xs focus:ring-1 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 font-semibold text-[11px] mb-1">Down Payment %</label>
+                            <input type="number" step="0.01" min="0" max="100" id="create-po-downpayment-pct" value="0.00" oninput="calculateAdminPOTotals()" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white text-slate-800 text-xs font-mono text-right focus:ring-1 focus:ring-indigo-500">
+                        </div>
+                        <div class="flex items-center justify-between gap-2 pt-3">
+                            <label class="flex items-center gap-1.5 cursor-pointer select-none">
+                                <input type="checkbox" id="create-po-is-buffer-stock" ${isBufferStockInitial ? 'checked' : ''} onchange="onBufferStockToggle(this.checked)" class="w-4 h-4 text-purple-600 rounded border-purple-300 focus:ring-purple-500">
+                                <span class="text-[11px] font-bold text-purple-900">🛡️ Buffer Stock</span>
+                            </label>
+                            <select id="create-po-category" class="px-2 py-1 border border-slate-300 rounded-lg bg-white text-slate-700 text-xs">
+                                <option value="">Category: Auto</option>
                                 ${(window.cachedOrderCategories || []).map(cat => `<option value="${cat.name}" ${isBufferStockInitial && cat.name === 'Buffer Stocks' ? 'selected' : ''}>${cat.name}</option>`).join('')}
                             </select>
+                            <input type="hidden" id="po-billing-policy" value="${isBufferStockInitial ? 'FIXED_PO_BUFFER' : 'ACTUAL_DELIVERY'}">
                         </div>
                     </div>
 
-                    <!-- Buffer Stock Checkbox & Billing Policy Selector -->
-                    <div class="p-3 bg-purple-50/70 border border-purple-200 rounded-xl flex items-center justify-between gap-3">
-                        <label class="flex items-center gap-2.5 cursor-pointer select-none">
-                            <input type="checkbox" id="create-po-is-buffer-stock" ${isBufferStockInitial ? 'checked' : ''} onchange="onBufferStockToggle(this.checked)" class="w-4 h-4 text-purple-600 rounded border-purple-300 focus:ring-purple-500">
-                            <div>
-                                <span class="text-xs font-bold text-purple-950 flex items-center gap-1.5">
-                                    <span>🛡️</span> Purchase Order for Client Buffer Stocks
-                                </span>
-                                <span class="text-[11px] text-purple-700 block">Manufacture to hold stock in reserve; automatically routes to Client Buffer Stock inventory upon DR acceptance.</span>
-                            </div>
-                        </label>
-                        <input type="hidden" id="po-billing-policy" value="${isBufferStockInitial ? 'FIXED_PO_BUFFER' : 'ACTUAL_DELIVERY'}">
-                    </div>
-
-                    <!-- Multi-Brand Search with Suggestions -->
-                    <div class="p-3.5 bg-slate-50/70 border border-slate-200/90 rounded-2xl space-y-2.5 relative shadow-sm" id="po-search-wrapper">
-                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                            <div class="flex items-center gap-2">
-                                <span class="text-sm">🔍</span>
-                                <span class="text-xs font-semibold text-slate-800 tracking-wide">Search & Add Products</span>
-                                <span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-medium uppercase border border-indigo-200/60">Multi-Brand Order</span>
-                            </div>
-                            <div class="flex items-center gap-2 w-full sm:w-auto" id="po-brand-filter-container">
-                                <label for="po-brand-select" class="text-[11px] font-normal text-slate-500 whitespace-nowrap">Filter Brand:</label>
-                                <select id="po-brand-select" onchange="onAdminPOBrandFilterChanged()" class="px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white font-normal text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition">
-                                    <option value="ALL">-- All Brands --</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <!-- Search input + Search button -->
-                        <div class="relative">
-                            <div class="flex items-stretch gap-2">
-                                <div class="relative flex-1">
-                                    <input type="text" 
-                                           id="po-product-search-input" 
-                                           oninput="handlePOSearchInput(this.value)" 
-                                           onkeydown="handlePOSearchKeydown(event)"
-                                           onfocus="showPOSuggestions()"
-                                           placeholder="Type product name, SKU, or brand (e.g. Amber Romance, Toner, Sunscreen, BSSA)..." 
-                                           autocomplete="off"
-                                           class="w-full pl-9 pr-8 py-2 text-xs border border-slate-200 rounded-xl bg-white font-normal text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-sm transition">
-                                    <span class="absolute left-3 top-2.5 text-slate-400 text-xs">🔍</span>
-                                    <button type="button" 
-                                            id="po-search-clear-btn" 
-                                            onclick="clearPOSearch()" 
-                                            class="hidden absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 text-xs px-1 font-bold">✕</button>
-                                </div>
-                                <button type="button" 
-                                        id="po-search-btn" 
-                                        onclick="triggerPOSearchBtn()" 
-                                        class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-medium transition flex items-center gap-1.5 shadow-sm shadow-indigo-600/20 active:scale-95">
-                                    <span>🔍</span>
-                                    <span>Search Product</span>
-                                </button>
-                            </div>
-
+                    <!-- Quick Multi-Brand Search with Suggestions -->
+                    <div class="p-2.5 bg-slate-50/80 border border-slate-200 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs" id="po-search-wrapper">
+                        <div class="flex items-center gap-2 flex-1 min-w-[260px] relative">
+                            <span class="text-slate-400">🔍</span>
+                            <input type="text" 
+                                   id="po-product-search-input" 
+                                   oninput="handlePOSearchInput(this.value)" 
+                                   onkeydown="handlePOSearchKeydown(event)"
+                                   onfocus="showPOSuggestions()"
+                                   placeholder="Quick search product name or SKU to add..." 
+                                   autocomplete="off"
+                                   class="w-full pl-2 pr-7 py-1.5 border border-slate-200 rounded-lg bg-white text-xs text-slate-800 focus:ring-1 focus:ring-indigo-500">
+                            <button type="button" 
+                                    id="po-search-clear-btn" 
+                                    onclick="clearPOSearch()" 
+                                    class="hidden absolute right-2 text-slate-400 hover:text-slate-600 font-bold">✕</button>
                             <!-- Floating Suggestions Dropdown -->
                             <div id="po-suggestions-container" 
-                                 class="hidden absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 max-h-72 overflow-y-auto divide-y divide-slate-100">
-                                <!-- Populated dynamically by renderPOSuggestions() -->
+                                 class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 max-h-64 overflow-y-auto divide-y divide-slate-100">
                             </div>
                         </div>
-                        <p id="po-search-note" class="text-[11px] text-slate-500 font-normal flex items-center gap-1.5">
-                            <span>💡</span>
-                            <span>Order products from different brands in the same PO. Click any suggestion to add it to the table below.</span>
-                        </p>
-                    </div>
-
-                    <!-- Line Items Section -->
-                    <div class="space-y-2.5 pt-2 border-t border-slate-100">
-                        <div class="flex justify-between items-center">
-                            <div class="flex items-center gap-2">
-                                <span class="text-xs font-semibold uppercase tracking-wider text-slate-700">Order Products (Line Items)</span>
-                                <span class="text-[11px] text-slate-400 font-normal">· Clean selection & quantities</span>
-                            </div>
-                            <button type="button" onclick="addAdminPOLineItem()" class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 rounded-lg text-xs font-medium transition flex items-center gap-1.5 shadow-sm">
-                                <span>➕</span><span>Add Product Line</span>
+                        <div class="flex items-center gap-2">
+                            <select id="po-brand-select" onchange="onAdminPOBrandFilterChanged()" class="px-2 py-1.5 text-xs border border-slate-200 rounded-lg bg-white text-slate-700">
+                                <option value="ALL">All Brands</option>
+                            </select>
+                            <button type="button" onclick="addAdminPOLineItem()" class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg font-bold text-xs transition flex items-center gap-1 shadow-2xs">
+                                <span>➕</span><span>Add Line</span>
                             </button>
                         </div>
-
-                        <div class="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-                            <div class="max-h-72 sm:max-h-80 overflow-y-auto overflow-x-auto">
-                                <table class="w-full text-left text-xs">
-                                    <thead class="bg-slate-50/90 backdrop-blur-sm border-b border-slate-200 text-slate-500 font-medium text-[11px] uppercase tracking-wider sticky top-0 z-10 shadow-sm">
-                                        <tr>
-                                            <th class="py-3 px-3.5">Product</th>
-                                            <th class="py-3 px-3.5 w-32">Target Qty (pcs)</th>
-                                            <th class="py-3 px-3.5 w-36">Unit Price (₱)</th>
-                                            <th class="py-3 px-3.5 w-36">Delivery Date</th>
-                                            <th class="py-3 px-3.5 w-32">Subtotal (₱)</th>
-                                            <th class="py-3 px-2 w-12 text-center">Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="admin-po-lines-body" class="divide-y divide-slate-100 font-normal">
-                                        <!-- Dynamic Rows -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
                     </div>
 
-                    <!-- Summary & Totals -->
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-slate-50/70 rounded-2xl border border-slate-200/80 mt-3">
-                        <div>
-                            <label class="block text-xs font-medium text-slate-500 mb-1.5 uppercase tracking-wider">Packaging / Batch Notes</label>
-                            <textarea id="po-notes" rows="2" placeholder="Formulation variants, packaging specifics..." class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white text-xs text-slate-700 font-normal focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm"></textarea>
-                        </div>
-                        <div class="space-y-2 text-right flex flex-col justify-center">
-                            <div class="text-xs text-slate-500 font-normal flex justify-between sm:justify-end gap-3">
-                                <span>Total Items:</span>
-                                <strong id="admin-po-total-items" class="text-slate-700 font-medium font-mono">0</strong>
-                            </div>
-                            <div class="text-xs text-slate-500 font-normal flex justify-between sm:justify-end gap-3">
-                                <span>Total Target Quantity:</span>
-                                <strong id="admin-po-total-qty" class="text-slate-700 font-medium font-mono">0 pcs</strong>
-                            </div>
-                            <div class="pt-2 border-t border-slate-200 flex justify-between sm:justify-end items-baseline gap-3">
-                                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Grand Total:</span>
-                                <span id="admin-po-grand-total" class="text-xl font-bold text-indigo-600 font-mono tracking-tight">₱0.00</span>
-                            </div>
-                        </div>
+                    <!-- Line Items Table matching Reference Columns: Description, Item, Stock, Cost, UOM, Quantity, Price, Subtotal, Inclusive, VAT, Discount, Total, Action -->
+                    <div class="border border-slate-200 rounded-xl overflow-x-auto shadow-2xs bg-white">
+                        <table class="w-full text-left text-xs min-w-[1020px] border-collapse">
+                            <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold text-[11px]">
+                                <tr>
+                                    <th class="py-2.5 px-2.5" style="width: 14%;">Description</th>
+                                    <th class="py-2.5 px-2.5" style="width: 22%;">Item</th>
+                                    <th class="py-2.5 px-1.5 text-right" style="width: 6%;">Stock</th>
+                                    <th class="py-2.5 px-1.5 text-right" style="width: 6%;">Cost</th>
+                                    <th class="py-2.5 px-1.5 text-center" style="width: 5%;">UOM</th>
+                                    <th class="py-2.5 px-1.5 text-right" style="width: 7%;">Quantity</th>
+                                    <th class="py-2.5 px-1.5 text-right" style="width: 7%;">Price</th>
+                                    <th class="py-2.5 px-1.5 text-right" style="width: 8%;">Subtotal</th>
+                                    <th class="py-2.5 px-1 text-center" style="width: 5%;">Inclusive</th>
+                                    <th class="py-2.5 px-1.5 text-right" style="width: 6%;">VAT</th>
+                                    <th class="py-2.5 px-1.5 text-right" style="width: 6%;">Discount</th>
+                                    <th class="py-2.5 px-2 text-right font-bold" style="width: 9%;">Total</th>
+                                    <th class="py-2.5 px-1.5 text-center" style="width: 36px;"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-po-lines-body" class="divide-y divide-slate-100">
+                                <!-- Dynamic Rows -->
+                            </tbody>
+                        </table>
                     </div>
 
-                    <div class="flex justify-end gap-2.5 pt-3 border-t border-slate-100 flex-shrink-0">
-                        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-medium text-xs transition">Cancel</button>
-                        <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-medium text-xs shadow-md shadow-indigo-600/30 transition">Submit Purchase Order</button>
+                    <!-- Bottom Section: Comments & File on Left, Summary Card on Right -->
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-3.5 pt-1">
+                        <!-- Left Column (Comments, File, Actions) -->
+                        <div class="lg:col-span-8 space-y-2.5">
+                            <div>
+                                <label class="block text-slate-600 font-semibold text-xs mb-1">Comments</label>
+                                <textarea id="po-notes" rows="3" placeholder="Order comments, packaging specifics, formulation notes..." class="w-full p-2.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 focus:ring-1 focus:ring-indigo-500"></textarea>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <label class="text-slate-600 font-semibold text-xs whitespace-nowrap">File:</label>
+                                <input type="file" id="po-file-attachment" class="text-xs text-slate-600 file:mr-2.5 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer">
+                            </div>
+                            <div class="flex items-center gap-2 pt-1 flex-wrap">
+                                <button type="button" onclick="submitCreatePO(event, 'DRAFT')" class="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold shadow-xs transition cursor-pointer">
+                                    Save
+                                </button>
+                                <button type="submit" class="px-4 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded text-xs font-semibold shadow-xs transition cursor-pointer">
+                                    Confirm
+                                </button>
+                                <button type="button" onclick="resetCreatePOForm()" class="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded text-xs font-semibold shadow-xs transition cursor-pointer">
+                                    Delete
+                                </button>
+                                <button type="button" onclick="closeModal()" class="px-4 py-1.5 bg-slate-600 hover:bg-slate-700 text-white rounded text-xs font-semibold shadow-xs transition cursor-pointer">
+                                    Back
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Right Column (Totals Card matching reference image) -->
+                        <div class="lg:col-span-4 bg-slate-50/90 border border-slate-200 rounded-xl p-3.5 space-y-2 text-xs flex flex-col justify-between">
+                            <div class="space-y-1.5">
+                                <div class="flex justify-between items-center text-slate-600">
+                                    <span>Subtotal:</span>
+                                    <span id="admin-po-summary-subtotal" class="font-mono font-semibold text-slate-800">0.00</span>
+                                </div>
+                                <div class="flex justify-between items-center text-slate-600">
+                                    <span>VAT:</span>
+                                    <span id="admin-po-summary-vat" class="font-mono font-semibold text-slate-800">0.00</span>
+                                </div>
+                                <div class="flex justify-between items-center text-slate-600">
+                                    <span>Discount:</span>
+                                    <span id="admin-po-summary-discount" class="font-mono font-semibold text-slate-800">0.00</span>
+                                </div>
+                                <div class="border-t border-slate-300 pt-1.5 flex justify-between items-center">
+                                    <span class="font-bold text-slate-800">Total:</span>
+                                    <span id="admin-po-summary-total" class="font-mono font-bold text-sm text-slate-950">0.00</span>
+                                </div>
+                                <div class="flex justify-between items-center text-slate-600 pt-0.5">
+                                    <span>Down Payment:</span>
+                                    <span id="admin-po-summary-downpayment" class="font-mono font-semibold text-slate-800">0.00</span>
+                                </div>
+                            </div>
+                            <!-- Legacy elements kept for backward compatibility with existing tests/functions -->
+                            <div class="hidden">
+                                <span id="admin-po-total-items">0</span>
+                                <span id="admin-po-total-qty">0 pcs</span>
+                                <span id="admin-po-grand-total">₱0.00</span>
+                            </div>
+                        </div>
                     </div>
                 </form>
             </div>
@@ -8552,49 +8590,76 @@ function selectPOSuggestion(productId) {
     const prod = adminPOCatalog.find(p => p.id === productId);
     if (!prod) return;
 
-    // If single initial line item that hasn't been touched, replace it; otherwise add as a new line item (allowing same product multiple times)
     const orderDeliveryDate = document.getElementById('create-po-delivery-date')?.value || null;
-    if (adminPOLineItems.length === 1 && adminPOLineItems[0].target_quantity === 1000 && adminPOLineItems[0].product_id === adminPOCatalog[0]?.id && !adminPOLineItems[0]._userEdited) {
+    const initialQty = 20;
+    const initialPrice = Number(prod.default_price || 0);
+    const initialSubtotal = initialQty * initialPrice;
+    const initialUom = prod.unit || 'PC';
+
+    if (adminPOLineItems.length === 1 && adminPOLineItems[0].target_quantity === 20 && adminPOLineItems[0].product_id === adminPOCatalog[0]?.id && !adminPOLineItems[0]._userEdited) {
         adminPOLineItems[0].product_id = prod.id;
-        adminPOLineItems[0].unit_price = Number(prod.default_price || 0);
+        adminPOLineItems[0].unit_price = initialPrice;
+        adminPOLineItems[0].uom = initialUom;
+        adminPOLineItems[0].subtotal = initialSubtotal;
+        adminPOLineItems[0].line_total = initialSubtotal;
         adminPOLineItems[0].delivery_date = orderDeliveryDate;
         adminPOLineItems[0]._userEdited = true;
     } else {
         adminPOLineItems.push({
             product_id: prod.id,
-            target_quantity: 1000,
-            unit_price: Number(prod.default_price || 0),
+            description: '',
+            stock: 0,
+            cost: 0,
+            uom: initialUom,
+            target_quantity: initialQty,
+            unit_price: initialPrice,
+            subtotal: initialSubtotal,
+            is_inclusive: false,
+            vat: 0,
+            discount: 0,
+            line_total: initialSubtotal,
             delivery_date: orderDeliveryDate,
             _userEdited: true
         });
     }
     renderAdminPOLineItems();
+    calculateAdminPOTotals();
     NKB.showToast(`Added ${prod.name} to order!`, 'success');
-
-    const lastIdx = adminPOLineItems.length - 1;
-    setTimeout(() => {
-        const rowInput = document.querySelector(`#admin-po-lines-body tr:nth-child(${lastIdx + 1}) input[type="number"]`);
-        if (rowInput) {
-            rowInput.focus();
-            rowInput.select();
-        }
-    }, 50);
 
     const container = document.getElementById('po-suggestions-container');
     if (container) container.classList.add('hidden');
 }
 
-function addAdminPOLineItem() {
+function addAdminPOLineItem(initial = {}) {
     if (adminPOCatalog.length === 0) return;
     const defaultProd = adminPOCatalog[0];
     const orderDeliveryDate = document.getElementById('create-po-delivery-date')?.value || null;
+    const prod = initial.product_id ? (adminPOCatalog.find(p => p.id === initial.product_id) || defaultProd) : defaultProd;
+    const qty = initial.target_quantity !== undefined ? initial.target_quantity : 20;
+    const price = initial.unit_price !== undefined ? initial.unit_price : Number(prod.default_price || 0);
+    const subtotal = qty * price;
+    const isInclusive = !!initial.is_inclusive;
+    const vat = initial.vat !== undefined ? initial.vat : (isInclusive ? Math.round((subtotal - subtotal / 1.12) * 100) / 100 : 0);
+    const discount = initial.discount !== undefined ? initial.discount : 0;
+    const lineTotal = Math.max(0, subtotal - discount + (isInclusive ? 0 : vat));
+
     adminPOLineItems.push({
-        product_id: defaultProd.id,
-        target_quantity: 1000,
-        unit_price: Number(defaultProd.default_price || 0),
-        delivery_date: orderDeliveryDate
+        product_id: prod.id,
+        description: initial.description || '',
+        stock: initial.stock !== undefined ? initial.stock : 0,
+        cost: initial.cost !== undefined ? initial.cost : 0,
+        uom: initial.uom || prod.unit || 'PC',
+        target_quantity: qty,
+        unit_price: price,
+        subtotal: subtotal,
+        is_inclusive: isInclusive,
+        vat: vat,
+        discount: discount,
+        line_total: lineTotal,
+        delivery_date: initial.delivery_date || orderDeliveryDate
     });
     renderAdminPOLineItems();
+    calculateAdminPOTotals();
 }
 
 function removeAdminPOLineItem(index) {
@@ -8603,142 +8668,242 @@ function removeAdminPOLineItem(index) {
         addAdminPOLineItem();
     } else {
         renderAdminPOLineItems();
+        calculateAdminPOTotals();
     }
 }
 
 function updateAdminPOLineItem(index, field, value) {
     if (!adminPOLineItems[index]) return;
     adminPOLineItems[index]._userEdited = true;
+    const item = adminPOLineItems[index];
+
     if (field === 'product_id') {
         const prod = adminPOCatalog.find(p => p.id === value);
-        adminPOLineItems[index].product_id = value;
+        item.product_id = value;
         if (prod) {
-            adminPOLineItems[index].unit_price = Number(prod.default_price || 0);
+            item.unit_price = Number(prod.default_price || 0);
+            item.uom = prod.unit || 'PC';
         }
         renderAdminPOLineItems();
+        calculateAdminPOTotals();
+        return;
+    } else if (field === 'description') {
+        item.description = value;
+        return;
+    } else if (field === 'uom') {
+        item.uom = value;
+        return;
+    } else if (field === 'cost') {
+        item.cost = Math.max(0, parseFloat(value) || 0);
+        return;
+    } else if (field === 'stock') {
+        item.stock = parseFloat(value) || 0;
         return;
     } else if (field === 'target_quantity') {
-        adminPOLineItems[index].target_quantity = parseInt(value, 10) || 0;
+        item.target_quantity = Math.max(0, parseFloat(value) || 0);
     } else if (field === 'unit_price') {
-        adminPOLineItems[index].unit_price = Math.max(0, parseFloat(value) || 0);
-        adminPOLineItems[index]._customPriceEntered = true;
+        item.unit_price = Math.max(0, parseFloat(value) || 0);
+        item._customPriceEntered = true;
+    } else if (field === 'is_inclusive') {
+        item.is_inclusive = !!value;
+    } else if (field === 'vat') {
+        item.vat = Math.max(0, parseFloat(value) || 0);
+    } else if (field === 'discount') {
+        item.discount = Math.max(0, parseFloat(value) || 0);
     } else if (field === 'delivery_date') {
-        adminPOLineItems[index].delivery_date = value ? value.trim() : null;
+        item.delivery_date = value ? value.trim() : null;
         return;
     }
 
-    // Update line total and summary totals
-    const lineSubtotal = (adminPOLineItems[index].target_quantity || 0) * (adminPOLineItems[index].unit_price || 0);
-    const lineTotalEl = document.getElementById(`admin-po-line-total-${index}`);
-    if (lineTotalEl) lineTotalEl.textContent = NKB.formatCurrency(lineSubtotal);
+    // Recalculate line totals
+    const lineSubtotal = (item.target_quantity || 0) * (item.unit_price || 0);
+    item.subtotal = lineSubtotal;
+    if (item.is_inclusive) {
+        item.vat = lineSubtotal > 0 ? Math.round((lineSubtotal - (lineSubtotal / 1.12)) * 100) / 100 : 0;
+        const vatInput = document.getElementById(`admin-po-line-vat-${index}`);
+        if (vatInput) vatInput.value = item.vat.toFixed(2);
+    }
+    const lineTotal = Math.max(0, lineSubtotal - (item.discount || 0) + (item.is_inclusive ? 0 : (item.vat || 0)));
+    item.line_total = lineTotal;
 
-    let totalQty = 0;
+    const subtotalEl = document.getElementById(`admin-po-line-subtotal-${index}`);
+    if (subtotalEl) subtotalEl.value = NKB.formatNumber(lineSubtotal);
+
+    const totalEl = document.getElementById(`admin-po-line-total-${index}`);
+    if (totalEl) totalEl.value = NKB.formatNumber(lineTotal);
+
+    calculateAdminPOTotals();
+}
+
+function calculateAdminPOTotals() {
+    let subtotal = 0;
+    let totalVat = 0;
+    let totalDiscount = 0;
     let grandTotal = 0;
-    adminPOLineItems.forEach(item => {
-        totalQty += item.target_quantity || 0;
-        grandTotal += (item.target_quantity || 0) * (item.unit_price || 0);
+    let totalQty = 0;
+
+    adminPOLineItems.forEach((item) => {
+        const qty = parseFloat(item.target_quantity) || 0;
+        const price = parseFloat(item.unit_price) || 0;
+        const lineSubtotal = qty * price;
+        item.subtotal = lineSubtotal;
+
+        let lineVat = parseFloat(item.vat) || 0;
+        if (item.is_inclusive) {
+            lineVat = lineSubtotal > 0 ? (lineSubtotal - (lineSubtotal / 1.12)) : 0;
+            item.vat = Math.round(lineVat * 100) / 100;
+        }
+        const lineDiscount = parseFloat(item.discount) || 0;
+        const lineTotal = Math.max(0, lineSubtotal - lineDiscount + (item.is_inclusive ? 0 : lineVat));
+        item.line_total = lineTotal;
+
+        subtotal += lineSubtotal;
+        totalVat += (parseFloat(item.vat) || 0);
+        totalDiscount += lineDiscount;
+        grandTotal += lineTotal;
+        totalQty += qty;
     });
 
-    const elTotalItems = document.getElementById('admin-po-total-items');
-    if (elTotalItems) elTotalItems.textContent = adminPOLineItems.length;
-    const elTotalQty = document.getElementById('admin-po-total-qty');
-    if (elTotalQty) elTotalQty.textContent = `${NKB.formatNumber(totalQty)} pcs`;
-    const elGrandTotal = document.getElementById('admin-po-grand-total');
-    if (elGrandTotal) elGrandTotal.textContent = NKB.formatCurrency(grandTotal);
+    const dpPct = parseFloat(document.getElementById('create-po-downpayment-pct')?.value) || 0;
+    const downPayment = grandTotal * (dpPct / 100);
+
+    const elSub = document.getElementById('admin-po-summary-subtotal');
+    if (elSub) elSub.textContent = NKB.formatNumber(subtotal);
+
+    const elVat = document.getElementById('admin-po-summary-vat');
+    if (elVat) elVat.textContent = NKB.formatNumber(totalVat);
+
+    const elDisc = document.getElementById('admin-po-summary-discount');
+    if (elDisc) elDisc.textContent = NKB.formatNumber(totalDiscount);
+
+    const elTot = document.getElementById('admin-po-summary-total');
+    if (elTot) elTot.textContent = NKB.formatNumber(grandTotal);
+
+    const elDp = document.getElementById('admin-po-summary-downpayment');
+    if (elDp) elDp.textContent = NKB.formatNumber(downPayment);
+
+    // Keep legacy elements updated for backward compatibility with existing tests/functions
+    const elLegacyItems = document.getElementById('admin-po-total-items');
+    if (elLegacyItems) elLegacyItems.textContent = adminPOLineItems.length;
+    const elLegacyQty = document.getElementById('admin-po-total-qty');
+    if (elLegacyQty) elLegacyQty.textContent = `${NKB.formatNumber(totalQty)} pcs`;
+    const elLegacyGrand = document.getElementById('admin-po-grand-total');
+    if (elLegacyGrand) elLegacyGrand.textContent = NKB.formatCurrency(grandTotal);
 }
+window.calculateAdminPOTotals = calculateAdminPOTotals;
 
 function renderAdminPOLineItems() {
     const tbody = document.getElementById('admin-po-lines-body');
     if (!tbody) return;
 
     if (adminPOCatalog.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="py-6 text-center text-amber-600 font-medium bg-amber-50/50 rounded-lg">⚠️ No products available in this client's catalog.</td></tr>`;
-        const elTotalItems = document.getElementById('admin-po-total-items');
-        if (elTotalItems) elTotalItems.textContent = '0';
-        const elTotalQty = document.getElementById('admin-po-total-qty');
-        if (elTotalQty) elTotalQty.textContent = '0 pcs';
-        const elGrandTotal = document.getElementById('admin-po-grand-total');
-        if (elGrandTotal) elGrandTotal.textContent = '₱0.00';
+        tbody.innerHTML = `<tr><td colspan="13" class="py-6 text-center text-amber-600 font-medium bg-amber-50/50 rounded-lg">⚠️ No products available in this client's catalog.</td></tr>`;
+        calculateAdminPOTotals();
         return;
     }
 
-    let totalQty = 0;
-    let grandTotal = 0;
-
     tbody.innerHTML = adminPOLineItems.map((item, idx) => {
-        const lineSubtotal = (item.target_quantity || 0) * (item.unit_price || 0);
-        totalQty += item.target_quantity || 0;
-        grandTotal += lineSubtotal;
+        const qty = parseFloat(item.target_quantity) || 0;
+        const price = parseFloat(item.unit_price) || 0;
+        const lineSubtotal = qty * price;
+        const lineDiscount = parseFloat(item.discount) || 0;
+        const lineVat = parseFloat(item.vat) || 0;
+        const lineTotal = Math.max(0, lineSubtotal - lineDiscount + (item.is_inclusive ? 0 : lineVat));
 
         return `
-            <tr class="hover:bg-slate-50/70 transition" id="admin-po-row-${idx}">
-                <td class="py-3 px-3.5">
-                    <select onchange="updateAdminPOLineItem(${idx}, 'product_id', this.value)" class="w-full px-3 py-2 border border-slate-200 hover:border-slate-300 rounded-xl text-xs bg-white font-normal text-slate-800 tracking-normal focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
+            <tr class="hover:bg-slate-50/80 transition" id="admin-po-row-${idx}">
+                <td class="py-2 px-2">
+                    <input type="text" 
+                           value="${item.description ? item.description.replace(/"/g, '&quot;') : ''}" 
+                           oninput="updateAdminPOLineItem(${idx}, 'description', this.value)" 
+                           placeholder="" 
+                           class="w-full px-2 py-1.5 border border-slate-300 rounded text-xs bg-white text-slate-800">
+                </td>
+                <td class="py-2 px-2">
+                    <select onchange="updateAdminPOLineItem(${idx}, 'product_id', this.value)" class="w-full px-2 py-1.5 border border-slate-300 rounded text-xs bg-white text-slate-800 truncate">
                         ${window.renderProductOptionsGroupedByBrand ? window.renderProductOptionsGroupedByBrand(adminPOCatalog, item.product_id) : adminPOCatalog.map(p => `
                             <option value="${p.id}" ${p.id === item.product_id ? 'selected' : ''}>
-                                ${p.display_name || p.clean_name || p.name} - ₱${Number(p.default_price).toFixed(2)}${p.has_custom_price ? ' [Contract Rate]' : ''}
+                                ${p.display_name || p.clean_name || p.name}
                             </option>
                         `).join('')}
                     </select>
                 </td>
-                <td class="py-3 px-3.5">
-                    <input type="number" min="1" step="1" 
-                           value="${item.target_quantity}" 
-                           oninput="updateAdminPOLineItem(${idx}, 'target_quantity', this.value)" 
-                           class="w-full px-3 py-2 border border-slate-200 hover:border-slate-300 rounded-xl text-xs font-normal text-slate-800 text-center tracking-normal focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
+                <td class="py-2 px-1.5 text-right">
+                    <input type="number" step="any" readonly value="${Number(item.stock || 0).toFixed(2)}" class="w-full px-1 py-1.5 border border-slate-200 rounded text-xs text-right bg-slate-50 text-slate-500 font-mono">
                 </td>
-                <td class="py-3 px-3.5">
-                    <div class="relative">
-                        <span class="absolute left-2.5 top-2 text-slate-400 font-mono text-xs">₱</span>
-                        <input type="number" step="0.01" min="0" inputmode="decimal"
-                               value="${Number(item.unit_price || 0).toFixed(2)}" 
-                               oninput="updateAdminPOLineItem(${idx}, 'unit_price', this.value)"
-                               onblur="if(this.value && !isNaN(this.value)) this.value = parseFloat(this.value).toFixed(2)"
-                               class="w-full pl-6 pr-2 py-2 border border-slate-200 hover:border-slate-300 rounded-xl text-xs font-bold font-mono text-emerald-700 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm"
-                               placeholder="0.00"
-                               title="Custom Unit Price for this client">
-                    </div>
+                <td class="py-2 px-1.5 text-right">
+                    <input type="number" step="any" min="0" value="${Number(item.cost || 0).toFixed(2)}" oninput="updateAdminPOLineItem(${idx}, 'cost', this.value)" class="w-full px-1 py-1.5 border border-slate-300 rounded text-xs text-right font-mono text-slate-800">
                 </td>
-                <td class="py-3 px-3.5">
-                    <input type="date" 
-                           value="${item.delivery_date ? (item.delivery_date.includes('T') ? item.delivery_date.split('T')[0] : item.delivery_date) : ''}" 
-                           onchange="updateAdminPOLineItem(${idx}, 'delivery_date', this.value)" 
-                           class="w-full px-2.5 py-2 border border-slate-200 hover:border-slate-300 rounded-xl text-xs font-normal text-slate-800 tracking-normal focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm"
-                           title="Delivery Date for this product (Optional)">
+                <td class="py-2 px-1.5 text-center">
+                    <input type="text" value="${item.uom || 'PC'}" oninput="updateAdminPOLineItem(${idx}, 'uom', this.value)" class="w-full px-1 py-1.5 border border-slate-300 rounded text-xs text-center uppercase font-mono text-slate-800">
                 </td>
-                <td id="admin-po-line-total-${idx}" class="py-3 px-3.5 font-semibold text-slate-900 font-mono text-xs tracking-tight">
-                    ${NKB.formatCurrency(lineSubtotal)}
+                <td class="py-2 px-1.5 text-right">
+                    <input type="number" step="any" min="0" value="${Number(item.target_quantity !== undefined ? item.target_quantity : 20).toFixed(2)}" oninput="updateAdminPOLineItem(${idx}, 'target_quantity', this.value)" class="w-full px-1.5 py-1.5 border border-slate-300 rounded text-xs text-right font-mono font-bold text-slate-900">
                 </td>
-                <td class="py-3 px-2 text-center">
-                    <button type="button" onclick="removeAdminPOLineItem(${idx})" class="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition" title="Remove line">
-                        ✖
-                    </button>
+                <td class="py-2 px-1.5 text-right">
+                    <input type="number" step="0.01" min="0" value="${Number(item.unit_price || 0).toFixed(2)}" oninput="updateAdminPOLineItem(${idx}, 'unit_price', this.value)" class="w-full px-1.5 py-1.5 border border-slate-300 rounded text-xs text-right font-mono font-bold text-slate-900">
+                </td>
+                <td class="py-2 px-1.5 text-right">
+                    <input type="text" readonly id="admin-po-line-subtotal-${idx}" value="${NKB.formatNumber(lineSubtotal)}" class="w-full px-1.5 py-1.5 border border-slate-200 rounded text-xs text-right font-mono bg-slate-50 text-slate-700">
+                </td>
+                <td class="py-2 px-1 text-center">
+                    <input type="checkbox" ${item.is_inclusive ? 'checked' : ''} onchange="updateAdminPOLineItem(${idx}, 'is_inclusive', this.checked)" class="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-0">
+                </td>
+                <td class="py-2 px-1.5 text-right">
+                    <input type="number" step="0.01" min="0" id="admin-po-line-vat-${idx}" value="${Number(item.vat || 0).toFixed(2)}" oninput="updateAdminPOLineItem(${idx}, 'vat', this.value)" class="w-full px-1 py-1.5 border border-slate-300 rounded text-xs text-right font-mono text-slate-800">
+                </td>
+                <td class="py-2 px-1.5 text-right">
+                    <input type="number" step="0.01" min="0" value="${Number(item.discount || 0).toFixed(2)}" oninput="updateAdminPOLineItem(${idx}, 'discount', this.value)" class="w-full px-1 py-1.5 border border-slate-300 rounded text-xs text-right font-mono text-slate-800">
+                </td>
+                <td class="py-2 px-1.5 text-right">
+                    <input type="text" readonly id="admin-po-line-total-${idx}" value="${NKB.formatNumber(lineTotal)}" class="w-full px-1.5 py-1.5 border border-slate-200 rounded text-xs text-right font-mono font-bold bg-slate-50 text-slate-950">
+                </td>
+                <td class="py-2 px-1.5 text-center">
+                    <button type="button" onclick="removeAdminPOLineItem(${idx})" class="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded text-[11px] font-bold shadow-xs transition cursor-pointer" title="Delete Line">Del</button>
                 </td>
             </tr>
         `;
     }).join('');
 
-    const elTotalItems = document.getElementById('admin-po-total-items');
-    if (elTotalItems) elTotalItems.textContent = adminPOLineItems.length;
-    const elTotalQty = document.getElementById('admin-po-total-qty');
-    if (elTotalQty) elTotalQty.textContent = `${NKB.formatNumber(totalQty)} pcs`;
-    const elGrandTotal = document.getElementById('admin-po-grand-total');
-    if (elGrandTotal) elGrandTotal.textContent = NKB.formatCurrency(grandTotal);
+    calculateAdminPOTotals();
 }
 
-async function submitCreatePO(e) {
-    e.preventDefault();
+function previewCurrentPOPrint() {
+    const clientSelect = document.getElementById('po-client-id');
+    const clientId = clientSelect ? clientSelect.value : '';
+    const poNum = document.getElementById('create-po-customer-po-number')?.value || 'DRAFT';
+    window.open(`/print-po.html?preview=1&poNumber=${encodeURIComponent(poNum)}&clientId=${encodeURIComponent(clientId)}`, '_blank');
+}
+window.previewCurrentPOPrint = previewCurrentPOPrint;
+
+function resetCreatePOForm() {
+    if (confirm('Are you sure you want to clear this Purchase Order form?')) {
+        adminPOLineItems = [];
+        if (document.getElementById('po-notes')) document.getElementById('po-notes').value = '';
+        if (document.getElementById('create-po-description')) document.getElementById('create-po-description').value = '';
+        if (document.getElementById('create-po-downpayment-pct')) document.getElementById('create-po-downpayment-pct').value = '0.00';
+        addAdminPOLineItem();
+        calculateAdminPOTotals();
+    }
+}
+window.resetCreatePOForm = resetCreatePOForm;
+
+async function submitCreatePO(e, targetStatus = 'PENDING') {
+    if (e && e.preventDefault) e.preventDefault();
     const clientId = document.getElementById('po-client-id').value;
     const toleranceEl = document.getElementById('po-tolerance');
     const tolerance = toleranceEl ? parseFloat(toleranceEl.value) : undefined;
-    const policy = document.getElementById('po-billing-policy').value;
+    const policy = document.getElementById('po-billing-policy')?.value || 'ACTUAL_DELIVERY';
     const termSelect = document.getElementById('create-po-form-of-payment') || document.getElementById('po-form-of-payment');
     let formOfPayment = termSelect ? termSelect.value : 'COD';
     if (formOfPayment === 'CUSTOM') {
         const customInput = document.getElementById('create-po-form-of-payment-custom') || document.getElementById('po-form-of-payment-custom');
         formOfPayment = customInput ? (customInput.value.trim() || 'COD') : 'COD';
     }
-    const notes = document.getElementById('po-notes').value;
+
+    const description = document.getElementById('create-po-description')?.value?.trim() || '';
+    const comments = document.getElementById('po-notes')?.value?.trim() || '';
+    const notes = description ? (comments ? `[${description}] ${comments}` : `[${description}]`) : comments;
 
     if (!adminPOLineItems || adminPOLineItems.length === 0) {
         NKB.showToast('Please add at least one product line item to the order.', 'error');
@@ -8784,7 +8949,12 @@ async function submitCreatePO(e) {
                         target_quantity: item.target_quantity,
                         unit_price: Math.round(Number(item.unit_price || 0) * 100) / 100,
                         delivery_date: item.delivery_date ? item.delivery_date.trim() : undefined,
-                        save_custom_price: true
+                        save_custom_price: true,
+                        description: item.description,
+                        uom: item.uom,
+                        cost: item.cost,
+                        discount: item.discount,
+                        vat: item.vat
                     };
                 })
             })
