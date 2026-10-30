@@ -17827,8 +17827,9 @@ function renderProductionSalesOrderBoard() {
     };
 
     const userRole = (typeof NKB !== 'undefined' && NKB.user && NKB.user.role) || '';
-    const isExecAdmin = userRole === 'ADMIN' || userRole === 'SUPERADMIN';
-    const canEditOrder = isExecAdmin || (typeof NKB !== 'undefined' && NKB.hasPermission && (NKB.hasPermission('orders:edit') || NKB.hasPermission('orders:manage')));
+    const isExecAdmin = ['ADMIN', 'SUPER_ADMIN', 'SUPERADMIN', 'IT_ADMIN'].includes(userRole);
+    const canEditOrder = isExecAdmin || userRole === 'ACCOUNTING' || (typeof NKB !== 'undefined' && NKB.hasPermission && (NKB.hasPermission('orders:update') || NKB.hasPermission('orders:edit') || NKB.hasPermission('orders:manage')));
+
 
     let unfinishedIdx = 0;
     const firstCompletedIndex = list.findIndex(o => isFinishedPO(o));

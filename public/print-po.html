@@ -1275,7 +1275,7 @@
                     calculatedSubtotal += lineSubtotal;
 
                     return `
-                        <tr>
+                        <tr class="item-row" data-product-id="${item.product_id}" data-item-id="${item.id || ''}" data-item-name="${escapeHtml(item.item_name || item.product_name || desc)}">
                             <td class="td-desc cell-editable" contenteditable="false">
                                 <div class="prod-name">${escapeHtml(desc)}</div>
                                 ${item.delivery_date ? `<div class="item-delivery-date" style="font-size: 8pt; color: #047857; font-weight: bold; margin-top: 2px;">🚚 Delivery Date: ${formatDateMMDDYYYY(item.delivery_date)}</div>` : ''}
@@ -1292,6 +1292,7 @@
                         </tr>
                     `;
                 }).join('');
+
             }
 
             document.getElementById('po-items-tbody').innerHTML = itemsHtml;
@@ -1414,16 +1415,16 @@
                     notes: notesVal,
                     payment_made: paymentMadeVal
                 };
-                if (termsVal) {
+                if (termsVal && termsVal !== '—' && termsVal !== '-') {
                     payload.terms = termsVal;
                     payload.form_of_payment = termsVal;
                 }
-                if (dueDateVal) {
+                if (dueDateVal && dueDateVal !== '—' && dueDateVal !== '-') {
                     payload.expected_delivery_date = dueDateVal;
                 }
 
-                // Gather updated table items if available
-                const itemRows = document.querySelectorAll('#po-items-tbody tr');
+                // Gather updated table items
+                const itemRows = document.querySelectorAll('#po-items-tbody tr.item-row, #po-items-tbody tr');
                 const itemsPayload = [];
                 itemRows.forEach(tr => {
                     const descEl = tr.querySelector('.td-desc');
@@ -1433,19 +1434,24 @@
                         const target_quantity = parseCleanNumber(qtyEl.textContent) || 1;
                         const unit_price = priceEl ? parseCleanNumber(priceEl.textContent) : 0;
                         const item_name = (descEl.querySelector('.prod-name')?.textContent || descEl.childNodes[0]?.textContent || descEl.textContent).trim();
-                        const matched = rawPoData?.items?.find(it => (it.product_name || it.name) === item_name || it.item_name === item_name);
-                        if (matched && matched.product_id) {
+                        const matched = rawPoData?.items?.find(it => 
+                            (tr.dataset.productId && it.product_id === tr.dataset.productId) ||
+                            (it.product_name || it.name) === item_name || 
+                            it.item_name === item_name
+                        );
+                        const productId = tr.dataset.productId || matched?.product_id;
+                        if (productId) {
                             itemsPayload.push({
-                                product_id: matched.product_id,
-                                item_name,
-                                target_quantity,
-                                unit_price: unit_price || matched.unit_price || 0
+                                product_id: productId,
+                                item_name: tr.dataset.itemName || matched?.item_name || item_name,
+                                target_quantity: Math.max(1, target_quantity),
+                                unit_price: unit_price !== undefined ? unit_price : (matched?.unit_price || 0)
                             });
                         }
                     }
                 });
 
-                if (itemsPayload.length > 0 && itemsPayload.length === (rawPoData?.items?.length || 0)) {
+                if (itemsPayload.length > 0) {
                     payload.items = itemsPayload;
                 }
 
@@ -1461,15 +1467,19 @@
                 const json = await res.json();
                 if (json.success) {
                     alert('Order receipt updated successfully!');
-                    if (json.data) rawPoData = json.data;
+                    if (json.data) {
+                        rawPoData = json.data;
+                        renderPO(json.data);
+                    }
                     toggleEditMode();
                 } else {
-                    alert('Failed to save changes: ' + (json.error || 'Unknown error'));
+                    alert('Failed to save changes: ' + (json.error || json.message || 'Unknown error'));
                 }
             } catch (err) {
                 console.error('Error saving PO changes:', err);
-                alert('Connection error while saving order changes.');
+                alert('Connection error while saving order changes: ' + (err.message || err));
             } finally {
+
                 if (saveBtn) {
                     saveBtn.disabled = false;
                     saveBtn.innerHTML = '<span>💾 Save Changes</span>';

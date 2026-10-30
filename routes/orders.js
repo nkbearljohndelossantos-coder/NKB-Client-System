@@ -758,11 +758,12 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
         return res.status(404).json({ success: false, error: 'Purchase Order not found.' });
     }
 
-    if (req.user.role === 'CLIENT') {
-        if (po.client_id !== req.clientId) {
-            return res.status(403).json({ success: false, error: 'Access denied.', code: 'FORBIDDEN' });
+    if (req.user.role === 'CLIENT' || req.user.role === 'VYUCEUTICAL_OPERATOR') {
+        const userClientId = req.clientId || req.user.client_id;
+        if (userClientId && po.client_id !== userClientId) {
+            return res.status(403).json({ success: false, error: 'Access denied. You can only update orders for your assigned client account.', code: 'FORBIDDEN' });
         }
-        if (po.status !== 'PENDING_APPROVAL' && po.status !== 'DRAFT') {
+        if (req.user.role === 'CLIENT' && po.status !== 'PENDING_APPROVAL' && po.status !== 'DRAFT') {
             return res.status(400).json({ success: false, error: 'Clients can only edit pending orders.' });
         }
     } else {
@@ -771,6 +772,8 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
             return res.status(403).json({ success: false, error: 'Access denied. You do not have permission to update purchase orders.', code: 'FORBIDDEN' });
         }
     }
+
+
 
     if (po.status === 'COMPLETED' || po.status === 'CANCELLED' || po.status === 'VOIDED') {
         return res.status(400).json({
@@ -953,16 +956,24 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
             }
 
             // Clean up any job orders for products that were removed from the PO during update (if no DRs exist)
-            const updatedProductIds = processedItems.map(p => p.productId ?? p.product_id);
-            const orphanedJOs = db.prepare(`
-                SELECT id FROM job_orders 
-                WHERE po_id = ? AND product_id NOT IN (${updatedProductIds.map(() => '?').join(',')})
-            `).all(id, ...updatedProductIds);
+            const updatedProductIds = processedItems.map(p => p.productId ?? p.product_id).filter(Boolean);
+            if (updatedProductIds.length > 0) {
+                const orphanedJOs = db.prepare(`
+                    SELECT id FROM job_orders 
+                    WHERE po_id = ? AND product_id NOT IN (${updatedProductIds.map(() => '?').join(',')})
+                `).all(id, ...updatedProductIds);
 
-            for (const ojo of orphanedJOs) {
-                db.prepare('DELETE FROM production_batches WHERE jo_id = ?').run(ojo.id);
-                db.prepare('DELETE FROM job_orders WHERE id = ?').run(ojo.id);
+                for (const ojo of orphanedJOs) {
+                    const batches = db.prepare('SELECT id FROM production_batches WHERE jo_id = ?').all(ojo.id);
+                    for (const b of batches) {
+                        db.prepare('DELETE FROM batch_yields WHERE batch_id = ?').run(b.id);
+                        db.prepare('DELETE FROM overrun_approvals WHERE batch_id = ?').run(b.id);
+                    }
+                    db.prepare('DELETE FROM production_batches WHERE jo_id = ?').run(ojo.id);
+                    db.prepare('DELETE FROM job_orders WHERE id = ?').run(ojo.id);
+                }
             }
+
         }
 
         let updatedCategory = po.category;
@@ -1117,8 +1128,10 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
             data: { ...updatedPO, items: orderItems, total_target_quantity: totalTargetQty }
         });
     } catch (err) {
+        console.error(`[PUT /api/orders/:id] Error updating PO ${id}:`, err);
         return res.status(400).json({ success: false, error: err.message });
     }
+
 });
 
 /**

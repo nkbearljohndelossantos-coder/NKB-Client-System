@@ -1976,6 +1976,9 @@ async function openEditPOModal(poId) {
         delivery_date: it.delivery_date ? (it.delivery_date.includes('T') ? it.delivery_date.split('T')[0] : it.delivery_date) : ''
     }));
 
+    const poDateFormatted = po.po_date ? (po.po_date.includes('T') ? po.po_date.split('T')[0] : po.po_date) : '';
+    const deliveryDateFormatted = po.expected_delivery_date ? (po.expected_delivery_date.includes('T') ? po.expected_delivery_date.split('T')[0] : po.expected_delivery_date) : '';
+
     if (editPOLineItems.length === 0 && editPOCatalog.length > 0) {
         editPOLineItems.push({
             product_id: editPOCatalog[0].id,
@@ -1985,8 +1988,6 @@ async function openEditPOModal(poId) {
         });
     }
 
-    const poDateFormatted = po.po_date ? (po.po_date.includes('T') ? po.po_date.split('T')[0] : po.po_date) : '';
-    const deliveryDateFormatted = po.expected_delivery_date ? (po.expected_delivery_date.includes('T') ? po.expected_delivery_date.split('T')[0] : po.expected_delivery_date) : '';
 
     const rawTerm = (po.form_of_payment || po.terms || 'COD').trim();
     const lowerRaw = rawTerm.toLowerCase();
@@ -2671,8 +2672,8 @@ async function submitEditPO(e) {
                 const prod = editPOCatalog.find(p => p.id === item.product_id);
                 return {
                     product_id: item.product_id,
-                    item_name: prod ? prod.name : undefined,
-                    target_quantity: item.target_quantity,
+                    item_name: prod ? (prod.clean_name || prod.name) : (item.item_name || item.name || undefined),
+                    target_quantity: Math.max(1, parseInt(item.target_quantity) || 1),
                     unit_price: item.unit_price !== undefined ? Number(item.unit_price) : undefined,
                     delivery_date: item.delivery_date ? item.delivery_date.trim() : undefined,
                     save_custom_price: true
@@ -2680,6 +2681,7 @@ async function submitEditPO(e) {
             })
         })
     });
+
 
     if (res.success) {
         NKB.showToast(`Purchase Order ${res.data.po_number} updated successfully!`, 'success');
