@@ -15,7 +15,9 @@ router.get('/', authenticateToken, enforceClientIsolation, (req, res) => {
         const client = db.prepare(`
             SELECT c.*, u.id as user_id, u.email as user_email, u.is_active as user_active
             FROM clients c
-            LEFT JOIN users u ON u.client_id = c.id
+            LEFT JOIN users u ON u.id = (
+                SELECT id FROM users WHERE client_id = c.id ORDER BY CASE WHEN role = 'CLIENT' THEN 0 ELSE 1 END, created_at ASC LIMIT 1
+            )
             WHERE c.id = ?
         `).get(req.clientId);
         return res.json({ success: true, data: client ? [client] : [] });
@@ -25,7 +27,9 @@ router.get('/', authenticateToken, enforceClientIsolation, (req, res) => {
     let query = `
         SELECT c.*, u.id as user_id, u.email as user_email, u.is_active as user_active
         FROM clients c
-        LEFT JOIN users u ON u.client_id = c.id
+        LEFT JOIN users u ON u.id = (
+            SELECT id FROM users WHERE client_id = c.id ORDER BY CASE WHEN role = 'CLIENT' THEN 0 ELSE 1 END, created_at ASC LIMIT 1
+        )
         WHERE 1=1
     `;
     const params = [];
@@ -55,7 +59,9 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
     const client = db.prepare(`
         SELECT c.*, u.id as user_id, u.email as user_email, u.is_active as user_active
         FROM clients c
-        LEFT JOIN users u ON u.client_id = c.id
+        LEFT JOIN users u ON u.id = (
+            SELECT id FROM users WHERE client_id = c.id ORDER BY CASE WHEN role = 'CLIENT' THEN 0 ELSE 1 END, created_at ASC LIMIT 1
+        )
         WHERE c.id = ?
     `).get(id);
     if (!client) {

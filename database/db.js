@@ -2103,10 +2103,6 @@ if (useMysql) {
             }
         }
 
-        // Also ensure online@vyuceutical.com and angelica@opc.com have role VYUCEUTICAL_OPERATOR
-        try {
-            db.prepare("UPDATE users SET role = 'VYUCEUTICAL_OPERATOR', plain_password = 'Staff123!', is_active = 1 WHERE LOWER(email) IN ('online@vyuceutical.com', 'angelica@opc.com')").run();
-        } catch (_) {}
 
         // Backfill plain_password for any remaining accounts without one
         try {
@@ -2249,34 +2245,82 @@ if (useMysql) {
     // Migration: Merge duplicate Vyuceutical OPC - Online Platforms client records into canonical client record
     try {
         const primaryId = '0d68514b-2b7f-42d2-a211-cfbdc0855d3a';
-        const dupId = '880a7615-0c98-4867-890b-bbbf7f031e86';
-        const primaryClient = db.prepare('SELECT id FROM clients WHERE id = ?').get(primaryId);
-        const dupClient = db.prepare('SELECT id FROM clients WHERE id = ?').get(dupId);
+        const primaryUserId = 'i0000000-0000-0000-0000-000000000001';
 
-        if (primaryClient && dupClient) {
-            db.prepare('UPDATE purchase_orders SET client_id = ? WHERE client_id = ?').run(primaryId, dupId);
-            db.prepare('UPDATE users SET client_id = ? WHERE client_id = ?').run(primaryId, dupId);
-            db.prepare('UPDATE delivery_receipts SET client_id = ? WHERE client_id = ?').run(primaryId, dupId);
-            db.prepare('UPDATE sales_invoices SET client_id = ? WHERE client_id = ?').run(primaryId, dupId);
-            db.prepare('UPDATE payments SET client_id = ? WHERE client_id = ?').run(primaryId, dupId);
-            db.prepare('UPDATE client_buffer_stock SET client_id = ? WHERE client_id = ?').run(primaryId, dupId);
-            db.prepare('DELETE FROM client_product_prices WHERE client_id = ?').run(dupId);
-            db.prepare('DELETE FROM clients WHERE id = ?').run(dupId);
-            console.log(`✅ Merged duplicate Vyuceutical OPC Online Platforms client (${dupId}) into primary client (${primaryId})`);
-        } else if (primaryClient) {
-            db.prepare('UPDATE purchase_orders SET client_id = ? WHERE client_id = ?').run(primaryId, dupId);
-            db.prepare('UPDATE users SET client_id = ? WHERE client_id = ?').run(primaryId, dupId);
-        }
-
-        // Canonicalize company_name and contact_person
-        if (primaryClient) {
+        // 1. Ensure primary client row exists & is canonical
+        let primaryClient = db.prepare('SELECT id FROM clients WHERE id = ?').get(primaryId);
+        if (!primaryClient) {
+            db.prepare(`
+                INSERT INTO clients (id, company_name, contact_person, email, phone, address, is_vyuceutical_ops, default_billing_policy, default_tolerance_percent, credit_limit, is_active, created_at, updated_at)
+                VALUES (?, 'Vyuceutical OPC', 'Online Platforms', 'online.operator@vyuceutical.com', '+63 917 000 0011', 'Phils.', 1, 'ACTUAL_DELIVERY', 10.0, 500000.0, 1, datetime('now', 'localtime'), datetime('now', 'localtime'))
+            `).run(primaryId);
+            primaryClient = { id: primaryId };
+        } else {
             db.prepare(`
                 UPDATE clients 
                 SET company_name = 'Vyuceutical OPC', 
                     contact_person = 'Online Platforms', 
+                    email = 'online.operator@vyuceutical.com',
                     is_vyuceutical_ops = 1 
                 WHERE id = ?
             `).run(primaryId);
+        }
+
+        // 2. Find any duplicate client rows matching Online Platforms
+        const dupClients = db.prepare(`
+            SELECT id FROM clients 
+            WHERE id != ? 
+              AND (
+                LOWER(contact_person) LIKE '%online platform%' 
+                OR LOWER(company_name) LIKE '%online platform%'
+                OR (LOWER(company_name) LIKE '%vyuceutical%' AND LOWER(contact_person) LIKE '%online%')
+              )
+        `).all(primaryId);
+
+        for (const dup of dupClients) {
+            db.prepare('UPDATE purchase_orders SET client_id = ? WHERE client_id = ?').run(primaryId, dup.id);
+            db.prepare('UPDATE users SET client_id = ? WHERE client_id = ?').run(primaryId, dup.id);
+            db.prepare('UPDATE delivery_receipts SET client_id = ? WHERE client_id = ?').run(primaryId, dup.id);
+            db.prepare('UPDATE sales_invoices SET client_id = ? WHERE client_id = ?').run(primaryId, dup.id);
+            db.prepare('UPDATE payments SET client_id = ? WHERE client_id = ?').run(primaryId, dup.id);
+            db.prepare('UPDATE client_buffer_stock SET client_id = ? WHERE client_id = ?').run(primaryId, dup.id);
+            try { db.prepare('UPDATE client_product_prices SET client_id = ? WHERE client_id = ?').run(primaryId, dup.id); } catch (_) {}
+            db.prepare('DELETE FROM client_product_prices WHERE client_id = ?').run(dup.id);
+            db.prepare('DELETE FROM clients WHERE id = ?').run(dup.id);
+            console.log(`✅ Merged duplicate Online Platforms client (${dup.id}) into primary client (${primaryId})`);
+        }
+
+        // 3. Ensure primary user has correct client_id & role
+        const primaryUser = db.prepare('SELECT id FROM users WHERE id = ?').get(primaryUserId);
+        if (primaryUser) {
+            db.prepare(`
+                UPDATE users 
+                SET client_id = ?, 
+                    role = 'VYUCEUTICAL_OPERATOR',
+                    is_active = 1,
+                    name = 'Angelica Tamano (Online Platform Operator)',
+                    email = 'online.operator@vyuceutical.com'
+                WHERE id = ?
+            `).run(primaryId, primaryUserId);
+        }
+
+        // 4. Merge duplicate Online Platform user accounts
+        const dupUsers = db.prepare(`
+            SELECT id, email FROM users 
+            WHERE id != ? 
+              AND (
+                LOWER(email) IN ('online@vyuceutical.com', 'angelica@opc.com')
+                OR (client_id = ? AND LOWER(name) LIKE '%online%')
+              )
+        `).all(primaryUserId, primaryId);
+
+        for (const du of dupUsers) {
+            db.prepare('UPDATE purchase_orders SET created_by = ? WHERE created_by = ?').run(primaryUserId, du.id);
+            try { db.prepare('UPDATE finished_product_requisitions SET requested_by = ? WHERE requested_by = ?').run(primaryUserId, du.id); } catch (_) {}
+            try { db.prepare('UPDATE po_operator_notes SET user_id = ? WHERE user_id = ?').run(primaryUserId, du.id); } catch (_) {}
+            try { db.prepare('UPDATE audit_logs SET user_id = ? WHERE user_id = ?').run(primaryUserId, du.id); } catch (_) {}
+            db.prepare('DELETE FROM users WHERE id = ?').run(du.id);
+            console.log(`✅ Merged and removed duplicate Online Platform user account: ${du.email}`);
         }
     } catch (mergeErr) {
         console.error('Vyuceutical Online Platforms client merge error:', mergeErr.message);

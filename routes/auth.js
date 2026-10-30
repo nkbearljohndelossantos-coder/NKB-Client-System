@@ -87,6 +87,17 @@ router.post('/login', (req, res) => {
             WHERE LOWER(u.email) = ?
         `).get(cleanEmail);
 
+        if (!user && (cleanEmail === 'online@vyuceutical.com' || cleanEmail === 'angelica@opc.com')) {
+            user = db.prepare(`
+                SELECT u.id, u.name, u.email, u.password_hash, u.role, u.client_id, u.is_active,
+                       u.security_pin, u.auto_lock_minutes,
+                       c.company_name, c.default_billing_policy, c.default_tolerance_percent
+                FROM users u
+                LEFT JOIN clients c ON u.client_id = c.id
+                WHERE LOWER(u.email) = 'online.operator@vyuceutical.com'
+            `).get();
+        }
+
         if (!user && cleanEmail === 'admin@nkbmanufacturing.com') {
             const hash = bcrypt.hashSync(cleanPassword || 'Admin123!', 10);
             const adminId = 'a0000000-0000-0000-0000-000000000001';
