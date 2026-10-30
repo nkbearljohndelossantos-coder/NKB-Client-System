@@ -1418,6 +1418,9 @@
                     payload.terms = termsVal;
                     payload.form_of_payment = termsVal;
                 }
+                if (dueDateVal) {
+                    payload.expected_delivery_date = dueDateVal;
+                }
 
                 // Gather updated table items if available
                 const itemRows = document.querySelectorAll('#po-items-tbody tr');

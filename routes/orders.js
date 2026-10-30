@@ -694,12 +694,12 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
                 it.id,
                 it.poId,
                 it.productId,
-                it.itemName,
-                it.targetQuantity,
-                it.minAllowedQuantity,
-                it.maxAllowedQuantity,
-                it.unitPrice,
-                it.subtotal,
+                it.itemName ?? null,
+                it.targetQuantity ?? 0,
+                it.minAllowedQuantity ?? 0,
+                it.maxAllowedQuantity ?? 0,
+                it.unitPrice ?? 0,
+                it.subtotal ?? 0,
                 it.deliveryDate || null
             );
         }
@@ -896,21 +896,42 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
             // Synchronize existing Job Orders for items in this PO (supporting multiple occurrences of same product)
             const syncedJoIds = new Set();
             for (const it of processedItems) {
-                const itDelDate = (it.deliveryDate !== undefined) ? it.deliveryDate : (it.delivery_date || null);
+                const itDelDate = (it.deliveryDate !== undefined && it.deliveryDate !== null)
+                    ? it.deliveryDate
+                    : ((it.delivery_date !== undefined && it.delivery_date !== null) ? it.delivery_date : null);
+                const itTargetQty = (it.targetQuantity !== undefined && it.targetQuantity !== null)
+                    ? it.targetQuantity
+                    : ((it.target_quantity !== undefined && it.target_quantity !== null) ? it.target_quantity : 0);
+                const itMinQty = (it.minAllowedQuantity !== undefined && it.minAllowedQuantity !== null)
+                    ? it.minAllowedQuantity
+                    : ((it.min_allowed_quantity !== undefined && it.min_allowed_quantity !== null) ? it.min_allowed_quantity : 0);
+                const itMaxQty = (it.maxAllowedQuantity !== undefined && it.maxAllowedQuantity !== null)
+                    ? it.maxAllowedQuantity
+                    : ((it.max_allowed_quantity !== undefined && it.max_allowed_quantity !== null) ? it.max_allowed_quantity : 0);
+                const itUnitPrice = (it.unitPrice !== undefined && it.unitPrice !== null)
+                    ? it.unitPrice
+                    : ((it.unit_price !== undefined && it.unit_price !== null) ? it.unit_price : 0);
+                const itName = (it.itemName !== undefined && it.itemName !== null)
+                    ? it.itemName
+                    : ((it.item_name !== undefined && it.item_name !== null) ? it.item_name : null);
+                const itSubtotal = (it.subtotal !== undefined && it.subtotal !== null)
+                    ? it.subtotal
+                    : Math.round(itTargetQty * itUnitPrice * 100) / 100;
+
                 insertItemStmt.run(
-                    it.id,
-                    it.poId,
-                    it.productId,
-                    it.itemName || it.item_name || null,
-                    it.targetQuantity || it.target_quantity,
-                    it.minAllowedQuantity || it.min_allowed_quantity,
-                    it.maxAllowedQuantity || it.max_allowed_quantity,
-                    it.unitPrice || it.unit_price,
-                    it.subtotal,
+                    it.id ?? uuidv4(),
+                    it.poId ?? it.po_id ?? id,
+                    it.productId ?? it.product_id,
+                    itName,
+                    itTargetQty,
+                    itMinQty,
+                    itMaxQty,
+                    itUnitPrice,
+                    itSubtotal,
                     itDelDate
                 );
 
-                const availableJOs = db.prepare('SELECT id FROM job_orders WHERE po_id = ? AND product_id = ? ORDER BY created_at ASC').all(id, it.productId);
+                const availableJOs = db.prepare('SELECT id FROM job_orders WHERE po_id = ? AND product_id = ? ORDER BY created_at ASC').all(id, it.productId ?? it.product_id);
                 const targetJO = availableJOs.find(j => !syncedJoIds.has(j.id));
                 if (targetJO) {
                     syncedJoIds.add(targetJO.id);
@@ -920,19 +941,19 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
                             scheduled_end_date = COALESCE(?, scheduled_end_date),
                             updated_at = datetime('now', 'localtime')
                         WHERE id = ?
-                    `).run(it.targetQuantity || it.target_quantity, itDelDate, targetJO.id);
+                    `).run(itTargetQty, itDelDate, targetJO.id);
 
                     // Sync target_quantity on active production batches
                     db.prepare(`
                         UPDATE production_batches
                         SET target_quantity = ?, updated_at = datetime('now', 'localtime')
                         WHERE jo_id = ? AND status IN ('PLANNED', 'MIXING')
-                    `).run(it.targetQuantity || it.target_quantity, targetJO.id);
+                    `).run(itTargetQty, targetJO.id);
                 }
             }
 
             // Clean up any job orders for products that were removed from the PO during update (if no DRs exist)
-            const updatedProductIds = processedItems.map(p => p.productId);
+            const updatedProductIds = processedItems.map(p => p.productId ?? p.product_id);
             const orphanedJOs = db.prepare(`
                 SELECT id FROM job_orders 
                 WHERE po_id = ? AND product_id NOT IN (${updatedProductIds.map(() => '?').join(',')})
@@ -1018,25 +1039,25 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
                 updated_at = datetime('now', 'localtime')
             WHERE id = ?
         `).run(
-            po_date !== undefined && po_date ? po_date : po.po_date,
-            expected_delivery_date !== undefined ? (expected_delivery_date || null) : po.expected_delivery_date,
-            tolerance,
-            policy,
-            updatedCustomerPo,
-            notes !== undefined ? (notes || null) : po.notes,
-            form_of_payment !== undefined ? (form_of_payment || null) : (po.form_of_payment || 'COD'),
-            updatedCategory,
-            updatedCategoryColor,
-            subtotal,
-            taxRate,
-            taxAmount,
-            grandTotal,
-            newIsBufferStock,
-            newPaymentMade,
-            newIsRevisioned,
-            newRevisionCount,
-            newRevisionNotes,
-            newRevisionedAt,
+            (po_date !== undefined && po_date) ? po_date : (po.po_date ?? null),
+            (expected_delivery_date !== undefined ? (expected_delivery_date || null) : (po.expected_delivery_date ?? null)),
+            (tolerance !== undefined && tolerance !== null) ? tolerance : (po.tolerance_percent ?? 10.0),
+            (policy !== undefined && policy !== null) ? policy : (po.billing_policy ?? 'ACTUAL_DELIVERY'),
+            (updatedCustomerPo !== undefined && updatedCustomerPo !== null) ? updatedCustomerPo : (po.customer_po_number ?? null),
+            (notes !== undefined ? (notes || null) : (po.notes ?? null)),
+            (form_of_payment !== undefined ? (form_of_payment || null) : (po.form_of_payment ?? 'COD')),
+            (updatedCategory !== undefined ? (updatedCategory || null) : (po.category ?? null)),
+            (updatedCategoryColor !== undefined ? (updatedCategoryColor || null) : (po.category_color ?? null)),
+            (subtotal !== undefined && subtotal !== null) ? subtotal : (po.subtotal ?? 0.0),
+            (taxRate !== undefined && taxRate !== null) ? taxRate : (po.tax_percent ?? 0.0),
+            (taxAmount !== undefined && taxAmount !== null) ? taxAmount : (po.tax_amount ?? 0.0),
+            (grandTotal !== undefined && grandTotal !== null) ? grandTotal : (po.grand_total ?? 0.0),
+            newIsBufferStock ?? 0,
+            newPaymentMade ?? 0.0,
+            newIsRevisioned ?? 0,
+            newRevisionCount ?? 0,
+            newRevisionNotes ?? null,
+            newRevisionedAt ?? null,
             id
         );
 
