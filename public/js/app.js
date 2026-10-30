@@ -1325,8 +1325,9 @@ async function openViewPOModal(poId) {
     const isClient = NKB.user ? (NKB.user.role === 'CLIENT') : window.location.pathname.includes('client');
     const userRole = NKB.user?.role;
     const canViewPrices = isClient || ['SUPER_ADMIN', 'IT_ADMIN', 'ADMIN', 'CEO', 'ACCOUNTING'].includes(userRole);
-    const canEditOrder = isClient ? (po.status === 'PENDING_APPROVAL') : ['SUPER_ADMIN', 'IT_ADMIN', 'ADMIN', 'ACCOUNTING'].includes(userRole);
+    const canEditOrder = isClient ? (po.status === 'PENDING_APPROVAL') : ['SUPER_ADMIN', 'IT_ADMIN', 'ADMIN', 'ACCOUNTING', 'VYUCEUTICAL_OPERATOR'].includes(userRole);
     const canStartJO = !isClient && (po.status === 'APPROVED' || po.status === 'IN_PRODUCTION');
+
 
     const itemsRows = items.map((item, idx) => {
         totalTarget += item.target_quantity;
@@ -1740,11 +1741,12 @@ async function openViewPOModal(poId) {
 
                 <!-- Footer Actions -->
                 <div class="flex flex-wrap justify-between items-center gap-2 pt-3 border-t border-slate-100 flex-shrink-0">
-                        ${(canEditOrder && po.status !== 'COMPLETED' && po.status !== 'CANCELLED' && po.status !== 'VOIDED' && (!po.deliveries || po.deliveries.length === 0)) ? `
+                        ${(canEditOrder && po.status !== 'COMPLETED' && po.status !== 'CANCELLED' && po.status !== 'VOIDED' && (!po.deliveries || !po.deliveries.some(d => d.status !== 'CANCELLED'))) ? `
                             <button onclick="closeModal(); openEditPOModal('${po.id}');" class="px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-300 rounded-xl font-bold text-xs shadow-sm transition inline-flex items-center gap-1.5" title="Update products and details of this order">
                                 <span>✏️ Update Order</span>
                             </button>
                         ` : ''}
+
                         ${(NKB.user && (NKB.user.role === 'ADMIN' || NKB.user.role === 'SUPER_ADMIN') && po.status === 'PENDING_APPROVAL') ? `
                             <button onclick="approvePO('${po.id}', '${po.po_number}'); closeModal();" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs shadow-sm transition">
                                 Approve Order
@@ -1896,6 +1898,7 @@ let editPOCatalog = [];
 let editingPOId = null;
 
 async function openEditPOModal(poId) {
+    editingPOId = poId;
     const root = document.getElementById('modals-root') || document.getElementById('client-modals-root');
     if (!root) return;
 
@@ -1918,12 +1921,13 @@ async function openEditPOModal(poId) {
     const po = res.data;
 
     // Verify order hasn't been delivered or dispatched
-    const hasDeliveries = (po.deliveries && po.deliveries.length > 0) || (po.dr_count && po.dr_count > 0);
+    const hasDeliveries = (po.deliveries && po.deliveries.some(d => d.status !== 'CANCELLED')) || (po.dr_count && po.dr_count > 0);
     if (po.status === 'COMPLETED' || hasDeliveries) {
         NKB.showToast('Cannot update Purchase Order: Order has already been delivered or delivery receipts have been created.', 'error');
         closeModal();
         return;
     }
+
 
     const isVyuceutical = po.is_vyuceutical_ops === 1 || (po.company_name && po.company_name.toLowerCase().includes('vyuceutical'));
 
@@ -2030,7 +2034,9 @@ async function openEditPOModal(poId) {
                 </div>
                 
                 <form id="form-edit-po" onsubmit="submitEditPO(event)" class="space-y-4 text-xs font-normal flex-1 overflow-y-auto pr-1">
+                    <input type="hidden" id="edit-po-id" value="${po.id}">
                     <div class="grid grid-cols-1 sm:grid-cols-4 gap-3.5">
+
                         <div>
                             <label class="block text-slate-500 font-medium text-xs mb-1.5 uppercase tracking-wider">Client / Buyer</label>
                             <div class="px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 text-slate-700 font-medium text-xs">
@@ -2621,8 +2627,12 @@ function recalculateEditPOTotals(currentGrandTotal) {
 window.recalculateEditPOTotals = recalculateEditPOTotals;
 
 async function submitEditPO(e) {
-    e.preventDefault();
-    if (!editingPOId) return;
+    if (e && e.preventDefault) e.preventDefault();
+    const poId = editingPOId || document.getElementById('edit-po-id')?.value;
+    if (!poId) {
+        NKB.showToast('Invalid Order ID.', 'error');
+        return;
+    }
 
     if (!editPOLineItems || editPOLineItems.length === 0) {
         NKB.showToast('Please add at least one product line item to the order.', 'error');
@@ -2636,65 +2646,84 @@ async function submitEditPO(e) {
         }
     }
 
-    const poDate = document.getElementById('edit-po-date').value;
-    const deliveryDate = document.getElementById('edit-po-delivery-date').value;
-    const customerPoNumber = document.getElementById('edit-po-customer-po-number')?.value?.trim() || null;
-    const policy = document.getElementById('edit-po-billing-policy').value;
-    const formOfPaymentEl = document.getElementById('edit-po-form-of-payment');
-    let formOfPayment = formOfPaymentEl ? formOfPaymentEl.value : undefined;
-    if (formOfPayment === 'CUSTOM') {
-        const customInput = document.getElementById('edit-po-form-of-payment-custom');
-        formOfPayment = customInput ? (customInput.value.trim() || 'COD') : 'COD';
+    const submitBtn = e?.target?.querySelector ? e.target.querySelector('button[type="submit"]') : document.querySelector('#form-edit-po button[type="submit"]');
+    const origBtnHtml = submitBtn ? submitBtn.innerHTML : '';
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span>⏳ Updating Order...</span>';
     }
-    const notes = document.getElementById('edit-po-notes').value;
-    const paymentMadeInput = document.getElementById('edit-po-payment-made');
-    const paymentMade = paymentMadeInput ? Math.max(0, parseFloat(paymentMadeInput.value) || 0) : 0;
 
-    const isRevisionedCheckbox = document.getElementById('edit-po-is-revisioned');
-    const isRevisioned = isRevisionedCheckbox ? isRevisionedCheckbox.checked : undefined;
-    const revisionNotesInput = document.getElementById('edit-po-revision-notes');
-    const revisionNotes = revisionNotesInput ? revisionNotesInput.value.trim() : undefined;
-
-    const res = await NKB.api(`/api/orders/${editingPOId}`, {
-        method: 'PUT',
-        body: JSON.stringify({
-            po_date: poDate || undefined,
-            expected_delivery_date: deliveryDate || null,
-            customer_po_number: customerPoNumber,
-            billing_policy: policy,
-            form_of_payment: formOfPayment,
-            category: document.getElementById('edit-po-category')?.value || null,
-            notes,
-            payment_made: paymentMade,
-            is_revisioned: isRevisioned,
-            revision_notes: revisionNotes,
-            items: editPOLineItems.map(item => {
-                const prod = editPOCatalog.find(p => p.id === item.product_id);
-                return {
-                    product_id: item.product_id,
-                    item_name: prod ? (prod.clean_name || prod.name) : (item.item_name || item.name || undefined),
-                    target_quantity: Math.max(1, parseInt(item.target_quantity) || 1),
-                    unit_price: item.unit_price !== undefined ? Number(item.unit_price) : undefined,
-                    delivery_date: item.delivery_date ? item.delivery_date.trim() : undefined,
-                    save_custom_price: true
-                };
-            })
-        })
-    });
-
-
-    if (res.success) {
-        NKB.showToast(`Purchase Order ${res.data.po_number} updated successfully!`, 'success');
-        const savedId = editingPOId;
-        closeModal();
-        if (typeof loadOrders === 'function') {
-            loadOrders();
+    try {
+        const poDate = document.getElementById('edit-po-date').value;
+        const deliveryDate = document.getElementById('edit-po-delivery-date').value;
+        const customerPoNumber = document.getElementById('edit-po-customer-po-number')?.value?.trim() || null;
+        const policy = document.getElementById('edit-po-billing-policy').value;
+        const formOfPaymentEl = document.getElementById('edit-po-form-of-payment');
+        let formOfPayment = formOfPaymentEl ? formOfPaymentEl.value : undefined;
+        if (formOfPayment === 'CUSTOM') {
+            const customInput = document.getElementById('edit-po-form-of-payment-custom');
+            formOfPayment = customInput ? (customInput.value.trim() || 'COD') : 'COD';
         }
-        await openViewPOModal(savedId);
-    } else {
-        NKB.showToast(res.error || 'Failed to update PO.', 'error');
+        const notes = document.getElementById('edit-po-notes').value;
+        const paymentMadeInput = document.getElementById('edit-po-payment-made');
+        const paymentMade = paymentMadeInput ? Math.max(0, parseFloat(paymentMadeInput.value) || 0) : 0;
+
+        const isRevisionedCheckbox = document.getElementById('edit-po-is-revisioned');
+        const isRevisioned = isRevisionedCheckbox ? isRevisionedCheckbox.checked : undefined;
+        const revisionNotesInput = document.getElementById('edit-po-revision-notes');
+        const revisionNotes = revisionNotesInput ? revisionNotesInput.value.trim() : undefined;
+
+        const res = await NKB.api(`/api/orders/${poId}`, {
+            method: 'PUT',
+            body: JSON.stringify({
+                po_date: poDate || undefined,
+                expected_delivery_date: deliveryDate || null,
+                customer_po_number: customerPoNumber,
+                billing_policy: policy,
+                form_of_payment: formOfPayment,
+                category: document.getElementById('edit-po-category')?.value || null,
+                notes,
+                payment_made: paymentMade,
+                is_revisioned: isRevisioned,
+                revision_notes: revisionNotes,
+                items: editPOLineItems.map(item => {
+                    const prod = editPOCatalog.find(p => p.id === item.product_id);
+                    return {
+                        product_id: item.product_id,
+                        item_name: prod ? (prod.clean_name || prod.name) : (item.item_name || item.name || undefined),
+                        target_quantity: Math.max(1, parseInt(item.target_quantity) || 1),
+                        unit_price: item.unit_price !== undefined ? Number(item.unit_price) : undefined,
+                        delivery_date: item.delivery_date ? item.delivery_date.trim() : undefined,
+                        save_custom_price: true
+                    };
+                })
+            })
+        });
+
+        if (res.success) {
+            NKB.showToast(`Purchase Order ${res.data.po_number} updated successfully!`, 'success');
+            const savedId = poId;
+            closeModal();
+            if (typeof loadOrders === 'function') {
+                loadOrders();
+            }
+            if (typeof openViewPOModal === 'function') {
+                await openViewPOModal(savedId).catch(() => null);
+            }
+        } else {
+            NKB.showToast(res.error || 'Failed to update PO.', 'error');
+        }
+    } catch (err) {
+        console.error('Error updating order:', err);
+        NKB.showToast('Network error while updating order.', 'error');
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = origBtnHtml;
+        }
     }
 }
+
 
 // Global click-away listener to dismiss Edit PO product suggestions
 document.addEventListener('click', (e) => {
@@ -2710,7 +2739,9 @@ document.addEventListener('click', (e) => {
 
 window.openViewPOModal = openViewPOModal;
 window.openEditPOModal = openEditPOModal;
+window.submitEditPO = submitEditPO;
 window.closeModal = closeModal;
+
 window.NKB = NKB;
 window.escapeHTML = NKB.escapeHTML;
 window.escapeHtml = NKB.escapeHtml;
