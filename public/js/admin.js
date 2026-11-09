@@ -8241,20 +8241,10 @@ async function openCreatePOModal(options = {}) {
                             <input type="date" id="create-po-delivery-date" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white text-slate-800 text-xs focus:ring-1 focus:ring-indigo-500">
                         </div>
                         <div>
-                            <div class="flex items-center justify-between mb-1">
-                                <label class="block text-slate-600 font-semibold text-[11px]">Down Payment</label>
-                                <div class="inline-flex rounded-md shadow-2xs p-0.5 bg-slate-100 border border-slate-200" id="create-po-dp-toggle">
-                                    <button type="button" id="create-po-dp-type-pct" onclick="setCreatePODownpaymentType('PERCENTAGE')" class="px-2 py-0.5 text-[10px] font-bold rounded bg-indigo-600 text-white shadow-xs transition" title="Percentage of Total Bill">
-                                        %
-                                    </button>
-                                    <button type="button" id="create-po-dp-type-amt" onclick="setCreatePODownpaymentType('AMOUNT')" class="px-2 py-0.5 text-[10px] font-bold rounded text-slate-600 hover:text-slate-900 transition" title="Fixed Amount (₱)">
-                                        ₱
-                                    </button>
-                                </div>
-                            </div>
+                            <label class="block text-slate-600 font-semibold text-[11px] mb-1">Down Payment</label>
                             <input type="hidden" id="create-po-downpayment-type" value="PERCENTAGE">
-                            <div class="relative">
-                                <span id="create-po-dp-prefix" class="hidden absolute left-2.5 top-1.5 text-slate-400 font-mono text-xs font-bold">₱</span>
+                            <div class="flex items-center w-full h-[34px] px-2.5 border border-slate-300 rounded-lg bg-white focus-within:ring-1 focus-within:ring-indigo-500 focus-within:border-indigo-500 transition shadow-2xs">
+                                <span id="create-po-dp-prefix" class="hidden text-slate-400 font-mono text-xs font-bold mr-1 select-none">₱</span>
                                 <input type="number" 
                                        step="0.01" 
                                        min="0" 
@@ -8262,12 +8252,19 @@ async function openCreatePOModal(options = {}) {
                                        id="create-po-downpayment-val" 
                                        value="0.00" 
                                        oninput="onAdminPODownpaymentInput(this.value)" 
-                                       class="w-full pl-2.5 pr-7 py-1.5 border border-slate-300 rounded-lg bg-white text-slate-800 text-xs font-mono font-bold text-right focus:ring-1 focus:ring-indigo-500" 
+                                       class="w-full min-w-0 bg-transparent border-0 p-0 text-slate-800 text-xs font-mono font-bold text-left focus:ring-0 focus:outline-none" 
                                        placeholder="0.00">
-                                <span id="create-po-dp-suffix" class="absolute right-2.5 top-1.5 text-slate-400 font-mono text-xs font-bold">%</span>
+                                <div class="inline-flex rounded-md p-0.5 bg-slate-100 border border-slate-200 shrink-0 ml-1.5" id="create-po-dp-toggle">
+                                    <button type="button" id="create-po-dp-type-pct" onclick="setCreatePODownpaymentType('PERCENTAGE')" class="px-2 py-0.5 text-[10px] font-bold rounded bg-indigo-600 text-white shadow-xs transition leading-none" title="Percentage of Total Bill">
+                                        %
+                                    </button>
+                                    <button type="button" id="create-po-dp-type-amt" onclick="setCreatePODownpaymentType('AMOUNT')" class="px-2 py-0.5 text-[10px] font-bold rounded text-slate-600 hover:text-slate-900 transition leading-none" title="Fixed Amount (₱)">
+                                        ₱
+                                    </button>
+                                </div>
                             </div>
                             <input type="hidden" id="create-po-downpayment-pct" value="0.00">
-                            <div class="text-[10px] text-slate-400 mt-1 flex justify-between">
+                            <div class="text-[10px] text-slate-400 mt-1 flex justify-between items-center">
                                 <span>Equivalent:</span>
                                 <strong id="create-po-dp-computed" class="font-mono text-indigo-700 font-bold">₱0.00</strong>
                             </div>
@@ -8895,25 +8892,17 @@ function setCreatePODownpaymentType(type) {
     const valInput = document.getElementById('create-po-downpayment-val');
 
     if (type === 'AMOUNT') {
-        if (btnPct) btnPct.className = 'px-2 py-0.5 text-[10px] font-bold rounded text-slate-600 hover:text-slate-900 transition';
-        if (btnAmt) btnAmt.className = 'px-2 py-0.5 text-[10px] font-bold rounded bg-indigo-600 text-white shadow-xs transition';
+        if (btnPct) btnPct.className = 'px-2 py-0.5 text-[10px] font-bold rounded text-slate-600 hover:text-slate-900 transition leading-none';
+        if (btnAmt) btnAmt.className = 'px-2 py-0.5 text-[10px] font-bold rounded bg-indigo-600 text-white shadow-xs transition leading-none';
         if (prefixEl) prefixEl.classList.remove('hidden');
         if (suffixEl) suffixEl.classList.add('hidden');
-        if (valInput) {
-            valInput.removeAttribute('max');
-            valInput.classList.remove('pr-7');
-            valInput.classList.add('pl-7', 'pr-2.5');
-        }
+        if (valInput) valInput.removeAttribute('max');
     } else {
-        if (btnPct) btnPct.className = 'px-2 py-0.5 text-[10px] font-bold rounded bg-indigo-600 text-white shadow-xs transition';
-        if (btnAmt) btnAmt.className = 'px-2 py-0.5 text-[10px] font-bold rounded text-slate-600 hover:text-slate-900 transition';
+        if (btnPct) btnPct.className = 'px-2 py-0.5 text-[10px] font-bold rounded bg-indigo-600 text-white shadow-xs transition leading-none';
+        if (btnAmt) btnAmt.className = 'px-2 py-0.5 text-[10px] font-bold rounded text-slate-600 hover:text-slate-900 transition leading-none';
         if (prefixEl) prefixEl.classList.add('hidden');
-        if (suffixEl) suffixEl.classList.remove('hidden');
-        if (valInput) {
-            valInput.setAttribute('max', '100');
-            valInput.classList.remove('pl-7');
-            valInput.classList.add('pl-2.5', 'pr-7');
-        }
+        if (suffixEl) suffixEl.classList.add('hidden');
+        if (valInput) valInput.setAttribute('max', '100');
     }
     calculateAdminPOTotals();
 }

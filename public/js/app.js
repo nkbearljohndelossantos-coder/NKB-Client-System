@@ -2198,41 +2198,40 @@ async function openEditPOModal(poId) {
                             </div>
                             <!-- Downpayment Option: Percentage vs Amount -->
                             <div class="p-3 bg-white rounded-xl border border-indigo-100 shadow-2xs space-y-2">
-                                <div class="flex items-center justify-between">
-                                    <label class="block text-[11px] font-bold text-indigo-950 uppercase tracking-wider">
+                                <div>
+                                    <label class="block text-[11px] font-bold text-indigo-950 uppercase tracking-wider mb-1">
                                         💰 Downpayment / Deposit
                                     </label>
-                                    <div class="inline-flex rounded-md shadow-2xs p-0.5 bg-slate-100 border border-slate-200" id="edit-po-dp-toggle">
-                                        <button type="button" 
-                                                id="edit-po-dp-type-pct" 
-                                                onclick="setEditPODownpaymentType('PERCENTAGE')" 
-                                                class="px-2 py-0.5 text-[10px] font-bold rounded ${initialDpType === 'PERCENTAGE' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'} transition" 
-                                                title="Percentage of Total Bill">
-                                            %
-                                        </button>
-                                        <button type="button" 
-                                                id="edit-po-dp-type-amt" 
-                                                onclick="setEditPODownpaymentType('AMOUNT')" 
-                                                class="px-2 py-0.5 text-[10px] font-bold rounded ${initialDpType === 'AMOUNT' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'} transition" 
-                                                title="Fixed Amount (₱)">
-                                            ₱
-                                        </button>
+                                    <input type="hidden" id="edit-po-downpayment-type" value="${initialDpType}">
+                                    <div class="flex items-center w-full h-[36px] px-3 border border-indigo-200 rounded-lg bg-emerald-50/30 focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500 transition shadow-2xs">
+                                        <span id="edit-po-dp-prefix" class="${initialDpType === 'AMOUNT' ? '' : 'hidden'} text-slate-500 font-mono text-xs font-bold mr-1 select-none">₱</span>
+                                        <input type="number" 
+                                               id="edit-po-downpayment-val" 
+                                               step="0.01" 
+                                               min="0" 
+                                               ${initialDpType === 'PERCENTAGE' ? 'max="100"' : ''} 
+                                               value="${initialDpVal.toFixed(2)}" 
+                                               oninput="recalculateEditPOTotals()" 
+                                               class="w-full min-w-0 bg-transparent border-0 p-0 text-xs font-bold font-mono text-emerald-700 text-left focus:ring-0 focus:outline-none" 
+                                               placeholder="0.00" 
+                                               title="Downpayment to deduct from the order total bill">
+                                        <div class="inline-flex rounded-md p-0.5 bg-slate-100 border border-slate-200 shrink-0 ml-2" id="edit-po-dp-toggle">
+                                            <button type="button" 
+                                                    id="edit-po-dp-type-pct" 
+                                                    onclick="setEditPODownpaymentType('PERCENTAGE')" 
+                                                    class="px-2 py-0.5 text-[10px] font-bold rounded ${initialDpType === 'PERCENTAGE' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'} transition leading-none" 
+                                                    title="Percentage of Total Bill">
+                                                %
+                                            </button>
+                                            <button type="button" 
+                                                    id="edit-po-dp-type-amt" 
+                                                    onclick="setEditPODownpaymentType('AMOUNT')" 
+                                                    class="px-2 py-0.5 text-[10px] font-bold rounded ${initialDpType === 'AMOUNT' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'} transition leading-none" 
+                                                    title="Fixed Amount (₱)">
+                                                ₱
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
-                                <input type="hidden" id="edit-po-downpayment-type" value="${initialDpType}">
-                                <div class="relative">
-                                    <span id="edit-po-dp-prefix" class="${initialDpType === 'AMOUNT' ? '' : 'hidden'} absolute left-3 top-2 text-slate-400 font-mono text-xs font-bold">₱</span>
-                                    <input type="number" 
-                                           id="edit-po-downpayment-val" 
-                                           step="0.01" 
-                                           min="0" 
-                                           ${initialDpType === 'PERCENTAGE' ? 'max="100"' : ''} 
-                                           value="${initialDpVal.toFixed(2)}" 
-                                           oninput="recalculateEditPOTotals()" 
-                                           class="w-full ${initialDpType === 'AMOUNT' ? 'pl-7 pr-3' : 'pl-3 pr-7'} py-1.5 border border-indigo-200 rounded-lg text-xs font-bold font-mono text-emerald-700 bg-emerald-50/30 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-2xs text-right" 
-                                           placeholder="0.00" 
-                                           title="Downpayment to deduct from the order total bill">
-                                    <span id="edit-po-dp-suffix" class="${initialDpType === 'PERCENTAGE' ? '' : 'hidden'} absolute right-3 top-2 text-slate-400 font-mono text-xs font-bold">%</span>
                                 </div>
                                 <input type="hidden" id="edit-po-payment-made" value="${Number(po.payment_made || po.paid_amount || 0).toFixed(2)}">
                                 <div class="flex justify-between items-center text-[10px] text-slate-500">
@@ -2656,25 +2655,17 @@ function setEditPODownpaymentType(type) {
     const valInput = document.getElementById('edit-po-downpayment-val');
 
     if (type === 'AMOUNT') {
-        if (btnPct) btnPct.className = 'px-2 py-0.5 text-[10px] font-bold rounded text-slate-600 hover:text-slate-900 transition';
-        if (btnAmt) btnAmt.className = 'px-2 py-0.5 text-[10px] font-bold rounded bg-indigo-600 text-white shadow-xs transition';
+        if (btnPct) btnPct.className = 'px-2 py-0.5 text-[10px] font-bold rounded text-slate-600 hover:text-slate-900 transition leading-none';
+        if (btnAmt) btnAmt.className = 'px-2 py-0.5 text-[10px] font-bold rounded bg-indigo-600 text-white shadow-xs transition leading-none';
         if (prefixEl) prefixEl.classList.remove('hidden');
         if (suffixEl) suffixEl.classList.add('hidden');
-        if (valInput) {
-            valInput.removeAttribute('max');
-            valInput.classList.remove('pr-7', 'pl-3');
-            valInput.classList.add('pl-7', 'pr-3');
-        }
+        if (valInput) valInput.removeAttribute('max');
     } else {
-        if (btnPct) btnPct.className = 'px-2 py-0.5 text-[10px] font-bold rounded bg-indigo-600 text-white shadow-xs transition';
-        if (btnAmt) btnAmt.className = 'px-2 py-0.5 text-[10px] font-bold rounded text-slate-600 hover:text-slate-900 transition';
+        if (btnPct) btnPct.className = 'px-2 py-0.5 text-[10px] font-bold rounded bg-indigo-600 text-white shadow-xs transition leading-none';
+        if (btnAmt) btnAmt.className = 'px-2 py-0.5 text-[10px] font-bold rounded text-slate-600 hover:text-slate-900 transition leading-none';
         if (prefixEl) prefixEl.classList.add('hidden');
-        if (suffixEl) suffixEl.classList.remove('hidden');
-        if (valInput) {
-            valInput.setAttribute('max', '100');
-            valInput.classList.remove('pl-7', 'pr-3');
-            valInput.classList.add('pl-3', 'pr-7');
-        }
+        if (suffixEl) suffixEl.classList.add('hidden');
+        if (valInput) valInput.setAttribute('max', '100');
     }
     recalculateEditPOTotals();
 }
