@@ -316,6 +316,7 @@ router.get('/export', authenticateToken, (req, res) => {
             SELECT po.id, po.po_number, po.so_number, po.customer_po_number, c.company_name as client_name,
                    po.po_date, po.expected_delivery_date, po.form_of_payment,
                    po.status, po.subtotal, po.tax_amount, po.grand_total,
+                   po.downpayment_type, po.downpayment_value, po.downpayment_amount,
                    COALESCE(po.payment_made, 0) as payment_made,
                    po.notes, po.created_at, po.updated_at,
                    (SELECT GROUP_CONCAT(COALESCE(poi.item_name, p.name) || ' (' || poi.target_quantity || ' ' || COALESCE(p.unit, 'pcs') || CASE WHEN poi.delivery_date IS NOT NULL AND poi.delivery_date != '' THEN ', Due: ' || poi.delivery_date ELSE '' END || ')', '; ')
@@ -499,7 +500,7 @@ router.get('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
  * Create a new Purchase Order
  */
 router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
-    let { client_id, expected_delivery_date, tolerance_percent, billing_policy, notes, form_of_payment, items, tax_percent, category, category_color, is_buffer_stock } = req.body;
+    let { client_id, expected_delivery_date, tolerance_percent, billing_policy, notes, form_of_payment, items, tax_percent, category, category_color, is_buffer_stock, downpayment_type, downpayment_value, downpayment_amount, payment_made } = req.body;
     let customer_po_number = req.body.customer_po_number || req.body.client_po_number || req.body.customer_po || null;
     if (typeof customer_po_number === 'string') {
         customer_po_number = customer_po_number.trim() || null;
@@ -619,6 +620,24 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
         const taxAmount = Math.round(((subtotal * taxRate) / 100) * 100) / 100;
         const grandTotal = Math.round((subtotal + taxAmount) * 100) / 100;
 
+        const dpType = (String(downpayment_type || '').toUpperCase() === 'AMOUNT') ? 'AMOUNT' : 'PERCENTAGE';
+        let dpVal = (downpayment_value !== undefined && downpayment_value !== null && !isNaN(parseFloat(downpayment_value)))
+            ? Math.max(0, parseFloat(downpayment_value))
+            : 0.0;
+        let dpAmount = 0.0;
+        if (dpType === 'PERCENTAGE') {
+            dpAmount = Math.round(((grandTotal * dpVal) / 100) * 100) / 100;
+        } else {
+            dpAmount = (downpayment_amount !== undefined && downpayment_amount !== null && !isNaN(parseFloat(downpayment_amount)))
+                ? Math.max(0, parseFloat(downpayment_amount))
+                : dpVal;
+            dpVal = dpAmount;
+        }
+
+        const recordedPaymentMade = (payment_made !== undefined && payment_made !== null && !isNaN(parseFloat(payment_made)))
+            ? Math.max(0, parseFloat(payment_made))
+            : (dpAmount > 0 ? dpAmount : 0.0);
+
         // Auto-assign category if not explicitly provided
         let finalCategory = category || null;
         let finalCategoryColor = category_color || null;
@@ -657,8 +676,8 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
 
         db.prepare(`
             INSERT INTO purchase_orders
-            (id, po_number, so_number, customer_po_number, client_id, po_date, expected_delivery_date, tolerance_percent, billing_policy, status, notes, form_of_payment, category, category_color, subtotal, tax_percent, tax_amount, grand_total, is_buffer_stock, created_by, approved_by, approved_at)
-            VALUES (?, ?, ?, ?, ?, date('now', 'localtime'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (id, po_number, so_number, customer_po_number, client_id, po_date, expected_delivery_date, tolerance_percent, billing_policy, status, notes, form_of_payment, category, category_color, subtotal, tax_percent, tax_amount, grand_total, downpayment_type, downpayment_value, downpayment_amount, payment_made, is_buffer_stock, created_by, approved_by, approved_at)
+            VALUES (?, ?, ?, ?, ?, date('now', 'localtime'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
             poId,
             poNumber,
@@ -677,6 +696,10 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
             taxRate,
             taxAmount,
             grandTotal,
+            dpType ?? 'PERCENTAGE',
+            dpVal ?? 0.0,
+            dpAmount ?? 0.0,
+            recordedPaymentMade ?? 0.0,
             isBufferStock,
             req.user.id,
             initialStatus === 'APPROVED' ? req.user.id : null,
@@ -748,7 +771,7 @@ router.post('/', authenticateToken, enforceClientIsolation, (req, res) => {
  */
 router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
     const { id } = req.params;
-    let { po_date, expected_delivery_date, tolerance_percent, billing_policy, notes, form_of_payment, items, tax_percent, category, category_color, is_buffer_stock, payment_made, is_revisioned, revision_notes } = req.body;
+    let { po_date, expected_delivery_date, tolerance_percent, billing_policy, notes, form_of_payment, items, tax_percent, category, category_color, is_buffer_stock, payment_made, is_revisioned, revision_notes, downpayment_type, downpayment_value, downpayment_amount } = req.body;
     if (form_of_payment === undefined && req.body.terms !== undefined) {
         form_of_payment = req.body.terms;
     }
@@ -1002,9 +1025,35 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
         }
 
         const newIsBufferStock = is_buffer_stock !== undefined ? ((is_buffer_stock === true || is_buffer_stock === 1 || is_buffer_stock === '1' || is_buffer_stock === 'true') ? 1 : 0) : (po.is_buffer_stock || 0);
+
+        const newDpType = (downpayment_type !== undefined)
+            ? ((String(downpayment_type).toUpperCase() === 'AMOUNT') ? 'AMOUNT' : 'PERCENTAGE')
+            : (po.downpayment_type || 'PERCENTAGE');
+
+        let newDpVal;
+        if (downpayment_value !== undefined && downpayment_value !== null && !isNaN(parseFloat(downpayment_value))) {
+            newDpVal = Math.max(0, parseFloat(downpayment_value));
+        } else if (po.downpayment_value !== undefined && po.downpayment_value !== null) {
+            newDpVal = parseFloat(po.downpayment_value);
+        } else {
+            newDpVal = 0.0;
+        }
+
+        let newDpAmount = 0.0;
+        if (newDpType === 'PERCENTAGE') {
+            newDpAmount = Math.round(((grandTotal * newDpVal) / 100) * 100) / 100;
+        } else {
+            if (downpayment_amount !== undefined && downpayment_amount !== null && !isNaN(parseFloat(downpayment_amount))) {
+                newDpAmount = Math.max(0, parseFloat(downpayment_amount));
+            } else {
+                newDpAmount = newDpVal;
+            }
+            newDpVal = newDpAmount;
+        }
+
         const newPaymentMade = (payment_made !== undefined && payment_made !== null && !isNaN(parseFloat(payment_made)))
             ? Math.max(0, parseFloat(payment_made))
-            : (po.payment_made !== undefined && po.payment_made !== null ? parseFloat(po.payment_made) : 0.0);
+            : ((downpayment_amount !== undefined || downpayment_value !== undefined) ? newDpAmount : (po.payment_made !== undefined && po.payment_made !== null ? parseFloat(po.payment_made) : 0.0));
 
         let newIsRevisioned = po.is_revisioned || 0;
         let newRevisionCount = po.revision_count || 0;
@@ -1041,6 +1090,9 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
                 tax_percent = ?,
                 tax_amount = ?,
                 grand_total = ?,
+                downpayment_type = ?,
+                downpayment_value = ?,
+                downpayment_amount = ?,
                 is_buffer_stock = ?,
                 payment_made = ?,
                 is_revisioned = ?,
@@ -1063,6 +1115,9 @@ router.put('/:id', authenticateToken, enforceClientIsolation, (req, res) => {
             (taxRate !== undefined && taxRate !== null) ? taxRate : (po.tax_percent ?? 0.0),
             (taxAmount !== undefined && taxAmount !== null) ? taxAmount : (po.tax_amount ?? 0.0),
             (grandTotal !== undefined && grandTotal !== null) ? grandTotal : (po.grand_total ?? 0.0),
+            newDpType ?? 'PERCENTAGE',
+            newDpVal ?? 0.0,
+            newDpAmount ?? 0.0,
             newIsBufferStock ?? 0,
             newPaymentMade ?? 0.0,
             newIsRevisioned ?? 0,

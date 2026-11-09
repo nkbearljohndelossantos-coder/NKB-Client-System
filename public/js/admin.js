@@ -8241,8 +8241,36 @@ async function openCreatePOModal(options = {}) {
                             <input type="date" id="create-po-delivery-date" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white text-slate-800 text-xs focus:ring-1 focus:ring-indigo-500">
                         </div>
                         <div>
-                            <label class="block text-slate-600 font-semibold text-[11px] mb-1">Down Payment %</label>
-                            <input type="number" step="0.01" min="0" max="100" id="create-po-downpayment-pct" value="0.00" oninput="calculateAdminPOTotals()" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white text-slate-800 text-xs font-mono text-right focus:ring-1 focus:ring-indigo-500">
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="block text-slate-600 font-semibold text-[11px]">Down Payment</label>
+                                <div class="inline-flex rounded-md shadow-2xs p-0.5 bg-slate-100 border border-slate-200" id="create-po-dp-toggle">
+                                    <button type="button" id="create-po-dp-type-pct" onclick="setCreatePODownpaymentType('PERCENTAGE')" class="px-2 py-0.5 text-[10px] font-bold rounded bg-indigo-600 text-white shadow-xs transition" title="Percentage of Total Bill">
+                                        %
+                                    </button>
+                                    <button type="button" id="create-po-dp-type-amt" onclick="setCreatePODownpaymentType('AMOUNT')" class="px-2 py-0.5 text-[10px] font-bold rounded text-slate-600 hover:text-slate-900 transition" title="Fixed Amount (₱)">
+                                        ₱
+                                    </button>
+                                </div>
+                            </div>
+                            <input type="hidden" id="create-po-downpayment-type" value="PERCENTAGE">
+                            <div class="relative">
+                                <span id="create-po-dp-prefix" class="hidden absolute left-2.5 top-1.5 text-slate-400 font-mono text-xs font-bold">₱</span>
+                                <input type="number" 
+                                       step="0.01" 
+                                       min="0" 
+                                       max="100"
+                                       id="create-po-downpayment-val" 
+                                       value="0.00" 
+                                       oninput="onAdminPODownpaymentInput(this.value)" 
+                                       class="w-full pl-2.5 pr-7 py-1.5 border border-slate-300 rounded-lg bg-white text-slate-800 text-xs font-mono font-bold text-right focus:ring-1 focus:ring-indigo-500" 
+                                       placeholder="0.00">
+                                <span id="create-po-dp-suffix" class="absolute right-2.5 top-1.5 text-slate-400 font-mono text-xs font-bold">%</span>
+                            </div>
+                            <input type="hidden" id="create-po-downpayment-pct" value="0.00">
+                            <div class="text-[10px] text-slate-400 mt-1 flex justify-between">
+                                <span>Equivalent:</span>
+                                <strong id="create-po-dp-computed" class="font-mono text-indigo-700 font-bold">₱0.00</strong>
+                            </div>
                         </div>
                         <div class="flex items-center justify-between gap-2 pt-3">
                             <label class="flex items-center gap-1.5 cursor-pointer select-none">
@@ -8805,8 +8833,31 @@ function calculateAdminPOTotals() {
         totalQty += qty;
     });
 
-    const dpPct = parseFloat(document.getElementById('create-po-downpayment-pct')?.value) || 0;
-    const downPayment = grandTotal * (dpPct / 100);
+    const dpType = document.getElementById('create-po-downpayment-type')?.value || 'PERCENTAGE';
+    const dpValInput = document.getElementById('create-po-downpayment-val');
+    let dpVal = dpValInput ? (parseFloat(dpValInput.value) || 0) : (parseFloat(document.getElementById('create-po-downpayment-pct')?.value) || 0);
+
+    let downPayment = 0;
+    if (dpType === 'PERCENTAGE') {
+        downPayment = Math.round(((grandTotal * dpVal) / 100) * 100) / 100;
+    } else {
+        downPayment = Math.round(dpVal * 100) / 100;
+    }
+
+    const legacyPctEl = document.getElementById('create-po-downpayment-pct');
+    if (legacyPctEl && legacyPctEl !== dpValInput) {
+        legacyPctEl.value = (dpType === 'PERCENTAGE') ? dpVal.toFixed(2) : (grandTotal > 0 ? ((downPayment / grandTotal) * 100).toFixed(2) : '0.00');
+    }
+
+    const computedEl = document.getElementById('create-po-dp-computed');
+    if (computedEl) {
+        if (dpType === 'PERCENTAGE') {
+            computedEl.textContent = NKB.formatCurrency(downPayment);
+        } else {
+            const effPct = grandTotal > 0 ? Math.round(((downPayment / grandTotal) * 100) * 10) / 10 : 0;
+            computedEl.textContent = `${effPct}% of total`;
+        }
+    }
 
     const elSub = document.getElementById('admin-po-summary-subtotal');
     if (elSub) elSub.textContent = NKB.formatNumber(subtotal);
@@ -8832,6 +8883,46 @@ function calculateAdminPOTotals() {
     if (elLegacyGrand) elLegacyGrand.textContent = NKB.formatCurrency(grandTotal);
 }
 window.calculateAdminPOTotals = calculateAdminPOTotals;
+
+function setCreatePODownpaymentType(type) {
+    const hiddenType = document.getElementById('create-po-downpayment-type');
+    if (hiddenType) hiddenType.value = type;
+
+    const btnPct = document.getElementById('create-po-dp-type-pct');
+    const btnAmt = document.getElementById('create-po-dp-type-amt');
+    const prefixEl = document.getElementById('create-po-dp-prefix');
+    const suffixEl = document.getElementById('create-po-dp-suffix');
+    const valInput = document.getElementById('create-po-downpayment-val');
+
+    if (type === 'AMOUNT') {
+        if (btnPct) btnPct.className = 'px-2 py-0.5 text-[10px] font-bold rounded text-slate-600 hover:text-slate-900 transition';
+        if (btnAmt) btnAmt.className = 'px-2 py-0.5 text-[10px] font-bold rounded bg-indigo-600 text-white shadow-xs transition';
+        if (prefixEl) prefixEl.classList.remove('hidden');
+        if (suffixEl) suffixEl.classList.add('hidden');
+        if (valInput) {
+            valInput.removeAttribute('max');
+            valInput.classList.remove('pr-7');
+            valInput.classList.add('pl-7', 'pr-2.5');
+        }
+    } else {
+        if (btnPct) btnPct.className = 'px-2 py-0.5 text-[10px] font-bold rounded bg-indigo-600 text-white shadow-xs transition';
+        if (btnAmt) btnAmt.className = 'px-2 py-0.5 text-[10px] font-bold rounded text-slate-600 hover:text-slate-900 transition';
+        if (prefixEl) prefixEl.classList.add('hidden');
+        if (suffixEl) suffixEl.classList.remove('hidden');
+        if (valInput) {
+            valInput.setAttribute('max', '100');
+            valInput.classList.remove('pl-7');
+            valInput.classList.add('pl-2.5', 'pr-7');
+        }
+    }
+    calculateAdminPOTotals();
+}
+window.setCreatePODownpaymentType = setCreatePODownpaymentType;
+
+function onAdminPODownpaymentInput(val) {
+    calculateAdminPOTotals();
+}
+window.onAdminPODownpaymentInput = onAdminPODownpaymentInput;
 
 function renderAdminPOLineItems() {
     const tbody = document.getElementById('admin-po-lines-body');
@@ -8978,6 +9069,12 @@ async function submitCreatePO(e, targetStatus = 'PENDING') {
         const isBufferStock = document.getElementById('create-po-is-buffer-stock')?.checked ? 1 : 0;
         const customerPoNumber = document.getElementById('create-po-customer-po-number')?.value?.trim() || undefined;
         const deliveryDate = document.getElementById('create-po-delivery-date')?.value?.trim() || undefined;
+        const dpType = document.getElementById('create-po-downpayment-type')?.value || 'PERCENTAGE';
+        const dpValInput = document.getElementById('create-po-downpayment-val');
+        const dpVal = dpValInput ? (parseFloat(dpValInput.value) || 0) : (parseFloat(document.getElementById('create-po-downpayment-pct')?.value) || 0);
+        const summaryDpText = document.getElementById('admin-po-summary-downpayment')?.textContent || '';
+        const dpAmount = parseFloat(summaryDpText.replace(/[^0-9.-]+/g, '')) || 0;
+
         const res = await NKB.api('/api/orders', {
             method: 'POST',
             body: JSON.stringify({
@@ -8988,6 +9085,10 @@ async function submitCreatePO(e, targetStatus = 'PENDING') {
                 billing_policy: policy,
                 is_buffer_stock: isBufferStock,
                 form_of_payment: formOfPayment,
+                downpayment_type: dpType,
+                downpayment_value: dpVal,
+                downpayment_amount: dpAmount,
+                payment_made: dpAmount,
                 category: document.getElementById('create-po-category')?.value || (isBufferStock ? 'Buffer Stocks' : undefined),
                 notes,
                 items: adminPOLineItems.map(item => {

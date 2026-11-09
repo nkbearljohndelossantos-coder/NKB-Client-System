@@ -107,6 +107,15 @@ function runMigrations(dbInstance, isMysql) {
         try {
             dbInstance.exec(`ALTER TABLE purchase_orders ADD COLUMN category_color ${textType};`);
         } catch (_) {}
+        try {
+            dbInstance.exec(`ALTER TABLE purchase_orders ADD COLUMN downpayment_type ${textType} DEFAULT 'PERCENTAGE';`);
+        } catch (_) {}
+        try {
+            dbInstance.exec(`ALTER TABLE purchase_orders ADD COLUMN downpayment_value ${realType} DEFAULT 0.0;`);
+        } catch (_) {}
+        try {
+            dbInstance.exec(`ALTER TABLE purchase_orders ADD COLUMN downpayment_amount ${realType} DEFAULT 0.0;`);
+        } catch (_) {}
 
         // Order Categories Table
         if (isMysql) {

@@ -876,6 +876,18 @@
                         <td class="total-label">Discount</td>
                         <td class="total-val" id="disp-discount" contenteditable="false" onblur="recalculateTotals()">0.00</td>
                     </tr>
+                    <tr id="row-downpayment" style="display: none;">
+                        <td class="total-label" id="lbl-downpayment">
+                            <span id="txt-downpayment-label">Downpayment</span>
+                            <span id="dp-edit-controls" class="no-print" style="display: none; margin-left: 4px;">
+                                <select id="edit-dp-type" onchange="onEditDPTypeChange()" style="font-size: 7.5pt; font-weight: bold; border: 1px solid #94a3b8; border-radius: 3px; padding: 0 2px; background: #fff; cursor: pointer;">
+                                    <option value="PERCENTAGE">%</option>
+                                    <option value="AMOUNT">₱</option>
+                                </select>
+                            </span>
+                        </td>
+                        <td class="total-val" id="disp-downpayment" contenteditable="false" onblur="onDownpaymentBlur()">0.00</td>
+                    </tr>
                     <tr id="row-payment-made">
                         <td class="total-label">Payment Made</td>
                         <td class="total-val" id="disp-payment-made" contenteditable="false" onblur="recalculateTotals()">0.00</td>
@@ -928,6 +940,9 @@
     <script>
         let rawPoData = null;
         let isEditMode = false;
+        let currentDPType = 'PERCENTAGE';
+        let currentDPValue = 0;
+        let currentDPAmount = 0;
 
         function formatDateMMDDYYYY(val) {
             if (!val) return '';
@@ -1034,7 +1049,10 @@
             // Totals
             if (document.getElementById('disp-vat')) document.getElementById('disp-vat').contentEditable = val;
             if (document.getElementById('disp-discount')) document.getElementById('disp-discount').contentEditable = val;
+            if (document.getElementById('disp-downpayment')) document.getElementById('disp-downpayment').contentEditable = val;
             if (document.getElementById('disp-payment-made')) document.getElementById('disp-payment-made').contentEditable = val;
+            const dpEditControls = document.getElementById('dp-edit-controls');
+            if (dpEditControls) dpEditControls.style.display = editable ? 'inline-block' : 'none';
 
             // Bank lines
             document.getElementById('disp-bank-details').contentEditable = val;
@@ -1073,6 +1091,93 @@
             recalculateTotals();
         }
 
+        function updateDownpaymentDisplay(providedNet) {
+            let net = providedNet;
+            if (net === undefined) {
+                let runningSubtotal = 0;
+                document.querySelectorAll('#po-items-tbody tr').forEach(tr => {
+                    const subtotalTd = tr.querySelector('.td-subtotal');
+                    if (subtotalTd) runningSubtotal += parseCleanNumber(subtotalTd.textContent);
+                });
+                const vat = parseCleanNumber(document.getElementById('disp-vat')?.textContent || 0);
+                const discount = parseCleanNumber(document.getElementById('disp-discount')?.textContent || 0);
+                net = Math.max(0, runningSubtotal + vat - discount);
+            }
+
+            if (currentDPType === 'PERCENTAGE') {
+                currentDPAmount = Math.round(((net * currentDPValue) / 100) * 100) / 100;
+                const txtLabel = document.getElementById('txt-downpayment-label');
+                if (txtLabel) txtLabel.textContent = `Downpayment (${currentDPValue > 0 ? `${currentDPValue}%` : '0%'})`;
+            } else {
+                currentDPAmount = Math.round(currentDPValue * 100) / 100;
+                const txtLabel = document.getElementById('txt-downpayment-label');
+                if (txtLabel) txtLabel.textContent = 'Downpayment (Fixed)';
+            }
+
+            const dpEl = document.getElementById('disp-downpayment');
+            if (dpEl && document.activeElement !== dpEl) {
+                dpEl.textContent = formatNumber2(currentDPAmount);
+            }
+
+            const dpRow = document.getElementById('row-downpayment');
+            const hasDP = currentDPAmount >= 0.005 || currentDPValue >= 0.005 || isEditMode;
+            if (dpRow) {
+                dpRow.style.display = hasDP ? '' : 'none';
+            }
+        }
+
+        function onEditDPTypeChange() {
+            const select = document.getElementById('edit-dp-type');
+            if (!select) return;
+            currentDPType = select.value;
+            let runningSubtotal = 0;
+            document.querySelectorAll('#po-items-tbody tr').forEach(tr => {
+                const subtotalTd = tr.querySelector('.td-subtotal');
+                if (subtotalTd) runningSubtotal += parseCleanNumber(subtotalTd.textContent);
+            });
+            const vat = parseCleanNumber(document.getElementById('disp-vat')?.textContent || 0);
+            const discount = parseCleanNumber(document.getElementById('disp-discount')?.textContent || 0);
+            const net = Math.max(0, runningSubtotal + vat - discount);
+
+            if (currentDPType === 'PERCENTAGE') {
+                currentDPValue = net > 0 ? Math.round(((currentDPAmount / net) * 100) * 10) / 10 : 30;
+                if (currentDPValue > 100) currentDPValue = 100;
+            } else {
+                currentDPValue = currentDPAmount;
+            }
+            updateDownpaymentDisplay(net);
+            recalculateTotals();
+        }
+
+        function onDownpaymentBlur() {
+            const dpEl = document.getElementById('disp-downpayment');
+            if (!dpEl) return;
+            const entered = parseCleanNumber(dpEl.textContent);
+            let runningSubtotal = 0;
+            document.querySelectorAll('#po-items-tbody tr').forEach(tr => {
+                const subtotalTd = tr.querySelector('.td-subtotal');
+                if (subtotalTd) runningSubtotal += parseCleanNumber(subtotalTd.textContent);
+            });
+            const vat = parseCleanNumber(document.getElementById('disp-vat')?.textContent || 0);
+            const discount = parseCleanNumber(document.getElementById('disp-discount')?.textContent || 0);
+            const net = Math.max(0, runningSubtotal + vat - discount);
+
+            if (currentDPType === 'PERCENTAGE') {
+                if (entered <= 100) {
+                    currentDPValue = entered;
+                    currentDPAmount = Math.round(((net * currentDPValue) / 100) * 100) / 100;
+                } else {
+                    currentDPAmount = entered;
+                    currentDPValue = net > 0 ? Math.round(((currentDPAmount / net) * 100) * 10) / 10 : 0;
+                }
+            } else {
+                currentDPValue = entered;
+                currentDPAmount = entered;
+            }
+            updateDownpaymentDisplay(net);
+            recalculateTotals();
+        }
+
         function recalculateTotals() {
             let runningSubtotal = 0;
             document.querySelectorAll('#po-items-tbody tr').forEach(tr => {
@@ -1089,10 +1194,12 @@
             const discount = parseCleanNumber(discountEl ? discountEl.textContent : 0);
             const paymentMade = parseCleanNumber(paymentMadeEl ? paymentMadeEl.textContent : 0);
 
-            // Subtotal net after VAT & discount, then minus Payment Made
-            // If overpaid (payment made > net subtotal), Total Balance displays with a negative sign
+            // Subtotal net after VAT & discount, then minus Downpayment or Payment Made
             const netSubtotal = Math.max(0, runningSubtotal + vat - discount);
-            const diff = Math.round((netSubtotal - paymentMade) * 100) / 100;
+            updateDownpaymentDisplay(netSubtotal);
+
+            const effectiveDeduction = (paymentMade > 0) ? paymentMade : currentDPAmount;
+            const diff = Math.round((netSubtotal - effectiveDeduction) * 100) / 100;
             const totalBalance = Math.abs(diff) < 0.005 ? 0 : diff;
 
             document.getElementById('disp-subtotal').textContent = formatNumber2(runningSubtotal);
@@ -1108,13 +1215,20 @@
         }
 
         // Reference layout shows Subtotal / VAT / Discount / Total only.
-        // Show "Payment Made" + "Total Balance" only when a payment exists (or while editing).
+        // Show "Downpayment" and "Payment Made" + "Total Balance" when present (or while editing).
         function syncTotalsLayout(paymentMade) {
-            const row = document.getElementById('row-payment-made');
+            const rowPay = document.getElementById('row-payment-made');
+            const rowDp = document.getElementById('row-downpayment');
+            const dpEditControls = document.getElementById('dp-edit-controls');
             const lbl = document.getElementById('lbl-total-balance');
+
             const hasPayment = Math.abs(Number(paymentMade) || 0) >= 0.005;
-            if (row) row.style.display = (hasPayment || isEditMode) ? '' : 'none';
-            if (lbl) lbl.textContent = hasPayment ? 'Total Balance' : 'Total';
+            const hasDP = currentDPAmount >= 0.005 || currentDPValue >= 0.005;
+
+            if (rowPay) rowPay.style.display = (hasPayment || isEditMode) ? '' : 'none';
+            if (rowDp) rowDp.style.display = (hasDP || isEditMode) ? '' : 'none';
+            if (dpEditControls) dpEditControls.style.display = isEditMode ? 'inline-block' : 'none';
+            if (lbl) lbl.textContent = (hasPayment || hasDP) ? 'Total Balance' : 'Total';
         }
 
         function extractSizeFromText(name) {
@@ -1311,7 +1425,22 @@
             const finalDiscount = po.discount_amount || 0;
             const finalPaymentMade = (po.payment_made !== undefined && po.payment_made !== null) ? po.payment_made : (po.paid_amount || 0);
             const finalNet = (po.grand_total !== undefined && po.grand_total !== null) ? po.grand_total : (finalSubtotal + finalVat - finalDiscount);
-            const finalDiff = Math.round((finalNet - finalPaymentMade) * 100) / 100;
+
+            // Downpayment initialization
+            currentDPType = (po.downpayment_type === 'AMOUNT' || (!po.downpayment_type && po.downpayment_amount > 0 && !po.downpayment_value)) ? 'AMOUNT' : 'PERCENTAGE';
+            currentDPValue = (currentDPType === 'PERCENTAGE')
+                ? (po.downpayment_value !== undefined && po.downpayment_value !== null ? Number(po.downpayment_value) : (finalNet > 0 && finalPaymentMade > 0 ? Math.round(((finalPaymentMade / finalNet) * 100) * 100) / 100 : 0))
+                : (po.downpayment_amount !== undefined && po.downpayment_amount !== null ? Number(po.downpayment_amount) : Number(finalPaymentMade || 0));
+            currentDPAmount = (po.downpayment_amount !== undefined && po.downpayment_amount !== null && Number(po.downpayment_amount) > 0)
+                ? Number(po.downpayment_amount)
+                : ((currentDPType === 'PERCENTAGE') ? Math.round(((finalNet * currentDPValue) / 100) * 100) / 100 : currentDPValue);
+
+            const dpSelect = document.getElementById('edit-dp-type');
+            if (dpSelect) dpSelect.value = currentDPType;
+            updateDownpaymentDisplay(finalNet);
+
+            const effectiveDeduction = (finalPaymentMade > 0) ? finalPaymentMade : currentDPAmount;
+            const finalDiff = Math.round((finalNet - effectiveDeduction) * 100) / 100;
             const finalTotalBalance = Math.abs(finalDiff) < 0.005 ? 0 : finalDiff;
 
             document.getElementById('disp-subtotal').textContent = formatNumber2(finalSubtotal);
@@ -1413,7 +1542,10 @@
 
                 const payload = {
                     notes: notesVal,
-                    payment_made: paymentMadeVal
+                    downpayment_type: currentDPType,
+                    downpayment_value: currentDPValue,
+                    downpayment_amount: currentDPAmount,
+                    payment_made: paymentMadeVal > 0 ? paymentMadeVal : currentDPAmount
                 };
                 if (termsVal && termsVal !== '—' && termsVal !== '-') {
                     payload.terms = termsVal;

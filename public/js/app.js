@@ -1642,14 +1642,18 @@ async function openViewPOModal(poId) {
                                     <span>Total Bill:</span>
                                     <span class="font-mono text-slate-900 font-black">${NKB.formatCurrency(po.grand_total)}</span>
                                 </div>
-                                ${(Number(po.payment_made || po.paid_amount || 0) > 0) ? `
+                                ${(Number(po.downpayment_amount || po.payment_made || po.paid_amount || 0) > 0) ? `
+                                    <div class="flex justify-between text-sm font-bold text-indigo-900">
+                                        <span>Downpayment (${po.downpayment_type === 'AMOUNT' ? 'Fixed Amount' : `${po.downpayment_value || Math.round(((po.downpayment_amount || po.payment_made) / (po.grand_total || 1)) * 100)}%`}):</span>
+                                        <span class="font-mono font-bold text-indigo-900">${NKB.formatCurrency(po.downpayment_amount || po.payment_made || po.paid_amount || 0)}</span>
+                                    </div>
                                     <div class="flex justify-between text-sm font-bold text-emerald-700">
                                         <span>Less: Payment Made:</span>
-                                        <span class="font-mono font-black text-emerald-700">- ${NKB.formatCurrency(po.payment_made || po.paid_amount || 0)}</span>
+                                        <span class="font-mono font-black text-emerald-700">- ${NKB.formatCurrency(po.payment_made || po.downpayment_amount || po.paid_amount || 0)}</span>
                                     </div>
                                     <div class="flex justify-between text-base font-black text-indigo-950 pt-2 border-t-2 border-indigo-200 bg-indigo-50/70 p-2.5 rounded-xl">
                                         <span>Total Balance Due:</span>
-                                        <span class="font-mono text-indigo-700 font-black">${NKB.formatCurrency(Math.max(0, (po.grand_total || 0) - (po.payment_made || po.paid_amount || 0)))}</span>
+                                        <span class="font-mono text-indigo-700 font-black">${NKB.formatCurrency(Math.max(0, (po.grand_total || 0) - (po.payment_made || po.downpayment_amount || po.paid_amount || 0)))}</span>
                                     </div>
                                 ` : ''}
                             </div>
@@ -2018,6 +2022,24 @@ async function openEditPOModal(poId) {
         isCustom = true;
     }
 
+    const initialDpType = (po.downpayment_type === 'AMOUNT' || (!po.downpayment_type && po.downpayment_amount > 0 && !po.downpayment_value)) ? 'AMOUNT' : 'PERCENTAGE';
+    let initialDpVal = 0;
+    if (initialDpType === 'PERCENTAGE') {
+        if (po.downpayment_value !== undefined && po.downpayment_value !== null && !isNaN(parseFloat(po.downpayment_value))) {
+            initialDpVal = parseFloat(po.downpayment_value);
+        } else if (po.grand_total > 0 && po.payment_made > 0) {
+            initialDpVal = Math.round(((po.payment_made / po.grand_total) * 100) * 100) / 100;
+        }
+    } else {
+        if (po.downpayment_amount !== undefined && po.downpayment_amount !== null && !isNaN(parseFloat(po.downpayment_amount))) {
+            initialDpVal = parseFloat(po.downpayment_amount);
+        } else if (po.downpayment_value !== undefined && po.downpayment_value !== null && !isNaN(parseFloat(po.downpayment_value))) {
+            initialDpVal = parseFloat(po.downpayment_value);
+        } else if (po.payment_made !== undefined && po.payment_made !== null) {
+            initialDpVal = parseFloat(po.payment_made);
+        }
+    }
+
     root.innerHTML = `
         <div class="fixed inset-0 modal-backdrop flex items-center justify-center p-4 z-50 overflow-y-auto">
             <div class="bg-white rounded-2xl max-w-4xl w-full p-6 sm:p-7 shadow-2xl space-y-4 max-h-[92vh] flex flex-col my-auto">
@@ -2174,24 +2196,49 @@ async function openEditPOModal(poId) {
                                 <label class="block text-xs font-medium text-slate-500 mb-1.5 uppercase tracking-wider">Special Notes / Description (Appears on Printed Order)</label>
                                 <textarea id="edit-po-notes" rows="2" placeholder="Special formulation notes, packaging variants, delivery instructions..." class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white text-xs text-slate-700 font-normal focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">${po.notes || ''}</textarea>
                             </div>
-                            <!-- Payment Made / Deposit Input -->
-                            <div class="p-3 bg-white rounded-xl border border-indigo-100 shadow-2xs space-y-1.5">
-                                <label class="block text-[11px] font-bold text-indigo-950 uppercase tracking-wider">
-                                    💰 Payment Made / Deposit (₱)
-                                </label>
+                            <!-- Downpayment Option: Percentage vs Amount -->
+                            <div class="p-3 bg-white rounded-xl border border-indigo-100 shadow-2xs space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <label class="block text-[11px] font-bold text-indigo-950 uppercase tracking-wider">
+                                        💰 Downpayment / Deposit
+                                    </label>
+                                    <div class="inline-flex rounded-md shadow-2xs p-0.5 bg-slate-100 border border-slate-200" id="edit-po-dp-toggle">
+                                        <button type="button" 
+                                                id="edit-po-dp-type-pct" 
+                                                onclick="setEditPODownpaymentType('PERCENTAGE')" 
+                                                class="px-2 py-0.5 text-[10px] font-bold rounded ${initialDpType === 'PERCENTAGE' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'} transition" 
+                                                title="Percentage of Total Bill">
+                                            %
+                                        </button>
+                                        <button type="button" 
+                                                id="edit-po-dp-type-amt" 
+                                                onclick="setEditPODownpaymentType('AMOUNT')" 
+                                                class="px-2 py-0.5 text-[10px] font-bold rounded ${initialDpType === 'AMOUNT' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'} transition" 
+                                                title="Fixed Amount (₱)">
+                                            ₱
+                                        </button>
+                                    </div>
+                                </div>
+                                <input type="hidden" id="edit-po-downpayment-type" value="${initialDpType}">
                                 <div class="relative">
-                                    <span class="absolute left-3 top-2 text-slate-400 font-mono text-xs font-bold">₱</span>
+                                    <span id="edit-po-dp-prefix" class="${initialDpType === 'AMOUNT' ? '' : 'hidden'} absolute left-3 top-2 text-slate-400 font-mono text-xs font-bold">₱</span>
                                     <input type="number" 
-                                           id="edit-po-payment-made" 
+                                           id="edit-po-downpayment-val" 
                                            step="0.01" 
                                            min="0" 
-                                           value="${Number(po.payment_made || po.paid_amount || 0).toFixed(2)}" 
+                                           ${initialDpType === 'PERCENTAGE' ? 'max="100"' : ''} 
+                                           value="${initialDpVal.toFixed(2)}" 
                                            oninput="recalculateEditPOTotals()" 
-                                           class="w-full pl-7 pr-3 py-1.5 border border-indigo-200 rounded-lg text-xs font-bold font-mono text-emerald-700 bg-emerald-50/30 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-2xs" 
+                                           class="w-full ${initialDpType === 'AMOUNT' ? 'pl-7 pr-3' : 'pl-3 pr-7'} py-1.5 border border-indigo-200 rounded-lg text-xs font-bold font-mono text-emerald-700 bg-emerald-50/30 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-2xs text-right" 
                                            placeholder="0.00" 
-                                           title="Payment Made or Deposit to deduct from the order total bill">
+                                           title="Downpayment to deduct from the order total bill">
+                                    <span id="edit-po-dp-suffix" class="${initialDpType === 'PERCENTAGE' ? '' : 'hidden'} absolute right-3 top-2 text-slate-400 font-mono text-xs font-bold">%</span>
                                 </div>
-                                <p class="text-[10px] text-slate-400">Enter advance payment, downpayment, or check collection to lessen the total bill of this PO.</p>
+                                <input type="hidden" id="edit-po-payment-made" value="${Number(po.payment_made || po.paid_amount || 0).toFixed(2)}">
+                                <div class="flex justify-between items-center text-[10px] text-slate-500">
+                                    <span>Equivalent: <strong id="edit-po-dp-computed" class="font-mono text-indigo-700 font-bold">₱0.00</strong></span>
+                                    <span class="text-slate-400">Deducted from Total</span>
+                                </div>
                             </div>
 
                             <!-- PO Revision Option -->
@@ -2199,10 +2246,10 @@ async function openEditPOModal(poId) {
                                 <div class="flex items-center justify-between">
                                     <label class="flex items-center gap-2 cursor-pointer select-none">
                                         <input type="checkbox" 
-                                               id="edit-po-is-revisioned" 
-                                               ${po.is_revisioned ? 'checked' : ''} 
-                                               onchange="document.getElementById('edit-po-revision-details-box').classList.toggle('hidden', !this.checked)" 
-                                               class="w-4 h-4 text-amber-600 rounded border-amber-300 focus:ring-amber-500">
+                                                id="edit-po-is-revisioned" 
+                                                ${po.is_revisioned ? 'checked' : ''} 
+                                                onchange="document.getElementById('edit-po-revision-details-box').classList.toggle('hidden', !this.checked)" 
+                                                class="w-4 h-4 text-amber-600 rounded border-amber-300 focus:ring-amber-500">
                                         <span class="text-xs font-bold text-amber-950 flex items-center gap-1.5">
                                             <span>🔄</span><span>Label as Revisioned Order</span>
                                         </span>
@@ -2216,10 +2263,10 @@ async function openEditPOModal(poId) {
                                         Revision Note / Reason (Displays on SO Receipts):
                                     </label>
                                     <input type="text" 
-                                           id="edit-po-revision-notes" 
-                                           value="${(po.revision_notes || '').replace(/"/g, '&quot;')}" 
-                                           placeholder="e.g. Adjusted quantities and terms per client agreement" 
-                                           class="w-full px-2.5 py-1.5 border border-amber-200 rounded-lg text-xs bg-white text-slate-800 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition shadow-2xs">
+                                            id="edit-po-revision-notes" 
+                                            value="${(po.revision_notes || '').replace(/"/g, '&quot;')}" 
+                                            placeholder="e.g. Adjusted quantities and terms per client agreement" 
+                                            class="w-full px-2.5 py-1.5 border border-amber-200 rounded-lg text-xs bg-white text-slate-800 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition shadow-2xs">
                                     <p class="text-[10px] text-amber-700/90 leading-tight">Checking this will mark this order as revisioned and print a prominent <strong>[REVISED]</strong> badge on the official Sales Order receipt.</p>
                                 </div>
                             </div>
@@ -2238,7 +2285,7 @@ async function openEditPOModal(poId) {
                                 <span id="edit-po-grand-total" class="text-lg font-bold text-slate-800 font-mono tracking-tight">₱0.00</span>
                             </div>
                             <div class="flex justify-between sm:justify-end items-baseline gap-3 text-emerald-700">
-                                <span class="text-xs font-semibold uppercase tracking-wider text-emerald-600">Less: Payment Made:</span>
+                                <span class="text-xs font-semibold uppercase tracking-wider text-emerald-600" id="edit-po-lbl-dp-discount">Less: Downpayment:</span>
                                 <span id="edit-po-disp-payment-made" class="text-sm font-bold font-mono tracking-tight">₱0.00</span>
                             </div>
                             <div class="pt-1.5 border-t-2 border-indigo-100 flex justify-between sm:justify-end items-baseline gap-3">
@@ -2598,6 +2645,41 @@ function updateEditPOLineItem(index, field, value) {
     recalculateEditPOTotals(grandTotal);
 }
 
+function setEditPODownpaymentType(type) {
+    const hiddenType = document.getElementById('edit-po-downpayment-type');
+    if (hiddenType) hiddenType.value = type;
+
+    const btnPct = document.getElementById('edit-po-dp-type-pct');
+    const btnAmt = document.getElementById('edit-po-dp-type-amt');
+    const prefixEl = document.getElementById('edit-po-dp-prefix');
+    const suffixEl = document.getElementById('edit-po-dp-suffix');
+    const valInput = document.getElementById('edit-po-downpayment-val');
+
+    if (type === 'AMOUNT') {
+        if (btnPct) btnPct.className = 'px-2 py-0.5 text-[10px] font-bold rounded text-slate-600 hover:text-slate-900 transition';
+        if (btnAmt) btnAmt.className = 'px-2 py-0.5 text-[10px] font-bold rounded bg-indigo-600 text-white shadow-xs transition';
+        if (prefixEl) prefixEl.classList.remove('hidden');
+        if (suffixEl) suffixEl.classList.add('hidden');
+        if (valInput) {
+            valInput.removeAttribute('max');
+            valInput.classList.remove('pr-7', 'pl-3');
+            valInput.classList.add('pl-7', 'pr-3');
+        }
+    } else {
+        if (btnPct) btnPct.className = 'px-2 py-0.5 text-[10px] font-bold rounded bg-indigo-600 text-white shadow-xs transition';
+        if (btnAmt) btnAmt.className = 'px-2 py-0.5 text-[10px] font-bold rounded text-slate-600 hover:text-slate-900 transition';
+        if (prefixEl) prefixEl.classList.add('hidden');
+        if (suffixEl) suffixEl.classList.remove('hidden');
+        if (valInput) {
+            valInput.setAttribute('max', '100');
+            valInput.classList.remove('pl-7', 'pr-3');
+            valInput.classList.add('pl-3', 'pr-7');
+        }
+    }
+    recalculateEditPOTotals();
+}
+window.setEditPODownpaymentType = setEditPODownpaymentType;
+
 function recalculateEditPOTotals(currentGrandTotal) {
     let grandTotal = currentGrandTotal;
     if (grandTotal === undefined || grandTotal === null) {
@@ -2607,13 +2689,46 @@ function recalculateEditPOTotals(currentGrandTotal) {
         });
     }
 
+    const dpType = document.getElementById('edit-po-downpayment-type')?.value || 'PERCENTAGE';
+    const dpValInput = document.getElementById('edit-po-downpayment-val');
+    const dpVal = dpValInput ? (Math.max(0, parseFloat(dpValInput.value) || 0)) : (parseFloat(document.getElementById('edit-po-payment-made')?.value) || 0);
+
+    let downPaymentAmount = 0;
+    if (dpType === 'PERCENTAGE') {
+        downPaymentAmount = Math.round(((grandTotal * dpVal) / 100) * 100) / 100;
+    } else {
+        downPaymentAmount = Math.round(dpVal * 100) / 100;
+    }
+
+    // Keep hidden payment-made updated
     const paymentInput = document.getElementById('edit-po-payment-made');
-    const paymentMade = paymentInput ? (Math.max(0, parseFloat(paymentInput.value) || 0)) : 0;
-    const balanceDue = Math.max(0, grandTotal - paymentMade);
+    if (paymentInput && paymentInput !== dpValInput) {
+        paymentInput.value = downPaymentAmount.toFixed(2);
+    }
+
+    const computedEl = document.getElementById('edit-po-dp-computed');
+    if (computedEl) {
+        if (dpType === 'PERCENTAGE') {
+            computedEl.textContent = NKB.formatCurrency(downPaymentAmount);
+        } else {
+            const effPct = grandTotal > 0 ? Math.round(((downPaymentAmount / grandTotal) * 100) * 10) / 10 : 0;
+            computedEl.textContent = `${effPct}% of bill`;
+        }
+    }
+
+    const lblDp = document.getElementById('edit-po-lbl-dp-discount');
+    if (lblDp) {
+        lblDp.textContent = (dpType === 'PERCENTAGE' && dpVal > 0)
+            ? `Less: Downpayment (${dpVal}%):`
+            : 'Less: Downpayment:';
+    }
 
     const dispPaymentEl = document.getElementById('edit-po-disp-payment-made');
-    if (dispPaymentEl) dispPaymentEl.textContent = NKB.formatCurrency(paymentMade);
+    if (dispPaymentEl) {
+        dispPaymentEl.textContent = `- ${NKB.formatCurrency(downPaymentAmount)}`;
+    }
 
+    const balanceDue = Math.max(0, grandTotal - downPaymentAmount);
     const balanceEl = document.getElementById('edit-po-balance-due');
     if (balanceEl) {
         balanceEl.textContent = NKB.formatCurrency(balanceDue);
@@ -2665,8 +2780,18 @@ async function submitEditPO(e) {
             formOfPayment = customInput ? (customInput.value.trim() || 'COD') : 'COD';
         }
         const notes = document.getElementById('edit-po-notes').value;
-        const paymentMadeInput = document.getElementById('edit-po-payment-made');
-        const paymentMade = paymentMadeInput ? Math.max(0, parseFloat(paymentMadeInput.value) || 0) : 0;
+
+        const dpType = document.getElementById('edit-po-downpayment-type')?.value || 'PERCENTAGE';
+        const dpValInput = document.getElementById('edit-po-downpayment-val');
+        const dpVal = dpValInput ? (Math.max(0, parseFloat(dpValInput.value) || 0)) : 0;
+        let grandTotal = 0;
+        editPOLineItems.forEach(item => {
+            grandTotal += (item.target_quantity || 0) * (item.unit_price || 0);
+        });
+        const dpAmount = (dpType === 'PERCENTAGE') 
+            ? Math.round(((grandTotal * dpVal) / 100) * 100) / 100 
+            : Math.round(dpVal * 100) / 100;
+        const paymentMade = dpAmount;
 
         const isRevisionedCheckbox = document.getElementById('edit-po-is-revisioned');
         const isRevisioned = isRevisionedCheckbox ? isRevisionedCheckbox.checked : undefined;
@@ -2683,6 +2808,9 @@ async function submitEditPO(e) {
                 form_of_payment: formOfPayment,
                 category: document.getElementById('edit-po-category')?.value || null,
                 notes,
+                downpayment_type: dpType,
+                downpayment_value: dpVal,
+                downpayment_amount: dpAmount,
                 payment_made: paymentMade,
                 is_revisioned: isRevisioned,
                 revision_notes: revisionNotes,
