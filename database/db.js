@@ -368,7 +368,8 @@ function runMigrations(dbInstance, isMysql) {
                 { id: 'ba-bdo-vyu', bank_name: 'BDO: Vyuceutical - 0080-5801-0717', account_number: '0080-5801-0717', account_name: 'Vyuceutical OPC', account_type: 'Checking', balance: 550000.00 },
                 { id: 'ba-sec-nkb-mfg', bank_name: 'Security Bank: NKB Manufacturing Corporation - 0000079720871', account_number: '0000079720871', account_name: 'NKB Manufacturing Corporation', account_type: 'Checking', balance: 500000.00 },
                 { id: 'ba-mb-nkb-mfg', bank_name: 'Metrobank: NKB Manufacturing Corporation - 788-7-78803245-1', account_number: '788-7-78803245-1', account_name: 'NKB MANUFACTURING CORPORATION', account_type: 'Checking', balance: 750000.00 },
-                { id: 'ba-mb-kath-norvin', bank_name: "METROBANK - SAVINGS - MA'AM KATH/SIR NORVIN - 007-788-01272-8", account_number: '007-788-01272-8', account_name: "MA'AM KATH/SIR NORVIN", account_type: 'Savings', balance: 500000.00 }
+                { id: 'ba-mb-kath-norvin', bank_name: "METROBANK - SAVINGS - MA'AM KATH/SIR NORVIN - 007-788-01272-8", account_number: '007-788-01272-8', account_name: "MA'AM KATH/SIR NORVIN", account_type: 'Savings', balance: 500000.00 },
+                { id: 'ba-ew-nkb-mfg', bank_name: 'EastWest Bank: NKB Manufacturing Corporation - 200069453658', account_number: '200069453658', account_name: 'NKB MANUFACTURING CORPORATION', account_type: 'Checking', balance: 500000.00 }
             ];
 
             // Update legacy placeholder account numbers if present
@@ -400,6 +401,21 @@ function runMigrations(dbInstance, isMysql) {
                         '007-788-01272-8',
                         "MA'AM KATH/SIR NORVIN",
                         'Savings',
+                        500000.00
+                    );
+                }
+            } catch (_) {}
+
+            // Ensure EastWest Bank (NKB Manufacturing Corporation) is registered
+            try {
+                const ewCheck = dbInstance.prepare("SELECT id FROM bank_accounts WHERE account_number = '200069453658' OR id = 'ba-ew-nkb-mfg'").get();
+                if (!ewCheck) {
+                    insertStmt.run(
+                        'ba-ew-nkb-mfg',
+                        'EastWest Bank: NKB Manufacturing Corporation - 200069453658',
+                        '200069453658',
+                        'NKB MANUFACTURING CORPORATION',
+                        'Checking',
                         500000.00
                     );
                 }

@@ -4880,7 +4880,8 @@ const DEFAULT_PAYABLE_BANKS_LIST = [
     { id: 'ba-bdo-new-yra', name: 'BDO: New Yra Enterprises - 0036-8801-3196', bank_name: 'BDO: New Yra Enterprises - 0036-8801-3196', account_name: 'New Yra Enterprises', account_number: '0036-8801-3196', balance: 600000 },
     { id: 'ba-bdo-vyu', name: 'BDO: Vyuceutical - 0080-5801-0717', bank_name: 'BDO: Vyuceutical - 0080-5801-0717', account_name: 'Vyuceutical OPC', account_number: '0080-5801-0717', balance: 550000 },
     { id: 'ba-mb-nkb-mfg', name: 'Metrobank: NKB Manufacturing Corporation - 788-7-78803245-1', bank_name: 'Metrobank: NKB Manufacturing Corporation - 788-7-78803245-1', account_name: 'NKB MANUFACTURING CORPORATION', account_number: '788-7-78803245-1', balance: 750000 },
-    { id: 'ba-mb-kath-norvin', name: "METROBANK - SAVINGS - MA'AM KATH/SIR NORVIN - 007-788-01272-8", bank_name: "METROBANK - SAVINGS - MA'AM KATH/SIR NORVIN - 007-788-01272-8", account_name: "MA'AM KATH/SIR NORVIN", account_number: '007-788-01272-8', balance: 500000 }
+    { id: 'ba-mb-kath-norvin', name: "METROBANK - SAVINGS - MA'AM KATH/SIR NORVIN - 007-788-01272-8", bank_name: "METROBANK - SAVINGS - MA'AM KATH/SIR NORVIN - 007-788-01272-8", account_name: "MA'AM KATH/SIR NORVIN", account_number: '007-788-01272-8', balance: 500000 },
+    { id: 'ba-ew-nkb-mfg', name: 'EastWest Bank: NKB Manufacturing Corporation - 200069453658', bank_name: 'EastWest Bank: NKB Manufacturing Corporation - 200069453658', account_name: 'NKB MANUFACTURING CORPORATION', account_number: '200069453658', balance: 500000 }
 ];
 
 function checkPayableOverdraft(overrideAmount = null) {

@@ -1,6 +1,6 @@
 {
   "success": true,
-  "count": 104,
+  "count": 105,
   "batch_scaling": {
     "batch_size": 100,
     "uom": "kg"
@@ -10109,6 +10109,116 @@
           "material_name": "EUPERLAN PEARLIZER (FW)",
           "category": "Cosmetic",
           "required_quantity": 1,
+          "uom": "kg",
+          "supplier": "FW SPA"
+        }
+      ]
+    },
+    {
+      "formula_id": 130,
+      "formula_code": "FORM-2026-0140",
+      "formula_name": "SKINOVA FACIAL WASH 1.0 (60mL)",
+      "product_category": "Cosmetic",
+      "active_version": "V1.0",
+      "version_status": "APPROVED",
+      "compounding_code": "CP-1618",
+      "batch_size": 100,
+      "batch_uom": "kg",
+      "total_raw_materials_count": 12,
+      "raw_materials_needed": [
+        {
+          "material_code": "MAT-WAT-01",
+          "material_name": "DE-IONIZED WATER",
+          "category": "Cosmetic",
+          "required_quantity": 57.15,
+          "uom": "kg",
+          "supplier": "MAYNILAD"
+        },
+        {
+          "material_code": "RM-SLES-01",
+          "material_name": "SLES GEL (TEXAPON)",
+          "category": "Cosmetic",
+          "required_quantity": 18,
+          "uom": "kg",
+          "supplier": "CCT"
+        },
+        {
+          "material_code": "RM-PROCOL-01",
+          "material_name": "PROPYLENE GLYCOL (TRANSWORLD)",
+          "category": "Cosmetic",
+          "required_quantity": 5,
+          "uom": "kg",
+          "supplier": "TRANSWORLD"
+        },
+        {
+          "material_code": "RM-NIA-01",
+          "material_name": "NIACINAMIDE (HACHIMORI)",
+          "category": "Cosmetic",
+          "required_quantity": 2,
+          "uom": "kg",
+          "supplier": "HACHIMORI"
+        },
+        {
+          "material_code": "RM-EMPIGEN",
+          "material_name": "EMPIGEN BS/FA (COCAMIDOPROPYL BETAINE)",
+          "category": "Cosmetic",
+          "required_quantity": 10,
+          "uom": "kg",
+          "supplier": "CHEMICO"
+        },
+        {
+          "material_code": "RM-MERQUAT3330",
+          "material_name": "MERQUAT PLUS 3330 POLYMER",
+          "category": "Cosmetic",
+          "required_quantity": 2,
+          "uom": "kg",
+          "supplier": "CHEMICO"
+        },
+        {
+          "material_code": "RM-DMDM-01",
+          "material_name": "DMDM HYDANTOIN",
+          "category": "Cosmetic",
+          "required_quantity": 0.5,
+          "uom": "kg",
+          "supplier": "FW SPA"
+        },
+        {
+          "material_code": "RM-ALOE-XT-01",
+          "material_name": "ALOE VERA EXTRACT (SOGOMI)",
+          "category": "Cosmetic",
+          "required_quantity": 1,
+          "uom": "kg",
+          "supplier": "SOGOMI CORP."
+        },
+        {
+          "material_code": "FR-ORANGE-CHEM",
+          "material_name": "SWEET ORANGE SCENT (HANBIT-CHEMICO)",
+          "category": "Cosmetic",
+          "required_quantity": 0.3,
+          "uom": "kg",
+          "supplier": "CHEMICO"
+        },
+        {
+          "material_code": "FR-SWEET-OREN-01",
+          "material_name": "SWEET ORANGE EO (PROESSENCES)",
+          "category": "Cosmetic",
+          "required_quantity": 0.05,
+          "uom": "kg",
+          "supplier": "PROESSENCES INC."
+        },
+        {
+          "material_code": "RM-HARMONIE-SHEA",
+          "material_name": "HARMONIE SHEA BUTTER EMULSION",
+          "category": "Cosmetic",
+          "required_quantity": 1,
+          "uom": "kg",
+          "supplier": "CHEMICO"
+        },
+        {
+          "material_code": "RM-SALT-01",
+          "material_name": "SALT INDUSTRIAL (FW)",
+          "category": "Cosmetic",
+          "required_quantity": 3,
           "uom": "kg",
           "supplier": "FW SPA"
         }
