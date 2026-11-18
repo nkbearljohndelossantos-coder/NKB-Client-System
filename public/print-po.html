@@ -1015,6 +1015,13 @@
                     docNoEl.textContent = 'PO-' + currentNo;
                 }
             }
+
+            document.querySelectorAll('.item-delivery-date').forEach(el => {
+                const match = el.textContent.match(/\d{2}\/\d{2}\/\d{4}/);
+                if (match) {
+                    el.textContent = `🚚 ${chosen === 'SALES ORDER' ? 'Delivery Due' : 'Delivery Date'}: ${match[0]}`;
+                }
+            });
         }
 
         function toggleEditMode() {
@@ -1393,12 +1400,14 @@
                     const price = item.unit_price || 0;
                     const lineSubtotal = item.subtotal || (qty * price);
                     calculatedSubtotal += lineSubtotal;
+                    const itemDelDate = item.delivery_date || item.deliveryDate || item.expected_delivery_date;
+                    const deliveryLabel = (chosenTitle === 'SALES ORDER' ? 'Delivery Due' : 'Delivery Date');
 
                     return `
                         <tr class="item-row" data-product-id="${item.product_id}" data-item-id="${item.id || ''}" data-item-name="${escapeHtml(item.item_name || item.product_name || desc)}">
                             <td class="td-desc cell-editable" contenteditable="false">
                                 <div class="prod-name">${escapeHtml(desc)}</div>
-                                ${item.delivery_date ? `<div class="item-delivery-date" style="font-size: 8pt; color: #047857; font-weight: bold; margin-top: 2px;">🚚 Delivery Date: ${formatDateMMDDYYYY(item.delivery_date)}</div>` : ''}
+                                ${itemDelDate ? `<div class="item-delivery-date" style="font-size: 8pt; color: #047857; font-weight: bold; margin-top: 2px;">🚚 ${deliveryLabel}: ${formatDateMMDDYYYY(itemDelDate)}</div>` : ''}
                                 ${itemNote ? `<div style="font-size: 8pt; color: #374151; font-style: italic; margin-top: 1px; font-weight: 600;">Note: ${escapeHtml(itemNote)}</div>` : ''}
                             </td>
                             <td class="td-size cell-editable" contenteditable="false">${escapeHtml(itemSize)}</td>

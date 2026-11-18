@@ -864,6 +864,14 @@
             font-weight: 700;
         }
 
+        .item-delivery-date {
+            font-size: 7.8pt !important;
+            font-weight: 700 !important;
+            color: #047857 !important;
+            margin-top: 1.5px;
+            line-height: 1.2;
+        }
+
         .items-table tbody td.td-qty {
             text-align: right;
             padding-right: 12px;
@@ -904,6 +912,10 @@
             font-weight: 700 !important;
             color: #1e293b !important;
         }
+        .items-table-tier-2 .item-delivery-date {
+            font-size: 7.2pt !important;
+            margin-top: 1px;
+        }
 
         /* Tier 3: 9 - 13 items */
         .items-table-tier-3 {
@@ -929,6 +941,10 @@
             font-weight: 700 !important;
             color: #1e293b !important;
         }
+        .items-table-tier-3 .item-delivery-date {
+            font-size: 6.8pt !important;
+            margin-top: 1px;
+        }
 
         /* Tier 4: 14 - 17 items */
         .items-table-tier-4 {
@@ -953,6 +969,10 @@
             font-size: 6.8pt !important;
             font-weight: 700 !important;
             color: #1e293b !important;
+        }
+        .items-table-tier-4 .item-delivery-date {
+            font-size: 6.4pt !important;
+            margin-top: 0.5px;
         }
 
         /* Remarks */
@@ -1331,7 +1351,7 @@
                 '.company-name', '.company-address', '.company-tin',
                 '.cust-name-display', '.cust-addr-display',
                 '.doc-no-display', '.doc-date-display', '.doc-duedate-display',
-                '.product-name-txt', '.product-sku-txt', '.td-qty', '.td-uom',
+                '.product-name-txt', '.product-sku-txt', '.item-delivery-date', '.td-qty', '.td-uom',
                 '.remarks-display'
             ];
 
@@ -1362,7 +1382,7 @@
 
             // Find matching element class in target slip
             for (let cls of changedEl.classList) {
-                if (cls.endsWith('-display') || cls.startsWith('product-') || cls.startsWith('company-') || cls === 'td-qty' || cls === 'td-uom') {
+                if (cls.endsWith('-display') || cls.startsWith('product-') || cls.startsWith('company-') || cls === 'item-delivery-date' || cls === 'td-qty' || cls === 'td-uom') {
                     const allInSource = Array.from(slip.querySelectorAll('.' + cls));
                     const idx = allInSource.indexOf(changedEl);
                     if (idx !== -1) {
@@ -1462,6 +1482,13 @@
                 const rawNo = el.getAttribute('data-raw-no') || el.textContent;
                 el.textContent = formatDocNumber(rawNo, chosen, clientData);
             });
+
+            document.querySelectorAll('.item-delivery-date').forEach(el => {
+                const match = el.textContent.match(/\d{2}\/\d{2}\/\d{4}/);
+                if (match) {
+                    el.textContent = `🚚 ${chosen === 'SALES ORDER' ? 'Delivery Due' : 'Delivery Date'}: ${match[0]}`;
+                }
+            });
         }
 
         function extractProductSize(name) {
@@ -1536,12 +1563,15 @@
                 const qty = formatQty(item.target_quantity || item.quantity || 0);
                 const rawUom = (item.unit || 'PC').toUpperCase().trim();
                 const uom = (rawUom === 'PCS' || rawUom === 'PIECE' || rawUom === 'PIECES') ? 'PC' : rawUom;
+                const itemDelDate = item.delivery_date || item.deliveryDate || item.expected_delivery_date || item.due_date;
+                const deliveryLabel = (docTitle === 'SALES ORDER' ? 'Delivery Due' : 'Delivery Date');
 
                 return `
                     <tr class="item-row">
                         <td class="td-desc cell-editable">
                             <span class="product-name-txt">${escapeHtml(name)}</span>
                             ${sku ? `<span class="product-sku-txt">(${escapeHtml(sku)})</span>` : ''}
+                            ${itemDelDate ? `<div class="item-delivery-date">🚚 ${deliveryLabel}: ${formatDateMMDDYYYY(itemDelDate)}</div>` : ''}
                         </td>
                         <td class="td-size cell-editable">${escapeHtml(itemSize || '—')}</td>
                         <td class="td-qty cell-editable">${escapeHtml(qty)}</td>

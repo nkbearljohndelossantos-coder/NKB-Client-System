@@ -137,6 +137,8 @@ function getClientConsolidatedJOData(clientId, specificPoId = null, specificJoId
             size: (item.size || '').trim(),
             target_quantity: item.target_quantity,
             unit: item.unit || 'PC',
+            delivery_date: item.delivery_date || (matchedJo ? matchedJo.scheduled_end_date : null) || null,
+            expected_delivery_date: item.delivery_date || (matchedJo ? matchedJo.scheduled_end_date : null) || null,
             jo_number: matchedJo ? matchedJo.jo_number : undefined,
             po_number: item.po_number
         };
@@ -152,6 +154,8 @@ function getClientConsolidatedJOData(clientId, specificPoId = null, specificJoId
                 size: (jo.size || '').trim(),
                 target_quantity: jo.target_quantity,
                 unit: jo.unit || 'PC',
+                delivery_date: jo.scheduled_end_date || null,
+                expected_delivery_date: jo.scheduled_end_date || null,
                 jo_number: jo.jo_number,
                 po_number: jo.po_number
             });
@@ -318,7 +322,9 @@ router.get('/:id', authenticateToken, (req, res) => {
                 product_name: jo.product_name,
                 sku: jo.sku,
                 target_quantity: jo.target_quantity,
-                unit: jo.unit || 'PC'
+                unit: jo.unit || 'PC',
+                delivery_date: jo.scheduled_end_date || null,
+                expected_delivery_date: jo.scheduled_end_date || null
             }],
             batches
         }

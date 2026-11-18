@@ -4873,6 +4873,7 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         assert.strictEqual(soDataRes.body.data.items[0].target_quantity, 700);
         assert.strictEqual(soDataRes.body.data.items[1].target_quantity, 1100);
         assert.strictEqual(soDataRes.body.data.items[0].product_name, `${prodRow.name} - Revised Batch 1`, 'SO item must preserve original product and brand name');
+        assert.strictEqual(soDataRes.body.data.items[0].delivery_date, '2026-12-05', 'SO item must carry delivery_date');
 
         // 6. Verify UI template files for Net Content and optional Delivery Date
         const printPoHtml = fs.readFileSync(path.join(__dirname, '../public/print-po.html'), 'utf8');
@@ -4882,6 +4883,8 @@ describe('NKB Manufacturing & Invoicing Workflow Tests', () => {
         const printJoHtml = fs.readFileSync(path.join(__dirname, '../public/print-jo.html'), 'utf8');
         assert.ok(printJoHtml.includes('Net Content'), 'print-jo.html must display Net Content header');
         assert.ok(printJoHtml.includes('Delivery Date:'), 'print-jo.html must include Delivery Date metadata');
+        assert.ok(printJoHtml.includes('item-delivery-date'), 'print-jo.html must support item-delivery-date per product');
+        assert.ok(printJoHtml.includes('Delivery Due'), 'print-jo.html must display Delivery Due in SO receipt');
 
         const adminJs = fs.readFileSync(path.join(__dirname, '../public/js/admin.js'), 'utf8');
         assert.ok(adminJs.includes('create-po-delivery-date'), 'admin.js must contain create-po-delivery-date input');
